@@ -1,10 +1,26 @@
-"""Authoritative event log handling and the read-only narrative projection.
+"""Read-only access to objective world facts and the narrative projection.
 
 Responsibility:
-    Define and append objective events (tick, sequence number, failure code, LLM call id)
-    and project them into timelines and stories (``narrative``).
+    Re-export the canonical fact models owned by ``living_island.world.facts`` (amendment
+    A1) and project them into timelines and stories (``narrative``).
 
 Must NOT:
-    Let the narrative invent facts that are not in the event log. Let narrative code
-    import ``living_island.sim`` or ``living_island.persistence`` (keep it read-only).
+    Allocate event IDs or define a second event model. Let the narrative invent facts that
+    are not in the event log. Import ``living_island.sim`` or ``living_island.persistence``.
 """
+
+from living_island.world.facts import (
+    PAYLOAD_MODEL_BY_TYPE,
+    EventType,
+    TypedEventPayload,
+    WorldEvent,
+    format_event_id,
+)
+
+__all__ = [
+    "PAYLOAD_MODEL_BY_TYPE",
+    "EventType",
+    "TypedEventPayload",
+    "WorldEvent",
+    "format_event_id",
+]

@@ -86,3 +86,24 @@ name = "events is read-only: no sim, no persistence"
 type = "forbidden"
 source_modules = ["living_island.events"]
 forbidden_modules = ["living_island.sim", "living_island.persistence"]
+
+[[tool.importlinter.contracts]]
+name = "world.protocol is standalone: no other world module"
+type = "forbidden"
+source_modules = ["living_island.world.protocol"]
+forbidden_modules = [
+    "living_island.world.state",
+    "living_island.world.facts",
+    "living_island.world.content",
+    "living_island.world.ports",
+]
+
+[[tool.importlinter.contracts]]
+name = "agents never import contract, persistence or sim"
+type = "forbidden"
+source_modules = ["living_island.agents"]
+forbidden_modules = [
+    "living_island.contract",
+    "living_island.persistence",
+    "living_island.sim",
+]

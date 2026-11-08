@@ -5,6 +5,10 @@
 > `Perception`, `ActionPlan`, `ActionIntent`, `ActionResult` and `DecisionTrigger` are frozen
 > unless the agent-interface spec requires a change, which must go through a spec amendment task.
 > `DecisionContext` remains provisional.
+>
+> **Amendment A1 (P1-01a, agent interface).** Applied from `agent-interface-v0.1.md` §8.
+> Every A1 change below is marked **[A1]** in place. A1 changes no physical rule, no
+> `Perception` field, no `DecisionTrigger` code and no `ActionResult` field.
 
 **Conventions:** JSON-shaped field lists below are normative **field descriptions, not Python/TypeScript code**. Types use `string`, `integer`, `boolean`, `null`, `array<T>` and `object{...}`; optional fields are marked `?`. Physical values must be integers.
 
@@ -121,9 +125,18 @@ DeferredDecisionTriggers { actor_id:string,reasons:array<DecisionTrigger> }
 
 While an actor has an active action, ingestion may accumulate deferred trigger codes but cannot replace its plan unless the interruption table terminates that action. At the next idle boundary, a nonempty deferred set requests one reevaluation and discards unstarted intents; otherwise the next queued intent starts without a new decision. Clear the deferred set only after accepting its replacement plan. Exhausted plans produce `PLAN_FINISHED`; tick zero requests the initial plan. No decision is made for dead actors.
 
-### 2.3 `DecisionContext` — assembled and owned by agents (PROVISIONAL)
+### 2.3 `DecisionContext` — assembled and owned by agents (PROVISIONAL beyond P1)
 
-> **Provisional until the agent-interface spec (before P3).** That spec decides how a resident agent works: cognitive tools such as recall or checking the known map that cost no game time, world actions that cost ticks, and how many model turns one decision may use. P1 must not implement or depend on this structure; P1 residents (random/rule-based) consume `Perception` and emit `ActionPlan` only.
+> **[A1] Replaces the former P1 prohibition.** The earlier sentence "P1 must not implement or
+> depend on this structure; P1 residents (random/rule-based) consume `Perception` and emit
+> `ActionPlan` only" is **withdrawn**. P1 implements and uses the minimal, empty-memory
+> context of `agent-interface-v0.1.md` §2.3: `perception` from the delivered packet,
+> `personality_profile = {profile_id, values: []}` from content, `current_goals` holding only
+> `{goal_id:"initial", text:<initial_goal>, priority:0}`, `recalled_episodes = []`,
+> `beliefs = []`, `current_plan_summary = null`. P1 must not fake memories. Every P1 policy
+> receives this context inside a `DecisionRequest` (§2.6) and emits an `ActionPlan`. The
+> field list below is unchanged. Richer cognition (cognitive tools, model turns per decision,
+> real memory/belief content) remains provisional until its later spec.
 
 ```text
 DecisionContext {
@@ -196,6 +209,25 @@ Success has both code/reason fields null; failure has a listed failure code and 
 
 For `talk`: `request` is mandatory only when `speech_act=request`, `in_reply_to` mandatory only when `speech_act=accept|refuse`, neither permitted otherwise. `text` is human-readable speech, may be empty when structured act carries meaning, and has an adapter-level length cap. All request/give/pick_up quantities are positive integers; canteen quantity must be exactly 1. Fruit transfers are all-or-nothing; insufficient owned fruit is `NO_ITEM`, insufficient ground fruit is `ITEM_TAKEN`, and insufficient receiving capacity is `INVENTORY_FULL`. `fill_canteen` target must be the unique owned canteen; adjacency is validated against spring. No attempt to transfer a serving without transferring the canteen is valid.
 
+### 2.4a [A1] Agent/sim-internal schemas and deterministic plan IDs
+
+`DecisionRequest`, `DecisionOutcome`, `DecisionError`, `PolicyConfig`, `ScriptFixture`,
+`DecisionRecord`, `DecisionTraceManifest` and `ResidentRuntimeState` are defined by
+`agent-interface-v0.1.md` §2, §4.2, §5 and §6, implemented in `agents/types.py`. They are
+agents/sim-internal schemas; none gives a resident access to the save package or world state.
+`DecisionError` codes are policy errors, never world `failure_code`s.
+
+Plan and intent IDs are deterministic: `plan_id = "<actor_id>:p<decision_ordinal, at least
+6 digits>"`, `intent_id = "<plan_id>:i<zero-based index>"`, formatted without truncation by
+the shared builders in `agents/types.py`. A decision is one transaction: request,
+`decide`, queuing of the effective plan and `commit_decision`, which advances the actor's
+ordinal exactly once (including for a wait substitute or a replayed record). No checkpoint
+may fall inside the transaction (agent-interface §2.1-§2.2).
+
+Each committed decision appends one canonical line to `decisions.jsonl` (not a `WorldEvent`,
+distinct from the future LLM call log); a successful run writes `decision-trace.json`, the
+canonical `DecisionTraceManifest` (agent-interface §5).
+
 ### 2.5 Five-level descriptors and visible signs
 
 **`Terrain` vocabulary (exact):** `sea`, `beach`, `grass`, `woods`, `rock`, `spring`, `cave`, `fruit_tree`, `damp_moss`, mapping to `~ . , W ^ S C F M` respectively. Raw map characters are not DTO values.
@@ -217,6 +249,13 @@ For `talk`: `request` is mandatory only when `speech_act=request`, `in_reply_to`
 **`SpeechAct` vocabulary (exact):** `statement`, `request`, `accept`, `refuse`. An utterance ID is the associated objective `utterance_spoken.event_id`. For accept/refuse, `in_reply_to` must reference a prior request utterance addressed to this speaker; reply addressee must be the original requester. No gift occurs from acceptance alone. A pairwise conversation session is keyed by sorted participant IDs, and the turn count / maximum / quiet gap / capped-session cooldown follow World Rules §4.2 (`social.max_dialogue_turns`, `social.dialogue_gap_ticks`, `social.dialogue_cooldown_ticks`); an over-cap attempt fails `DIALOGUE_LIMIT`.
 
 ## 3. Objective event envelope and catalog
+
+**[A1] Ownership.** `WorldEvent`, every payload model, the `EventType` vocabulary and the
+pure event-ID format are canonical in `world/facts.py`; event IDs are allocated only by the
+world engine's append port. `events` re-exports and projects these models read-only and
+never allocates IDs; `world` still imports no other `living_island` subpackage. Module
+placement follows the implementation plan §2.1; import-linter contracts are never weakened
+to place a type.
 
 ### 3.1 Envelope
 
@@ -284,10 +323,12 @@ SavePackage {
     personal_memories:array<object{}>,relationships:array<object{}>,
     queued_plans:array<ActionPlan>, // unstarted intents only; active intent lives in world
     deferred_decision_triggers:array<DeferredDecisionTriggers>,
-    delivered_perception_ticks:array<{actor_id:string,last_observed_tick:integer}>
+    delivered_perception_ticks:array<{actor_id:string,last_observed_tick:integer}>,
+    runtime_states:array<ResidentRuntimeState> // [A1] agent-interface §6, sorted by actor_id
   },
   event_cursor:integer,
   llm_record_cursor:integer,
+  decision_record_cursor:integer, // [A1] number of committed DecisionRecords
   pending_perception_deliveries:array<BoundaryPerceptionDelivery>,
   canonical_config_hash:string,canonical_map_hash:string
 }
@@ -305,6 +346,16 @@ LLMCallRecord { // separate recording JSONL, not WorldEvent
 `persistence` is the only filesystem writer (snapshots via atomic replacement, world events append to JSONL, model calls append to another JSONL). World uses no IO libraries. JSON snapshots can restore only on completed tick boundaries, including pending active-action progress and pending deliveries. Runtime editable parameters require their own explicit `config_changed` events. A UI playback rehydrates a display projection from event records; an authoritative re-execution recomputes world state using recorded decisions.
 
 At the end of tick `k`, every living actor has one packet for `k` pending until delivery; tick-zero initialization follows the same rule. `delivered_perception_ticks` starts at -1 per actor and advances monotonically after ingestion. An actor cannot acknowledge tick `k` twice. Snapshot the pending packets verbatim; do not rebuild transient observations from WorldState on restore. Runtime rule edits are disabled in P1 (`rule_overrides={}`); the `config_changed` event is reserved for the later explicitly permitted parameter list. No implementer may choose editable parameters during P1.
+
+**[A1] Runtime state, checkpoint phase and resume.** `event_cursor` equals
+`world.event_log_cursor`; the runtime ordinals (which count accepted decisions, substitutes
+included) sum to `decision_record_cursor`, which is not `llm_record_cursor`. The only P1
+checkpoint point is post-commit phase 7, before phase-1 ingestion of that boundary (tick zero
+included); an after-ingest/before-decide checkpoint is refused. Resume is continuation-only:
+it verifies hashes, runtime inputs and checkpoint consistency, then writes into a new output
+directory only post-checkpoint events and decisions plus `resume-origin.json`
+`{source_run_id, checkpoint_tick, checkpoint_sha256, event_cursor, decision_record_cursor}`;
+it never modifies the source run (agent-interface §6).
 
 ## 6. Determinism appendix
 
