@@ -2,10 +2,10 @@
 
 from typing import Protocol
 
-from living_island.world.protocol import ActionIntent, Observation
+from living_island.world.protocol import ActionPlan, Perception
 
 
 class Resident(Protocol):
-    """Anything that turns an observation into an intent proposal."""
+    """Anything that turns a perception into an action plan."""
 
-    def decide(self, observation: Observation) -> ActionIntent: ...
+    def decide(self, perception: Perception) -> ActionPlan: ...

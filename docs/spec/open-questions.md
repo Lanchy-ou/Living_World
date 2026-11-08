@@ -7,3 +7,4 @@ record the question, make the smallest reversible assumption, and flag it in you
 |---|---|---|---|---|---|
 | OQ-001 | 2026-11-08 | P0-01 | The product doc names a module `interface` (player interaction, saving, observation, debugging) but the P0-01 structure has no such package; its responsibilities are spread over `sim`, `persistence` and `contract`. Is a separate `interface`/API package wanted later (FastAPI)? | None; no `interface` package created. | open |
 | OQ-002 | 2026-11-08 | P0-01a | Memory import-linter contract has `unmatched_ignore_imports_alerting = "none"` because no memory module imports `world.protocol` yet. | Keep `none`; switch to `error` when the first memory module imports `world.protocol`. | open |
+| OQ-003 | 2026-11-08 | P0-02 | Content-validation and engine tests listed in world rules §8 are P1 work. | None; only a minimal content test (`test_default_content.py`) is added in P0-02. | open |
