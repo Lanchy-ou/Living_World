@@ -41,8 +41,11 @@ Python package `living_island` (`backend/src/living_island/`). Enforced by impor
 - `world` imports no other `living_island` subpackage, and no `anthropic`, `openai`,
   `httpx`, `requests`, `fastapi`. It contains perception (observation building) and
   `world/protocol.py` (`Observation`, `ActionIntent`, `ActionResult`).
-- `agents` and `memory` may use `world` only through `living_island.world.protocol`.
-- `events.narrative` must not import `sim` or `persistence`.
+- `agents` and `memory` may use `world` only through `living_island.world.protocol`, and
+  only their submodules (e.g. `agents/base.py`) may import it. Package `__init__.py` files
+  must not import anything from `world`.
+- The whole `events` package (not just `events.narrative`) must not import `sim` or
+  `persistence`.
 - `agents` never modify world state; `sim` is the only coordinator that connects them.
 - `contract` holds the pydantic models shared with the frontend.
 - `frontend/src/api/generated/` is generated from `contract`; never hand-edit it.
@@ -60,7 +63,7 @@ uv run --directory backend pytest
 uv run --directory backend ruff check .
 uv run --directory backend ruff format --check .
 uv run --directory backend mypy src
-uv run --directory backend lint-imports
+uv run --directory backend lint-imports --no-cache
 
 # Frontend
 pnpm --dir frontend install
