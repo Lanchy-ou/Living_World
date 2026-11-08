@@ -12,7 +12,10 @@ intents; the frontend only displays state and sends commands.
 - Product document: `docs/product/living-island-v0.1-design.md` (read the "[Claude note]"
   blocks too; notes marked "Confirmed" override the original text).
 - Specs: `docs/spec/` (`world-rules-v0.1.md`, `interface-contract-v0.1.md`,
-  `balance-notes-v0.1.md`, `open-questions.md`).
+  `balance-notes-v0.1.md`, `agent-interface-v0.1.md`, `p1-replay-frontend-v0.1.md`,
+  `open-questions.md`).
+- P1 plan: `docs/tasks/p1-implementation-plan-v0.1.md` (tasks, lanes, gates, handoff
+  fields, change requests).
 - Decisions: `docs/adr/`. Task briefs and handoffs: `docs/tasks/`.
 
 ## Source of truth order
@@ -90,7 +93,15 @@ uv run --directory backend python ../scripts/gen_types.py
 - Code, comments and docs are written in English.
 - Scripts must be cross-platform: Python scripts or `package.json` scripts only.
 - When done, append a "Handoff" section to `docs/tasks/<id>.md`: what changed, commands
-  run and their results, deviations, open questions.
+  run and their results, deviations, open questions, **plus** the seven required
+  fields (plan §6).
+- Every task passes Gate 1 (executor checks) and Gate 2 (independent reviewer). Gate 3
+  (project owner) applies only at milestones M1–M4 (plan §4).
+- At most two active workers, counting reviewers. Each task has its own branch and an
+  isolated worktree (plan §3).
+- A spec contradiction goes through the change-request steps (plan §7). Downstream agents
+  never edit frozen contracts.
+- Task cards follow `docs/tasks/_template.md`.
 
 ## Definition of done
 
