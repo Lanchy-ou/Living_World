@@ -15,7 +15,7 @@ jobs:
       - run: uv run --directory backend ruff check .
       - run: uv run --directory backend ruff format --check .
       - run: uv run --directory backend mypy src
-      - run: uv run --directory backend lint-imports
+      - run: uv run --directory backend lint-imports --no-cache
       - run: uv run --directory backend pytest
 
   frontend:

@@ -64,18 +64,25 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "agents and memory see world only via world.protocol"
+name = "agents see world only via world.protocol"
 type = "forbidden"
-source_modules = ["living_island.agents", "living_island.memory"]
+source_modules = ["living_island.agents"]
 forbidden_modules = ["living_island.world"]
-ignore_imports = [
-    "living_island.agents.** -> living_island.world.protocol",
-    "living_island.memory.** -> living_island.world.protocol",
-]
+ignore_imports = ["living_island.agents.** -> living_island.world.protocol"]
+unmatched_ignore_imports_alerting = "error"
+
+[[tool.importlinter.contracts]]
+name = "memory sees world only via world.protocol"
+type = "forbidden"
+source_modules = ["living_island.memory"]
+forbidden_modules = ["living_island.world"]
+# No memory module imports world.protocol yet, so this ignore is unmatched today.
+# Switch to "error" when the first memory module does.
+ignore_imports = ["living_island.memory.** -> living_island.world.protocol"]
 unmatched_ignore_imports_alerting = "none"
 
 [[tool.importlinter.contracts]]
-name = "narrative is read-only: no sim, no persistence"
+name = "events is read-only: no sim, no persistence"
 type = "forbidden"
-source_modules = ["living_island.events.narrative"]
+source_modules = ["living_island.events"]
 forbidden_modules = ["living_island.sim", "living_island.persistence"]
