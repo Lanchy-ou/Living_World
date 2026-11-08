@@ -3,7 +3,7 @@
 Responsibility:
     Own all world state and the only code that changes it. Validate and resolve action
     intents deterministically (seeded RNG, fixed resolution order). Build the limited
-    ``Observation`` each resident receives (perception lives here).
+    ``Perception`` each resident receives (perception lives here).
 
 Must NOT:
     Import any other ``living_island`` subpackage, or any LLM / network library

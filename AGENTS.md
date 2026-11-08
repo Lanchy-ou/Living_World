@@ -11,7 +11,8 @@ intents; the frontend only displays state and sends commands.
 
 - Product document: `docs/product/living-island-v0.1-design.md` (read the "[Claude note]"
   blocks too; notes marked "Confirmed" override the original text).
-- Specs: `docs/spec/` (`world-rules-v0.1.md`, `interface-contract.md`, `open-questions.md`).
+- Specs: `docs/spec/` (`world-rules-v0.1.md`, `interface-contract-v0.1.md`,
+  `balance-notes-v0.1.md`, `open-questions.md`).
 - Decisions: `docs/adr/`. Task briefs and handoffs: `docs/tasks/`.
 
 ## Source of truth order
@@ -23,7 +24,7 @@ If code disagrees with the spec, the code is wrong (or the spec needs a task to 
 
 1. **The world is the source of truth.** Agents only propose intents; the world validates
    and resolves them. No LLM output may change world state directly.
-2. **Perception is not omniscience.** Agents only receive an `Observation` built by the
+2. **Perception is not omniscience.** Agents only receive a `Perception` built by the
    world; they never see full world state.
 3. **The narrative never invents facts.** Narrative code is read-only over the event log.
 4. **Memory is not objective history.** The event log (engine-owned) is separate from
@@ -39,9 +40,9 @@ Python package `living_island` (`backend/src/living_island/`). Enforced by impor
 (`backend/pyproject.toml`) in CI:
 
 - `world` imports no other `living_island` subpackage, and no `anthropic`, `openai`,
-  `httpx`, `requests`, `fastapi`. It contains perception (observation building) and
-  `world/protocol.py` (`Observation`, `ActionIntent`, `ActionResult`).
-- `agents` and `memory` may use `world` only through `living_island.world.protocol`, and
+  `httpx`, `requests`, `fastapi`. It builds `Perception` (the perception boundary) and holds
+  `world/protocol.py` (`Perception`, `ActionPlan`, `ActionIntent`, `ActionResult`).
+- `agents` and `memory` may use `world` only through `living_island.world.protocol`.
   The top-level `agents/__init__.py` and `memory/__init__.py` must not import from `world`;
   submodules, including subpackages such as `agents/llm/`, may import only `world.protocol`.
 - The whole `events` package (not just `events.narrative`) must not import `sim` or

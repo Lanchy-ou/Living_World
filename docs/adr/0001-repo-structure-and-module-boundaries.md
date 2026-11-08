@@ -1,5 +1,7 @@
 # ADR 0001: Repository structure and module boundaries
 
+Terminology note: `Observation` was renamed `Perception` in ADR 0002.
+
 - Status: accepted
 - Date: 2026-11-08
 - Task: P0-01
