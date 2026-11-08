@@ -72,6 +72,13 @@ Probes in a scratch copy of `backend/` (all run with `lint-imports --no-cache`):
 4. **Stale cache:** a plain `lint-imports` run in the scratch copy once reported a failure on
    an already-restored tree; `--no-cache` passed. Probes and the final run used `--no-cache`.
 
+### Decisions
+
+- Probe 1 (`agents/__init__.py` imports `world.protocol`) is expected to FAIL. Only
+  submodules of `agents`/`memory` may import `world.protocol`; the top-level `__init__.py`
+  files must not import from `world`.
+- Merge of this branch into `main` (merge commit, no squash) is approved.
+
 ### Open questions
 
 - For probe 1, should `agents/__init__.py` itself be allowed to import `world.protocol`

@@ -42,8 +42,8 @@ Python package `living_island` (`backend/src/living_island/`). Enforced by impor
   `httpx`, `requests`, `fastapi`. It contains perception (observation building) and
   `world/protocol.py` (`Observation`, `ActionIntent`, `ActionResult`).
 - `agents` and `memory` may use `world` only through `living_island.world.protocol`, and
-  only their submodules (e.g. `agents/base.py`) may import it. Package `__init__.py` files
-  must not import anything from `world`.
+  The top-level `agents/__init__.py` and `memory/__init__.py` must not import from `world`;
+  submodules, including subpackages such as `agents/llm/`, may import only `world.protocol`.
 - The whole `events` package (not just `events.narrative`) must not import `sim` or
   `persistence`.
 - `agents` never modify world state; `sim` is the only coordinator that connects them.
