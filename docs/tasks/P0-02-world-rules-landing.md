@@ -110,16 +110,16 @@ Reply with: `git diff --stat main`, every command's exit code, the map hash, and
 
 - Docstrings in `agents/__init__.py` and `world/__init__.py` mention `Observation`; updated to
   `Perception` for consistency (not in the brief's file list).
-- Interface-contract title: removed the "(DRAFT)" suffix as a status label. Other titles still
-  say "v0.1-rc3" and the balance-notes title still says "PROPOSED, NOT MEASURED", and the TOML
-  `schema_version` is still `"0.1-rc3"`; none were changed (no rule/number/wording changes
-  beyond the brief). Decide whether to rename these in a follow-up.
+- Interface-contract title: removed the "(DRAFT)" suffix as a status label. The remaining
+  rc3 labels were removed in the final touch (see below).
 - Balance notes had no status line; the approved block was inserted under the title.
 - The TOML header's first line "NOT ACCEPTED / NOT BALANCE-TESTED" was replaced by the block;
   its other comment lines are unchanged.
 - Fixed a dangling "and" left in AGENTS.md "Module boundaries" by P0-01a while editing it.
-- The ADR names the damp-moss cue as "approved option C" as stated in the brief; the option
-  letter is not defined in the landed spec files.
+- The ADR first named the cue "approved option C" as in the brief; the final touch replaced it
+  with a direct description (the option is defined in balance notes §3).
+- Final touch: ADR 0001 terminology note; "-rc3" dropped from spec titles, TOML header and
+  `schema_version` (now `"0.1"`); balance-notes title now "(values are candidates, not measured)".
 
 ### Open questions
 

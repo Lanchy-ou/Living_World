@@ -21,8 +21,8 @@ are not obvious from the spec text.
 - **Canteen value is a hypothesis.** It is not an established balance fact. P2 tests it by
   comparing runs with and without the canteen at fixed geometry and hydration. Nonholder
   deaths are not a success criterion.
-- **Day-one water cue:** damp moss, a real local cue that suggests a direction but gives no
-  coordinates (approved option C).
+- **Day-one water cue:** a vague physical cue (damp moss at (15,32)) pointing east, with no
+  spring coordinates.
 - **Ownership of perception and decision context:** `world` builds `Perception`; `agents`
   builds `DecisionContext` from a `Perception` plus the character's own memory and goals.
   This extends ADR 0001 (perception lives in `world/`).

@@ -1,4 +1,4 @@
-# Living Island — v0.1-rc3 configuration.
+# Living Island — v0.1 configuration.
 # **Approved v0.1 (2026-11-08).** Rules and semantics are frozen. Numeric values in
 # `content/worlds/default.toml` are candidates to be tuned in P2 without changing this spec.
 # `Perception`, `ActionPlan`, `ActionIntent`, `ActionResult` and `DecisionTrigger` are frozen
@@ -9,7 +9,7 @@
 # No floating-point configuration in the authoritative simulation.
 
 [meta]
-schema_version = "0.1-rc3"
+schema_version = "0.1"
 world_id = "default_island"
 run_id = "default_island_seed20261108_run01" # deterministic ID for replay tests
 seed = 20261108

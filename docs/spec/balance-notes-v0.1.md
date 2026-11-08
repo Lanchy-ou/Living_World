@@ -1,4 +1,4 @@
-# Living Island — v0.1-rc3 Balance Notes (PROPOSED, NOT MEASURED)
+# Living Island — v0.1 Balance Notes (values are candidates, not measured)
 
 > **Approved v0.1 (2026-11-08).** Rules and semantics are frozen. Numeric values in
 > `content/worlds/default.toml` are candidates to be tuned in P2 without changing this spec.
