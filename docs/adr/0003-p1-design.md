@@ -57,3 +57,12 @@ browser replay. This ADR records the decisions that shape that work.
   and request indexes, so replies and causal references behave as in an uninterrupted run.
   WorldState and the contract are unchanged. Plan §2.1 is marked `[CR-003]`.
 - Open questions through OQ-049 are dispositioned in `docs/spec/open-questions.md`.
+
+## Addendum: M3 (2026-11-09, P1-07)
+
+- **M3 signed off by the owner** after loading a real exported `ReplayBundle` (the scripted
+  mechanics fixture from P1-07) in the merged P1-08 viewer, inspecting a failure and seeking
+  to the final tick.
+- Exports from `run` and `reexecute` are byte-identical; `resume --export-replay` stays
+  refused (replay-frontend §2.4). No contract or schema change was needed after A2.
+- OQ-023 closed with a shared invalid fixture; OQ-050 accepted.
