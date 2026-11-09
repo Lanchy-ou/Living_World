@@ -577,3 +577,55 @@ def test_a_fresh_baseline_never_counts_self_as_a_sight() -> None:
     content, state = tiny(day_radius_tiles=0, night_radius_tiles=0)
     batch = run_tick(content, state, 1)  # empty baselines, nobody in sight
     assert batch.new_sight_actor_ids == ["ella"]  # only the canteen holder's inventory ID
+
+
+# ------------------------------------------------------------------ rework round 2
+
+
+def test_stale_config_is_refused_at_bind_time() -> None:
+    """G2-02: canonical hashes are recomputed from the private copy before anything is built."""
+    content, state = tiny()
+    cutoffs = content.config.perception.need_band_cutoffs
+    original = list(cutoffs)
+    cutoffs[:] = [9000, 9100, 9200, 9300]  # data changed, declared hashes unchanged
+    try:
+        with pytest.raises(ValueError, match="config does not match"):
+            begin_observation_tick(state, 1, content)
+    finally:
+        cutoffs[:] = original
+    begin_observation_tick(state, 1, content)  # restored content binds again
+
+
+def test_stale_map_is_refused_at_bind_time() -> None:
+    content, state = tiny()
+    original = content.map_rows[3]
+    content.map_rows[3] = original.replace(".", ",", 1)  # still a legal glyph, stale hash
+    try:
+        with pytest.raises(ValueError, match="map does not match"):
+            begin_observation_tick(state, 1, content)
+    finally:
+        content.map_rows[3] = original
+    expected = run_tick(content, state, 1)
+    assert expected.physical_samples_by_actor  # the refused bind poisoned no cache
+
+
+def test_content_matching_itself_but_not_the_world_state_is_refused() -> None:
+    content, state = tiny()
+    state.config_hash = "1" * 64
+    with pytest.raises(ValueError, match="do not match the world state"):
+        begin_observation_tick(state, 1, content)
+    state.config_hash = content.config_hash
+    state.map_hash = "2" * 64
+    with pytest.raises(ValueError, match="do not match the world state"):
+        begin_observation_tick(state, 1, content)
+
+
+def test_identical_state_and_valid_content_give_a_byte_identical_batch() -> None:
+    first_content, first_state = tiny(day_radius_tiles=3)
+    second_content, second_state = tiny(day_radius_tiles=3)
+    assert first_content is not second_content
+    one = run_tick(first_content, first_state, 1, {"ella": [c(4, 2), c(5, 2)]})
+    two = run_tick(second_content, second_state, 1, {"ella": [c(4, 2), c(5, 2)]})
+    assert canonical_json_bytes(one.model_dump(mode="json")) == canonical_json_bytes(
+        two.model_dump(mode="json")
+    )

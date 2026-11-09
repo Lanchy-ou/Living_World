@@ -24,7 +24,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
-from living_island.world.content import WorldContent, map_hash
+from living_island.world.content import WorldContent, config_hash, map_hash
 from living_island.world.perception import (
     CueView,
     EntityView,
@@ -62,13 +62,14 @@ from living_island.world.state import (
 # Derived tile views
 # ---------------------------------------------------------------------------
 
-# Immutable, shared TileView objects per map, keyed by the canonical map hash recomputed from
-# the rows that built them. This caches derived data only (never content) and cannot go stale.
+# Immutable, shared TileView objects per map, keyed only by a map hash that
+# ``begin_observation_tick`` has just recomputed from the private copy's rows and verified
+# against the world identity. This caches derived data only (never content).
 _TILE_VIEWS: dict[str, tuple[TileView, ...]] = {}
 
 
-def _tile_views(smap: StaticMap, rows: list[str]) -> tuple[TileView, ...]:
-    key = map_hash(rows)
+def _tile_views(smap: StaticMap, verified_map_hash: str) -> tuple[TileView, ...]:
+    key = verified_map_hash
     views = _TILE_VIEWS.get(key)
     if views is None:
         views = tuple(
@@ -149,13 +150,13 @@ class WorkingAccumulator(ObservationAccumulator):
         self,
         completed_tick: int,
         receipt_baseline: tuple[ExposureReceipts, ...],
-        content: WorldContent,
+        private_content: WorldContent,
     ):
+        """Takes ownership of ``private_content``, already deep-copied and hash-verified."""
         super().__init__(completed_tick, receipt_baseline)
-        # [CR-002] A private deep copy: later changes to the caller's object cannot matter.
-        self._content = content.model_copy(deep=True)
-        self._smap = StaticMap.from_content(self._content)
-        self._tile_views = _tile_views(self._smap, self._content.map_rows)
+        self._content = private_content
+        self._smap = StaticMap.from_content(private_content)
+        self._tile_views = _tile_views(self._smap, private_content.map_hash)
         self._steps: dict[str, _ActorSteps] = {}
         self._known = _build_known(self._receipt_baseline)  # from the private baseline copy
 
@@ -180,12 +181,23 @@ def _living(state: WorldState, actor_id: str) -> ResidentPhysicalState:
 def begin_observation_tick(
     state: WorldState, completed_tick: int, content: WorldContent
 ) -> ObservationAccumulator:
-    """Open a tick: freeze the tick-start receipt baseline and keep a copy of the content."""
+    """Open a tick: freeze the tick-start receipt baseline and keep verified content.
+
+    [CR-002] The content is deep-copied first. The copy's canonical config and map hashes are
+    recomputed from its data and must equal its declared hashes and the world state's
+    identity, before the map is built or any cache is read. A mismatch raises; there is no
+    fallback. The caller's object is never read again.
+    """
     if completed_tick < 0:
         raise ValueError("completed_tick must be nonnegative")
-    if (content.config_hash, content.map_hash) != (state.config_hash, state.map_hash):
+    private = content.model_copy(deep=True)
+    if config_hash(private.config) != private.config_hash:
+        raise ValueError("content config does not match its declared config_hash (stale content)")
+    if map_hash(private.map_rows) != private.map_hash:
+        raise ValueError("content map does not match its declared map_hash (stale content)")
+    if (private.config_hash, private.map_hash) != (state.config_hash, state.map_hash):
         raise ValueError("content hashes do not match the world state's config_hash/map_hash")
-    return WorkingAccumulator(completed_tick, tuple(state.exposure_receipts_by_resident), content)
+    return WorkingAccumulator(completed_tick, tuple(state.exposure_receipts_by_resident), private)
 
 
 def observe_step(
