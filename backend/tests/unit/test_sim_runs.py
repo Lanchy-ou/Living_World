@@ -379,7 +379,6 @@ def test_cli_seed_zero_tick_and_incompatible_flags(tmp_path, capsys):
         "--out",
         str(output),
     ]
-
     assert main([*arguments, "--script", "extra.json"]) == 1
     assert "--script is required" in capsys.readouterr().err
     with pytest.raises(SystemExit) as error:

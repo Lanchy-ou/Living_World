@@ -9,7 +9,10 @@ from hypothesis import strategies as st
 from test_engine_actions import content_with
 
 from living_island.contract.replay import ReplayBundle
+from living_island.persistence._codec import PersistenceError
+from living_island.persistence.content import load_world_content
 from living_island.persistence.replay import FrameSpool, export_replay
+from living_island.persistence.scripts import load_script
 from living_island.sim.cli import main
 from living_island.sim.runner import run
 from living_island.world.content import canonical_json_bytes
@@ -241,4 +244,30 @@ def test_frame_write_error_stops_run_and_refuses_publication(tmp_path, capsys, m
         == 1
     )
     assert not (directory / "decision-trace.json").exists()
+    assert not (directory / "replay.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("artifact", "message"),
+    [
+        ("frames.jsonl", "final_frame.*does not match the final checkpoint"),
+        ("checkpoint-0000000006.json", "final_world_sha256"),
+    ],
+)
+def test_export_refuses_altered_final_health(tmp_path, artifact, message):
+    directory = tmp_path / "run"
+    content = load_world_content(FIXTURES / "mechanics.toml")
+    script = load_script(FIXTURES / "mechanics.script.json", content.config)
+    run(content, 6, directory, script=script, on_boundary_committed=FrameSpool(directory))
+    target = directory / artifact
+    lines = target.read_bytes().splitlines(keepends=True)
+    final = json.loads(lines[-1])
+    world = final if artifact == "frames.jsonl" else final["world"]
+    assert world["residents"][2]["health"] == 70
+    world["residents"][2]["health"] = 71
+    lines[-1] = canonical_json_bytes(final) + (b"\n" if artifact == "frames.jsonl" else b"")
+    target.write_bytes(b"".join(lines))
+
+    with pytest.raises(PersistenceError, match=message):
+        export_replay(directory)
     assert not (directory / "replay.json").exists()
