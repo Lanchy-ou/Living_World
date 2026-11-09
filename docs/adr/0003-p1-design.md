@@ -66,3 +66,16 @@ browser replay. This ADR records the decisions that shape that work.
 - Exports from `run` and `reexecute` are byte-identical; `resume --export-replay` stays
   refused (replay-frontend §2.4). No contract or schema change was needed after A2.
 - OQ-023 closed with a shared invalid fixture; OQ-050 accepted.
+
+## Addendum: M4 (2026-11-09, P1-09)
+
+- **M4 signed off by the owner; P1 is complete.** On a clean clone of `main` at `6d90824`,
+  the README walkthrough ran verbatim. The default world ran for 1,008 ticks, resumed from
+  tick 144 and was re-executed. Event and decision logs and the final world hash matched
+  across all three runs, and the two exported replays were byte-identical. The owner loaded
+  the replay in the viewer through tick 1008. Post-merge CI on `main` is green.
+- P1-09 carried no contract, schema or rule change. Its export now checks the last spool
+  frame against the final checkpoint before publishing.
+- OQ-015 and OQ-017 accepted, OQ-018 closed, OQ-053 accepted. Deferred to P2: OQ-049
+  (`run_id` under `--seed`), OQ-051 (replay size warning), OQ-052 (intermediate-frame
+  export check).

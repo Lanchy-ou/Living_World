@@ -3,8 +3,8 @@
 Living Island runs a deterministic 2D island world. Residents propose actions through a
 policy interface, and the world validates and resolves them. The P1 CLI runs random and
 scripted policies, saves checkpoints, and re-executes recorded decisions. The offline viewer
-loads exported replays for inspection. P1 integration is ready for review and M4 owner
-acceptance is pending.
+loads exported replays for inspection. P1 is complete: milestone M4 was signed off by the
+project owner on 2026-11-09.
 
 - [Product design](docs/product/living-island-v0.1-design.md)
 - [Specifications](docs/spec/)
