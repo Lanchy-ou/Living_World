@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 
-from living_island.world.facts import ResidentMovedPayload
+from living_island.world.facts import ResidentMovedPayload, WorldEvent
 from living_island.world.pathfinding import NEIGHBOR_STEPS, PathResult, find_path
 from living_island.world.ports import ObservationAccumulator, observe_step
 from living_island.world.protocol import Coord, FailureCode
@@ -33,7 +33,7 @@ def move(
     action: ActiveAction,
     observations: ObservationAccumulator,
     budget: int,
-    emit: Callable[[ResidentMovedPayload], None],
+    emit: Callable[[ResidentMovedPayload], WorldEvent],
 ) -> tuple[int, FailureCode | None]:
     route = action.route
     cursor = action.route_cursor

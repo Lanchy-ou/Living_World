@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
+from typing import cast
 
+from living_island.world import actions
 from living_island.world.content import WorldContent, canonical_json_bytes
+from living_island.world.death import apply_death
 from living_island.world.facts import (
     ActionFailedPayload,
+    ActionInterruptedPayload,
     ActionProgressedPayload,
     ActionStartedPayload,
     ActionSucceededPayload,
@@ -18,6 +23,15 @@ from living_island.world.facts import (
     format_event_id,
 )
 from living_island.world.movement import move, plan_movement
+from living_island.world.physiology import (
+    ActivityKind,
+    TickActivity,
+    apply_metabolism,
+    apply_rest_sleep_gain,
+    condition_fact,
+    is_dead,
+    near_cave,
+)
 from living_island.world.ports import (
     ObservationAccumulator,
     ObservationBatch,
@@ -29,12 +43,17 @@ from living_island.world.protocol import (
     ActionIntent,
     BoundaryPerceptionDelivery,
     Coord,
+    EntityTarget,
     FailureCode,
     Perception,
+    ResidentTarget,
     TileTarget,
     format_delivery_id,
 )
 from living_island.world.receipts import merge_receipts, merge_tile_indices
+from living_island.world.resources import record_regrowth, regrow_fruit
+from living_island.world.rng import shuffle
+from living_island.world.rulefacts import PendingFact
 from living_island.world.space import StaticMap
 from living_island.world.state import (
     ActiveAction,
@@ -234,35 +253,64 @@ class Engine:
         return event.model_copy(deep=True)
 
     def _action_fact(
-        self, type: EventType, action: ActiveAction, payload: TypedEventPayload
-    ) -> None:
+        self,
+        type: EventType,
+        action: ActiveAction,
+        payload: TypedEventPayload,
+        *,
+        causes: list[str] | None = None,
+    ) -> WorldEvent:
         intent = action.intent
-        self.append_fact(type, intent.actor_id, None, intent.intent_id, None, [], payload)
+        target = intent.target
+        target_id = target.id if isinstance(target, EntityTarget | ResidentTarget) else None
+        return self.append_fact(
+            type,
+            intent.actor_id,
+            target_id,
+            intent.intent_id,
+            None,
+            causes or [],
+            payload,
+        )
+
+    def _rule_fact(self, fact: PendingFact, intent_id: str | None = None) -> WorldEvent:
+        return self.append_fact(
+            fact.type,
+            fact.actor_id,
+            fact.target_id,
+            intent_id,
+            None,
+            [],
+            fact.payload,
+        )
 
     def _start(self, resident: ResidentPhysicalState, intent: ActionIntent) -> ActiveAction:
-        if intent.action_type != "move_to":
-            raise RuntimeError("only movement is wired at checkpoint A")
-        assert isinstance(intent.target, TileTarget)
+        kind = intent.action_type
         route: list[Coord] | None = None
-        failure: FailureCode | None = None
-        if not resident.alive:
-            failure = "DEAD"
-        elif resident.stamina <= self._config.needs.min_value:
-            failure = "EXHAUSTED"
-        else:
-            explored = next(
-                group.tile_indices
-                for group in self._state.explored_tiles_by_resident
-                if group.resident_id == resident.id
-            )
-            path = plan_movement(self._map, explored, resident.position, intent.target.position)
-            if isinstance(path, str):
-                failure = path
-            elif path.status != "ok":
-                failure = path.status
+        failure = actions.validate(self._config, self._state, resident, intent)
+        if failure is None and kind == "move_to":
+            assert isinstance(intent.target, TileTarget)
+            if resident.stamina <= self._config.needs.min_value:
+                failure = "EXHAUSTED"
             else:
-                route = list(path.route)
-        duration = None if failure is None else self._config.actions.invalid_attempt_ticks
+                explored = next(
+                    group.tile_indices
+                    for group in self._state.explored_tiles_by_resident
+                    if group.resident_id == resident.id
+                )
+                path = plan_movement(self._map, explored, resident.position, intent.target.position)
+                if isinstance(path, str):
+                    failure = path
+                elif path.status != "ok":
+                    failure = path.status
+                else:
+                    route = list(path.route)
+        if failure is not None:
+            duration = self._config.actions.invalid_attempt_ticks
+        elif kind == "move_to":
+            duration = None
+        else:
+            duration = cast(int, getattr(self._config.actions, f"{kind}_ticks"))
         action = ActiveAction(
             intent=intent,
             tick_started=self._state.tick,
@@ -288,15 +336,19 @@ class Engine:
         resident: ResidentPhysicalState,
         action: ActiveAction,
         observations: ObservationAccumulator,
-    ) -> bool:
+    ) -> tuple[bool, int]:
         action.elapsed_ticks += 1
+        if (
+            action.pending_failure_code is None
+            and action.intent.action_type in ("move_to", "gather")
+            and resident.stamina <= self._config.needs.min_value
+        ):
+            action.pending_failure_code = "EXHAUSTED"
+            return True, 0
         if action.remaining_ticks is not None:
             action.remaining_ticks -= 1
-            return action.remaining_ticks == 0
-        if resident.stamina <= self._config.needs.min_value:
-            action.pending_failure_code = "EXHAUSTED"
-            return True
-        _, failure = move(
+            return action.remaining_ticks == 0, 0
+        steps, failure = move(
             self._map,
             self._state,
             resident,
@@ -306,22 +358,36 @@ class Engine:
             lambda payload: self._action_fact("resident_moved", action, payload),
         )
         action.pending_failure_code = failure
-        return failure is not None or action.route_cursor == len(action.route or [])
+        return failure is not None or action.route_cursor == len(action.route or []), steps
 
-    def advance_tick(self) -> WorldTickCommit:
-        tick = self._open_tick()
-        observations = begin_observation_tick(self._state, tick, self._content)
+    def _progress_actions(
+        self,
+        observations: ObservationAccumulator,
+    ) -> tuple[list[ActiveAction], dict[str, TickActivity]]:
         active = {action.intent.actor_id: action for action in self._state.active_actions}
         unfinished: list[ActiveAction] = []
         completions: list[ActiveAction] = []
-        for resident in self._state.residents:
+        activity: dict[str, TickActivity] = {}
+        for index, resident in enumerate(self._state.residents):
             action = active.get(resident.id)
             intent = self._submitted.get(resident.id)
             if intent is not None:
                 action = self._start(resident, intent)
             if action is None:
                 continue
-            if self._progress(resident, action, observations):
+            activity_kind: ActivityKind = "other"
+            kind = action.intent.action_type
+            if action.pending_failure_code is None and kind in ("rest", "sleep"):
+                activity_kind = kind
+                self._state.residents[index] = apply_rest_sleep_gain(
+                    self._config,
+                    resident,
+                    kind,
+                    near_cave(resident.position, self._state.cave),
+                )
+            done, steps = self._progress(resident, action, observations)
+            activity[resident.id] = TickActivity(kind=activity_kind, tiles_traversed=steps)
+            if done:
                 completions.append(action)
             else:
                 unfinished.append(action)
@@ -336,9 +402,32 @@ class Engine:
                     ),
                 )
         self._state.active_actions = unfinished
+        return completions, activity
+
+    def _settle_actions(
+        self,
+        completions: list[ActiveAction],
+        activity: dict[str, TickActivity],
+    ) -> None:
+        completions.sort(key=lambda a: (a.intent.actor_id, a.intent.intent_id))
+        self._state.resolution_rng_state_uint32 = shuffle(
+            completions,
+            self._state.resolution_rng_state_uint32,
+        )
+        residents = {resident.id: resident for resident in self._state.residents}
         for action in completions:
-            action_type = action.intent.action_type
-            if action.pending_failure_code is None:
+            intent = action.intent
+            actor = residents[intent.actor_id]
+            action_type = intent.action_type
+            failure = cast(FailureCode | None, action.pending_failure_code)
+            if failure is None and action_type != "move_to":
+                failure = actions.validate(self._config, self._state, actor, intent)
+            if failure is None:
+                fact = actions.settle(self._config, self._state, actor, intent)
+                if fact is not None:
+                    self._rule_fact(fact, intent.intent_id)
+                if action_type == "gather":
+                    activity[actor.id] = replace(activity[actor.id], gather_completed=True)
                 self._action_fact(
                     "action_succeeded",
                     action,
@@ -353,10 +442,64 @@ class Engine:
                     action,
                     ActionFailedPayload(
                         action_type=action_type,
-                        failure_code=action.pending_failure_code,
+                        failure_code=failure,
                     ),
                 )
 
+    def _regrow(self, tick: int) -> None:
+        regrowth = regrow_fruit(self._config, self._state.fruit_nodes, tick)
+        self._state.fruit_nodes = regrowth.nodes
+        self._state.lifetime_fruit_regrown = record_regrowth(
+            self._state.lifetime_fruit_regrown,
+            regrowth.regrown_total,
+        )
+        for fact in regrowth.facts:
+            self._rule_fact(fact)
+
+    def _metabolize(
+        self,
+        tick: int,
+        before: list[ResidentPhysicalState],
+        activity: dict[str, TickActivity],
+    ) -> None:
+        for index, previous in enumerate(before):
+            resident = self._state.residents[index]
+            if not resident.alive:
+                continue
+            metabolism = apply_metabolism(
+                self._config,
+                resident,
+                activity.get(resident.id, TickActivity()),
+            )
+            self._state.residents[index] = metabolism.resident
+            for fact in metabolism.cost_facts:
+                self._rule_fact(fact)
+            condition = condition_fact(previous, metabolism.resident)
+            if condition is not None:
+                self._rule_fact(condition)
+            if is_dead(self._config, metabolism.resident):
+                death = apply_death(self._config, self._state, resident.id, tick)
+                self._state = death.state
+                events = [self._rule_fact(fact) for fact in death.facts]
+                if death.cancelled_action is not None:
+                    action = death.cancelled_action
+                    self._action_fact(
+                        "action_interrupted",
+                        action,
+                        ActionInterruptedPayload(
+                            action_type=action.intent.action_type, reason="DEATH"
+                        ),
+                        causes=[events[0].event_id],
+                    )
+
+    def advance_tick(self) -> WorldTickCommit:
+        tick = self._open_tick()
+        before = [resident.model_copy(deep=True) for resident in self._state.residents]
+        observations = begin_observation_tick(self._state, tick, self._content)
+        completions, activity = self._progress_actions(observations)
+        self._settle_actions(completions, activity)
+        self._regrow(tick)
+        self._metabolize(tick, before, activity)
         batch = finish_observation_tick(observations, self._state)
         self._apply_observations(batch)
         self._exploration_facts(batch)
