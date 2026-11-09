@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Sequence
 from dataclasses import replace
 from typing import cast
 
@@ -58,7 +59,6 @@ from living_island.world.protocol import (
     Perception,
     ResidentTarget,
     StateDelta,
-    TalkParameters,
     TileTarget,
     format_delivery_id,
 )
@@ -150,7 +150,12 @@ def _initialize(content: WorldContent) -> WorldState:
 
 
 class Engine:
-    def __init__(self, content: WorldContent, restored_world: WorldState | None):
+    def __init__(
+        self,
+        content: WorldContent,
+        restored_world: WorldState | None,
+        history: Sequence[WorldEvent],
+    ):
         self._content = WorldContent.model_validate(content.model_dump())
         self._config = self._content.config
         self._map = StaticMap.from_content(self._content)
@@ -162,7 +167,7 @@ class Engine:
         self._events: list[WorldEvent] = []
         self._event_ids: set[str] = set()
         self._submitted: dict[str, ActionIntent] = {}
-        self._requests: dict[str, tuple[str, str]] = {}
+        self._requests: dict[str, dialogue.Request] = {}
         self._heard: dict[str, list[HeardUtterance]] = {}
         self._intent_ids = {action.intent.intent_id for action in self._state.active_actions}
         self._outcomes: dict[
@@ -170,15 +175,10 @@ class Engine:
         ] = {}
         self._deltas: dict[str, list[StateDelta]] = {}
         self._results: dict[str, ActionResult] = {}
-        self._restored_boundary = (
-            (self._state.tick, self._state.next_event_seq_in_tick)
-            if restored_world is not None
-            else None
-        )
         if restored_world is not None:
-            if self._state.event_log_cursor:
-                self._event_ids.add(format_event_id(self._state.run_id, 0, 0))
-            self._restore_active_replies()
+            self._restore_history(history)
+        elif history:
+            raise ValueError("fresh engine requires empty event history")
 
     def _restore(self, state: WorldState) -> WorldState:
         if state.next_event_seq_in_tick > state.event_log_cursor:
@@ -193,6 +193,49 @@ class Engine:
         ):
             raise ValueError("restored world does not match the verified content identities")
         return WorldState.model_validate(state.model_dump())
+
+    def _restore_history(self, history: Sequence[WorldEvent]) -> None:
+        state = self._state
+        if not history or len(history) != state.event_log_cursor:
+            raise ValueError(
+                f"restore history requires a complete prefix of length {state.event_log_cursor}"
+            )
+        first = history[0]
+        if first.tick != 0 or first.type != "world_initialized":
+            raise ValueError("restore history must begin with world_initialized at tick zero")
+        tick, seq = 0, 0
+        for event in history:
+            if event.run_id != state.run_id:
+                raise ValueError(f"restore history run_id must equal {state.run_id!r}")
+            if event.tick > state.tick or event.tick < tick:
+                raise ValueError("restore history ticks must be ordered through the checkpoint")
+            if event.tick != tick:
+                tick, seq = event.tick, 0
+            if event.seq_in_tick != seq or event.event_id != format_event_id(
+                state.run_id, tick, seq
+            ):
+                raise ValueError(
+                    f"restore history IDs must be contiguous at tick {tick}, seq {seq}"
+                )
+            self._index_event(event)
+            seq += 1
+        # A tick with no facts is absent from the event prefix.
+        if state.next_event_seq_in_tick != (seq if tick == state.tick else 0):
+            raise ValueError("restore history does not match the checkpoint's event sequence")
+
+    def _index_event(self, event: WorldEvent) -> None:
+        payload = event.payload
+        if isinstance(payload, UtteranceSpokenPayload) and payload.speech_act == "request":
+            request = payload.request
+            if request is None or event.actor_id is None or payload.utterance_id != event.event_id:
+                raise ValueError("request utterance requires a speaker, request and matching ID")
+            self._requests[event.event_id] = (
+                event.actor_id,
+                payload.addressee_id,
+                request.item_type,
+                request.quantity,
+            )
+        self._event_ids.add(event.event_id)
 
     def initial_commit(self) -> WorldTickCommit:
         if not self._initial_pending:
@@ -212,7 +255,7 @@ class Engine:
             }
         )
         digest = hashlib.sha256(canonical_json_bytes(initial_snapshot.model_dump(mode="json")))
-        self.append_fact(
+        self._append_fact(
             "world_initialized",
             None,
             None,
@@ -262,10 +305,24 @@ class Engine:
         caused_by_event_ids: list[str],
         payload: TypedEventPayload,
     ) -> WorldEvent:
+        if type not in ("agent_fallback_used", "god_intervention_recorded"):
+            raise ValueError(f"{type} cannot be emitted through the external append_fact port")
+        return self._append_fact(
+            type, actor_id, target_id, intent_id, llm_call_id, caused_by_event_ids, payload
+        )
+
+    def _append_fact(
+        self,
+        type: EventType,
+        actor_id: str | None,
+        target_id: str | None,
+        intent_id: str | None,
+        llm_call_id: str | None,
+        caused_by_event_ids: list[str],
+        payload: TypedEventPayload,
+    ) -> WorldEvent:
         tick = self._open_tick()
-        if type == "config_changed" or (type == "world_initialized" and (tick or self._events)):
-            raise ValueError(f"{type} cannot be emitted at this boundary")
-        if any(not self._known_event(cause) for cause in caused_by_event_ids):
+        if any(cause not in self._event_ids for cause in caused_by_event_ids):
             raise ValueError("causal references must name known, already emitted events")
         seq = len(self._events)
         event_id = self._next_event_id()
@@ -288,51 +345,9 @@ class Engine:
             ),
             payload=payload,
         ).model_copy(deep=True)
+        self._index_event(event)
         self._events.append(event)
-        self._event_ids.add(event.event_id)
         return event.model_copy(deep=True)
-
-    def _restore_active_replies(self) -> None:
-        for action in self._state.active_actions:
-            intent = action.intent
-            params = intent.parameters
-            target = intent.target
-            if (
-                action.pending_failure_code is not None
-                or not isinstance(params, TalkParameters)
-                or not isinstance(target, ResidentTarget)
-                or params.in_reply_to is None
-            ):
-                continue
-            request = params.in_reply_to
-            position = self._event_position(request)
-            if position is None or position[0] > action.tick_started:
-                raise ValueError("restored active reply has an invalid request ID")
-            # A committed active reply passed start validation, including the immutable parties.
-            self._requests[request] = (target.id, intent.actor_id)
-            self._event_ids.add(request)
-
-    def _event_position(self, event_id: str) -> tuple[int, int] | None:
-        parts = event_id.rsplit(":", 2)
-        if len(parts) != 3 or parts[0] != self._state.run_id:
-            return None
-        try:
-            tick, seq = int(parts[1]), int(parts[2])
-        except ValueError:
-            return None
-        if min(tick, seq) < 0 or event_id != format_event_id(self._state.run_id, tick, seq):
-            return None
-        return tick, seq
-
-    def _known_event(self, event_id: str) -> bool:
-        if event_id in self._event_ids:
-            return True
-        if self._restored_boundary is None:
-            return False
-        # The restored snapshot proves the sequence range of its own committed tick only.
-        position = self._event_position(event_id)
-        tick, count = self._restored_boundary
-        return position is not None and position[0] == tick and position[1] < count
 
     def _next_event_id(self) -> str:
         return format_event_id(self._state.run_id, self._open_tick(), len(self._events))
@@ -348,7 +363,7 @@ class Engine:
         intent = action.intent
         target = intent.target
         target_id = target.id if isinstance(target, EntityTarget | ResidentTarget) else None
-        return self.append_fact(
+        return self._append_fact(
             type,
             intent.actor_id,
             target_id,
@@ -359,7 +374,7 @@ class Engine:
         )
 
     def _rule_fact(self, fact: PendingFact, intent_id: str | None = None) -> WorldEvent:
-        return self.append_fact(
+        return self._append_fact(
             fact.type,
             fact.actor_id,
             fact.target_id,
@@ -373,7 +388,8 @@ class Engine:
         self,
         resident: ResidentPhysicalState,
         intent: ActionIntent,
-        tick: int,
+        *,
+        emission_tick: int | None = None,
     ) -> FailureCode | None:
         failure = actions.validate(self._config, self._state, resident, intent)
         if failure is None and intent.action_type == "talk":
@@ -382,15 +398,15 @@ class Engine:
                 self._state,
                 resident,
                 intent,
-                tick,
                 self._requests,
+                emission_tick=emission_tick,
             )
         return failure
 
     def _start(self, resident: ResidentPhysicalState, intent: ActionIntent) -> ActiveAction:
         kind = intent.action_type
         route: list[Coord] | None = None
-        failure = self._validate(resident, intent, self._state.tick)
+        failure = self._validate(resident, intent)
         if failure is None and kind == "move_to":
             assert isinstance(intent.target, TileTarget)
             if resident.stamina <= self._config.needs.min_value:
@@ -533,7 +549,7 @@ class Engine:
             action_type = intent.action_type
             failure = cast(FailureCode | None, action.pending_failure_code)
             if failure is None and action_type != "move_to":
-                failure = self._validate(actor, intent, self._open_tick())
+                failure = self._validate(actor, intent, emission_tick=self._open_tick())
             if failure is None:
                 before = results.effect_values(self._state, actor, intent)
                 if action_type == "talk":
@@ -594,8 +610,6 @@ class Engine:
         payload = dialogue.speech_payload(action.intent, self._next_event_id())
         causes = [] if payload.in_reply_to is None else [payload.in_reply_to]
         spoken = self._action_fact("utterance_spoken", action, payload, causes=causes)
-        if payload.speech_act == "request":
-            self._requests[spoken.event_id] = (speaker.id, payload.addressee_id)
         heard = HeardUtterance(
             utterance_id=spoken.event_id,
             speaker_id=speaker.id,
@@ -616,7 +630,7 @@ class Engine:
                 > self._config.perception.hearing_radius_tiles
             ):
                 continue
-            self.append_fact(
+            self._append_fact(
                 "utterance_heard",
                 listener.id,
                 speaker.id,
@@ -803,7 +817,7 @@ class Engine:
 
     def _exploration_facts(self, batch: ObservationBatch) -> None:
         for update in batch.new_static_tiles_by_actor:
-            self.append_fact(
+            self._append_fact(
                 "exploration_updated",
                 update.actor_id,
                 None,

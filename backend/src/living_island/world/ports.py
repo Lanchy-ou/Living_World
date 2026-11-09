@@ -6,6 +6,7 @@ P1-04. Only engine ports mutate world state.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Protocol
 
 from pydantic import model_validator
@@ -209,7 +210,12 @@ class WorldEngine(Protocol):
         raise NotImplementedError
 
 
-def create_engine(content: WorldContent, restored_world: WorldState | None) -> WorldEngine:
+def create_engine(
+    content: WorldContent,
+    restored_world: WorldState | None,
+    history: Sequence[WorldEvent] = (),
+) -> WorldEngine:
+    """Create a fresh engine or restore against the complete verified event prefix."""
     from living_island.world.engine import Engine
 
-    return Engine(content, restored_world)
+    return Engine(content, restored_world, history)

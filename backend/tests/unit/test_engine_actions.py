@@ -10,7 +10,7 @@ from living_island.world.content import WorldContent, build_world_content, map_b
 from living_island.world.facts import ActionFailedPayload
 from living_island.world.ports import WorldTickCommit, create_engine
 from living_island.world.protocol import ActionIntent, ActionType, Coord
-from living_island.world.state import GroundFruitPile, ReceiptEntity, UniqueCanteenState, WorldState
+from living_island.world.state import GroundFruitPile, ReceiptEntity, UniqueCanteenState
 
 
 def intent(
@@ -45,10 +45,6 @@ def content_with(
     return build_world_content(config, map_bytes_from_rows(ROWS))
 
 
-def snapshot(content: WorldContent) -> WorldState:
-    return create_engine(content, None).initial_commit().snapshot
-
-
 def failures(commit: WorldTickCommit) -> list[str]:
     return [
         e.payload.failure_code for e in commit.events if isinstance(e.payload, ActionFailedPayload)
@@ -76,6 +72,8 @@ def test_last_fruit_resolves_after_full_duration_before_regrowth() -> None:
     assert sum(r.fruit_count for r in second.snapshot.residents) == 1
     facts = [(e.type, e.actor_id, e.target_id) for e in second.events]
     gather = next(f for f in facts if f[0] == "fruit_gathered")
+    winner = next(r.id for r in second.snapshot.residents if r.fruit_count == 1)
+    assert gather == ("fruit_gathered", winner, "fruit_01")
     assert facts.index(gather) < facts.index(("fruit_regrew", None, "fruit_01"))
     assert ("stamina_action_cost_applied", gather[1], None) in facts
     assert second.snapshot.fruit_nodes[0].stock == content.config.fruit.regrow_per_cycle
@@ -84,7 +82,8 @@ def test_last_fruit_resolves_after_full_duration_before_regrowth() -> None:
 @pytest.mark.parametrize("item", ["fruit", "canteen"])
 def test_ground_item_contention_is_atomic(item: str) -> None:
     content = content_with({"ella": (2, 3), "ryan": (3, 4)})
-    state = snapshot(content)
+    initial = create_engine(content, None).initial_commit()
+    state = initial.snapshot
     position = Coord(x=3, y=3)
     if item == "fruit":
         state.ground_fruit = [GroundFruitPile(position=position, quantity=1)]
@@ -106,23 +105,30 @@ def test_ground_item_contention_is_atomic(item: str) -> None:
         )
     target = {"kind": "tile", "position": position}
     settled = tick(
-        create_engine(content, state),
+        create_engine(content, state, initial.events),
         intent("pick_up", "ryan", target=target, item_type=item, quantity=1),
         intent("pick_up", target=target, item_type=item, quantity=1),
     )
     assert failures(settled) == ["ITEM_TAKEN"]
-    winner = next(e.actor_id for e in settled.events if e.type == "item_picked_up")
+    pickup = next(e for e in settled.events if e.type == "item_picked_up")
     if item == "fruit":
+        winner = next(r.id for r in settled.snapshot.residents if r.fruit_count == 1)
+        assert (pickup.actor_id, pickup.target_id) == (winner, "ground_fruit@3,3")
         assert not settled.snapshot.ground_fruit
         assert sum(r.fruit_count for r in settled.snapshot.residents) == 1
     else:
-        assert settled.snapshot.unique_canteen.holder_id == winner
+        assert pickup.actor_id in ("ella", "ryan")
+        assert (pickup.actor_id, pickup.target_id) == (
+            settled.snapshot.unique_canteen.holder_id,
+            "canteen_01",
+        )
         assert settled.snapshot.unique_canteen.ground_position is None
 
 
 def test_give_and_pick_up_contend_for_the_receivers_last_slot() -> None:
     content = content_with({"ella": (2, 3), "ryan": (3, 3)}, inventory={"slot_capacity": 1})
-    state = snapshot(content)
+    initial = create_engine(content, None).initial_commit()
+    state = initial.snapshot
     position = Coord(x=3, y=3)
     state.ground_fruit = [GroundFruitPile(position=position, quantity=1)]
     state.exposure_receipts_by_resident[1].entities.append(
@@ -131,7 +137,7 @@ def test_give_and_pick_up_contend_for_the_receivers_last_slot() -> None:
     group = state.exposure_receipts_by_resident[1]
     group.entities = sorted(group.entities, key=lambda e: (e.entity_id, e.position.y, e.position.x))
     commit = tick(
-        create_engine(content, state),
+        create_engine(content, state, initial.events),
         intent("give", target=RYAN, item_type="canteen", quantity=1),
         intent(
             "pick_up",
@@ -148,9 +154,10 @@ def test_give_and_pick_up_contend_for_the_receivers_last_slot() -> None:
 
 def test_eat_drink_fill_and_give_effects() -> None:
     content = content_with({"ella": (9, 1), "ryan": (9, 2)})
-    state = snapshot(content)
+    initial = create_engine(content, None).initial_commit()
+    state = initial.snapshot
     state.residents[0].fruit_count = 2
-    engine = create_engine(content, state)
+    engine = create_engine(content, state, initial.events)
     given = tick(engine, intent("give", target=RYAN, item_type="fruit", quantity=1))
     assert [r.fruit_count for r in given.snapshot.residents] == [1, 1]
     ate = tick(engine, intent("eat"))
@@ -170,6 +177,15 @@ def test_eat_drink_fill_and_give_effects() -> None:
         engine, intent("give", id="give-canteen", target=RYAN, item_type="canteen", quantity=1)
     )
     assert canteen.snapshot.unique_canteen.holder_id == "ryan"
+    for commit, event_type, target_id in [
+        (given, "item_given", "ryan"),
+        (ate, "fruit_consumed", None),
+        (drank, "water_drank", "canteen_01"),
+        (spring, "water_drank", None),
+        (canteen, "item_given", "ryan"),
+    ]:
+        effect = next(e for e in commit.events if e.type == event_type)
+        assert (effect.actor_id, effect.target_id) == ("ella", target_id)
 
 
 def test_invalid_start_consumes_configured_duration() -> None:
@@ -187,10 +203,11 @@ def test_invalid_start_consumes_configured_duration() -> None:
 @pytest.mark.parametrize("kind", ["rest", "sleep", "wait"])
 def test_recovery_and_wait_through_completion(kind: ActionType) -> None:
     content = content_with({"ella": (2, 3)}, actions={f"{kind}_ticks": 1})
-    state = snapshot(content)
+    initial = create_engine(content, None).initial_commit()
+    state = initial.snapshot
     actor = state.residents[0]
     actor.stamina = 1000
-    result = tick(create_engine(content, state), intent(kind))
+    result = tick(create_engine(content, state, initial.events), intent(kind))
     needs = content.config.needs
     if kind == "rest":
         gain = needs.stamina_rest_gain_per_tick - needs.stamina_awake_decay_per_tick
@@ -204,12 +221,13 @@ def test_recovery_and_wait_through_completion(kind: ActionType) -> None:
 
 def test_death_facts_keep_rule_targets_and_precede_causal_interrupt() -> None:
     content = content_with({"ella": (2, 3)})
-    state = snapshot(content)
+    initial = create_engine(content, None).initial_commit()
+    state = initial.snapshot
     resident = state.residents[0]
     resident.satiety = 0
     resident.health = 1
     resident.fruit_count = 1
-    engine = create_engine(content, state)
+    engine = create_engine(content, state, initial.events)
     result = tick(engine, intent("rest"))
     facts = [(e.type, e.actor_id, e.target_id) for e in result.events]
     assert facts[-6:] == [

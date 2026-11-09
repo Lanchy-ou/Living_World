@@ -102,3 +102,16 @@ def test_frontier_actual_cost_waits_for_the_next_budget() -> None:
     assert [step.step_cost_units for step in steps] == [2]
     assert second_move.snapshot.residents[0].position == Coord(x=6, y=4)
     assert not second_move.snapshot.active_actions
+
+
+def test_move_to_own_tile_succeeds_without_steps() -> None:
+    content = tiny_content(ROWS, {"ella": (2, 3)})
+    engine = create_engine(content, None)
+    initial = engine.initial_commit()
+    result = tick(engine, movement(2, 3))
+    assert result.snapshot.residents[0].position == initial.snapshot.residents[0].position
+    assert not result.snapshot.active_actions
+    assert [e.type for e in result.events if e.intent_id == "move"] == [
+        "action_started",
+        "action_succeeded",
+    ]

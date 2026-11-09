@@ -148,7 +148,7 @@ def test_simultaneous_pair_turns_share_limit_and_cooldown() -> None:
     assert failures(first) == ["DIALOGUE_LIMIT"]
     assert sum(e.type == "utterance_spoken" for e in first.events) == 1
     assert first.snapshot.dialogue_sessions[0].cooldown_until_tick == 3
-    for boundary in (1, 2, 3):
+    for boundary in (1, 2):
         result = tick(
             engine,
             intent(
@@ -159,8 +159,30 @@ def test_simultaneous_pair_turns_share_limit_and_cooldown() -> None:
                 text="Again",
             ),
         )
-        assert failures(result) == (["DIALOGUE_LIMIT"] if boundary < 3 else [])
+        assert failures(result) == (["DIALOGUE_LIMIT"] if boundary == 1 else [])
     assert result.snapshot.dialogue_sessions[0].turn_count == 1
+
+
+def test_talk_emits_exactly_when_cooldown_ends() -> None:
+    content = content_with(
+        {"ella": (2, 3), "ryan": (3, 3)},
+        actions={"talk_ticks": 2},
+        social={"max_dialogue_turns": 1, "dialogue_cooldown_ticks": 3},
+    )
+    engine = create_engine(content, None)
+    engine.initial_commit()
+    tick(engine, intent("talk", target=RYAN, speech_act="statement", text="First"))
+    capped = tick(engine)
+    assert capped.snapshot.dialogue_sessions[0].cooldown_until_tick == 5
+    tick(engine)
+    started = tick(
+        engine, intent("talk", id="second", target=RYAN, speech_act="statement", text="Again")
+    )
+    assert started.snapshot.active_actions[0].remaining_ticks == 1
+    assert not any(e.type == "utterance_spoken" for e in started.events)
+    finished = tick(engine)
+    assert not failures(finished)
+    assert next(e for e in finished.events if e.type == "utterance_spoken").tick == 5
 
 
 def test_dialogue_gap_resets_uncapped_session() -> None:

@@ -8,6 +8,8 @@ from living_island.world.facts import UtteranceRequest, UtteranceSpokenPayload
 from living_island.world.protocol import ActionIntent, FailureCode, ResidentTarget, TalkParameters
 from living_island.world.state import DialogueSessionState, ResidentPhysicalState, WorldState
 
+type Request = tuple[str, str, str, int]  # speaker, addressee, item, quantity
+
 
 def _session(
     state: WorldState,
@@ -21,8 +23,9 @@ def validate_talk(
     state: WorldState,
     actor: ResidentPhysicalState,
     intent: ActionIntent,
-    tick: int,
-    requests: Mapping[str, tuple[str, str]],
+    requests: Mapping[str, Request],
+    *,
+    emission_tick: int | None,
 ) -> FailureCode | None:
     # The engine has already checked the exposure receipt.
     target = intent.target
@@ -33,14 +36,16 @@ def validate_talk(
         return "INVALID_TARGET"
     if distance(actor.position, recipient.position) > config.perception.hearing_radius_tiles:
         return "OUT_OF_HEARING"
-    if params.in_reply_to is not None and requests.get(params.in_reply_to) != (
-        recipient.id,
-        actor.id,
-    ):
-        return "INVALID_REPLY"
-    session = _session(state, sorted([actor.id, recipient.id]))
-    if config.social.max_dialogue_turns == 0 or (session and tick < session.cooldown_until_tick):
-        return "DIALOGUE_LIMIT"
+    if params.in_reply_to is not None:
+        request = requests.get(params.in_reply_to)
+        if request is None or request[:2] != (recipient.id, actor.id):
+            return "INVALID_REPLY"
+    if emission_tick is not None:
+        session = _session(state, sorted([actor.id, recipient.id]))
+        if config.social.max_dialogue_turns == 0 or (
+            session is not None and emission_tick < session.cooldown_until_tick
+        ):
+            return "DIALOGUE_LIMIT"
     return None
 
 

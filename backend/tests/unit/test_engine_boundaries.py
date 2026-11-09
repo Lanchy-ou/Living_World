@@ -3,7 +3,7 @@
 import hashlib
 
 import pytest
-from test_engine_actions import RYAN, TREE, content_with, failures, intent, snapshot
+from test_engine_actions import RYAN, TREE, content_with, failures, intent
 from test_engine_dialogue import ELLA
 from test_engine_movement import movement, tick
 
@@ -11,6 +11,7 @@ from living_island.world.content import canonical_json_bytes
 from living_island.world.engine import Engine
 from living_island.world.facts import (
     AgentFallbackUsedPayload,
+    GodInterventionRecordedPayload,
     WorldInitializedPayload,
     format_event_id,
 )
@@ -46,7 +47,8 @@ def interrupt_world(urgent: bool = False, exhausted: bool = False, dying: bool =
         map={"walk_cost_budget_per_tick": 2},
         perception={"day_radius_tiles": 1, "night_radius_tiles": 1},
     )
-    state = snapshot(content)
+    initial = create_engine(content, None).initial_commit()
+    state = initial.snapshot
     ella = state.residents[0]
     if urgent:
         ella.satiety = content.config.agents.urgent_satiety_below + 1
@@ -68,7 +70,7 @@ def interrupt_world(urgent: bool = False, exhausted: bool = False, dying: bool =
         ],
         key=lambda e: (e.entity_id, e.position.y, e.position.x),
     )
-    return content, state
+    return content, initial
 
 
 def request() -> ActionIntent:
@@ -92,8 +94,8 @@ def request() -> ActionIntent:
     ],
 )
 def test_soft_priorities_keep_all_triggers(urgent: bool, speech: bool, reason: str) -> None:
-    content, state = interrupt_world(urgent=urgent)
-    engine = Engine(content, state)
+    content, initial = interrupt_world(urgent=urgent)
+    engine = Engine(content, initial.snapshot, initial.events)
     submitted = [movement(7, 3), *([request()] if speech else [])]
     result = tick(engine, *submitted)
     feedback = packet(result).perception.last_action_feedback
@@ -126,8 +128,8 @@ def test_soft_priorities_keep_all_triggers(urgent: bool, speech: bool, reason: s
 
 def test_exhaustion_beats_all_soft_triggers_and_death_beats_exhaustion() -> None:
     for dying in (False, True):
-        content, state = interrupt_world(urgent=True, exhausted=True, dying=dying)
-        engine = Engine(content, state)
+        content, initial = interrupt_world(urgent=True, exhausted=True, dying=dying)
+        engine = Engine(content, initial.snapshot, initial.events)
         result = tick(engine, movement(7, 3), request())
         terminal = engine._results["ella"]
         if dying:
@@ -155,8 +157,8 @@ def test_exhaustion_beats_all_soft_triggers_and_death_beats_exhaustion() -> None
 
 @pytest.mark.parametrize("dying", [False, True])
 def test_completion_beats_cooccurring_interrupts(dying: bool) -> None:
-    content, state = interrupt_world(urgent=True, exhausted=True, dying=dying)
-    engine = Engine(content, state)
+    content, initial = interrupt_world(urgent=True, exhausted=True, dying=dying)
+    engine = Engine(content, initial.snapshot, initial.events)
     result = tick(engine, movement(4, 3), request())
     assert engine._results["ella"].status == "success"
     assert not failures(result)
@@ -181,9 +183,10 @@ def test_non_movement_action_retains_sighting_without_interrupting(kind: str) ->
 
 def test_sleep_urgent_crossing_wakes_and_does_not_receive_speech() -> None:
     content = content_with({"ella": (2, 3), "ryan": (3, 3)})
-    state = snapshot(content)
+    initial = create_engine(content, None).initial_commit()
+    state = initial.snapshot
     state.residents[0].satiety = content.config.agents.urgent_satiety_below + 1
-    result = tick(create_engine(content, state), intent("sleep"), request())
+    result = tick(create_engine(content, state, initial.events), intent("sleep"), request())
     assert packet(result).decision_triggers == ["ACTION_INTERRUPTED", "URGENT_NEED", "WOKE"]
     assert not packet(result).perception.heard_utterances
 
@@ -240,10 +243,11 @@ def test_allocator_tick_zero_hash_lifecycle_and_commits_detached() -> None:
 def test_restore_uses_serialized_active_intents_and_rng() -> None:
     content = content_with({"ella": (2, 2), "ryan": (4, 2)}, fruit={"regrow_ticks": 2})
     original = create_engine(content, None)
-    original.initial_commit()
+    initial = original.initial_commit()
     before = tick(original, intent("gather", target=TREE), intent("gather", "ryan", target=TREE))
     saved = WorldState.model_validate_json(before.snapshot.model_dump_json())
-    restored = create_engine(content, saved)
+    history = (*initial.events, *before.events)
+    restored = create_engine(content, saved, history)
     with pytest.raises(RuntimeError, match="fresh"):
         restored.initial_commit()
     for intents in [(), (intent("wait"),), ()]:
@@ -254,32 +258,38 @@ def test_restore_uses_serialized_active_intents_and_rng() -> None:
         )
     saved.config_hash = "wrong"
     with pytest.raises(ValueError, match="identities"):
-        create_engine(content, saved)
+        create_engine(content, saved, history)
 
 
-def test_restore_causal_validation_uses_only_proven_ids() -> None:
+def test_restore_accepts_sim_fact_citing_pre_checkpoint_event() -> None:
     content = content_with({"ella": (2, 3)})
     engine = create_engine(content, None)
     first = engine.initial_commit()
-    tick(engine, intent("wait"))
+    earlier = tick(engine, intent("wait"))
     prior = tick(engine)
-    restored = create_engine(content, prior.snapshot)
+    history = (*first.events, *earlier.events, *prior.events)
+    restored = create_engine(content, prior.snapshot, history)
+    engine.begin_tick()
     restored.begin_tick()
     payload = AgentFallbackUsedPayload(
         resident_id="ella", reason="TIMEOUT", fallback_policy_id="rule"
     )
-    causes = [prior.events[0].event_id, first.events[0].event_id]
+    causes = [prior.events[0].event_id, earlier.events[-1].event_id]
     event = restored.append_fact("agent_fallback_used", "ella", None, None, None, causes, payload)
     assert event.caused_by_event_ids == list(reversed(causes))
+    assert event == engine.append_fact(
+        "agent_fallback_used", "ella", None, None, None, causes, payload
+    )
     unknown = format_event_id(prior.snapshot.run_id, prior.snapshot.tick, len(prior.events))
     with pytest.raises(ValueError, match="causal"):
         restored.append_fact("agent_fallback_used", "ella", None, None, None, [unknown], payload)
+    assert restored.advance_tick() == engine.advance_tick()
 
 
-def test_restored_reply_needs_request_evidence_oq_040() -> None:
+def test_restore_replies_to_pre_checkpoint_request_identically() -> None:
     content = content_with({"ella": (2, 3), "ryan": (3, 3)})
     engine = create_engine(content, None)
-    engine.initial_commit()
+    initial = engine.initial_commit()
     spoken = tick(
         engine,
         intent(
@@ -295,19 +305,30 @@ def test_restored_reply_needs_request_evidence_oq_040() -> None:
         "talk",
         "ryan",
         target=ELLA,
-        speech_act="refuse",
-        text="",
+        speech_act="accept",
+        text="Sure",
         in_reply_to=event.event_id,
     )
-    assert failures(tick(create_engine(content, spoken.snapshot), response)) == ["INVALID_REPLY"]
-    assert not failures(tick(engine, response))
+    checkpoint = tick(engine)
+    saved = WorldState.model_validate_json(checkpoint.snapshot.model_dump_json())
+    history = [*initial.events, *spoken.events, *checkpoint.events]
+    original_history = [e.model_dump() for e in history]
+    restored = tick(create_engine(content, saved, history), response)
+    assert canonical_json_bytes(restored.model_dump(mode="json")) == canonical_json_bytes(
+        tick(engine, response).model_dump(mode="json")
+    )
+    assert [e.model_dump() for e in history] == original_history
+    assert not failures(restored)
+    assert next(e for e in restored.events if e.type == "utterance_spoken").caused_by_event_ids == [
+        event.event_id
+    ]
 
 
 def test_restore_continues_a_reply_validated_before_the_checkpoint() -> None:
     content = content_with({"ella": (2, 3), "ryan": (3, 3)}, actions={"talk_ticks": 2})
     engine = create_engine(content, None)
-    engine.initial_commit()
-    tick(engine, request())
+    initial = engine.initial_commit()
+    started = tick(engine, request())
     spoken = tick(engine)
     event = next(e for e in spoken.events if e.type == "utterance_spoken")
     response = intent(
@@ -320,9 +341,81 @@ def test_restore_continues_a_reply_validated_before_the_checkpoint() -> None:
     pending = tick(engine, response)
     assert pending.snapshot.active_actions[0].pending_failure_code is None
     saved = WorldState.model_validate_json(pending.snapshot.model_dump_json())
-    restored = tick(create_engine(content, saved))
+    history = (*initial.events, *started.events, *spoken.events, *pending.events)
+    restored = tick(create_engine(content, saved, history))
     assert restored == tick(engine)
     assert not failures(restored)
     assert next(e for e in restored.events if e.type == "utterance_spoken").caused_by_event_ids == [
         event.event_id
     ]
+
+
+@pytest.mark.parametrize("invalid", ["missing", "length", "run_id", "gap"])
+def test_restore_rejects_invalid_event_history(invalid: str) -> None:
+    content = content_with({"ella": (2, 3)})
+    engine = create_engine(content, None)
+    initial = engine.initial_commit()
+    latest = tick(engine, intent("wait"))
+    history = [*initial.events, *latest.events]
+    if invalid == "missing":
+        with pytest.raises(ValueError, match="complete prefix of length"):
+            create_engine(content, latest.snapshot)
+        return
+    if invalid == "length":
+        history.pop()
+        error = "complete prefix of length"
+    elif invalid == "run_id":
+        history[-1] = history[-1].model_copy(update={"run_id": "other"})
+        error = "history run_id"
+    else:
+        last = history[-1]
+        seq = last.seq_in_tick + 1
+        history[-1] = last.model_copy(
+            update={
+                "seq_in_tick": seq,
+                "event_id": format_event_id(last.run_id, last.tick, seq),
+            }
+        )
+        error = "IDs must be contiguous"
+    with pytest.raises(ValueError, match=error):
+        create_engine(content, latest.snapshot, history)
+
+
+def test_fresh_engine_rejects_event_history() -> None:
+    content = content_with({"ella": (2, 3)})
+    initial = create_engine(content, None).initial_commit()
+    with pytest.raises(ValueError, match="fresh engine requires empty"):
+        create_engine(content, None, initial.events)
+
+
+def test_external_append_fact_only_accepts_sim_facts() -> None:
+    content = content_with({"ella": (2, 3)})
+    engine = create_engine(content, None)
+    initial = engine.initial_commit()
+    engine.begin_tick()
+    for fact in initial.events:
+        with pytest.raises(ValueError, match="external append_fact port"):
+            engine.append_fact(
+                fact.type, fact.actor_id, fact.target_id, None, None, [], fact.payload
+            )
+    appended = engine.append_fact(
+        "god_intervention_recorded",
+        "ella",
+        None,
+        None,
+        None,
+        [],
+        GodInterventionRecordedPayload(
+            intervention_id="dream-1",
+            recipient_id="ella",
+            kind="dream",
+            transcript_retained=False,
+        ),
+    )
+    assert appended.seq_in_tick == 0
+    engine.start_intent(movement(3, 3))
+    move = next(e for e in engine.advance_tick().events if e.type == "resident_moved")
+    engine.begin_tick()
+    with pytest.raises(ValueError, match="external append_fact port"):
+        engine.append_fact(move.type, move.actor_id, None, move.intent_id, None, [], move.payload)
+    assert all(e.type != "resident_moved" for e in engine.advance_tick().events)
