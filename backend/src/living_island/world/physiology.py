@@ -119,8 +119,9 @@ def apply_metabolism(
 
     * satiety and hydration lose their per-tick decay, also during rest and sleep, clamped;
     * stamina loses awake decay unless sleeping, the movement extra once if at least one tile
-      was traversed, and the gather cost once if a gather completed (the sequential clamps equal
-      one clamp of the total);
+      was traversed, and the gather cost once if a gather completed, in that order and each
+      clamped at the minimum; ``stamina_action_cost_applied`` reports the amount actually
+      deducted and is omitted when that is 0;
     * health loses ``health_loss_per_tick_if_deprived`` once if satiety **or** hydration is at
       the minimum after metabolism; otherwise a sleeping resident gains
       ``health_recovery_sleep_per_tick`` while both satiety and hydration are above their
@@ -132,21 +133,21 @@ def apply_metabolism(
     new.satiety = _clamp(config, resident.satiety - n.satiety_decay_per_tick)
     new.hydration = _clamp(config, resident.hydration - n.hydration_decay_per_tick)
 
+    # Stamina: awake decay first, then the movement and gather costs, each clamped at the
+    # minimum. A cost fact reports what was actually deducted; a deduction of 0 emits nothing.
     stamina = resident.stamina
     cost_facts: list[PendingFact] = []
     if activity.kind != "sleep":
-        stamina -= n.stamina_awake_decay_per_tick
+        stamina = _clamp(config, stamina - n.stamina_awake_decay_per_tick)
     if activity.tiles_traversed >= 1:
-        stamina -= n.stamina_move_extra_cost_per_tick
-        if n.stamina_move_extra_cost_per_tick > 0:
-            cost_facts.append(_cost_fact(resident.id, n.stamina_move_extra_cost_per_tick, "move"))
+        stamina, deducted = _deduct(config, stamina, n.stamina_move_extra_cost_per_tick)
+        if deducted > 0:
+            cost_facts.append(_cost_fact(resident.id, deducted, "move"))
     if activity.gather_completed:
-        stamina -= n.stamina_gather_cost_per_completion
-        if n.stamina_gather_cost_per_completion > 0:
-            cost_facts.append(
-                _cost_fact(resident.id, n.stamina_gather_cost_per_completion, "gather")
-            )
-    new.stamina = _clamp(config, stamina)
+        stamina, deducted = _deduct(config, stamina, n.stamina_gather_cost_per_completion)
+        if deducted > 0:
+            cost_facts.append(_cost_fact(resident.id, deducted, "gather"))
+    new.stamina = stamina
 
     if new.satiety == n.min_value or new.hydration == n.min_value:
         new.health = _clamp(config, resident.health - n.health_loss_per_tick_if_deprived)
@@ -157,6 +158,12 @@ def apply_metabolism(
     ):
         new.health = _clamp(config, resident.health + n.health_recovery_sleep_per_tick)
     return MetabolismResult(new, cost_facts)
+
+
+def _deduct(config: EffectiveConfig, stamina: int, cost: int) -> tuple[int, int]:
+    """``(new_stamina, actually_deducted)`` for a cost clamped at the minimum."""
+    after = _clamp(config, stamina - cost)
+    return after, stamina - after
 
 
 def _cost_fact(resident_id: str, amount: int, reason: Literal["gather", "move"]) -> PendingFact:

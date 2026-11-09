@@ -159,9 +159,13 @@ class FruitLedger:
 
 
 def fruit_ledger(config: EffectiveConfig, state: WorldState) -> FruitLedger:
-    """Account for every fruit in ``state``; ``initial_on_trees`` comes from the config."""
+    """Account for every fruit in ``state``.
+
+    ``initial_on_trees`` is fixed by the configured content (configured tree count times
+    ``initial_stock_per_tree``), never by the nodes currently in ``state``.
+    """
     return FruitLedger(
-        initial_on_trees=len(state.fruit_nodes) * config.fruit.initial_stock_per_tree,
+        initial_on_trees=len(config.world.fruit_trees) * config.fruit.initial_stock_per_tree,
         regrown=state.lifetime_fruit_regrown,
         on_trees=sum(n.stock for n in state.fruit_nodes),
         in_inventories=sum(r.fruit_count for r in state.residents),
@@ -171,7 +175,15 @@ def fruit_ledger(config: EffectiveConfig, state: WorldState) -> FruitLedger:
 
 
 def check_fruit_conservation(config: EffectiveConfig, state: WorldState) -> FruitLedger:
-    """Return the ledger, or raise ``ValueError`` if fruit was created or destroyed."""
+    """Return the ledger, or raise ``ValueError`` if fruit was created or destroyed.
+
+    The state's fruit nodes must also be exactly the configured trees (same IDs and
+    positions); a missing, extra or renamed node is refused even if its stock is zero.
+    """
+    configured = {t.id: tuple(t.position) for t in config.world.fruit_trees}
+    actual = {n.id: (n.position.x, n.position.y) for n in state.fruit_nodes}
+    if len(actual) != len(state.fruit_nodes) or actual != configured:
+        raise ValueError("fruit nodes must be exactly the configured trees")
     ledger = fruit_ledger(config, state)
     if not ledger.balanced:
         raise ValueError(f"fruit conservation violated: {ledger}")

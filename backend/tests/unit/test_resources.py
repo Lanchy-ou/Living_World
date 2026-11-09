@@ -222,3 +222,70 @@ def test_identical_inputs_give_byte_identical_regrowth_results() -> None:
         )
 
     assert run() == run()
+
+
+def test_initial_supply_comes_from_the_configured_trees_not_the_state_nodes() -> None:
+    """G2-01: removing a tree and its fruit must not rebalance the books."""
+    content = default_content()
+    state = fresh_state(content)
+    removed = state.fruit_nodes.pop(0)
+    assert removed.stock == 1
+    ledger = fruit_ledger(content.config, state)
+    assert ledger.initial_on_trees == 6  # configured: six trees x stock 1
+    assert ledger.on_trees == 5 and not ledger.balanced
+    with pytest.raises(ValueError):
+        check_fruit_conservation(content.config, state)
+
+
+def test_a_missing_node_is_refused_even_when_its_stock_was_zero() -> None:
+    content = default_content()
+    state = fresh_state(content)
+    state.fruit_nodes[0].stock = 0
+    state.lifetime_fruit_consumed = 1  # the fruit was eaten: the ledger balances
+    check_fruit_conservation(content.config, state)
+    state.fruit_nodes.pop(0)  # now the node itself is gone; the counts still balance
+    with pytest.raises(ValueError, match="configured trees"):
+        check_fruit_conservation(content.config, state)
+
+
+def test_an_extra_node_is_refused() -> None:
+    content = default_content()
+    state = fresh_state(content)
+    state.fruit_nodes.append(
+        FruitNodeState(
+            id="fruit_99", position=Coord(x=7, y=7), stock=0, regrow_phase_offset_ticks=0
+        )
+    )
+    with pytest.raises(ValueError, match="configured trees"):
+        check_fruit_conservation(content.config, state)
+    state.fruit_nodes[-1].stock = 1  # an extra node carrying fruit is refused too
+    with pytest.raises(ValueError):
+        check_fruit_conservation(content.config, state)
+
+
+@pytest.mark.parametrize("change", ["renamed", "moved", "stock"])
+def test_an_altered_node_is_refused(change: str) -> None:
+    content = default_content()
+    state = fresh_state(content)
+    node = state.fruit_nodes[0]
+    if change == "renamed":
+        node.id = "fruit_00"
+    elif change == "moved":
+        node.position = Coord(x=node.position.x + 1, y=node.position.y)
+    else:
+        node.stock += 1
+    with pytest.raises(ValueError):
+        check_fruit_conservation(content.config, state)
+
+
+def test_a_valid_state_still_balances_after_regrowth_and_eating() -> None:
+    content = default_content()
+    cfg = content.config
+    state = fresh_state(content)
+    grown = regrow_fruit(cfg, state.fruit_nodes, cfg.fruit.regrow_ticks)
+    state.fruit_nodes = grown.nodes
+    state.lifetime_fruit_regrown = record_regrowth(0, grown.regrown_total)
+    state.fruit_nodes[0].stock -= 1
+    state.residents[0].fruit_count = 1
+    ledger = check_fruit_conservation(cfg, state)
+    assert ledger.initial_on_trees == 6 and ledger.regrown == grown.regrown_total

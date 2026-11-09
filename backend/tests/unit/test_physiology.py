@@ -351,3 +351,53 @@ def test_identical_inputs_give_byte_identical_physiology_results() -> None:
     first = run()
     assert first == run()
     assert not re.search(rb"[0-9]\.[0-9]", first)  # integers only
+
+
+def _cost_facts(out: Any) -> list[tuple[str, int]]:
+    return [
+        (f.payload.reason, f.payload.amount)
+        for f in out.facts
+        if f.type == "stamina_action_cost_applied"
+    ]
+
+
+def test_cost_fact_reports_the_actual_deduction_after_the_awake_decay_clamp() -> None:
+    """G2-03: stamina 40 is spent by awake decay alone, so one tile deducts nothing more."""
+    c = cfg()
+    assert c.needs.stamina_awake_decay_per_tick == 40
+    out = step_physiology(c, ella(stamina=40), TickActivity(tiles_traversed=1), False)
+    assert out.resident.stamina == 0
+    assert _cost_facts(out) == []  # an actual deduction of 0 emits no fact
+    assert [f.type for f in out.facts] == ["condition_updated"]
+
+
+def test_partial_deductions_are_reported_as_clamped() -> None:
+    c = cfg()
+    # 70 - 40 awake = 30 left; the 60 movement cost deducts only 30.
+    moved = step_physiology(c, ella(stamina=70), TickActivity(tiles_traversed=2), False)
+    assert moved.resident.stamina == 0 and _cost_facts(moved) == [("move", 30)]
+    # 200 - 40 = 160 left; the 300 gather cost deducts only 160.
+    gathered = step_physiology(c, ella(stamina=200), TickActivity(gather_completed=True), False)
+    assert gathered.resident.stamina == 0 and _cost_facts(gathered) == [("gather", 160)]
+
+
+def test_a_later_cost_sees_what_the_earlier_cost_left() -> None:
+    c = cfg()
+    # 100 - 40 = 60 -> move deducts 60 -> 0 -> gather deducts 0 (no fact).
+    out = step_physiology(
+        c, ella(stamina=100), TickActivity(tiles_traversed=1, gather_completed=True), False
+    )
+    assert _cost_facts(out) == [("move", 60)] and out.resident.stamina == 0
+
+
+def test_full_costs_are_reported_in_full_when_stamina_suffices() -> None:
+    c = cfg()
+    out = step_physiology(
+        c, ella(stamina=5000), TickActivity(tiles_traversed=3, gather_completed=True), False
+    )
+    n = c.needs
+    assert _cost_facts(out) == [
+        ("move", n.stamina_move_extra_cost_per_tick),
+        ("gather", n.stamina_gather_cost_per_completion),
+    ]
+    assert [f.type for f in out.facts][-1] == "condition_updated"  # cost facts come first

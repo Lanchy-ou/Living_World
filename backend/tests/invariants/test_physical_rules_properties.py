@@ -1,4 +1,9 @@
-"""Property tests over arbitrary legal sequences of the P1-03 rule functions (WR §8 1-3).
+"""Synthetic stress tests of the P1-03 rule functions (arithmetic invariants only).
+
+These sequences are NOT physically legal: gathers and fills ignore reach, the canteen is
+dropped and picked up anywhere, and one resident can move, gather and sleep in a tick. They
+stress the arithmetic invariants (bounds, conservation, one-place canteen, dead hold nothing).
+The legal-sequence properties live in ``test_legal_physical_sequences.py``.
 
 The machine drives regrowth, physiology, gathering, eating, giving, dropping, picking up,
 canteen use and death. Gather/eat/give/pick-up are written here only as thin legal moves over
@@ -68,7 +73,7 @@ def slots_used(state: WorldState, resident_id: str) -> int:
     return r.fruit_count + (1 if held else 0)
 
 
-class PhysicalRules(RuleBasedStateMachine):
+class SyntheticStressRules(RuleBasedStateMachine):
     state: WorldState
     tick: int
 
@@ -273,13 +278,13 @@ class PhysicalRules(RuleBasedStateMachine):
             assert slots_used(self.state, r.id) <= SLOTS
 
 
-PhysicalRules.TestCase.settings = settings(
+SyntheticStressRules.TestCase.settings = settings(
     max_examples=60,
     stateful_step_count=60,
     deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.data_too_large],
 )
-TestPhysicalRules = PhysicalRules.TestCase
+TestSyntheticStress = SyntheticStressRules.TestCase
 
 
 # ----------------------------------------------------------------------------- static checks
