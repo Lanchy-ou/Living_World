@@ -32,3 +32,12 @@ browser replay. This ADR records the decisions that shape that work.
 - The agent-interface and replay specs are approved but their contract changes are not
   effective until A1 and A2 land; the interface contract and world rules are unchanged until then.
 - Changes to frozen contracts go through the change-request steps in the plan (§7).
+
+## Addendum: M1 (2026-11-09, P1-01a)
+
+- **A1 landed** in `interface-contract-v0.1.md` and `world-rules-v0.1.md` (marked `[A1]`).
+  The world/agent contract is frozen for P1; later changes need a change request (plan §7).
+- **CR-001 (owner-approved, option A):** Interface Contract §4 "invalid parameter shape"
+  covers well-formed DTOs with invalid values, which world settles as a bounded failure.
+  Malformed shapes cannot be constructed and are `INVALID_PLAN` in agents (Agent Interface §3.1).
+- OQ-004 to OQ-008 accepted as recorded in `docs/spec/open-questions.md`.
