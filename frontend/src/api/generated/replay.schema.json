@@ -242,7 +242,8 @@
       "description": "Effective needs bounds; the minimum is always 0 and below the maximum.",
       "properties": {
         "min_value": {
-          "const": 0,
+          "maximum": 0,
+          "minimum": 0,
           "title": "Min Value",
           "type": "integer"
         },

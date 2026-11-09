@@ -52,6 +52,7 @@ for (const name of [
   "map__nonpositive_dimension",
   "legend__multichar_symbol",
   "condition_bounds__min_not_zero",
+  "condition_bounds__min_value_false",
   "condition_bounds__max_not_above_min",
 ]) {
   refuses(name, invalid[name]);

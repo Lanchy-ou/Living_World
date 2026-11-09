@@ -121,6 +121,7 @@ def test_every_cross_field_rule_group_has_a_fixture() -> None:
         "utterance_refs",
         "entity_refs",
         "namespaces",
+        "init_event",
         "map",
         "legend",
         "residents",

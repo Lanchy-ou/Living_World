@@ -507,6 +507,20 @@ def _move_trees_off_f(d: Doc) -> None:
         f["fruit_trees"][0]["position"] = coord(1, 1)
 
 
+def _first_event(d: Doc) -> None:
+    d["events"][0] = event(
+        0,
+        0,
+        "config_changed",
+        {"parameter": "x", "old_value": 1, "new_value": 2, "effective_tick": 0},
+    )
+
+
+def _statement_with_reply(d: Doc) -> None:
+    p = d["events"][5]["payload"]
+    p["speech_act"], p["request"], p["in_reply_to"] = "statement", None, eid(0, 0)
+
+
 INVALID: dict[str, tuple[str, Mutation]] = {
     # schema-level refusals (also refused by the generated JSON Schema)
     "schema__unknown_version": ("Input should be '0.1'", _setter(["replay_schema_version"], "0.2")),
@@ -568,7 +582,38 @@ INVALID: dict[str, tuple[str, Mutation]] = {
     ),
     "utterance_refs__reply_not_request": ("must cite an earlier", _reply_not_request),
     "utterance_refs__reply_unresolved": ("must cite an earlier", _reply_unresolved),
+    "utterance_refs__accept_without_reply": (
+        "requires in_reply_to",
+        _setter(["events", 7, "payload", "in_reply_to"], None),
+    ),
+    "utterance_refs__statement_with_reply": ("forbids it otherwise", _statement_with_reply),
+    "utterance_refs__reply_wrong_speaker": (
+        "addressee to its speaker",
+        _setter(["events", 7, "actor_id"], "mia"),
+    ),
+    "utterance_refs__reply_wrong_addressee": (
+        "addressee to its speaker",
+        _setter(["events", 7, "payload", "addressee_id"], "mia"),
+    ),
+    # initialization event
+    "init_event__first_not_world_initialized": ("init_event: the first event", _first_event),
+    "init_event__config_hash_differs": (
+        "config_hash differs",
+        _setter(["events", 0, "payload", "config_hash"], "c" * 64),
+    ),
+    "init_event__map_hash_differs": (
+        "map_hash differs",
+        _setter(["events", 0, "payload", "map_hash"], "c" * 64),
+    ),
     # resident / entity references and namespaces
+    "namespaces__corpse_event_id_collides_with_resident": (
+        "resident/corpse",
+        _setter(["events", 9, "payload", "corpse_id"], "ella"),
+    ),
+    "namespaces__canteen_event_id_collides_with_resident": (
+        "resident/canteen",
+        _setter(["events", 10, "payload", "canteen_id"], "ella"),
+    ),
     "entity_refs__actor_unknown": (
         "actor_id 'ghost'",
         _setter(["events", 3, "actor_id"], "ghost"),
@@ -608,8 +653,16 @@ INVALID: dict[str, tuple[str, Mutation]] = {
         "day_start_hour must be below",
         _setter(["clock", "day_end_hour"], 6),
     ),
+    "condition_bounds__min_value_false": (
+        "valid integer",
+        _setter(["condition_bounds", "min_value"], False),
+    ),
+    "condition_bounds__min_value_float": (
+        "valid integer",
+        _setter(["condition_bounds", "min_value"], 0.0),
+    ),
     "condition_bounds__min_not_zero": (
-        "Input should be 0",
+        "less than or equal to 0",
         _setter(["condition_bounds", "min_value"], 5),
     ),
     "condition_bounds__max_not_above_min": (

@@ -21,12 +21,14 @@ import hashlib
 from collections import Counter
 from typing import Annotated, Literal
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, StrictInt, StringConstraints, model_validator
 
 from living_island.world.facts import (
+    CorpseCreatedPayload,
     UtteranceHeardPayload,
     UtteranceSpokenPayload,
     WorldEvent,
+    WorldInitializedPayload,
     format_event_id,
 )
 from living_island.world.protocol import (
@@ -82,7 +84,7 @@ class ReplayClock(ProtocolModel):
 class ConditionBounds(ProtocolModel):
     """Effective needs bounds; the minimum is always 0 and below the maximum."""
 
-    min_value: Literal[0]
+    min_value: Annotated[StrictInt, Field(ge=0, le=0)]  # strict integer zero
     max_value: PosInt
 
 
@@ -299,6 +301,21 @@ class ReplayBundle(ProtocolModel):
                     "seq_in_tick must be contiguous"
                 )
             previous = event
+        self._check_initialization_event()
+
+    def _check_initialization_event(self) -> None:
+        # IC §3.1: world_initialized is first at tick 0; its hashes echo the bundle header.
+        first = self.events[0] if self.events else None
+        if (
+            first is None
+            or first.tick != 0
+            or not isinstance(first.payload, WorldInitializedPayload)
+        ):
+            raise ValueError("init_event: the first event must be world_initialized at tick 0")
+        if first.payload.config_hash != self.config_hash:
+            raise ValueError("init_event: world_initialized config_hash differs from the bundle")
+        if first.payload.map_hash != self.map_hash:
+            raise ValueError("init_event: world_initialized map_hash differs from the bundle")
 
     def _check_event_ranges(self) -> None:
         per_tick = Counter(e.tick for e in self.events)
@@ -333,7 +350,8 @@ class ReplayBundle(ProtocolModel):
 
     def _check_event_references(self) -> None:
         index_of = {e.event_id: i for i, e in enumerate(self.events)}
-        spoken: dict[str, str] = {}  # utterance event id -> speech_act, earlier events only
+        # utterance event id -> (speech_act, speaker, addressee), earlier events only
+        spoken: dict[str, tuple[str, str | None, str]] = {}
         residents = {r.id for r in self.residents}
         tree_ids = {t.id for t in self.frames[0].fruit_trees}
         for i, event in enumerate(self.events):
@@ -350,12 +368,25 @@ class ReplayBundle(ProtocolModel):
                     raise ValueError(
                         f"utterance_refs: utterance_id of {event.event_id} must equal its event id"
                     )
-                if payload.in_reply_to is not None and spoken.get(payload.in_reply_to) != "request":
+                replies = payload.speech_act in ("accept", "refuse")
+                if replies != (payload.in_reply_to is not None):
                     raise ValueError(
-                        f"utterance_refs: in_reply_to of {event.event_id} must cite an earlier "
-                        "utterance_spoken request"
+                        f"utterance_refs: {event.event_id} ({payload.speech_act}) "
+                        "requires in_reply_to for accept/refuse and forbids it otherwise"
                     )
-                spoken[event.event_id] = payload.speech_act
+                if payload.in_reply_to is not None:
+                    asked = spoken.get(payload.in_reply_to)
+                    if asked is None or asked[0] != "request":
+                        raise ValueError(
+                            f"utterance_refs: in_reply_to of {event.event_id} must cite an "
+                            "earlier utterance_spoken request"
+                        )
+                    if event.actor_id != asked[2] or payload.addressee_id != asked[1]:
+                        raise ValueError(
+                            f"utterance_refs: reply {event.event_id} must come from the "
+                            "request's addressee to its speaker"
+                        )
+                spoken[event.event_id] = (payload.speech_act, event.actor_id, payload.addressee_id)
             elif isinstance(payload, UtteranceHeardPayload) and payload.utterance_id not in spoken:
                 raise ValueError(
                     f"utterance_refs: utterance_heard {event.event_id} cites no earlier "
@@ -437,10 +468,21 @@ class ReplayBundle(ProtocolModel):
         residents = {r.id for r in self.residents}
         trees = {t.id for t in self.frames[0].fruit_trees}
         corpses = {c.id for f in self.frames for c in f.corpses}
+        canteens: set[str] = set()
+        for e in self.events:
+            p = e.payload
+            if isinstance(p, CorpseCreatedPayload):
+                corpses.add(p.corpse_id)
+            canteen_id = getattr(p, "canteen_id", None)
+            if canteen_id is not None:
+                canteens.add(canteen_id)
         for a, b, label in (
             (residents, trees, "resident/fruit tree"),
             (residents, corpses, "resident/corpse"),
             (trees, corpses, "fruit tree/corpse"),
+            (residents, canteens, "resident/canteen"),
+            (trees, canteens, "fruit tree/canteen"),
+            (corpses, canteens, "corpse/canteen"),
         ):
             clash = sorted(a & b)
             if clash:
