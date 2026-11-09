@@ -16,6 +16,7 @@ from living_island.world.protocol import (
     DeferredDecisionTriggers,
     NonNegInt,
     ProtocolModel,
+    format_delivery_id,
     require_sorted_unique,
 )
 from living_island.world.state import WorldState
@@ -61,30 +62,58 @@ class SavePackage(ProtocolModel):
 
     @model_validator(mode="after")
     def _consistent(self) -> SavePackage:
-        if self.event_cursor != self.world.event_log_cursor:
+        """Pre-ingest checkpoint invariants S1-S11 (P1-01a handoff, invariant table)."""
+        world, agents = self.world, self.agent_state
+        tick = world.tick
+        resident_ids = [r.id for r in world.residents]
+        living = {r.id for r in world.residents if r.alive}
+        # S1: event cursor
+        if self.event_cursor != world.event_log_cursor:
             raise ValueError("event_cursor must equal world.event_log_cursor")
-        ordinals = sum(r.next_decision_ordinal for r in self.agent_state.runtime_states)
-        if ordinals != self.decision_record_cursor:
-            raise ValueError("runtime ordinals must sum to decision_record_cursor")
+        # S2: canonical identities
         if (self.canonical_config_hash, self.canonical_map_hash) != (
-            self.world.config_hash,
-            self.world.map_hash,
+            world.config_hash,
+            world.map_hash,
         ):
             raise ValueError("canonical hashes must match the world snapshot identities")
+        # S3: one runtime state per resident
+        runtimes = {r.actor_id: r for r in agents.runtime_states}
+        if list(runtimes) != resident_ids:
+            raise ValueError("runtime_states must hold exactly one entry per world resident")
+        # S4: ordinals sum to the committed decision count
+        if sum(r.next_decision_ordinal for r in runtimes.values()) != self.decision_record_cursor:
+            raise ValueError("runtime ordinals must sum to decision_record_cursor")
+        # S5: no decision before the first ingest (tick-zero initialization)
+        if tick == 0 and self.decision_record_cursor != 0:
+            raise ValueError("a tick-zero checkpoint has no committed decisions")
+        # S6: one delivery cursor per resident, none foreign
+        cursors = {c.actor_id: c.last_observed_tick for c in agents.delivered_perception_ticks}
+        if list(cursors) != resident_ids:
+            raise ValueError("delivered_perception_ticks must hold one cursor per resident")
+        for actor_id in resident_ids:
+            cursor = cursors[actor_id]
+            # S7: delivery cursor equals runtime ingest bookkeeping
+            if runtimes[actor_id].latest_perception_tick != cursor:
+                raise ValueError(f"{actor_id}: latest_perception_tick must equal its cursor")
+            # S8: pre-ingest: living actors acknowledged exactly tick-1 (-1 at tick 0);
+            # nobody has acknowledged the saved tick or a future one
+            if actor_id in living and cursor != tick - 1:
+                raise ValueError(f"{actor_id}: living actor cursor must be {tick - 1}")
+            if cursor >= tick:
+                raise ValueError(f"{actor_id}: cursor must be before the saved tick")
+        # S9: pending packets sorted by (observed_tick, actor_id), unique
         keys = [(d.observed_tick, d.actor_id) for d in self.pending_perception_deliveries]
         if any(a >= b for a, b in zip(keys, keys[1:], strict=False)):
             raise ValueError("pending deliveries sort by (observed_tick, actor_id), unique")
-        # Resumable pre-ingest checkpoint (IC §5, AI §6): exactly one packet per living
-        # actor for the saved tick, none for dead actors.
-        resident_ids = [r.id for r in self.world.residents]
-        living = [r.id for r in self.world.residents if r.alive]
-        for d in self.pending_perception_deliveries:
-            if d.observed_tick != self.world.tick:
-                raise ValueError("pending deliveries must be for the saved world tick")
-            if not d.delivery_id.startswith(f"{self.world.run_id}:perception:"):
-                raise ValueError("pending delivery_id must use the saved run_id")
-        if [d.actor_id for d in self.pending_perception_deliveries] != living:
+        # S10: exactly one packet per living actor, none for dead
+        if {d.actor_id for d in self.pending_perception_deliveries} != living or len(
+            self.pending_perception_deliveries
+        ) != len(living):
             raise ValueError("exactly one pending delivery per living actor, none for dead")
-        if [r.actor_id for r in self.agent_state.runtime_states] != resident_ids:
-            raise ValueError("runtime_states actor set must match the world residents")
+        # S11: packet for the saved tick with the exact canonical delivery ID
+        for d in self.pending_perception_deliveries:
+            if d.observed_tick != tick:
+                raise ValueError("pending deliveries must be for the saved world tick")
+            if d.delivery_id != format_delivery_id(world.run_id, tick, d.actor_id):
+                raise ValueError("pending delivery_id must equal format_delivery_id")
         return self

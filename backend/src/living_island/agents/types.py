@@ -147,6 +147,8 @@ class DecisionRecord(ProtocolModel):
         if not is_canonical_trigger_order(self.triggers):
             raise ValueError("triggers must be unique and in canonical order")
         require_initial_or_triggered(self.tick, self.decision_ordinal, self.triggers)
+        if self.error_kind == "REPLAY_DIVERGED":
+            raise ValueError("REPLAY_DIVERGED stops before commitment; never in a record")
         if self.llm_call_id is not None:
             raise ValueError("P1 decision records have llm_call_id null (AI §5)")
         plan_id = build_plan_id(self.actor_id, self.decision_ordinal)

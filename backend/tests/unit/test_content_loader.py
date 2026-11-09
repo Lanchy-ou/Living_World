@@ -241,3 +241,34 @@ def test_shared_spawn_tile_allowed() -> None:
     config = _config()
     config["residents"][1]["position"] = list(config["residents"][0]["position"])
     build_world_content(config, _map())
+
+
+ANCHORED = [
+    "D:default-island.map",
+    "D:\\maps\\x.map",
+    "\\default-island.map",
+    "/default-island.map",
+    "\\\\server\\share\\x.map",
+    "//server/share/x.map",
+]
+
+
+def _with_layout(tmp_path: Path, layout: str) -> Path:
+    text = TOML.read_text(encoding="utf-8")
+    old = 'layout_file = "default-island.map"'
+    assert old in text
+    path = tmp_path / "w.toml"
+    path.write_text(text.replace(old, f"layout_file = '{layout}'"), "utf-8")
+    return path
+
+
+@pytest.mark.parametrize("layout", ANCHORED)
+def test_anchored_map_path_rejected(tmp_path: Path, layout: str) -> None:
+    with pytest.raises(ValueError, match="relative path"):
+        load_world_content(_with_layout(tmp_path, layout))
+
+
+@pytest.mark.parametrize("layout", ["default-island.map", "./default-island.map"])
+def test_plain_relative_map_path_allowed(tmp_path: Path, layout: str) -> None:
+    (tmp_path / "default-island.map").write_bytes(_map())
+    load_world_content(_with_layout(tmp_path, layout))

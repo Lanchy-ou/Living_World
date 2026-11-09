@@ -685,3 +685,22 @@ def test_record_ordinal_one_with_trigger_valid() -> None:
 def test_record_p1_boundary_rejected(mutation: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
         DecisionRecord.model_validate(record(**mutation))
+
+
+def test_replay_diverged_never_committed() -> None:
+    with pytest.raises(ValidationError):
+        DecisionRecord.model_validate(
+            record(
+                status="error",
+                error_kind="REPLAY_DIVERGED",
+                substituted=True,
+                effective_policy_id="sim-fallback-wait",
+            )
+        )
+    outcome = {
+        "status": "error",
+        "policy_id": "recorded-v0",
+        "error_kind": "REPLAY_DIVERGED",
+        "detail": "x",
+    }
+    TypeAdapter(DecisionOutcome).validate_python(outcome)  # still a valid outcome

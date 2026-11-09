@@ -313,6 +313,13 @@ Events that expose exact needs, inventories or private debug data are **not** de
 
 `DEAD`, `EXHAUSTED`, `INVALID_TARGET`, `PATH_BLOCKED`, `NO_PATH`, `OUT_OF_REACH`, `RESOURCE_TAKEN`, `INVENTORY_FULL`, `NO_ITEM`, `NO_NEED`, `NO_WATER`, `ALREADY_FULL`, `OUT_OF_HEARING`, `INVALID_SPEECH_ACT`, `INVALID_REPLY`, `DIALOGUE_LIMIT`, `ITEM_TAKEN`. Invalid plan JSON / model timeout are **agent-adapter** failures (recorded in the call log and `agent_fallback_used`), not fake world action failures. An invalid parameter shape becomes a bounded action failure `INVALID_TARGET` or the most specific listed code, not an uncaught exception.
 
+> **[A1] Clarification (CR-001, owner-approved option A).** "Invalid parameter shape" above
+> means a well-formed `ActionIntent` DTO whose values are invalid for settlement; world
+> settles it as a bounded failure (`INVALID_TARGET` or the most specific listed code).
+> Malformed shapes (wrong target kind or parameter model for the action type) cannot be
+> constructed; agents report them as `INVALID_PLAN` (`agent-interface-v0.1.md` §3.1, layer 1)
+> and they never reach world settlement.
+
 ## 5. Snapshot, model-call log and persistence boundaries
 
 ```text
