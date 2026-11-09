@@ -9,6 +9,10 @@
 > **Amendment A1 (P1-01a, agent interface).** Applied from `agent-interface-v0.1.md` §8.
 > Every A1 change below is marked **[A1]** in place. A1 changes no physical rule, no
 > `Perception` field, no `DecisionTrigger` code and no `ActionResult` field.
+>
+> **Amendment A2 (P1-01b, replay).** Applied from `p1-replay-frontend-v0.1.md` §8. Every A2
+> change below is marked **[A2]** in place. A2 changes no `WorldState`, `SavePackage` or
+> `Perception` field and no physical rule; it only adds the read-only replay DTOs (§5a).
 
 **Conventions:** JSON-shaped field lists below are normative **field descriptions, not Python/TypeScript code**. Types use `string`, `integer`, `boolean`, `null`, `array<T>` and `object{...}`; optional fields are marked `?`. Physical values must be integers.
 
@@ -19,6 +23,7 @@
 - `DecisionContext` is assembled by **`agents`**: `Perception` + the one resident's memory, beliefs, values and goals. It is never sent to world settlement.
 - `ActionPlan` and `ActionIntent` are proposals, not state changes. `ActionResult` has an authoritative internal form and a filtered actor-visible feedback form.
 - Event IDs, intent IDs, run IDs, plan IDs, utterance IDs and entity IDs are **strings**; tick, event sequence, counts, coordinate and condition values are **integers**.
+- **[A2]** `ReplayBundle` and `DisplayFrame` are read-only display DTOs for the offline viewer (§5a). They are backend projections of committed state and events, never `WorldState` or `Perception`, are never fed back to a resident, and are never stored in `WorldState` or `SavePackage`.
 - Coordinates always have shape `object{x:integer,y:integer}`; the TOML content's `[x,y]` is a different configuration syntax and must be converted explicitly.
 
 ## 2. JSON-shaped core field lists
@@ -351,7 +356,7 @@ LLMCallRecord { // separate recording JSONL, not WorldEvent
 }
 ```
 
-`persistence` is the only filesystem writer (snapshots via atomic replacement, world events append to JSONL, model calls append to another JSONL). World uses no IO libraries. JSON snapshots can restore only on completed tick boundaries, including pending active-action progress and pending deliveries. Runtime editable parameters require their own explicit `config_changed` events. A UI playback rehydrates a display projection from event records; an authoritative re-execution recomputes world state using recorded decisions.
+`persistence` is the only filesystem writer (snapshots via atomic replacement, world events append to JSONL, model calls append to another JSONL). World uses no IO libraries. JSON snapshots can restore only on completed tick boundaries, including pending active-action progress and pending deliveries. Runtime editable parameters require their own explicit `config_changed` events. ~~A UI playback rehydrates a display projection from event records;~~ **[A2]** A UI playback reads the recorded `DisplayFrame` of each tick (§5a), because events alone cannot reconstruct every drawable state (for example `world_initialized` carries only hashes); an authoritative re-execution recomputes world state using recorded decisions.
 
 At the end of tick `k`, every living actor has one packet for `k` pending until delivery; tick-zero initialization follows the same rule. `delivered_perception_ticks` starts at -1 per actor and advances monotonically after ingestion. An actor cannot acknowledge tick `k` twice. Snapshot the pending packets verbatim; do not rebuild transient observations from WorldState on restore. Runtime rule edits are disabled in P1 (`rule_overrides={}`); the `config_changed` event is reserved for the later explicitly permitted parameter list. No implementer may choose editable parameters during P1.
 
@@ -365,6 +370,44 @@ directory only post-checkpoint events and decisions plus `resume-origin.json`
 `{source_run_id, checkpoint_tick, checkpoint_sha256, event_cursor, decision_record_cursor}`;
 it never modifies the source run (agent-interface §6).
 
+### 5a. [A2] Replay bundle (browser-facing, read-only)
+
+`ReplayBundle` is one UTF-8 JSON file, `runs/<run_id>/replay.json`, exported by `persistence` after a run. It is separate from the save format (`SavePackage` snapshot plus event JSONL) and the two are never mixed. Its models are canonical in `contract/replay.py` (`ReplayBundle`, `DisplayFrame` and their parts; they reuse the canonical `WorldEvent` and public vocabularies and never import `WorldState` or `Perception`). Every replay model rejects unknown fields; all physical numbers are integers; labels and IDs are strings and `alive` is a boolean.
+
+```text
+ReplayBundle {
+  replay_schema_version:"0.1",                         // fixed; unknown versions refused, no migration
+  run_id:string, world_id:string,
+  config_hash:string, map_hash:string,                 // SHA-256 hex; config_hash is identity only
+  clock:{tick_minutes:integer,start_hour:integer,day_start_hour:integer,day_end_hour:integer},
+  condition_bounds:{min_value:0,max_value:integer},    // effective needs bounds, 0 = min < max
+  map:{width:integer,height:integer,rows:array<string>,
+       terrain_legend:array<{symbol:string,terrain:Terrain}>},   // the nine World Rules §1.2 pairs, order ~ . , W ^ S C F M
+  residents:array<{id:string,display_name:string}>,    // labels only
+  frames:array<DisplayFrame>,                          // ticks 0..N, no gaps; N+1 frames for N ticks
+  events:array<WorldEvent>                             // sorted (tick, seq_in_tick)
+}
+DisplayFrame {
+  tick:integer,
+  residents:array<{id:string,position:Coord,alive:boolean,
+                   satiety:integer,hydration:integer,stamina:integer,health:integer,
+                   fruit_count:integer,canteen_servings:integer|null,   // null = not holding the canteen
+                   active_action:{intent_id:string,action_type:string,
+                                  tick_started:integer,remaining_ticks:integer|null}|null}>,
+  fruit_trees:array<{id:string,position:Coord,stock:integer}>,
+  ground_fruit:array<{position:Coord,quantity:integer}>,
+  ground_canteen:{position:Coord,servings:integer}|null,
+  corpses:array<{id:string,resident_id:string,position:Coord}>,
+  event_range:{first_index:integer,count:integer}      // events[first_index : first_index+count] are exactly this tick's events
+}
+```
+
+A frame has no RNG, plans, receipts or private agent state; it may show exact conditions and all stocks because the viewer is the developer's god view, and it must never be supplied to a resident as perception. Static items (spring, cave, cue) come from the map and `max_stock` and other configuration values are not repeated.
+
+**Validation (single source: the Pydantic models).** `scripts/gen_types.py` exports the standalone JSON Schema 2020-12 `frontend/src/api/generated/replay.schema.json`, rooted at `ReplayBundle` with its definitions, plus the TypeScript types; the browser validates with Ajv2020 against that schema and never against the legacy `Contract` wrapper. There is no hand-written second schema. Beyond the schema, backend export and browser import enforce the same cross-field rules, proven by shared valid/invalid fixtures: contiguous ticks from 0; `event_range` slices that are exact, ordered, tick-matched and cumulative; strictly ordered events with `seq_in_tick` contiguous from zero per nonempty tick; `run_id` match, event-ID format and uniqueness; causal references resolving to earlier events; the first event being `world_initialized` at tick 0 with `config_hash`/`map_hash` equal to the bundle's; utterance ID/reference fields consistent with the event catalog (`accept`/`refuse` require `in_reply_to` citing an earlier `request` from the reply's addressee to its speaker; other acts forbid it); map dimensions, row count and widths, one-character ASCII grammar symbols and `map_hash` (SHA-256 of the rows joined with LF plus a final LF); the nine-pair legend; every frame holding exactly the declared residents (dead included); fruit trees stable and one-to-one with `F` tiles; unique ground-pile coordinates; coordinates inside the map; conditions within `condition_bounds`; counts, stocks and servings nonnegative; resident references in corpse and event fields resolving to declared residents; distinct entity-ID namespaces (residents, fruit trees, corpses and canteens, including IDs carried by event payloads); `condition_bounds.min_value` a strict integer 0. These are structural and domain checks, not re-execution. Any failure refuses the file; the viewer never repairs data.
+
+**Capture.** During `run` and `reexecute` the observer port (implementation plan §2.1) feeds one canonical `DisplayFrame` per committed boundary, tick zero included, into a display spool (`frames.jsonl`); at run completion `persistence` assembles `replay.json` from that spool and the verified event log. The spool is not a `SavePackage` or an event log. Resumed runs do not export replays: `resume --export-replay` is refused, and a full bundle for a resumed run comes from `reexecute --export-replay`. No frame cursor, spool hash or frame data is added to `WorldState` or `SavePackage`.
+
 ## 6. Determinism appendix
 
 ### 6.1 Forbidden nondeterminism in authoritative flow
@@ -374,7 +417,7 @@ No wall-clock time, real timestamps, UUID generation, globally shared random cal
 ### 6.2 Ordering and integer constraints
 
 - All simulated time, coordinates, health/needs, durations, counters, phases, step costs and amounts are integers. Divide only with specified integer operations; do not silently round floats.
-- Residents are processed in ascending UTF-8 ID order where the World Rules Spec calls for actor order; positions/tiles are sorted by `(y,x)`, entity IDs by ascending ID. For serialized WorldState arrays: residents/fruit nodes/corpses/exploration groups/receipt groups sort by ID; receipt entities by `(entity_id,position.y,position.x)` with unique triples; cue details by cue ID; dialogue sessions sort by their ordered pair IDs; active actions by `(intent.actor_id,intent.intent_id)`; ground fruit by `(y,x)`; tile indices ascending; event causal references preserve creation order. Visible/transient entities sort by entity ID, visible signs by `weak,dehydrated,fatigued`, and environmental cues by cue ID. Boundary packets sort by `(observed_tick,actor_id)`; delivery cursors and deferred-trigger groups by actor ID, trigger codes by §2.5. Plan intents preserve submitted order. Need bands use strict ordered integer cutoffs.
+- Residents are processed in ascending UTF-8 ID order where the World Rules Spec calls for actor order; positions/tiles are sorted by `(y,x)`, entity IDs by ascending ID. For serialized WorldState arrays: residents/fruit nodes/corpses/exploration groups/receipt groups sort by ID; receipt entities by `(entity_id,position.y,position.x)` with unique triples; cue details by cue ID; dialogue sessions sort by their ordered pair IDs; active actions by `(intent.actor_id,intent.intent_id)`; ground fruit by `(y,x)`; tile indices ascending; event causal references preserve creation order. Visible/transient entities sort by entity ID, visible signs by `weak,dehydrated,fatigued`, and environmental cues by cue ID. Boundary packets sort by `(observed_tick,actor_id)`; delivery cursors and deferred-trigger groups by actor ID, trigger codes by §2.5. Plan intents preserve submitted order. Need bands use strict ordered integer cutoffs. **[A2]** Replay arrays: bundle residents, and per-frame residents, fruit trees and corpses, sort by ascending ID; frame ground fruit by `(y,x)`; frames by tick; events by `(tick,seq_in_tick)`; legend entries in the World Rules §1.2 symbol order.
 - Dijkstra uses the queue key `(total_cost,y,x)`, neighbor order `N,E,S,W`, and replaces a predecessor only on a strictly lower cost (World Rules §5.3, with its two test vectors). Bresenham and per-step visibility match the World Rules Spec exactly.
 - All completions first sort `(actor_id,intent_id)` then a single Xorshift32-based Fisher–Yates shuffle; no other system consumes `resolution_rng`.
 - Regrowth offsets are per-tree and do not consume RNG. Objective causal links are ordered by event emission sequence. Fruit drop order is `fruit`, then canteen.
