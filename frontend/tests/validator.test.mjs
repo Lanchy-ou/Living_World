@@ -89,19 +89,13 @@ test("FE-T12: the shared valid fixture is accepted", () => {
 
 // Groups whose backend rule slug differs from the fixture group name.
 const RULE_BY_GROUP = { ground_fruit: "frame_sort" };
-const KNOWN_UNDETECTABLE = new Set(["condition_bounds__min_value_float"]);
+// OQ-013 / OQ-024 (owner-accepted): integral decimals such as 0.0 cannot be told from integers
+// after JSON.parse. This is the one explicit exemption list for FE-T12 parity.
+const INTEGRAL_DECIMAL_EXEMPT = new Set(["condition_bounds__min_value_float"]);
 const SCHEMA_ONLY_OK = new Set(["schema", "map", "legend", "condition_bounds"]);
 
-for (const name of sharedInvalidNames()) {
-  test(`FE-T12: shared invalid fixture ${name} is refused`, (t) => {
-    if (KNOWN_UNDETECTABLE.has(name)) {
-      // OQ-013: JSON.parse cannot tell 0.0 from 0. The backend refuses it, the browser
-      // cannot, and the viewer does not claim to.
-      const accepted = validator.validateText(readText(`${SHARED_DIR}invalid/${name}.json`));
-      assert.ok(accepted.ok, `${name} documents the OQ-013 limitation`);
-      t.diagnostic("OQ-013: not detectable in the browser");
-      return;
-    }
+for (const name of sharedInvalidNames().filter((n) => !INTEGRAL_DECIMAL_EXEMPT.has(n))) {
+  test(`FE-T12: shared invalid fixture ${name} is refused`, () => {
     const result = validator.validateText(readText(`${SHARED_DIR}invalid/${name}.json`));
     assert.ok(!result.ok, `${name} must be refused by the browser validator`);
     const group = name.split("__")[0];
@@ -118,6 +112,22 @@ for (const name of sharedInvalidNames()) {
     }
   });
 }
+
+test("FE-T12: every shared invalid fixture outside the exemption list is refused", () => {
+  const refused = sharedInvalidNames()
+    .filter((n) => !INTEGRAL_DECIMAL_EXEMPT.has(n))
+    .filter((n) => !validator.validateText(readText(`${SHARED_DIR}invalid/${n}.json`)).ok);
+  assert.equal(refused.length, sharedInvalidNames().length - INTEGRAL_DECIMAL_EXEMPT.size);
+});
+
+test("OQ-013/OQ-024: the exemption list holds integral-decimal fixtures only, and they are accepted (documented limitation)", () => {
+  for (const name of INTEGRAL_DECIMAL_EXEMPT) {
+    const text = readText(`${SHARED_DIR}invalid/${name}.json`);
+    assert.match(text, /[0-9]\.0[,}\]]/, `${name} must contain an integral decimal literal`);
+    const result = validator.validateText(text);
+    assert.ok(result.ok, `${name}: the browser accepts it by documented limitation`);
+  }
+});
 
 test("FE-T12: every shared cross-field rule group is refused as cross_field by the browser", () => {
   const crossGroups = new Set([
@@ -155,4 +165,24 @@ test("OQ-013: an integral decimal such as 1.0 is not claimed to be detected", ()
   // JSON.parse cannot tell 1.0 from 1, so the viewer accepts it; the backend refuses it.
   const text = readText(`${SHARED_DIR}valid.json`).replace('"tick":1,', '"tick":1.0,');
   assert.equal(JSON.parse(text).frames[1].tick, 1);
+});
+
+test("G2-02: exploration_updated indices must be strictly ascending and duplicate-free", () => {
+  const make = (indices) => {
+    const valid = JSON.parse(readText(`${SHARED_DIR}valid.json`));
+    const last = valid.events[valid.events.length - 1];
+    last.type = "exploration_updated";
+    last.actor_id = "mia";
+    last.caused_by_event_ids = [];
+    last.payload = { resident_id: "mia", newly_seen_tile_indices: indices };
+    return valid;
+  };
+  assert.ok(validator.validateValue(make([3, 4])).ok);
+  assert.ok(validator.validateValue(make([])).ok);
+  for (const bad of [[4, 3], [3, 3]]) {
+    const result = validator.validateValue(make(bad));
+    assert.ok(!result.ok, JSON.stringify(bad));
+    assert.equal(result.error.rule, "event_payload");
+    assert.match(result.error.message, /ascending and duplicate-free/);
+  }
 });

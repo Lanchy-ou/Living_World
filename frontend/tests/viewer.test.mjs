@@ -22,16 +22,32 @@ import { loadHandmade } from "./lib/env.mjs";
 
 const VIEW = { width: 600, height: 400 };
 
-test("FE-T01: tick 0 positions of the move-and-gather fixture are those of frame 0", () => {
-  const bundle = loadHandmade("move-and-gather.json");
-  const store = new ReplayStore();
-  store.load(bundle, "move-and-gather.json");
-  const s = store.getState();
-  assert.equal(s.currentTick, 0);
-  assert.equal(s.playing, false);
-  const at0 = Object.fromEntries(frameAt(bundle, 0).residents.map((r) => [r.id, [r.position.x, r.position.y]]));
-  assert.deepEqual(at0, { ella: [1, 3], mia: [1, 4], ryan: [2, 4] });
-  assert.deepEqual(residentView(bundle, 0, "ella").position, { x: 1, y: 3 });
+const TICK0 = {
+  "move-and-gather": { ella: [1, 3], mia: [1, 4], ryan: [2, 4] },
+  contention: { ella: [5, 5], mia: [2, 4], ryan: [7, 5] },
+  "death-drops-pickup": { ella: [2, 2], mia: [8, 3], ryan: [7, 3] },
+  "edge-frame0-only": { ella: [1, 3], mia: [1, 4], ryan: [2, 4] },
+  "edge-all-dead": { ella: [2, 2], mia: [3, 3], ryan: [4, 3] },
+};
+
+test("FE-T01: tick 0 positions of every valid hand-made fixture are those of frame 0", () => {
+  for (const [name, expected] of Object.entries(TICK0)) {
+    const bundle = loadHandmade(`${name}.json`);
+    const store = new ReplayStore();
+    store.load(bundle, name);
+    assert.equal(store.getState().currentTick, 0, name);
+    const frame = frameAt(bundle, 0);
+    const actual = Object.fromEntries(frame.residents.map((r) => [r.id, [r.position.x, r.position.y]]));
+    assert.deepEqual(actual, expected, name);
+    const layout = layoutFor(VIEW, bundle.map, { zoom: 1, panX: 0, panY: 0, follow: false });
+    const residents = computeSprites(bundle, frame, layout).filter((s) => s.kind === "resident");
+    for (const s of residents) {
+      assert.deepEqual([s.tileX, s.tileY], expected[s.id], `${name}/${s.id} sprite tile`);
+    }
+    for (const [id, [x, y]] of Object.entries(expected)) {
+      assert.deepEqual(residentView(bundle, 0, id).position, { x, y }, `${name}/${id} panel`);
+    }
+  }
 });
 
 test("FE-T01: all valid hand-made fixtures load into the store at tick 0, paused", () => {
@@ -104,6 +120,11 @@ test("FE-T03: seek, then switch resident: panel equals that frame's data", () =>
     assert.deepEqual(view.position, raw.position);
     assert.equal(view.fruitCount, raw.fruit_count);
     assert.equal(view.canteenServings, raw.canteen_servings);
+    // map placement after seek + switch: the selected resident is drawn on its recorded tile
+    const layout = layoutFor(VIEW, bundle.map, { zoom: 2, panX: -40, panY: -20, follow: false });
+    const sprite = computeSprites(bundle, frameAt(bundle, 4), layout).find((s) => s.kind === "resident" && s.id === store.getState().selectedResidentId);
+    assert.deepEqual([sprite.tileX, sprite.tileY], [raw.position.x, raw.position.y]);
+    assert.deepEqual(screenToTile(layout, sprite.cx, sprite.cy), raw.position);
     assert.deepEqual(
       Object.fromEntries(view.conditions.map((c) => [c.name, c.value])),
       { satiety: raw.satiety, hydration: raw.hydration, stamina: raw.stamina, health: raw.health },

@@ -112,6 +112,21 @@ function checkFrameSorting(b: ReplayBundle): void {
   }
 }
 
+// backend: ExplorationUpdatedPayload._sorted (payload model rule, enforced at parse time)
+function checkPayloadDomains(b: ReplayBundle): void {
+  for (const e of b.events) {
+    if (e.type !== "exploration_updated") continue;
+    const idx = payloadOf(e)["newly_seen_tile_indices"] as number[];
+    for (let i = 1; i < idx.length; i++) {
+      if ((idx[i - 1] as number) >= (idx[i] as number))
+        throw new RuleError(
+          "event_payload",
+          `newly_seen_tile_indices of ${e.event_id} must be ascending and duplicate-free`,
+        );
+    }
+  }
+}
+
 // backend: ReplayBundle._check_frame_ticks
 function checkFrameTicks(b: ReplayBundle): void {
   b.frames.forEach((f, i) => {
@@ -367,6 +382,7 @@ export function checkCrossField(b: ReplayBundle): ReplayError | null {
     checkClock(b);
     checkMap(b);
     checkFrameSorting(b);
+    checkPayloadDomains(b);
     checkMapHash(b);
     checkDeclaredResidents(b);
     checkFrameTicks(b);
