@@ -37,6 +37,8 @@ function refuses(name, doc) {
 }
 
 accepts("valid.json", valid);
+accepts("mechanics.replay.json", readJson(fixtures + "mechanics.replay.json"));
+
 refuses("contract wrapper around a valid bundle", { ReplayBundle: valid });
 refuses("legacy Contract wrapper", { SnapshotMeta: { schema_version: "0.1", tick: 0 } });
 refuses("empty object", {});

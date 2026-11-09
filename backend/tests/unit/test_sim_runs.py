@@ -379,9 +379,7 @@ def test_cli_seed_zero_tick_and_incompatible_flags(tmp_path, capsys):
         "--out",
         str(output),
     ]
-    assert main([*arguments, "--export-replay"]) == 1
-    assert "unavailable until P1-07" in capsys.readouterr().err
-    assert not output.exists()
+
     assert main([*arguments, "--script", "extra.json"]) == 1
     assert "--script is required" in capsys.readouterr().err
     with pytest.raises(SystemExit) as error:
@@ -445,13 +443,12 @@ def test_checkpoint_write_error_stops_after_observer_and_before_completion(tmp_p
     assert not (output / "decision-trace.json").exists()
 
 
-def test_cli_resume_and_reexecute_export_refusals_do_not_create_files(tmp_path, capsys):
+def test_cli_resume_export_refusal_does_not_create_files(tmp_path, capsys):
     output = tmp_path / "target"
     source = ["--source-run", str(tmp_path / "missing"), "--out", str(output), "--export-replay"]
     assert main(["resume", "--checkpoint", "missing", "--ticks", "1", *source]) == 1
     assert "use reexecute --export-replay" in capsys.readouterr().err
-    assert main(["reexecute", *source]) == 1
-    assert "unavailable until P1-07" in capsys.readouterr().err
+
     assert not output.exists()
 
 

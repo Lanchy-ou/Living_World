@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from living_island.persistence.content import load_world_content
+from living_island.persistence.replay import FrameSpool, export_replay
 from living_island.persistence.scripts import load_script
 from living_island.sim.runner import reexecute, resume, run
 from living_island.world.content import build_world_content, map_bytes_from_rows
@@ -52,12 +53,9 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        if args.export_replay:
-            if args.command == "resume":
-                raise ValueError(
-                    "resume cannot export a full replay; use reexecute --export-replay"
-                )
-            raise ValueError("--export-replay is unavailable until P1-07")
+        if args.export_replay and args.command == "resume":
+            raise ValueError("resume cannot export a full replay; use reexecute --export-replay")
+        observer = FrameSpool(args.out) if args.export_replay else None
         match args.command:
             case "run":
                 if (args.policy == "scripted") != (args.script is not None):
@@ -76,13 +74,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                     args.out,
                     script=script,
                     checkpoint_every=args.checkpoint_every,
+                    on_boundary_committed=observer,
                 )
             case "resume":
                 result = resume(args.checkpoint, args.source_run, args.ticks, args.out)
             case "reexecute":
-                result = reexecute(args.source_run, args.out)
+                result = reexecute(args.source_run, args.out, on_boundary_committed=observer)
             case _:
                 raise AssertionError(f"unexpected command {args.command}")
+        if observer is not None:
+            export_replay(result.output)
     except (ValueError, OSError) as exc:
         print(str(exc), file=sys.stderr)
         for note in getattr(exc, "__notes__", ()):
