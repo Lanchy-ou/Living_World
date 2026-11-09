@@ -19,8 +19,9 @@ from living_island.world.facts import WorldEvent
 from living_island.world.protocol import TERRAIN_BY_SYMBOL
 from living_island.world.state import WorldState
 
-from ._codec import PersistenceError, decode_model, encode
+from ._codec import PersistenceError, decode_model, digest, encode, verify_identity
 from ._files import atomic_create, create_file
+from .checkpoints import read_checkpoint
 from .trace import load_trace
 
 FRAMES_FILENAME = "frames.jsonl"
@@ -100,4 +101,16 @@ def export_replay(directory: Path) -> None:
         )
     except ValidationError as exc:
         raise PersistenceError(path, "replay", str(exc)) from exc
+    final_tick = trace.manifest.final_tick
+    checkpoint = directory / f"checkpoint-{final_tick:010d}.json"
+    world = read_checkpoint(checkpoint, trace.content).world
+    verify_identity(
+        checkpoint,
+        "final_world_sha256",
+        digest(encode(world, checkpoint)),
+        trace.manifest.final_world_sha256,
+    )
+    event_count = sum(event.tick == final_tick for event in trace.events)
+    if frames[-1] != project_frame(world, event_count):
+        raise PersistenceError(spool, "final_frame", "does not match the final checkpoint")
     atomic_create(path, encode(bundle, path) + b"\n")
