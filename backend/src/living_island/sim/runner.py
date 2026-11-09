@@ -1,123 +1,303 @@
-"""Synchronous simulation boundary orchestration."""
+"""Bootstrap, publish, resume, and re-execute committed simulations."""
 
-from collections import deque
-from collections.abc import Sequence
+from __future__ import annotations
+
+from dataclasses import dataclass
+from hashlib import sha256
+from pathlib import Path
 
 from living_island.agents.base import ResidentRuntime
-from living_island.agents.types import DecisionRecord
-from living_island.sim.decisions import decision_record
-from living_island.world.ports import WorldEngine, WorldTickCommit
-from living_island.world.protocol import (
-    DECISION_TRIGGERS,
-    ActionIntent,
-    ActionPlan,
-    DecisionTrigger,
-    format_delivery_id,
+from living_island.agents.policies.recorded import ReplayDiverged
+from living_island.agents.runtime import create_runtime
+from living_island.agents.types import DecisionRecord, OwnProfile, PolicyConfig, PolicyId
+from living_island.contract.save import SavePackage
+from living_island.persistence.checkpoints import write_checkpoint
+from living_island.persistence.content import retain_run_content
+from living_island.persistence.logs import (
+    DECISIONS_FILENAME,
+    EVENTS_FILENAME,
+    DecisionLogWriter,
+    EventLogWriter,
 )
+from living_island.persistence.resume import check_output, stage_resume_output
+from living_island.persistence.scripts import LoadedScript
+from living_island.persistence.trace import LoadedTrace, load_trace, write_trace
+from living_island.sim.boundary import BoundaryLoop
+from living_island.sim.ports import BoundaryObserver
+from living_island.world.content import WorldContent, canonical_json_bytes
+from living_island.world.ports import WorldTickCommit, create_engine
+from living_island.world.state import WorldState
 
 
-class BoundaryLoop:
-    """Drive the engine from a committed boundary and acknowledge each packet once."""
-
-    def __init__(self, engine: WorldEngine, runtimes: Sequence[ResidentRuntime]) -> None:
-        self._engine = engine
-        self._commit = engine.initial_commit()
-        self._runtimes = {runtime.actor_id: runtime for runtime in runtimes}
-        if len(self._runtimes) != len(runtimes) or set(self._runtimes) != {
-            resident.id for resident in self._commit.snapshot.residents
-        }:
-            raise ValueError("simulation requires one runtime per configured resident")
-        self._cursors = dict.fromkeys(self._runtimes, -1)
-        self._deferred: dict[str, set[DecisionTrigger]] = {
-            actor_id: set() for actor_id in self._runtimes
-        }
-        self._queued: dict[str, ActionPlan] = {}
-        self._at_boundary = True
+@dataclass(frozen=True)
+class RunResult:
+    world: WorldState
+    decision_record_cursor: int
+    output: Path
 
     @property
-    def boundary(self) -> WorldTickCommit:
-        return self._commit
+    def world_sha256(self) -> str:
+        return sha256(canonical_json_bytes(self.world.model_dump(mode="json"))).hexdigest()
 
-    def advance(self) -> tuple[WorldTickCommit, list[DecisionRecord]]:
-        if not self._at_boundary:
-            raise ValueError("simulation stopped before a completed boundary")
-        self._at_boundary = False
-        self._engine.begin_tick()
-        self._ingest()
-        records, starts = self._schedule()
-        for intent in starts:
-            self._engine.start_intent(intent)
-        self._commit = self._engine.advance_tick()
-        self._discard_unstarted()
-        self._at_boundary = True
-        return self._commit, records
 
-    def _ingest(self) -> None:
-        snapshot = self._commit.snapshot
-        pending = deque(self._commit.pending_deliveries)
-        living = sorted(resident.id for resident in snapshot.residents if resident.alive)
-        if [packet.actor_id for packet in pending] != living:
-            raise ValueError(
-                f"expected one pending delivery per living actor at tick {snapshot.tick}"
+def checkpoint_filename(tick: int) -> str:
+    return f"checkpoint-{tick:010d}.json"
+
+
+def _runtime_roster(
+    content: WorldContent,
+    policy_id: PolicyId | None,
+    script: LoadedScript | None,
+    trace: LoadedTrace | None,
+    checkpoint: SavePackage | None = None,
+) -> list[ResidentRuntime]:
+    cfg = content.config
+    config = (
+        PolicyConfig(
+            policy_id=policy_id,
+            seed=cfg.meta.seed,
+            max_plan_actions=cfg.agents.max_plan_actions,
+            map_width=cfg.map.width,
+            map_height=cfg.map.height,
+            script_sha256=script.sha256 if script is not None else None,
+            source_trace_sha256=trace.sha256 if trace is not None else None,
+        )
+        if policy_id is not None
+        else None
+    )
+    saved = (
+        {state.actor_id: state for state in checkpoint.agent_state.runtime_states}
+        if checkpoint is not None
+        else {}
+    )
+    runtimes = []
+    for actor in sorted(cfg.residents, key=lambda actor: actor.id):
+        restored = saved.get(actor.id)
+        selected = restored.policy_config if restored is not None else config
+        if selected is None:
+            raise ValueError(f"{actor.id}: missing restored policy config")
+        runtimes.append(
+            create_runtime(
+                actor.id,
+                selected,
+                OwnProfile(profile_id=actor.profile_id, initial_goal=actor.initial_goal),
+                script.for_actor(actor.id)
+                if script is not None and selected.policy_id == "scripted-v0"
+                else None,
+                trace.for_actor(actor.id)
+                if trace is not None and selected.policy_id == "recorded-v0"
+                else None,
+                restored,
             )
-        while pending:
-            packet = pending[0]
-            actor_id = packet.actor_id
-            if (
-                packet.delivery_id != format_delivery_id(snapshot.run_id, snapshot.tick, actor_id)
-                or packet.observed_tick != snapshot.tick
-                or self._cursors[actor_id] != snapshot.tick - 1
-            ):
-                raise ValueError(f"{actor_id}: invalid pending delivery at tick {snapshot.tick}")
-            self._runtimes[actor_id].ingest(packet)
-            self._cursors[actor_id] = packet.observed_tick
-            pending.popleft()
-            self._deferred[actor_id].update(packet.decision_triggers)
-            feedback = packet.perception.last_action_feedback
-            if (
-                feedback is not None
-                and feedback.status == "success"
-                and actor_id not in self._queued
-            ):
-                self._deferred[actor_id].add("PLAN_FINISHED")
+        )
+    return runtimes
 
-    def _schedule(self) -> tuple[list[DecisionRecord], list[ActionIntent]]:
-        snapshot = self._commit.snapshot
-        active = {action.intent.actor_id for action in snapshot.active_actions}
-        records: list[DecisionRecord] = []
-        starts: list[ActionIntent] = []
-        for actor_id in sorted(self._runtimes):
-            if actor_id in active or self._cursors[actor_id] != snapshot.tick:
-                continue
-            runtime = self._runtimes[actor_id]
-            deferred = self._deferred[actor_id]
-            if snapshot.tick == 0 or deferred:
-                self._queued.pop(actor_id, None)
-                triggers = (
-                    [code for code in DECISION_TRIGGERS if code in deferred]
-                    if snapshot.tick
-                    else []
-                )
-                request = runtime.make_request(snapshot.tick, triggers)
-                record = decision_record(snapshot.run_id, request, runtime.decide(request))
-                self._queued[actor_id] = record.plan
-                records.append(record)
-                runtime.commit_decision(record)
-                deferred.clear()
-            plan = self._queued.pop(actor_id)
-            intent, *remaining = plan.intents
-            starts.append(intent)
-            if remaining:
-                self._queued[actor_id] = plan.model_copy(update={"intents": remaining})
-        return records, starts
 
-    def _discard_unstarted(self) -> None:
-        """Clean up invalidated queues before the next pre-ingest checkpoint."""
-        for resident in self._commit.snapshot.residents:
-            if not resident.alive:
-                self._queued.pop(resident.id, None)
-                self._deferred[resident.id].clear()
-        for packet in self._commit.pending_deliveries:
-            feedback = packet.perception.last_action_feedback
-            if feedback is not None and feedback.status != "success":
-                self._queued.pop(packet.actor_id, None)
+class _ReplayCheck:
+    def __init__(self, trace: LoadedTrace, start_cursor: int = 0) -> None:
+        self._trace = trace
+        self._event_cursor = start_cursor
+
+    def boundary(self, commit: WorldTickCommit) -> None:
+        end = self._event_cursor
+        expected = self._trace.events
+        while end < len(expected) and expected[end].tick <= commit.snapshot.tick:
+            end += 1
+        if len(commit.events) != end - self._event_cursor or any(
+            canonical_json_bytes(actual.model_dump(mode="json"))
+            != canonical_json_bytes(wanted.model_dump(mode="json"))
+            for actual, wanted in zip(
+                commit.events, expected[self._event_cursor : end], strict=True
+            )
+        ):
+            raise ReplayDiverged(f"event bytes differ at tick {commit.snapshot.tick}")
+        self._event_cursor = end
+
+    def finish(self, result: RunResult) -> None:
+        manifest = self._trace.manifest
+        if self._event_cursor != manifest.event_count:
+            raise ReplayDiverged("unconsumed source events")
+        if result.decision_record_cursor != manifest.record_count:
+            raise ReplayDiverged("unconsumed source decisions")
+        if result.world_sha256 != manifest.final_world_sha256:
+            raise ReplayDiverged("final world hash differs from source manifest")
+
+
+def _drive(
+    loop: BoundaryLoop,
+    ticks: int,
+    output: Path,
+    events: EventLogWriter,
+    decisions: DecisionLogWriter,
+    observer: BoundaryObserver | None,
+    *,
+    fresh: bool,
+    checkpoint_every: int | None = None,
+    replay: _ReplayCheck | None = None,
+) -> RunResult:
+    final_tick = loop.boundary.snapshot.tick + ticks
+
+    def checkpoint() -> None:
+        save = loop.checkpoint()
+        write_checkpoint(output / checkpoint_filename(save.world.tick), save)
+
+    def publish(commit: WorldTickCommit, records: list[DecisionRecord]) -> None:
+        if replay is not None:
+            replay.boundary(commit)
+        events.append(commit.events)
+        decisions.append(records)
+        if observer is not None:
+            observer(
+                commit.snapshot.model_copy(deep=True),
+                tuple(event.model_copy(deep=True) for event in commit.events),
+            )
+        tick = commit.snapshot.tick
+        if tick in (0, final_tick) or (
+            checkpoint_every is not None and tick % checkpoint_every == 0
+        ):
+            checkpoint()
+
+    if fresh:
+        publish(loop.boundary, [])
+    elif ticks == 0:
+        checkpoint()
+    for _ in range(ticks):
+        commit, records = loop.advance()
+        publish(commit, records)
+    return RunResult(loop.boundary.snapshot, loop.decision_record_cursor, output)
+
+
+def _validate_length(ticks: int, checkpoint_every: int | None = None) -> None:
+    if ticks < 0:
+        raise ValueError("ticks must be nonnegative")
+    if checkpoint_every is not None and checkpoint_every <= 0:
+        raise ValueError("checkpoint interval must be positive")
+
+
+def _fresh_run(
+    content: WorldContent,
+    ticks: int,
+    output: Path,
+    policy_id: PolicyId,
+    script: LoadedScript | None,
+    trace: LoadedTrace | None,
+    checkpoint_every: int | None,
+    on_boundary_committed: BoundaryObserver | None,
+) -> RunResult:
+    output = output.resolve()
+    check_output(output, source=trace.path.parent.resolve() if trace is not None else None)
+    loop = BoundaryLoop(
+        create_engine(content, None),
+        _runtime_roster(
+            content,
+            policy_id,
+            script,
+            trace,
+        ),
+    )
+    output.mkdir(parents=True, exist_ok=True)
+    retain_run_content(output, content)
+    if script is not None:
+        script.retain(output)
+    run_id = content.config.meta.run_id
+    replay = _ReplayCheck(trace) if trace is not None else None
+    result = _drive(
+        loop,
+        ticks,
+        output,
+        EventLogWriter(output / EVENTS_FILENAME, run_id),
+        DecisionLogWriter(output / DECISIONS_FILENAME, run_id),
+        on_boundary_committed,
+        fresh=True,
+        checkpoint_every=checkpoint_every,
+        replay=replay,
+    )
+    if replay is not None:
+        replay.finish(result)
+    write_trace(output, result.world)
+    return result
+
+
+def run(
+    content: WorldContent,
+    ticks: int,
+    output: Path,
+    *,
+    script: LoadedScript | None = None,
+    checkpoint_every: int | None = None,
+    on_boundary_committed: BoundaryObserver | None = None,
+) -> RunResult:
+    """Start a random run, or a scripted run when given a verified ScriptFixture."""
+    _validate_length(ticks, checkpoint_every)
+    return _fresh_run(
+        content,
+        ticks,
+        output,
+        "scripted-v0" if script is not None else "random-v0",
+        script,
+        None,
+        checkpoint_every,
+        on_boundary_committed,
+    )
+
+
+def resume(
+    checkpoint: Path,
+    source_run: Path,
+    ticks: int,
+    output: Path,
+    *,
+    on_boundary_committed: BoundaryObserver | None = None,
+) -> RunResult:
+    _validate_length(ticks)
+    with stage_resume_output(source_run, output, checkpoint) as staged:
+        save = staged.checkpoint
+        runtimes = _runtime_roster(staged.content, None, staged.script, staged.trace, save)
+        loop = BoundaryLoop(
+            create_engine(staged.content, save.world, staged.history),
+            runtimes,
+            save,
+        )
+        replay = None
+        if staged.trace is not None:
+            if save.world.tick + ticks > staged.trace.manifest.final_tick:
+                raise ReplayDiverged("requested continuation extends beyond the source trace")
+            if staged.history != staged.trace.events[: save.event_cursor]:
+                raise ReplayDiverged("checkpoint event prefix differs from the source trace")
+            replay = _ReplayCheck(staged.trace, save.event_cursor)
+        result = _drive(
+            loop,
+            ticks,
+            staged.directory,
+            staged.events,
+            staged.decisions,
+            on_boundary_committed,
+            fresh=False,
+            replay=replay,
+        )
+        if replay is not None and staged.trace is not None:
+            if result.world.tick == staged.trace.manifest.final_tick:
+                replay.finish(result)
+    return RunResult(result.world, result.decision_record_cursor, output.resolve())
+
+
+def reexecute(
+    source_run: Path,
+    output: Path,
+    *,
+    on_boundary_committed: BoundaryObserver | None = None,
+) -> RunResult:
+    try:
+        trace = load_trace(source_run.resolve())
+    except (ValueError, OSError) as exc:
+        raise ReplayDiverged(str(exc)) from exc
+    return _fresh_run(
+        trace.content,
+        trace.manifest.final_tick,
+        output,
+        "recorded-v0",
+        None,
+        trace,
+        None,
+        on_boundary_committed,
+    )

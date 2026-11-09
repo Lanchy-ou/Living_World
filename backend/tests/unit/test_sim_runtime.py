@@ -12,7 +12,7 @@ from living_island.agents.types import (
     build_intent_id,
     build_plan_id,
 )
-from living_island.sim.runner import BoundaryLoop
+from living_island.sim.boundary import BoundaryLoop
 from living_island.world.ports import create_engine
 from living_island.world.protocol import ActionIntent, ActionPlan, EmptyParameters
 

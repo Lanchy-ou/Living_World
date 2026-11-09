@@ -224,6 +224,8 @@ class Engine:
             raise ValueError("restore history does not match the checkpoint's event sequence")
 
     def _index_event(self, event: WorldEvent) -> None:
+        if event.type == "action_started" and event.intent_id is not None:
+            self._intent_ids.add(event.intent_id)
         payload = event.payload
         if isinstance(payload, UtteranceSpokenPayload) and payload.speech_act == "request":
             request = payload.request

@@ -11,7 +11,7 @@ from living_island.agents.policies.random_policy import RandomPolicy
 from living_island.agents.policies.scripted import ScriptedPolicy
 from living_island.agents.runtime import Runtime, create_runtime
 from living_island.agents.types import ActorScript, OkOutcome, OwnProfile, PolicyConfig
-from living_island.sim.runner import BoundaryLoop
+from living_island.sim.boundary import BoundaryLoop
 from living_island.world.content import canonical_json_bytes
 from living_island.world.ports import create_engine
 from living_island.world.protocol import Coord, OwnInventory, TileView, VisibleEntity
@@ -263,3 +263,16 @@ def test_ai15_random_category_order_frontier_bounds_and_full_inventory():
         }
     )
     assert policy._categories(empty) == [[WAIT]]
+
+
+def test_ai15_random_world_rejection_is_not_a_policy_fault():
+    from test_engine_actions import content_with, failures
+
+    content = content_with({"ella": (9, 1)}, meta={"seed": 31}, canteen={"initial_servings": 2})
+    runtime = create_runtime(
+        "ella", policy_config(map_width=12, map_height=6), PROFILE, None, None, None
+    )
+    commit, [record] = BoundaryLoop(create_engine(content, None), [runtime]).advance()
+    assert record.plan.intents[0].action_type == "fill_canteen"
+    assert failures(commit) == ["ALREADY_FULL"]
+    assert record.status == "ok" and not record.substituted

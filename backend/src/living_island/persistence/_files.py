@@ -23,8 +23,16 @@ def atomic_create(path: Path, data: bytes) -> None:
     temporary: Path | None = None
     locked = False
     try:
-        with lock.open("xb"):
-            locked = True
+        try:
+            with lock.open("xb"):
+                locked = True
+        except FileExistsError as exc:
+            raise PersistenceError(
+                path,
+                "lock",
+                f"writer lock exists at {lock}. Remove it manually "
+                "after confirming no writer is active",
+            ) from exc
         if os.path.lexists(path):
             raise FileExistsError(f"target already exists: {path}")
         with NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", delete=False) as stream:

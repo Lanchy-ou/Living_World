@@ -7,7 +7,7 @@ from test_sim_runtime import WaitPolicy
 from living_island.agents.policies._plans import WAIT
 from living_island.agents.runtime import Runtime, create_runtime
 from living_island.agents.types import ActorScript, IntentTemplate
-from living_island.sim.runner import BoundaryLoop
+from living_island.sim.boundary import BoundaryLoop
 from living_island.world.facts import ActionFailedPayload
 from living_island.world.ports import create_engine
 from living_island.world.protocol import Coord, EmptyParameters, EntityTarget, TileTarget
