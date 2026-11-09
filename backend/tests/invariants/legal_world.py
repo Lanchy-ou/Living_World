@@ -21,12 +21,21 @@ functions' property tests need.
 5. **Give** needs a living recipient within Manhattan reach (WR §4.2) with room, and an owned
    item. **Pick-up** needs the same tile and an item there at tick start, and room.
 6. **One progressing action per actor per tick.**
+7. **Durations** (WR §4.1, §4.2, §5.4). No activity completes before its configured completion
+   tick. The driver has no pending-activity scheduler (that is P1-04), so it chooses only
+   actions whose configured duration is 1 tick, which then start and complete in their tick;
+   an action with a longer duration (``gather_ticks=2``, ``rest_ticks=6``, ``sleep_ticks=48``
+   in the default content) is never offered. The randomized machine therefore runs on fixture
+   content whose durations are all 1 (``variant_content(one_tick=True)``, built through the
+   normal content/config path with a valid config hash); a default-content run silently
+   restricts itself to the default one-tick actions. Movement is the one multi-tick activity
+   the driver models, as a journey.
 
 Positions come only from legal fixture setup (a passable site) or legal movement; there is no
 teleportation and no voluntary drop (the World Rules have no such action: ground items appear
 by death or by fixture). Completions re-check the mutable preconditions in ascending actor
 order and, if one no longer holds (a contested tree, a recipient that filled up), the action
-has no effect. Durations are P1-04's: each chosen action starts and completes in its tick.
+has no effect.
 Illegal and synthetic stress sequences live in ``test_physical_rules_properties.py``.
 """
 
@@ -74,6 +83,22 @@ from living_island.world.state import GroundFruitPile, WorldState
 T = TypeVar("T")
 Choose = Callable[[str, Sequence[T]], T]
 
+# Configured duration (``[actions]`` key) of each single-tick action the driver can choose.
+DURATION_KEY = {
+    "wait": "wait_ticks",
+    "rest": "rest_ticks",
+    "sleep": "sleep_ticks",
+    "gather": "gather_ticks",
+    "eat": "eat_ticks",
+    "drink_spring": "drink_ticks",
+    "drink_canteen": "drink_ticks",
+    "fill": "fill_canteen_ticks",
+    "give_fruit": "give_ticks",
+    "give_canteen": "give_ticks",
+    "pick_up_fruit": "pick_up_ticks",
+    "pick_up_canteen": "pick_up_ticks",
+}
+
 # Memoised routes per map: (map_hash, start, target) -> PathResult. Pure data, no content.
 _ROUTES: dict[tuple[str, tuple[int, int], tuple[int, int]], PathResult] = {}
 
@@ -84,11 +109,18 @@ def variant_content(
     per_cycle: int | None = None,
     initial_stock: int | None = None,
     max_stock: int | None = None,
+    one_tick: bool = False,
 ) -> WorldContent:
-    """Default content with a legal regrowth period, tree phase offsets and stock bounds."""
+    """Default content with a legal regrowth period, tree phase offsets and stock bounds.
+
+    ``one_tick`` sets every action duration (``[actions] *_ticks``) to 1, so each action the
+    legal driver chooses completes in its own tick (legality item 7).
+    """
     with (WORLDS / "default.toml").open("rb") as f:
         data: dict[str, Any] = copy.deepcopy(tomllib.load(f))
     fruit = data["fruit"]
+    if one_tick:
+        data["actions"] = {name: 1 for name in data["actions"]}
     if regrow_ticks is not None:
         fruit["regrow_ticks"] = regrow_ticks
     if per_cycle is not None:
@@ -144,6 +176,10 @@ class LegalWorld:
         self.spring = self.state.spring
         self.all_tiles = frozenset(range(self.smap.width * self.smap.height))
         self.sites = self._sites()
+
+    def duration(self, action: str) -> int:
+        """Configured completion tick count of ``action`` (``move`` is a journey, not timed)."""
+        return int(getattr(self.config.actions, DURATION_KEY[action]))
 
     # ------------------------------------------------------------------ geometry
 
@@ -244,7 +280,8 @@ class LegalWorld:
             acts.append("pick_up_fruit")
         if canteen.ground_position == me.position and room:
             acts.append("pick_up_canteen")
-        return acts
+        # Item 7: only actions that complete in the tick they start (no pending-activity engine).
+        return [a for a in acts if a == "move" or self.duration(a) == 1]
 
     # ------------------------------------------------------------------ one completed tick
 
@@ -463,12 +500,15 @@ def start_world(
     positions: Sequence[Coord] | None = None,
     ground_pile: tuple[Coord, int] | None = None,
     canteen_on: Coord | None = None,
+    depleted: bool = False,
 ) -> LegalWorld:
     """Legal fixture setup.
 
     Residents start on their spawn tiles, or on the given passable ``positions``; needs, health
     and servings come from the caller. ``ground_pile`` puts fruit on a tile (balanced through
-    the regrowth counter) and ``canteen_on`` puts the canteen on the ground there.
+    the regrowth counter) and ``canteen_on`` puts the canteen on the ground there. ``depleted``
+    starts every tree empty (as if its fruit had been eaten, kept balanced through the consumed
+    counter), so regrowth can act without any gathering.
     """
     state = fresh_state(content)
     for i, r in enumerate(state.residents):
@@ -478,6 +518,10 @@ def start_world(
             r.position = positions[i]
     if servings is not None:
         state.unique_canteen.servings = servings
+    if depleted:
+        for node in state.fruit_nodes:
+            state.lifetime_fruit_consumed += node.stock
+            node.stock = 0
     if ground_pile is not None:
         at, qty = ground_pile
         state.ground_fruit = [GroundFruitPile(position=at, quantity=qty)]
