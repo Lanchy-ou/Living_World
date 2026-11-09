@@ -67,7 +67,7 @@ def test_one_actor_ingests_then_decides_and_commits():
     )
     with pytest.raises(ValueError, match="no ingested perception"):
         runtime.make_request(0, [])
-    loop = BoundaryLoop(create_engine(content, None), runtime)
+    loop = BoundaryLoop(create_engine(content, None), [runtime])
     initial = loop.boundary
     first, records = loop.advance()
     assert first.snapshot.tick == 1

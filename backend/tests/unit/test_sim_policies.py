@@ -102,7 +102,7 @@ def test_ai03_invalid_structure_records_wait_and_applies_metabolism(defect):
 
     content = tiny_content(ROWS, {"ella": (2, 1)})
     runtime = Runtime("ella", policy_config(), PROFILE, Broken())
-    loop = BoundaryLoop(create_engine(content, None), runtime)
+    loop = BoundaryLoop(create_engine(content, None), [runtime])
     initial = loop.boundary
     original = initial.snapshot.model_dump()
     commit, [record] = loop.advance()
@@ -118,7 +118,7 @@ def test_ai07_random_decision_records_are_deterministic():
 
     def simulate():
         runtime = create_runtime("ella", policy_config(), PROFILE, None, None, None)
-        loop = BoundaryLoop(create_engine(content, None), runtime)
+        loop = BoundaryLoop(create_engine(content, None), [runtime])
         records = [record for _ in range(12) for record in loop.advance()[1]]
         assert records and all(record.status == "ok" for record in records)
         return canonical_json_bytes([record.model_dump(mode="json") for record in records])
@@ -130,7 +130,7 @@ def test_ai09_scripted_exhaustion_records_substitute_and_one_ordinal():
     content = tiny_content(ROWS, {"ella": (2, 1)})
     script = ActorScript(actor_id="ella", on_exhausted="error", plans=[[WAIT]])
     runtime = create_runtime("ella", policy_config("scripted-v0"), PROFILE, script, None, None)
-    loop = BoundaryLoop(create_engine(content, None), runtime)
+    loop = BoundaryLoop(create_engine(content, None), [runtime])
     _, [original] = loop.advance()
     commit, [fault] = loop.advance()
     assert original.policy_id == fault.policy_id == "scripted-v0"
@@ -154,7 +154,7 @@ def test_ai09_scripted_exhaustion_records_substitute_and_one_ordinal():
         None,
         None,
     )
-    _, [record] = BoundaryLoop(create_engine(content, None), waiting).advance()
+    _, [record] = BoundaryLoop(create_engine(content, None), [waiting]).advance()
     assert (record.status, record.substituted, waiting.export_state().policy_state) == (
         "ok",
         False,
