@@ -6,7 +6,7 @@ import hashlib
 from dataclasses import replace
 from typing import cast
 
-from living_island.world import actions, dialogue
+from living_island.world import actions, dialogue, interrupts, results
 from living_island.world.content import WorldContent, canonical_json_bytes
 from living_island.world.death import apply_death
 from living_island.world.facts import (
@@ -17,6 +17,7 @@ from living_island.world.facts import (
     ActionSucceededPayload,
     EventType,
     ExplorationUpdatedPayload,
+    StaminaActionCostAppliedPayload,
     TypedEventPayload,
     UtteranceHeardPayload,
     UtteranceSpokenPayload,
@@ -42,14 +43,22 @@ from living_island.world.ports import (
     finish_observation_tick,
 )
 from living_island.world.protocol import (
+    DECISION_TRIGGERS,
+    ActionFeedback,
     ActionIntent,
+    ActionResult,
+    ActionStatus,
     BoundaryPerceptionDelivery,
     Coord,
+    DecisionTrigger,
     EntityTarget,
     FailureCode,
     HeardUtterance,
+    InterruptionReason,
     Perception,
     ResidentTarget,
+    StateDelta,
+    TalkParameters,
     TileTarget,
     format_delivery_id,
 )
@@ -155,8 +164,25 @@ class Engine:
         self._submitted: dict[str, ActionIntent] = {}
         self._requests: dict[str, tuple[str, str]] = {}
         self._heard: dict[str, list[HeardUtterance]] = {}
+        self._intent_ids = {action.intent.intent_id for action in self._state.active_actions}
+        self._outcomes: dict[
+            str, tuple[ActiveAction, ActionStatus, FailureCode | None, InterruptionReason | None]
+        ] = {}
+        self._deltas: dict[str, list[StateDelta]] = {}
+        self._results: dict[str, ActionResult] = {}
+        self._restored_boundary = (
+            (self._state.tick, self._state.next_event_seq_in_tick)
+            if restored_world is not None
+            else None
+        )
+        if restored_world is not None:
+            if self._state.event_log_cursor:
+                self._event_ids.add(format_event_id(self._state.run_id, 0, 0))
+            self._restore_active_replies()
 
     def _restore(self, state: WorldState) -> WorldState:
+        if state.next_event_seq_in_tick > state.event_log_cursor:
+            raise ValueError("restored boundary event sequence exceeds the event log cursor")
         if (
             state.config_hash != self._content.config_hash
             or state.map_hash != self._content.map_hash
@@ -221,6 +247,9 @@ class Engine:
             action.intent.actor_id == actor for action in self._state.active_actions
         ):
             raise RuntimeError(f"{actor!r} already has an action for this interval")
+        if intent.intent_id in self._intent_ids:
+            raise ValueError(f"intent ID {intent.intent_id!r} has already been submitted")
+        self._intent_ids.add(intent.intent_id)
         self._submitted[actor] = intent.model_copy(deep=True)
 
     def append_fact(
@@ -236,8 +265,8 @@ class Engine:
         tick = self._open_tick()
         if type == "config_changed" or (type == "world_initialized" and (tick or self._events)):
             raise ValueError(f"{type} cannot be emitted at this boundary")
-        if any(cause not in self._event_ids for cause in caused_by_event_ids):
-            raise ValueError("causal references must name events already emitted by this engine")
+        if any(not self._known_event(cause) for cause in caused_by_event_ids):
+            raise ValueError("causal references must name known, already emitted events")
         seq = len(self._events)
         event_id = self._next_event_id()
         if isinstance(payload, UtteranceSpokenPayload) and payload.utterance_id != event_id:
@@ -253,12 +282,57 @@ class Engine:
             target_id=target_id,
             intent_id=intent_id,
             llm_call_id=llm_call_id,
-            caused_by_event_ids=list(caused_by_event_ids),
+            caused_by_event_ids=sorted(
+                caused_by_event_ids,
+                key=lambda event_id: tuple(int(part) for part in event_id.rsplit(":", 2)[1:]),
+            ),
             payload=payload,
         ).model_copy(deep=True)
         self._events.append(event)
         self._event_ids.add(event.event_id)
         return event.model_copy(deep=True)
+
+    def _restore_active_replies(self) -> None:
+        for action in self._state.active_actions:
+            intent = action.intent
+            params = intent.parameters
+            target = intent.target
+            if (
+                action.pending_failure_code is not None
+                or not isinstance(params, TalkParameters)
+                or not isinstance(target, ResidentTarget)
+                or params.in_reply_to is None
+            ):
+                continue
+            request = params.in_reply_to
+            position = self._event_position(request)
+            if position is None or position[0] > action.tick_started:
+                raise ValueError("restored active reply has an invalid request ID")
+            # A committed active reply passed start validation, including the immutable parties.
+            self._requests[request] = (target.id, intent.actor_id)
+            self._event_ids.add(request)
+
+    def _event_position(self, event_id: str) -> tuple[int, int] | None:
+        parts = event_id.rsplit(":", 2)
+        if len(parts) != 3 or parts[0] != self._state.run_id:
+            return None
+        try:
+            tick, seq = int(parts[1]), int(parts[2])
+        except ValueError:
+            return None
+        if min(tick, seq) < 0 or event_id != format_event_id(self._state.run_id, tick, seq):
+            return None
+        return tick, seq
+
+    def _known_event(self, event_id: str) -> bool:
+        if event_id in self._event_ids:
+            return True
+        if self._restored_boundary is None:
+            return False
+        # The restored snapshot proves the sequence range of its own committed tick only.
+        position = self._event_position(event_id)
+        tick, count = self._restored_boundary
+        return position is not None and position[0] == tick and position[1] < count
 
     def _next_event_id(self) -> str:
         return format_event_id(self._state.run_id, self._open_tick(), len(self._events))
@@ -406,6 +480,8 @@ class Engine:
                 continue
             activity_kind: ActivityKind = "other"
             kind = action.intent.action_type
+            prefix = f"residents/{resident.id}"
+            position_before = resident.position
             if action.pending_failure_code is None and kind in ("rest", "sleep"):
                 activity_kind = kind
                 self._state.residents[index] = apply_rest_sleep_gain(
@@ -415,6 +491,13 @@ class Engine:
                     near_cave(resident.position, self._state.cave),
                 )
             done, steps = self._progress(resident, action, observations)
+            self._deltas[resident.id] = results.changes(
+                {f"{prefix}/position": position_before, f"{prefix}/stamina": resident.stamina},
+                {
+                    f"{prefix}/position": resident.position,
+                    f"{prefix}/stamina": self._state.residents[index].stamina,
+                },
+            )
             activity[resident.id] = TickActivity(kind=activity_kind, tiles_traversed=steps)
             if done:
                 completions.append(action)
@@ -452,6 +535,7 @@ class Engine:
             if failure is None and action_type != "move_to":
                 failure = self._validate(actor, intent, self._open_tick())
             if failure is None:
+                before = results.effect_values(self._state, actor, intent)
                 if action_type == "talk":
                     self._speak(action, actor, activity)
                 fact = actions.settle(self._config, self._state, actor, intent)
@@ -459,23 +543,46 @@ class Engine:
                     self._rule_fact(fact, intent.intent_id)
                 if action_type == "gather":
                     activity[actor.id] = replace(activity[actor.id], gather_completed=True)
-                self._action_fact(
-                    "action_succeeded",
-                    action,
-                    ActionSucceededPayload(
-                        action_type=action_type,
-                        result_code="OK",
-                    ),
+                self._deltas[actor.id].extend(
+                    results.changes(before, results.effect_values(self._state, actor, intent))
                 )
-            else:
-                self._action_fact(
-                    "action_failed",
-                    action,
-                    ActionFailedPayload(
-                        action_type=action_type,
-                        failure_code=failure,
-                    ),
-                )
+            self._finish_action(action, failure=failure)
+
+    def _finish_action(
+        self,
+        action: ActiveAction,
+        *,
+        failure: FailureCode | None = None,
+        interruption: InterruptionReason | None = None,
+        causes: list[str] | None = None,
+    ) -> None:
+        kind = action.intent.action_type
+        actor = action.intent.actor_id
+        assert actor not in self._outcomes
+        status: ActionStatus
+        if failure is not None:
+            status = "failure"
+            self._action_fact(
+                "action_failed",
+                action,
+                ActionFailedPayload(action_type=kind, failure_code=failure),
+            )
+        elif interruption is not None:
+            status = "interrupted"
+            self._action_fact(
+                "action_interrupted",
+                action,
+                ActionInterruptedPayload(action_type=kind, reason=interruption),
+                causes=causes,
+            )
+        else:
+            status = "success"
+            self._action_fact(
+                "action_succeeded",
+                action,
+                ActionSucceededPayload(action_type=kind, result_code="OK"),
+            )
+        self._outcomes[actor] = (action, status, failure, interruption)
 
     def _speak(
         self,
@@ -536,6 +643,7 @@ class Engine:
         tick: int,
         before: list[ResidentPhysicalState],
         activity: dict[str, TickActivity],
+        action_by_actor: dict[str, ActiveAction],
     ) -> None:
         for index, previous in enumerate(before):
             resident = self._state.residents[index]
@@ -548,23 +656,32 @@ class Engine:
             )
             self._state.residents[index] = metabolism.resident
             for fact in metabolism.cost_facts:
-                self._rule_fact(fact)
+                action = action_by_actor[resident.id]
+                self._rule_fact(fact, action.intent.intent_id)
+                assert isinstance(fact.payload, StaminaActionCostAppliedPayload)
+                after = metabolism.resident.stamina
+                self._deltas[resident.id].append(
+                    StateDelta(
+                        path=f"residents/{resident.id}/stamina",
+                        before=after + fact.payload.amount,
+                        after=after,
+                    )
+                )
             condition = condition_fact(previous, metabolism.resident)
             if condition is not None:
                 self._rule_fact(condition)
             if is_dead(self._config, metabolism.resident):
                 death = apply_death(self._config, self._state, resident.id, tick)
                 self._state = death.state
-                events = [self._rule_fact(fact) for fact in death.facts]
+                died, *drops = death.facts
+                death_event = self._rule_fact(died)
+                for fact in drops:
+                    self._rule_fact(fact)
                 if death.cancelled_action is not None:
-                    action = death.cancelled_action
-                    self._action_fact(
-                        "action_interrupted",
-                        action,
-                        ActionInterruptedPayload(
-                            action_type=action.intent.action_type, reason="DEATH"
-                        ),
-                        causes=[events[0].event_id],
+                    self._finish_action(
+                        death.cancelled_action,
+                        interruption="DEATH",
+                        causes=[death_event.event_id],
                     )
 
     def advance_tick(self) -> WorldTickCommit:
@@ -572,13 +689,105 @@ class Engine:
         before = [resident.model_copy(deep=True) for resident in self._state.residents]
         observations = begin_observation_tick(self._state, tick, self._content)
         completions, activity = self._progress_actions(observations)
+        action_by_actor = {
+            a.intent.actor_id: a for a in [*self._state.active_actions, *completions]
+        }
         self._settle_actions(completions, activity)
         self._regrow(tick)
-        self._metabolize(tick, before, activity)
+        self._metabolize(tick, before, activity, action_by_actor)
         batch = finish_observation_tick(observations, self._state)
         self._apply_observations(batch)
         self._exploration_facts(batch)
-        return self._commit(batch)
+        triggers = self._resolve_boundary(before, set(batch.new_sight_actor_ids))
+        self._build_results(tick)
+        return self._commit(batch, triggers)
+
+    def _resolve_boundary(
+        self,
+        before: list[ResidentPhysicalState],
+        novel: set[str],
+    ) -> dict[str, set[DecisionTrigger]]:
+        active = {a.intent.actor_id: a for a in self._state.active_actions}
+        triggers_by_actor: dict[str, set[DecisionTrigger]] = {}
+        for previous, resident in zip(before, self._state.residents, strict=True):
+            if not resident.alive:
+                continue
+            actor = resident.id
+            triggers = interrupts.observations(
+                self._config,
+                previous,
+                resident,
+                self._heard.get(actor, []),
+                actor in novel,
+            )
+            action = active.get(actor)
+            if action is not None:
+                if (
+                    action.pending_failure_code is None
+                    and action.intent.action_type in ("move_to", "gather")
+                    and resident.stamina <= self._config.needs.min_value
+                ):
+                    self._finish_action(action, failure="EXHAUSTED")
+                else:
+                    reason = interrupts.soft_interrupt(action, triggers)
+                    if reason is not None:
+                        self._finish_action(action, interruption=reason)
+            outcome = self._outcomes.get(actor)
+            if outcome is not None:
+                finished, status, _, _ = outcome
+                if status == "failure":
+                    triggers.add("ACTION_FAILED")
+                if status == "interrupted":
+                    triggers.add("ACTION_INTERRUPTED")
+                if status != "failure" and finished.intent.action_type == "sleep":
+                    triggers.add("WOKE")
+            triggers_by_actor[actor] = triggers
+        self._state.active_actions = [
+            action
+            for action in self._state.active_actions
+            if action.intent.actor_id not in self._outcomes
+        ]
+        return triggers_by_actor
+
+    def _build_results(self, tick: int) -> None:
+        self._results = {}
+        for actor, (action, status, failure, reason) in self._outcomes.items():
+            intent = action.intent
+            events = [event for event in self._events if event.intent_id == intent.intent_id]
+            effect_types = {
+                "resident_moved",
+                "fruit_gathered",
+                "fruit_consumed",
+                "water_drank",
+                "canteen_filled",
+                "item_given",
+                "item_picked_up",
+                "utterance_spoken",
+            }
+            visible_effects: list[str] = list(
+                dict.fromkeys(e.type for e in events if e.type in effect_types)
+            )
+            if action.pending_failure_code is None and intent.action_type in ("rest", "sleep"):
+                if self._deltas[actor]:
+                    visible_effects.append("stamina_recovered")
+            self._results[actor] = ActionResult(
+                intent_id=intent.intent_id,
+                actor_id=actor,
+                tick_started=action.tick_started,
+                tick_finished=tick,
+                status=status,
+                failure_code=failure,
+                interruption_reason=reason,
+                state_delta=self._deltas[actor],
+                event_ids=[event.event_id for event in events],
+                visible_feedback=ActionFeedback(
+                    intent_id=intent.intent_id,
+                    status=status,
+                    failure_code=failure,
+                    interruption_reason=reason,
+                    visible_effects=visible_effects,
+                ),
+            )
 
     def _apply_observations(self, batch: ObservationBatch) -> None:
         updates = {update.actor_id: update for update in batch.exposure_receipt_updates}
@@ -607,8 +816,13 @@ class Engine:
                 ),
             )
 
-    def _commit(self, batch: ObservationBatch) -> WorldTickCommit:
+    def _commit(
+        self,
+        batch: ObservationBatch,
+        triggers: dict[str, set[DecisionTrigger]] | None = None,
+    ) -> WorldTickCommit:
         tick = self._open_tick()
+        triggers = triggers or {}
         self._state.tick = tick
         self._state.next_event_seq_in_tick = len(self._events)
         self._state.event_log_cursor += len(self._events)
@@ -621,12 +835,16 @@ class Engine:
                     {
                         **sample.model_dump(),
                         "heard_utterances": self._heard.get(sample.actor_id, []),
-                        "last_action_feedback": None,
+                        "last_action_feedback": (
+                            self._results[sample.actor_id].visible_feedback
+                            if sample.actor_id in self._results
+                            else None
+                        ),
                     }
                 ),
-                decision_triggers=["NEW_SIGHT"]
-                if sample.actor_id in batch.new_sight_actor_ids
-                else [],
+                decision_triggers=[
+                    code for code in DECISION_TRIGGERS if code in triggers.get(sample.actor_id, ())
+                ],
             )
             for sample in batch.physical_samples_by_actor
         ]
@@ -638,5 +856,7 @@ class Engine:
         self._events = []
         self._submitted.clear()
         self._heard.clear()
+        self._outcomes.clear()
+        self._deltas.clear()
         self._tick = None
         return commit
