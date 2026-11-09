@@ -41,3 +41,19 @@ browser replay. This ADR records the decisions that shape that work.
   covers well-formed DTOs with invalid values, which world settles as a bounded failure.
   Malformed shapes cannot be constructed and are `INVALID_PLAN` in agents (Agent Interface §3.1).
 - OQ-004 to OQ-008 accepted as recorded in `docs/spec/open-questions.md`.
+
+## Addendum: M2 (2026-11-09, P1-06)
+
+- **M2 signed off by the owner** after the P1-06 CLI demo: run, resume and reexecute on the
+  default world for 1,008 ticks produced byte-identical event and decision logs and the same
+  final world hash. Tasks merged since M1: P1-01b, P1-02, P1-03, P1-04, P1-05, P1-06 (and
+  P1-08 ahead of P1-05 by owner-approved lane exception).
+- **CR-002 (owner-approved):** (a) `begin_observation_tick(state, completed_tick, content)`;
+  the accumulator keeps a private deep copy of the content. (b) IDs are unique across the
+  resident, fruit tree, cue and canteen domains, and the `ground_fruit@` and `corpse@`
+  prefixes are reserved. Plan §2.1 and World Rules §1.1 are marked `[CR-002]`.
+- **CR-003 (owner-approved, option A):** `create_engine(content, restored_world, history=())`
+  takes the verified event prefix on restore. It is used read-only to rebuild the event-ID
+  and request indexes, so replies and causal references behave as in an uninterrupted run.
+  WorldState and the contract are unchanged. Plan §2.1 is marked `[CR-003]`.
+- Open questions through OQ-049 are dispositioned in `docs/spec/open-questions.md`.
