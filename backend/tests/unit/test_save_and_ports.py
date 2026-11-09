@@ -221,11 +221,6 @@ def test_observation_sample_omits_hearing_and_feedback() -> None:
     }
 
 
-def test_port_bodies_not_implemented() -> None:
-    with pytest.raises(NotImplementedError):
-        ports.create_engine(None, None)  # type: ignore[arg-type]
-
-
 # ---------------------------------------------------------------- consumer imports
 
 

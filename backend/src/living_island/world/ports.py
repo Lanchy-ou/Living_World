@@ -210,4 +210,6 @@ class WorldEngine(Protocol):
 
 
 def create_engine(content: WorldContent, restored_world: WorldState | None) -> WorldEngine:
-    raise NotImplementedError("P1-04")
+    from living_island.world.engine import Engine
+
+    return Engine(content, restored_world)
