@@ -35,6 +35,7 @@ jobs:
       - run: pnpm --dir frontend typecheck
       - run: pnpm --dir frontend build
       - run: pnpm --dir frontend run test:schema
+      - run: pnpm --dir frontend run test
 
   contract:
     runs-on: ubuntu-latest
