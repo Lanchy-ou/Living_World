@@ -6,7 +6,7 @@ import hashlib
 from dataclasses import replace
 from typing import cast
 
-from living_island.world import actions
+from living_island.world import actions, dialogue
 from living_island.world.content import WorldContent, canonical_json_bytes
 from living_island.world.death import apply_death
 from living_island.world.facts import (
@@ -18,6 +18,8 @@ from living_island.world.facts import (
     EventType,
     ExplorationUpdatedPayload,
     TypedEventPayload,
+    UtteranceHeardPayload,
+    UtteranceSpokenPayload,
     WorldEvent,
     WorldInitializedPayload,
     format_event_id,
@@ -45,6 +47,7 @@ from living_island.world.protocol import (
     Coord,
     EntityTarget,
     FailureCode,
+    HeardUtterance,
     Perception,
     ResidentTarget,
     TileTarget,
@@ -150,6 +153,8 @@ class Engine:
         self._events: list[WorldEvent] = []
         self._event_ids: set[str] = set()
         self._submitted: dict[str, ActionIntent] = {}
+        self._requests: dict[str, tuple[str, str]] = {}
+        self._heard: dict[str, list[HeardUtterance]] = {}
 
     def _restore(self, state: WorldState) -> WorldState:
         if (
@@ -234,10 +239,13 @@ class Engine:
         if any(cause not in self._event_ids for cause in caused_by_event_ids):
             raise ValueError("causal references must name events already emitted by this engine")
         seq = len(self._events)
+        event_id = self._next_event_id()
+        if isinstance(payload, UtteranceSpokenPayload) and payload.utterance_id != event_id:
+            raise ValueError("utterance_id must equal its event ID")
         event = WorldEvent(
             schema_version=self._state.schema_version,
             run_id=self._state.run_id,
-            event_id=format_event_id(self._state.run_id, tick, seq),
+            event_id=event_id,
             tick=tick,
             seq_in_tick=seq,
             type=type,
@@ -251,6 +259,9 @@ class Engine:
         self._events.append(event)
         self._event_ids.add(event.event_id)
         return event.model_copy(deep=True)
+
+    def _next_event_id(self) -> str:
+        return format_event_id(self._state.run_id, self._open_tick(), len(self._events))
 
     def _action_fact(
         self,
@@ -284,10 +295,28 @@ class Engine:
             fact.payload,
         )
 
+    def _validate(
+        self,
+        resident: ResidentPhysicalState,
+        intent: ActionIntent,
+        tick: int,
+    ) -> FailureCode | None:
+        failure = actions.validate(self._config, self._state, resident, intent)
+        if failure is None and intent.action_type == "talk":
+            return dialogue.validate_talk(
+                self._config,
+                self._state,
+                resident,
+                intent,
+                tick,
+                self._requests,
+            )
+        return failure
+
     def _start(self, resident: ResidentPhysicalState, intent: ActionIntent) -> ActiveAction:
         kind = intent.action_type
         route: list[Coord] | None = None
-        failure = actions.validate(self._config, self._state, resident, intent)
+        failure = self._validate(resident, intent, self._state.tick)
         if failure is None and kind == "move_to":
             assert isinstance(intent.target, TileTarget)
             if resident.stamina <= self._config.needs.min_value:
@@ -421,8 +450,10 @@ class Engine:
             action_type = intent.action_type
             failure = cast(FailureCode | None, action.pending_failure_code)
             if failure is None and action_type != "move_to":
-                failure = actions.validate(self._config, self._state, actor, intent)
+                failure = self._validate(actor, intent, self._open_tick())
             if failure is None:
+                if action_type == "talk":
+                    self._speak(action, actor, activity)
                 fact = actions.settle(self._config, self._state, actor, intent)
                 if fact is not None:
                     self._rule_fact(fact, intent.intent_id)
@@ -445,6 +476,50 @@ class Engine:
                         failure_code=failure,
                     ),
                 )
+
+    def _speak(
+        self,
+        action: ActiveAction,
+        speaker: ResidentPhysicalState,
+        activity: dict[str, TickActivity],
+    ) -> None:
+        tick = self._open_tick()
+        payload = dialogue.speech_payload(action.intent, self._next_event_id())
+        causes = [] if payload.in_reply_to is None else [payload.in_reply_to]
+        spoken = self._action_fact("utterance_spoken", action, payload, causes=causes)
+        if payload.speech_act == "request":
+            self._requests[spoken.event_id] = (speaker.id, payload.addressee_id)
+        heard = HeardUtterance(
+            utterance_id=spoken.event_id,
+            speaker_id=speaker.id,
+            addressee_id=payload.addressee_id,
+            speech_act=payload.speech_act,
+            text=payload.text,
+            request_item_type=payload.request.item_type if payload.request else None,
+            request_quantity=payload.request.quantity if payload.request else None,
+            in_reply_to=payload.in_reply_to,
+            heard_at_tick=tick,
+        )
+        for listener in self._state.residents:
+            if (
+                not listener.alive
+                or listener.id == speaker.id
+                or activity.get(listener.id, TickActivity()).kind == "sleep"
+                or actions.distance(listener.position, speaker.position)
+                > self._config.perception.hearing_radius_tiles
+            ):
+                continue
+            self.append_fact(
+                "utterance_heard",
+                listener.id,
+                speaker.id,
+                action.intent.intent_id,
+                None,
+                [spoken.event_id],
+                UtteranceHeardPayload(utterance_id=spoken.event_id, listener_id=listener.id),
+            )
+            self._heard.setdefault(listener.id, []).append(heard)
+        dialogue.count_turn(self._config, self._state, speaker.id, payload.addressee_id, tick)
 
     def _regrow(self, tick: int) -> None:
         regrowth = regrow_fruit(self._config, self._state.fruit_nodes, tick)
@@ -545,7 +620,7 @@ class Engine:
                 perception=Perception.model_validate(
                     {
                         **sample.model_dump(),
-                        "heard_utterances": [],
+                        "heard_utterances": self._heard.get(sample.actor_id, []),
                         "last_action_feedback": None,
                     }
                 ),
@@ -562,5 +637,6 @@ class Engine:
         ).model_copy(deep=True)
         self._events = []
         self._submitted.clear()
+        self._heard.clear()
         self._tick = None
         return commit
