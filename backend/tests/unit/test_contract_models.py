@@ -563,3 +563,125 @@ def test_vocabularies_match_contract() -> None:
     assert get_args(protocol.FailureCode) == protocol.FAILURE_CODES
     assert len(protocol.ACTION_TYPES) == 11
     assert "".join(protocol.TERRAIN_BY_SYMBOL) == "~.,W^SCFM"
+
+
+# ---------------------------------------------------------------- rework round 1
+
+TALK_PARAMS = {
+    "statement": {"speech_act": "statement", "text": "hi"},
+    "request": {
+        "speech_act": "request",
+        "text": "fruit?",
+        "request": {"item_type": "fruit", "quantity": 1},
+    },
+    "accept": {"speech_act": "accept", "text": "ok", "in_reply_to": "run:00000003:0002"},
+    "refuse": {"speech_act": "refuse", "text": "no", "in_reply_to": "run:00000003:0002"},
+}
+
+
+def talk_intent(act: str) -> dict[str, Any]:
+    return intent(
+        action_type="talk",
+        target={"kind": "resident", "id": "mia"},
+        parameters=TALK_PARAMS[act],
+    )
+
+
+@pytest.mark.parametrize("act", list(TALK_PARAMS))
+def test_talk_canonical_round_trip(act: str) -> None:
+    rec = DecisionRecord.model_validate(record(plan=plan([talk_intent(act)])))
+    dumped = rec.model_dump(mode="json")
+    params = dumped["plan"]["intents"][0]["parameters"]
+    assert params == TALK_PARAMS[act]  # absent keys omitted, never null
+    assert DecisionRecord.model_validate(dumped) == rec
+    assert DecisionRecord.model_validate_json(rec.model_dump_json()) == rec
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"speech_act": "statement", "text": "hi", "request": None},
+        {"speech_act": "statement", "text": "hi", "in_reply_to": None},
+        {**TALK_PARAMS["request"], "in_reply_to": None},
+        {**TALK_PARAMS["accept"], "request": None},
+        {"speech_act": "statement", "text": "hi", "in_reply_to": "x"},
+        {"speech_act": "refuse", "text": "no", "request": {"item_type": "fruit", "quantity": 1}},
+    ],
+)
+def test_talk_optional_keys_only_on_their_acts(params: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        protocol.TalkParameters.model_validate(params)
+
+
+def test_resident_moved_wire_name_is_from_only() -> None:
+    ev = WorldEvent.model_validate(event())
+    assert "from" in ev.model_dump(mode="json")["payload"]
+    bad = event(payload={"from_": {"x": 1, "y": 1}, "to": {"x": 1, "y": 2}, "step_cost_units": 1})
+    with pytest.raises(ValidationError):
+        WorldEvent.model_validate(bad)
+
+
+def test_payload_action_type_and_failure_code_are_strings() -> None:
+    p = facts.ActionFailedPayload.model_validate(
+        {"action_type": "future_action", "failure_code": "FUTURE_CODE"}
+    )
+    assert (p.action_type, p.failure_code) == ("future_action", "FUTURE_CODE")
+
+
+@pytest.mark.parametrize("bad_type", [[], {}, 3, None])
+def test_unhashable_event_type_is_validation_error(bad_type: Any) -> None:
+    with pytest.raises(ValidationError):
+        WorldEvent.model_validate(event(type=bad_type))
+
+
+def request(**kw: Any) -> dict[str, Any]:
+    d: dict[str, Any] = {
+        "actor_id": "ella",
+        "tick": 0,
+        "decision_ordinal": 0,
+        "triggers": [],
+        "context": context(),
+    }
+    d.update(kw)
+    return d
+
+
+def test_initial_request_may_have_empty_triggers() -> None:
+    DecisionRequest.model_validate(request())
+    DecisionRequest.model_validate(request(decision_ordinal=1, triggers=["NEW_SIGHT"]))
+
+
+@pytest.mark.parametrize("mutation", [{"decision_ordinal": 1}])
+def test_empty_triggers_rejected_after_initial_request(mutation: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        DecisionRequest.model_validate(request(**mutation))
+
+
+def test_empty_triggers_rejected_at_later_tick() -> None:
+    ctx = context()
+    ctx["perception"] = perception(tick=5)
+    with pytest.raises(ValidationError):
+        DecisionRequest.model_validate(request(tick=5, context=ctx))
+
+
+def ordinal_one_plan() -> dict[str, Any]:
+    pid = build_plan_id("ella", 1)
+    return {**plan([intent(intent_id=build_intent_id(pid, 0), plan_id=pid)]), "plan_id": pid}
+
+
+def test_record_ordinal_one_with_trigger_valid() -> None:
+    DecisionRecord.model_validate(
+        record(decision_ordinal=1, plan=ordinal_one_plan(), triggers=["NEW_SIGHT"])
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"decision_ordinal": 1, "plan": ordinal_one_plan()},
+        {"llm_call_id": "future-call"},
+    ],
+)
+def test_record_p1_boundary_rejected(mutation: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        DecisionRecord.model_validate(record(**mutation))

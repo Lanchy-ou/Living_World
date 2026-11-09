@@ -172,6 +172,8 @@ def test_non_ocean_border() -> None:
         ("time", "start_hour", 24),
         ("time", "day_end_hour", 6),
         ("needs", "min_value", 1),
+        ("needs", "min_value", False),
+        ("needs", "min_value", 0.0),
         ("needs", "initial_health", 10001),
         ("needs", "satiety_decay_per_tick", -1),
         ("fruit", "initial_stock_per_tree", 6),
@@ -209,3 +211,33 @@ def test_unknown_section() -> None:
     config = _config()
     config["extra"] = {}
     _rejects(config=config)
+
+
+def test_bool_and_float_min_value_rejected_from_toml(tmp_path: Path) -> None:
+    text = TOML.read_text(encoding="utf-8")
+    assert "min_value = 0" in text
+    (tmp_path / "default-island.map").write_bytes(_map())
+    for literal in ("false", "0.0"):
+        path = tmp_path / f"min-{literal}.toml"
+        path.write_text(text.replace("min_value = 0", f"min_value = {literal}", 1), "utf-8")
+        with pytest.raises(ValidationError):
+            load_world_content(path)
+
+
+def test_parent_relative_map_path_allowed(tmp_path: Path) -> None:
+    (tmp_path / "default-island.map").write_bytes(_map())
+    sub = tmp_path / "worlds"
+    sub.mkdir()
+    text = TOML.read_text(encoding="utf-8")
+    assert 'layout_file = "default-island.map"' in text
+    text = text.replace(
+        'layout_file = "default-island.map"', 'layout_file = "../default-island.map"'
+    )
+    (sub / "w.toml").write_text(text, "utf-8")
+    assert load_world_content(sub / "w.toml").map_hash == load_world_content(TOML).map_hash
+
+
+def test_shared_spawn_tile_allowed() -> None:
+    config = _config()
+    config["residents"][1]["position"] = list(config["residents"][0]["position"])
+    build_world_content(config, _map())

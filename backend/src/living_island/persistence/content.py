@@ -19,7 +19,7 @@ def load_world_content(config_path: Path) -> WorldContent:
     if not isinstance(layout, str):
         raise ValueError("map.layout_file must be a string")
     layout_path = Path(layout)
-    if layout_path.is_absolute() or ".." in layout_path.parts:
-        raise ValueError("map.layout_file must be a relative path inside the content folder")
+    if layout_path.is_absolute():  # plan §2.1: a relative map reference
+        raise ValueError("map.layout_file must be a relative path")
     map_raw = (config_path.parent / layout_path).read_bytes()
     return build_world_content(config_data, map_raw)

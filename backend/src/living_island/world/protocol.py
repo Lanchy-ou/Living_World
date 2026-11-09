@@ -10,9 +10,17 @@ including other ``living_island.world`` modules (implementation plan §2.1).
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from collections.abc import Mapping
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
 
 # ---------------------------------------------------------------------------
 # Base model and integer aliases
@@ -257,6 +265,24 @@ class TalkParameters(ProtocolModel):
     text: str
     request: ItemRequest | None = None
     in_reply_to: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_explicit_null(cls, data: Any) -> Any:
+        # IC §2.4: optional keys are present only on their speech acts and never null.
+        if isinstance(data, Mapping):
+            for key in ("request", "in_reply_to"):
+                if key in data and data[key] is None:
+                    raise ValueError(f"{key} must be omitted, not null")
+        return data
+
+    @model_serializer(mode="wrap")
+    def _omit_absent(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        out: dict[str, Any] = handler(self)
+        for key in ("request", "in_reply_to"):
+            if out.get(key) is None:
+                out.pop(key, None)
+        return out
 
     @model_validator(mode="after")
     def _act_fields(self) -> TalkParameters:

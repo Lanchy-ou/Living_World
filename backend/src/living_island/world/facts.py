@@ -11,10 +11,8 @@ from typing import Annotated, Any, Literal
 from pydantic import ConfigDict, Field, model_validator
 
 from living_island.world.protocol import (
-    ActionType,
     Coord,
     DrinkSource,
-    FailureCode,
     InterruptionReason,
     ItemType,
     NonNegInt,
@@ -78,13 +76,13 @@ class ConfigChangedPayload(ProtocolModel):
 
 
 class ActionStartedPayload(ProtocolModel):
-    action_type: ActionType
+    action_type: str  # IC §3.2: string
     plan_id: str
     duration_ticks: NonNegInt | None
 
 
 class ActionProgressedPayload(ProtocolModel):
-    action_type: ActionType
+    action_type: str  # IC §3.2: string
     elapsed_ticks: NonNegInt
     remaining_ticks: NonNegInt | None
     route_cursor: NonNegInt | None
@@ -95,29 +93,30 @@ class ResidentMovedPayload(ProtocolModel):
     to: Coord
     step_cost_units: PosInt
 
-    # The contract field is ``from`` (a Python keyword); serialize under that name.
+    # The contract field is ``from`` (a Python keyword). Only ``from`` is accepted on
+    # input and emitted on output; ``from_`` is rejected.
     model_config = ConfigDict(
         extra="forbid",
         strict=True,
         frozen=True,
-        validate_by_name=True,
+        validate_by_name=False,
         validate_by_alias=True,
         serialize_by_alias=True,
     )
 
 
 class ActionSucceededPayload(ProtocolModel):
-    action_type: ActionType
+    action_type: str  # IC §3.2: string
     result_code: Literal["OK"]
 
 
 class ActionFailedPayload(ProtocolModel):
-    action_type: ActionType
-    failure_code: FailureCode
+    action_type: str  # IC §3.2: string
+    failure_code: str  # IC §3.2: string
 
 
 class ActionInterruptedPayload(ProtocolModel):
-    action_type: ActionType
+    action_type: str  # IC §3.2: string
     reason: InterruptionReason
 
 
@@ -333,7 +332,11 @@ class WorldEvent(ProtocolModel):
         if isinstance(data, dict):
             event_type = data.get("type")
             payload = data.get("payload")
-            if event_type in PAYLOAD_MODEL_BY_TYPE and isinstance(payload, dict):
+            if (
+                isinstance(event_type, str)
+                and event_type in PAYLOAD_MODEL_BY_TYPE
+                and isinstance(payload, dict)
+            ):
                 model = PAYLOAD_MODEL_BY_TYPE[event_type]
                 return {**data, "payload": model.model_validate(payload)}
         return data

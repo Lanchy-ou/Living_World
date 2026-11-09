@@ -97,6 +97,12 @@ class DecisionContext(ProtocolModel):
     current_plan_summary: str | None
 
 
+def require_initial_or_triggered(tick: int, ordinal: int, triggers: list[DecisionTrigger]) -> None:
+    """AI §2.2: empty triggers only for the tick-zero initial request (ordinal 0)."""
+    if not triggers and (tick, ordinal) != (0, 0):
+        raise ValueError("empty triggers are allowed only for the tick-zero initial request")
+
+
 class DecisionRequest(ProtocolModel):
     actor_id: str
     tick: NonNegInt
@@ -111,6 +117,7 @@ class DecisionRequest(ProtocolModel):
         p = self.context.perception
         if p.actor_id != self.actor_id or p.tick != self.tick:
             raise ValueError("context.perception must be this actor's packet for this tick")
+        require_initial_or_triggered(self.tick, self.decision_ordinal, self.triggers)
         return self
 
 
@@ -139,6 +146,9 @@ class DecisionRecord(ProtocolModel):
     def _consistent(self) -> DecisionRecord:
         if not is_canonical_trigger_order(self.triggers):
             raise ValueError("triggers must be unique and in canonical order")
+        require_initial_or_triggered(self.tick, self.decision_ordinal, self.triggers)
+        if self.llm_call_id is not None:
+            raise ValueError("P1 decision records have llm_call_id null (AI §5)")
         plan_id = build_plan_id(self.actor_id, self.decision_ordinal)
         if self.plan.actor_id != self.actor_id or self.plan.plan_id != plan_id:
             raise ValueError("plan must use this actor's deterministic plan ID")

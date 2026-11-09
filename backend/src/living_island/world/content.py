@@ -13,7 +13,7 @@ import json
 from collections.abc import Mapping
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from living_island.world.protocol import Coord, NonNegInt, PosInt
 
@@ -84,7 +84,7 @@ class TimeConfig(ContentModel):
 
 
 class NeedsConfig(ContentModel):
-    min_value: Literal[0]
+    min_value: Annotated[StrictInt, Field(ge=0, le=0)]  # WR §1.1: strict integer zero
     max_value: PosInt
     initial_satiety: NonNegInt
     initial_hydration: NonNegInt
@@ -270,7 +270,6 @@ class EffectiveConfig(ContentModel):
         _unique(resident_ids, "resident IDs")
         _unique([t.id for t in self.world.fruit_trees], "fruit tree IDs")
         _unique([c.id for c in self.world.cues], "cue IDs")
-        _unique([tuple(r.position) for r in self.residents], "resident spawn positions")
         _unique([tuple(t.position) for t in self.world.fruit_trees], "fruit tree positions")
         _unique([tuple(c.position) for c in self.world.cues], "cue positions")
         if self.canteen.initial_owner_id not in resident_ids:

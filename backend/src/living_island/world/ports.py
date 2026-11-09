@@ -6,7 +6,6 @@ P1-04. Only engine ports mutate world state.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import Protocol
 
 from pydantic import model_validator
@@ -134,7 +133,8 @@ class ObservationAccumulator:
 
     @property
     def receipt_baseline(self) -> tuple[ExposureReceipts, ...]:
-        return self._receipt_baseline
+        """An isolated deep copy on every access; the private baseline never changes."""
+        return tuple(r.model_copy(deep=True) for r in self._receipt_baseline)
 
 
 def begin_observation_tick(state: WorldState, completed_tick: int) -> ObservationAccumulator:
@@ -190,7 +190,7 @@ class WorldEngine(Protocol):
         target_id: str | None,
         intent_id: str | None,
         llm_call_id: str | None,
-        caused_by_event_ids: Sequence[str],
+        caused_by_event_ids: list[str],
         payload: TypedEventPayload,
     ) -> WorldEvent:
         """Allocate the next event ID now; reject forward causal references."""

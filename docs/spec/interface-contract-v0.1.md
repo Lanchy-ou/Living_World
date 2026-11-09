@@ -134,7 +134,8 @@ While an actor has an active action, ingestion may accumulate deferred trigger c
 > `personality_profile = {profile_id, values: []}` from content, `current_goals` holding only
 > `{goal_id:"initial", text:<initial_goal>, priority:0}`, `recalled_episodes = []`,
 > `beliefs = []`, `current_plan_summary = null`. P1 must not fake memories. Every P1 policy
-> receives this context inside a `DecisionRequest` (§2.6) and emits an `ActionPlan`. The
+> receives this context inside a `DecisionRequest` (§2.4a) and returns a `DecisionOutcome`
+> (`ok` with an `ActionPlan`, `error`, or `replayed`; `agent-interface-v0.1.md` §2.2). The
 > field list below is unchanged. Richer cognition (cognitive tools, model turns per decision,
 > real memory/belief content) remains provisional until its later spec.
 

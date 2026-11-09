@@ -7,11 +7,13 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError
+from test_contract_models import delivery, perception
 from test_contract_models import world_state as world_state_dict
 
 from living_island.agents.types import PolicyConfig, ResidentRuntimeState
 from living_island.contract.save import SavePackage
 from living_island.world import ports
+from living_island.world.protocol import format_delivery_id
 
 SRC = Path(__file__).resolve().parents[2] / "src" / "living_island"
 
@@ -52,7 +54,7 @@ def save(**kw: Any) -> dict[str, Any]:
         "event_cursor": 0,
         "llm_record_cursor": 0,
         "decision_record_cursor": 3,
-        "pending_perception_deliveries": [],
+        "pending_perception_deliveries": [delivery()],
         "canonical_config_hash": "a" * 64,
         "canonical_map_hash": "a" * 64,
     }
@@ -79,6 +81,88 @@ def test_save_package_invalid(mutation: dict[str, Any]) -> None:
         SavePackage.model_validate(save(**mutation))
 
 
+def dead_world() -> dict[str, Any]:
+    w = world_state_dict()
+    w["residents"][0]["alive"] = False
+    return w
+
+
+def test_save_package_dead_actor_without_packet_valid() -> None:
+    SavePackage.model_validate(save(world=dead_world(), pending_perception_deliveries=[]))
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        pytest.param({"pending_perception_deliveries": []}, id="missing-packet"),
+        pytest.param(
+            {"pending_perception_deliveries": [delivery(), delivery()]}, id="duplicate-packet"
+        ),
+        pytest.param(
+            {
+                "pending_perception_deliveries": [
+                    delivery(),
+                    delivery(
+                        delivery_id=format_delivery_id("run", 0, "zed"),
+                        actor_id="zed",
+                        perception=perception(actor_id="zed"),
+                    ),
+                ]
+            },
+            id="extra-actor-packet",
+        ),
+        pytest.param(
+            {
+                "pending_perception_deliveries": [
+                    delivery(
+                        delivery_id=format_delivery_id("run", 1, "ella"),
+                        observed_tick=1,
+                        perception=perception(tick=1),
+                    )
+                ]
+            },
+            id="wrong-tick-packet",
+        ),
+        pytest.param(
+            {
+                "pending_perception_deliveries": [
+                    delivery(delivery_id=format_delivery_id("other", 0, "ella"))
+                ]
+            },
+            id="wrong-run-packet",
+        ),
+        pytest.param({"world": dead_world()}, id="dead-actor-packet"),
+    ],
+)
+def test_save_package_pending_packets_invalid(mutation: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        SavePackage.model_validate(save(**mutation))
+
+
+def test_save_package_runtime_actor_set_must_match() -> None:
+    state = save()
+    state["agent_state"]["runtime_states"] = []
+    with pytest.raises(ValidationError):
+        SavePackage.model_validate(save(agent_state=state["agent_state"], decision_record_cursor=0))
+
+
+def test_receipt_baseline_is_immutable() -> None:
+    from living_island.world.state import ExposureReceipts
+
+    receipts = ExposureReceipts.model_validate(
+        world_state_dict()["exposure_receipts_by_resident"][0]
+    )
+    acc = ports.ObservationAccumulator(0, (receipts,))
+    view = acc.receipt_baseline[0]
+    view.resident_id = "altered"
+    view.entities.clear()
+    receipts.resident_id = "caller-altered"
+    again = acc.receipt_baseline[0]
+    assert again.resident_id == "ella"
+    assert len(again.entities) == 1
+    assert acc.receipt_baseline[0] is not again
+
+
 def test_port_signatures_frozen() -> None:
     def params(fn: Any) -> list[str]:
         return list(inspect.signature(fn).parameters)
@@ -87,6 +171,8 @@ def test_port_signatures_frozen() -> None:
     assert params(ports.begin_observation_tick) == ["state", "completed_tick"]
     assert params(ports.observe_step) == ["acc", "state", "actor_id", "position", "step_index"]
     assert params(ports.finish_observation_tick) == ["acc", "state"]
+    hints = inspect.get_annotations(ports.WorldEngine.append_fact)
+    assert hints["caused_by_event_ids"] == "list[str]"
     assert params(ports.WorldEngine.append_fact) == [
         "self",
         "type",

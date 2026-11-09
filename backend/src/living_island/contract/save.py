@@ -74,4 +74,17 @@ class SavePackage(ProtocolModel):
         keys = [(d.observed_tick, d.actor_id) for d in self.pending_perception_deliveries]
         if any(a >= b for a, b in zip(keys, keys[1:], strict=False)):
             raise ValueError("pending deliveries sort by (observed_tick, actor_id), unique")
+        # Resumable pre-ingest checkpoint (IC §5, AI §6): exactly one packet per living
+        # actor for the saved tick, none for dead actors.
+        resident_ids = [r.id for r in self.world.residents]
+        living = [r.id for r in self.world.residents if r.alive]
+        for d in self.pending_perception_deliveries:
+            if d.observed_tick != self.world.tick:
+                raise ValueError("pending deliveries must be for the saved world tick")
+            if not d.delivery_id.startswith(f"{self.world.run_id}:perception:"):
+                raise ValueError("pending delivery_id must use the saved run_id")
+        if [d.actor_id for d in self.pending_perception_deliveries] != living:
+            raise ValueError("exactly one pending delivery per living actor, none for dead")
+        if [r.actor_id for r in self.agent_state.runtime_states] != resident_ids:
+            raise ValueError("runtime_states actor set must match the world residents")
         return self
