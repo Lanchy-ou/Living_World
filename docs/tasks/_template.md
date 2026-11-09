@@ -1,6 +1,6 @@
 # Task <ID>: <title>
 
-Copy this file to `docs/tasks/<id>.md`. Template source: P1 plan §5 (card) and §6 (handoff).
+Copy this file to `docs/tasks/<phase>/<id>.md` (e.g. `docs/tasks/p1/P1-02.md`). Template source: P1 plan §5 (card) and §6 (handoff).
 
 ## Brief
 

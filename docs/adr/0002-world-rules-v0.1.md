@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-11-08
-- Task: P0-02 (review history: `docs/tasks/P0-02-rc3-review.md`)
+- Task: P0-02 (review history: `docs/tasks/p0/P0-02-rc3-review.md`)
 
 ## Context
 
