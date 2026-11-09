@@ -294,7 +294,8 @@ and mutation boundaries cannot change without a change request.
 # world/content.py; typed metadata returned by the IO-free validated content model
 WorldContent { config:EffectiveConfig,map_rows:array<string>,config_hash:string,map_hash:string }
 # world/ports.py; signatures are normative, bodies arrive in the indicated tasks
-create_engine(content:WorldContent,restored_world:WorldState|null) -> WorldEngine
+create_engine(content:WorldContent,restored_world:WorldState|null,
+              history:Sequence[WorldEvent]=()) -> WorldEngine   # [CR-003]
 begin_observation_tick(state:WorldState, completed_tick:integer,
                        content:WorldContent) -> ObservationAccumulator   # [CR-002]
 observe_step(acc:ObservationAccumulator, state:WorldState,
@@ -344,6 +345,13 @@ persistence/content.py returns validated WorldContent with canonical config/map 
 create_engine initializes a fresh world or restores the supplied physical snapshot against
 those verified content identities. Restoring must not regenerate initial resources/receipts
 or initialization events; sim restores pending packets from SavePackage separately.
+**[CR-003]** `history` is the complete verified event prefix of the run, tick 0 through
+the checkpoint, supplied by sim from persistence (`read_event_prefix`, plus the ancestor
+prefix of OQ-028). It is empty for a fresh world and required on restore: its length must
+equal `restored_world.event_log_cursor`, its run_id must match, and it is read only to rebuild
+the engine's index of emitted event IDs and request utterances (speaker, addressee, item,
+quantity) so replies and causal references behave exactly as in an uninterrupted run. The
+engine never re-emits, mutates or stores `history` in WorldState; world still does no IO.
 
 WorldTickCommit.snapshot/events are immutable copies, never references to mutable engine
 objects. P1-04 owns tick numbering/event seq and buffers all facts, including boundary facts
