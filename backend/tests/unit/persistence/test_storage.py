@@ -642,10 +642,10 @@ def test_recorded_resume_requires_the_saved_trace_identity(
     checkpoint = source / "recorded-checkpoint.json"
     write_checkpoint(checkpoint, SavePackage.model_validate(payload))
     output = tmp_path / "out"
-    with pytest.raises(PersistenceError, match="requires a trace directory"):
-        open_resume_output(source, output, checkpoint)
+    with pytest.raises(PersistenceError, match="decision-trace.json"):
+        open_resume_output(source, output, checkpoint, trace_directory=tmp_path)
     assert not output.exists()
-    resumed = open_resume_output(source, output, checkpoint, trace_directory=source)
+    resumed = open_resume_output(source, output, checkpoint)
     assert resumed.trace is not None
     assert resumed.trace.for_actor(ACTOR) == (decision(),)
 
@@ -676,3 +676,56 @@ def test_resume_continuation_uses_ancestor_prefix(tmp_path: Path, content: World
     later.decisions.append([decision(2, 2)])
     assert (output / "events.jsonl").read_bytes() == canonical(final_event) + b"\n"
     assert (output / "decisions.jsonl").read_bytes() == canonical(decision(2, 2)) + b"\n"
+
+
+def test_stale_atomic_writer_lock_names_sidecar_and_manual_cleanup(tmp_path, content):
+    path = tmp_path / "save.json"
+    lock = tmp_path / ".save.json.lock"
+    lock.write_bytes(b"")
+    save = SavePackage.model_validate(checkpoint_data(content))
+    with pytest.raises(PersistenceError, match="Remove it manually") as error:
+        write_checkpoint(path, save)
+    assert str(lock) in str(error.value)
+    assert lock.is_file() and not path.exists()
+    lock.unlink()
+    write_checkpoint(path, save)
+    assert path.read_bytes() == canonical(save)
+
+
+def test_resume_rejects_missing_or_uncommitted_decision_prefix(tmp_path, content):
+    source = tmp_path / "source"
+    checkpoint = source_run(source, content)
+    path = source / "decisions.jsonl"
+    output = tmp_path / "target"
+    path.unlink()
+    with pytest.raises(PersistenceError, match="decisions.jsonl"):
+        open_resume_output(source, output, checkpoint)
+    path.write_bytes(b"")
+    with pytest.raises(PersistenceError, match="decision_record_cursor"):
+        open_resume_output(source, output, checkpoint)
+    path.write_bytes(canonical(decision()) + b"\npartial future record")
+    assert not output.exists()
+    open_resume_output(source, output, checkpoint)
+
+
+def test_resume_stages_bootstrap_before_publishing(tmp_path, content, monkeypatch):
+    from living_island.persistence import resume as storage
+
+    source = tmp_path / "source"
+    checkpoint = source_run(source, content)
+    output = tmp_path / "target"
+    original = storage.retain_run_content
+
+    def fail_after_origin(stage, content):
+        assert (stage / "resume-origin.json").exists()
+        assert not output.exists()
+        raise OSError("injected retained-content failure")
+
+    monkeypatch.setattr(storage, "retain_run_content", fail_after_origin)
+    with pytest.raises(OSError, match="injected retained-content failure"):
+        open_resume_output(source, output, checkpoint)
+    assert not output.exists()
+    monkeypatch.setattr(storage, "retain_run_content", original)
+    open_resume_output(source, output, checkpoint)
+    assert (output / "events.jsonl").is_file()
+    assert (output / "decisions.jsonl").is_file()
