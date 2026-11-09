@@ -196,25 +196,29 @@ def _fresh_run(
         ),
     )
     output.mkdir(parents=True, exist_ok=True)
-    retain_run_content(output, content)
-    if script is not None:
-        script.retain(output)
-    run_id = content.config.meta.run_id
-    replay = _ReplayCheck(trace) if trace is not None else None
-    result = _drive(
-        loop,
-        ticks,
-        output,
-        EventLogWriter(output / EVENTS_FILENAME, run_id),
-        DecisionLogWriter(output / DECISIONS_FILENAME, run_id),
-        on_boundary_committed,
-        fresh=True,
-        checkpoint_every=checkpoint_every,
-        replay=replay,
-    )
-    if replay is not None:
-        replay.finish(result)
-    write_trace(output, result.world)
+    try:
+        retain_run_content(output, content)
+        if script is not None:
+            script.retain(output)
+        run_id = content.config.meta.run_id
+        replay = _ReplayCheck(trace) if trace is not None else None
+        result = _drive(
+            loop,
+            ticks,
+            output,
+            EventLogWriter(output / EVENTS_FILENAME, run_id),
+            DecisionLogWriter(output / DECISIONS_FILENAME, run_id),
+            on_boundary_committed,
+            fresh=True,
+            checkpoint_every=checkpoint_every,
+            replay=replay,
+        )
+        if replay is not None:
+            replay.finish(result)
+        write_trace(output, result.world)
+    except Exception as exc:
+        exc.add_note(f"Incomplete run output at {output}. Use a new --out directory to retry.")
+        raise
     return result
 
 

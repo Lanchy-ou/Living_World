@@ -13,6 +13,10 @@ from living_island.world.content import canonical_json_bytes
 def main(original: Path, continuation: Path, replay: Path) -> None:
     manifest = json.loads((original / "decision-trace.json").read_bytes())
     origin = json.loads((continuation / "resume-origin.json").read_bytes())
+    start_tick = origin["checkpoint_tick"]
+    saved = json.loads((original / f"checkpoint-{start_tick:010d}.json").read_bytes())
+    living = sum(resident["alive"] for resident in saved["world"]["residents"])
+    assert living > 0
     for name, cursor in (("events", "event_cursor"), ("decisions", "decision_record_cursor")):
         raw = (original / f"{name}.jsonl").read_bytes()
         prefix = b"".join(raw.splitlines(keepends=True)[: origin[cursor]])
@@ -20,6 +24,14 @@ def main(original: Path, continuation: Path, replay: Path) -> None:
         assert raw == prefix + tail == (replay / f"{name}.jsonl").read_bytes()
         if name == "decisions":
             assert all(json.loads(line)["status"] == "ok" for line in raw.splitlines())
+            continuation_records = [json.loads(line) for line in tail.splitlines()]
+            assert continuation_records
+            first_tick = continuation_records[0]["tick"]
+            assert first_tick >= start_tick
+            print(
+                f"continuation: checkpoint tick={start_tick} living={living} "
+                f"decisions={len(continuation_records)} first_decision_tick={first_tick}"
+            )
         digest = sha256(raw).hexdigest()
         assert digest == manifest[f"{name}_sha256"]
         print(f"{name}: {raw.count(bytes([10]))} records sha256={digest}; both comparisons match")

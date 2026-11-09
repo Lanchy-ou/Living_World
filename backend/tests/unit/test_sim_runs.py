@@ -455,6 +455,43 @@ def test_cli_resume_and_reexecute_export_refusals_do_not_create_files(tmp_path, 
     assert not output.exists()
 
 
+@pytest.mark.parametrize("command", ["run", "reexecute"])
+def test_cli_names_partial_fresh_output_after_failure(command, tmp_path, monkeypatch, capsys):
+    from living_island.sim import runner
+
+    output = tmp_path / "partial"
+    if command == "run":
+        args = [
+            "run",
+            "--config",
+            str(WORLDS / "default.toml"),
+            "--ticks",
+            "1",
+            "--policy",
+            "random",
+        ]
+    else:
+        source = tmp_path / "source"
+        run(content_with({"ella": (2, 3)}), 1, source)
+        args = ["reexecute", "--source-run", str(source)]
+    write_checkpoint = runner.write_checkpoint
+
+    def fail_final_checkpoint(path, save):
+        if save.world.tick == 1:
+            raise OSError("injected checkpoint failure")
+        write_checkpoint(path, save)
+
+    monkeypatch.setattr(runner, "write_checkpoint", fail_final_checkpoint)
+    assert main([*args, "--out", str(output)]) == 1
+    err = capsys.readouterr().err
+    assert "injected checkpoint failure" in err
+    assert f"Incomplete run output at {output.resolve()}" in err
+    assert "Use a new --out directory to retry." in err
+    assert _checkpoint(output, 0).exists()
+    assert (output / "decisions.jsonl").read_bytes()
+    assert not (output / "decision-trace.json").exists()
+
+
 def test_recorded_checkpoint_resume_verifies_and_consumes_the_source_trace(tmp_path):
     content = content_with({"ella": (2, 3)})
     original, replay, continuation = (tmp_path / name for name in ("a", "b", "c"))
