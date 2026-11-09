@@ -556,6 +556,13 @@ INVALID: dict[str, tuple[str, Mutation]] = {
         _setter(["frames", 3, "event_range", "count"], 10),
     ),
     "event_range__events_not_covered": ("slices cover", _extra_event),
+    # The generated schema's payload union allows this shape, but the event type does not.
+    "event_payload__type_mismatch": (
+        "events.4.duration_ticks",
+        lambda d: next(e for e in d["events"] if e["type"] == "action_succeeded").update(
+            type="action_started"
+        ),
+    ),
     # event order, seq, IDs
     "event_order__tick_regresses": ("event_order", _swap_across_ticks),
     "event_seq__gap": ("event_seq", _seq_gap),

@@ -318,36 +318,3 @@ def stage_resume_output(
     except Exception as exc:
         exc.add_note(f"Unpublished continuation staging directory: {stage}")
         raise
-
-
-def open_resume_output(
-    source_directory: Path,
-    output_directory: Path,
-    checkpoint_path: Path,
-    *,
-    prior_events: tuple[WorldEvent, ...] = (),
-    trace_directory: Path | None = None,
-) -> ResumeOutput:
-    """Publish complete bootstrap artifacts for direct users of the storage port."""
-    with stage_resume_output(
-        source_directory,
-        output_directory,
-        checkpoint_path,
-        prior_events=prior_events,
-        trace_directory=trace_directory,
-    ) as staged:
-        pass
-    output = output_directory.resolve()
-    # Retain the validated writer sequences while moving their IO target with the files.
-    staged.events._path = output / EVENTS_FILENAME
-    staged.decisions._path = output / DECISIONS_FILENAME
-    return ResumeOutput(
-        staged.checkpoint,
-        staged.content,
-        staged.events,
-        staged.decisions,
-        staged.script,
-        staged.trace,
-        staged.history,
-        output,
-    )

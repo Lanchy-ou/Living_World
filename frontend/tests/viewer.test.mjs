@@ -18,7 +18,32 @@ import { eventInvolvesResident, failureCode, filterEvents, isFailureEvent, summa
 import { residentView } from "../src/panels/residentView.ts";
 import { resourcesView } from "../src/panels/resourcesView.ts";
 import { generateLongBundle } from "./lib/builder.mjs";
-import { loadHandmade } from "./lib/env.mjs";
+import { SHARED_DIR, loadHandmade, readText, validator } from "./lib/env.mjs";
+
+test("FE-T11: the real scripted export loads, seeks and exposes the recorded failure", () => {
+  const name = "mechanics.replay.json";
+  const result = validator.validateText(readText(SHARED_DIR + name));
+  assert.ok(result.ok, result.ok ? "" : result.error.message);
+  const { bundle } = result;
+  const store = new ReplayStore();
+  store.load(bundle, name);
+  assert.equal(store.getState().currentTick, 0);
+  assert.equal(lastTick(bundle), 6);
+  store.seek(lastTick(bundle));
+  const final = frameAt(bundle, store.getState().currentTick);
+  assert.equal(final.tick, 6);
+  assert.equal(final.residents.find((r) => r.id === "ryan").fruit_count, 1);
+  assert.equal(final.residents.find((r) => r.id === "ella").alive, false);
+
+  const failures = bundle.events.filter(isFailureEvent);
+  assert.equal(failures.length, 1);
+  const [failure] = failures;
+  assert.equal(failureCode(failure), "RESOURCE_TAKEN");
+  assert.equal(failure.actor_id, "mia");
+  store.seek(failure.tick);
+  assert.equal(store.getState().currentTick, 2);
+  assert.ok(eventsOfFrame(bundle, frameAt(bundle, 2)).includes(failure));
+});
 
 const VIEW = { width: 600, height: 400 };
 

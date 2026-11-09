@@ -27,7 +27,7 @@ from living_island.persistence.logs import (
     read_decisions,
     read_events,
 )
-from living_island.persistence.resume import open_resume_output
+from living_island.persistence.resume import stage_resume_output
 from living_island.persistence.scripts import load_script
 from living_island.persistence.trace import load_trace, write_trace
 from living_island.world.content import (
@@ -480,15 +480,16 @@ def test_resume_writes_only_continuation_and_preserves_source(
         stream.write(b"partial future record")
     before = {p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in source.iterdir()}
     directory_mtime = source.stat().st_mtime_ns
-    resumed = open_resume_output(source, output, checkpoint)
     initial = fact(content)
     event = fact(content, 2, causes=[initial.event_id])
-    with pytest.raises(PersistenceError, match="post-checkpoint event"):
-        resumed.events.append([fact(content, 1)])
-    resumed.events.append([event])
-    with pytest.raises(PersistenceError):
-        resumed.decisions.append([decision()])
-    resumed.decisions.append([decision(1, 1)])
+    with stage_resume_output(source, output, checkpoint) as staged:
+        with pytest.raises(PersistenceError, match="post-checkpoint event"):
+            staged.events.append([fact(content, 1)])
+        staged.events.append([event])
+        with pytest.raises(PersistenceError):
+            staged.decisions.append([decision()])
+        staged.decisions.append([decision(1, 1)])
+        assert not output.exists()
     assert (output / "events.jsonl").read_bytes() == canonical(event) + b"\n"
     assert (output / "decisions.jsonl").read_bytes() == canonical(decision(1, 1)) + b"\n"
     assert read_events(output / "events.jsonl", RUN_ID, prior=[initial], after_tick=1) == (event,)
@@ -506,7 +507,8 @@ def test_resume_writes_only_continuation_and_preserves_source(
     )
     for forbidden in (source / ".." / "source", source / "child", output):
         with pytest.raises(PersistenceError, match="output"):
-            open_resume_output(source, forbidden, checkpoint)
+            with stage_resume_output(source, forbidden, checkpoint):
+                pass
     assert before == {p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in source.iterdir()}
     assert source.stat().st_mtime_ns == directory_mtime
 
@@ -562,12 +564,14 @@ def test_script_identity_actor_slice_and_resume(tmp_path: Path, content: WorldCo
     checkpoint = source / "scripted-checkpoint.json"
     write_checkpoint(checkpoint, SavePackage.model_validate(payload))
     output = tmp_path / "out"
-    assert open_resume_output(source, output, checkpoint).script is not None
+    with stage_resume_output(source, output, checkpoint) as staged:
+        assert staged.script is not None
     assert (output / "script.json").read_bytes() == canonical_json_bytes(data)
     data["actors"][0]["on_exhausted"] = "error"
     path.write_bytes(canonical_json_bytes(data))
     with pytest.raises(PersistenceError, match="script_sha256"):
-        open_resume_output(source, tmp_path / "changed", checkpoint)
+        with stage_resume_output(source, tmp_path / "changed", checkpoint):
+            pass
 
 
 @pytest.mark.parametrize("case", ["version", "missing_actor", "plan_limit", "unknown_field"])
@@ -643,37 +647,39 @@ def test_recorded_resume_requires_the_saved_trace_identity(
     write_checkpoint(checkpoint, SavePackage.model_validate(payload))
     output = tmp_path / "out"
     with pytest.raises(PersistenceError, match="decision-trace.json"):
-        open_resume_output(source, output, checkpoint, trace_directory=tmp_path)
+        with stage_resume_output(source, output, checkpoint, trace_directory=tmp_path):
+            pass
     assert not output.exists()
-    resumed = open_resume_output(source, output, checkpoint)
-    assert resumed.trace is not None
-    assert resumed.trace.for_actor(ACTOR) == (decision(),)
+    with stage_resume_output(source, output, checkpoint) as staged:
+        assert staged.trace is not None
+        assert staged.trace.for_actor(ACTOR) == (decision(),)
 
     trace_path.write_bytes(canonical(manifest.model_copy(update={"final_world_sha256": "b" * 64})))
     with pytest.raises(PersistenceError, match="source_trace_sha256"):
-        open_resume_output(source, tmp_path / "changed", checkpoint, trace_directory=source)
+        with stage_resume_output(source, tmp_path / "changed", checkpoint, trace_directory=source):
+            pass
 
 
 def test_resume_continuation_uses_ancestor_prefix(tmp_path: Path, content: WorldContent) -> None:
     source = tmp_path / "source"
     middle = tmp_path / "middle"
     checkpoint = source_run(source, content)
-    resumed = open_resume_output(source, middle, checkpoint)
     initial = fact(content)
     event = fact(content, 2, causes=[initial.event_id])
-    resumed.events.append([event])
-    resumed.decisions.append([decision(1, 1)])
     data = checkpoint_data(content, tick=2, ordinal=2)
     data["world"].update(event_log_cursor=2, next_event_seq_in_tick=1)
     data["event_cursor"] = 2
-    later_checkpoint = middle / "checkpoint.json"
-    write_checkpoint(later_checkpoint, SavePackage.model_validate(data))
+    with stage_resume_output(source, middle, checkpoint) as staged:
+        staged.events.append([event])
+        staged.decisions.append([decision(1, 1)])
+        write_checkpoint(staged.directory / "checkpoint.json", SavePackage.model_validate(data))
 
     output = tmp_path / "output"
-    later = open_resume_output(middle, output, later_checkpoint, prior_events=(initial,))
+    later_checkpoint = middle / "checkpoint.json"
     final_event = fact(content, 3, causes=[initial.event_id, event.event_id])
-    later.events.append([final_event])
-    later.decisions.append([decision(2, 2)])
+    with stage_resume_output(middle, output, later_checkpoint, prior_events=(initial,)) as staged:
+        staged.events.append([final_event])
+        staged.decisions.append([decision(2, 2)])
     assert (output / "events.jsonl").read_bytes() == canonical(final_event) + b"\n"
     assert (output / "decisions.jsonl").read_bytes() == canonical(decision(2, 2)) + b"\n"
 
@@ -699,13 +705,16 @@ def test_resume_rejects_missing_or_uncommitted_decision_prefix(tmp_path, content
     output = tmp_path / "target"
     path.unlink()
     with pytest.raises(PersistenceError, match="decisions.jsonl"):
-        open_resume_output(source, output, checkpoint)
+        with stage_resume_output(source, output, checkpoint):
+            pass
     path.write_bytes(b"")
     with pytest.raises(PersistenceError, match="decision_record_cursor"):
-        open_resume_output(source, output, checkpoint)
+        with stage_resume_output(source, output, checkpoint):
+            pass
     path.write_bytes(canonical(decision()) + b"\npartial future record")
     assert not output.exists()
-    open_resume_output(source, output, checkpoint)
+    with stage_resume_output(source, output, checkpoint):
+        pass
 
 
 def test_resume_stages_bootstrap_before_publishing(tmp_path, content, monkeypatch):
@@ -723,9 +732,11 @@ def test_resume_stages_bootstrap_before_publishing(tmp_path, content, monkeypatc
 
     monkeypatch.setattr(storage, "retain_run_content", fail_after_origin)
     with pytest.raises(OSError, match="injected retained-content failure"):
-        open_resume_output(source, output, checkpoint)
+        with stage_resume_output(source, output, checkpoint):
+            pass
     assert not output.exists()
     monkeypatch.setattr(storage, "retain_run_content", original)
-    open_resume_output(source, output, checkpoint)
+    with stage_resume_output(source, output, checkpoint):
+        pass
     assert (output / "events.jsonl").is_file()
     assert (output / "decisions.jsonl").is_file()
