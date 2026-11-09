@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-import json
-from hashlib import sha256
+from collections.abc import Sequence
 
 from pydantic_core import PydanticSerializationError
 
-from living_island.agents.base import Policy
+from living_island.agents.base import Policy, ResidentRuntime
+from living_island.agents.policies.random_policy import RandomPolicy
+from living_island.agents.policies.recorded import RecordedPolicy, ReplayDiverged, request_sha256
+from living_island.agents.policies.scripted import ScriptedPolicy
 from living_island.agents.types import (
+    ActorScript,
     DecisionContext,
     DecisionOutcome,
     DecisionRecord,
@@ -31,20 +34,9 @@ from living_island.world.protocol import (
 )
 
 
-def request_sha256(request: DecisionRequest) -> str:
-    # Agents cannot import the world content encoder. Request DTOs contain only
-    # the integral JSON values covered by the canonical encoding in IC §6.3.
-    encoded = json.dumps(
-        request.model_dump(mode="json"),
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        allow_nan=False,
-    ).encode("utf-8")
-    return sha256(encoded).hexdigest()
-
-
 def _validate_plan(plan: ActionPlan, request: DecisionRequest, limit: int) -> ActionPlan:
+    if not isinstance(plan, ActionPlan):
+        raise ValueError("policy must return an ActionPlan")
     # Revalidate nested shapes even if a policy bypassed model construction.
     plan = ActionPlan.model_validate(plan.model_dump(mode="json", warnings="error"))
     plan_id = build_plan_id(request.actor_id, request.decision_ordinal)
@@ -154,6 +146,18 @@ class Runtime:
                     error_kind="INVALID_PLAN",
                     detail=str(exc),
                 )
+        if outcome.status == "replayed":
+            try:
+                source = outcome.source_record
+                _validate_plan(source.plan, request, self._config.max_plan_actions)
+                DecisionRecord.model_validate(source.model_dump(mode="json", warnings="error"))
+            except (ValueError, PydanticSerializationError) as exc:
+                outcome = ErrorOutcome(
+                    status="error",
+                    policy_id=outcome.policy_id,
+                    error_kind="REPLAY_DIVERGED",
+                    detail=str(exc),
+                )
         self._outcome = outcome.model_copy(deep=True)
         return outcome
 
@@ -184,6 +188,8 @@ class Runtime:
             raise ValueError(f"{self.actor_id}: decision record does not match the policy error")
         if outcome.status == "replayed" and record != outcome.source_record:
             raise ValueError(f"{self.actor_id}: replay must preserve the original record")
+        if isinstance(self._policy, ScriptedPolicy):
+            self._policy.commit()
         self._ordinal += 1
         self._decided_tick = request.tick
         self._request = self._outcome = None
@@ -198,3 +204,50 @@ class Runtime:
             policy_state=self._policy.export_state(),
             latest_perception_tick=self._latest_tick,
         )
+
+
+def create_runtime(
+    actor_id: str,
+    policy_config: PolicyConfig,
+    own_profile: OwnProfile,
+    own_script: ActorScript | None,
+    own_records: Sequence[DecisionRecord] | None,
+    restored_state: ResidentRuntimeState | None,
+) -> ResidentRuntime:
+    """Accept only the actor slice of inputs already verified by persistence."""
+    if restored_state is not None and (
+        restored_state.actor_id != actor_id or restored_state.policy_config != policy_config
+    ):
+        raise ValueError(f"{actor_id}: restored actor or policy config mismatch")
+    policy: Policy
+    match policy_config.policy_id:
+        case "random-v0":
+            if own_script is not None or own_records is not None:
+                raise ValueError(f"{actor_id}: random policy takes neither a script nor records")
+            policy = RandomPolicy(policy_config)
+        case "scripted-v0":
+            if own_script is None or own_script.actor_id != actor_id or own_records is not None:
+                raise ValueError(f"{actor_id}: scripted policy requires its own actor script")
+            if any(len(plan) > policy_config.max_plan_actions for plan in own_script.plans):
+                raise ValueError(f"{actor_id}: script exceeds the plan action limit")
+            cursor = 0
+            if restored_state is not None:
+                saved_cursor = restored_state.policy_state.get("cursor")
+                expected = min(restored_state.next_decision_ordinal, len(own_script.plans))
+                if type(saved_cursor) is not int or saved_cursor != expected:
+                    raise ValueError(
+                        f"{actor_id}: restored script cursor does not match its ordinal"
+                    )
+                cursor = saved_cursor
+            policy = ScriptedPolicy(own_script, cursor)
+        case "recorded-v0":
+            if own_records is None or own_script is not None:
+                raise ReplayDiverged(f"{actor_id}: recorded policy requires its own actor records")
+            if restored_state is not None and restored_state.next_decision_ordinal > len(
+                own_records
+            ):
+                raise ReplayDiverged(f"{actor_id}: restored ordinal exceeds source records")
+            policy = RecordedPolicy(actor_id, own_records)
+        case _:
+            raise ValueError(f"{actor_id}: unknown policy {policy_config.policy_id!r}")
+    return Runtime(actor_id, policy_config, own_profile, policy, restored_state)

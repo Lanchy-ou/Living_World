@@ -1,8 +1,8 @@
 """Synchronous simulation boundary orchestration."""
 
 from living_island.agents.base import ResidentRuntime
-from living_island.agents.runtime import request_sha256
 from living_island.agents.types import DecisionRecord
+from living_island.sim.decisions import decision_record
 from living_island.world.ports import WorldEngine, WorldTickCommit
 from living_island.world.protocol import DECISION_TRIGGERS, DecisionTrigger, format_delivery_id
 
@@ -45,24 +45,7 @@ class BoundaryLoop:
                 triggers = [trigger for trigger in DECISION_TRIGGERS if trigger in self._deferred]
                 request = self._runtime.make_request(snapshot.tick, triggers)
                 outcome = self._runtime.decide(request)
-                if outcome.status != "ok":
-                    raise ValueError("expected a normal one-actor plan")
-                record = DecisionRecord(
-                    record_schema_version="0.1",
-                    run_id=snapshot.run_id,
-                    tick=request.tick,
-                    actor_id=actor_id,
-                    decision_ordinal=request.decision_ordinal,
-                    policy_id=outcome.policy_id,
-                    effective_policy_id=outcome.policy_id,
-                    triggers=request.triggers,
-                    request_sha256=request_sha256(request),
-                    status="ok",
-                    error_kind=None,
-                    plan=outcome.plan,
-                    substituted=False,
-                    llm_call_id=None,
-                )
+                record = decision_record(snapshot.run_id, request, outcome)
                 (intent,) = record.plan.intents
                 records.append(record)
                 self._runtime.commit_decision(record)
