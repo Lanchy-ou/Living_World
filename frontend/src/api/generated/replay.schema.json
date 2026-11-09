@@ -1,0 +1,1588 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "ActionFailedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "action_type": {
+          "title": "Action Type",
+          "type": "string"
+        },
+        "failure_code": {
+          "title": "Failure Code",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action_type",
+        "failure_code"
+      ],
+      "title": "ActionFailedPayload",
+      "type": "object"
+    },
+    "ActionInterruptedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "action_type": {
+          "title": "Action Type",
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "DEATH",
+            "URGENT_NEED",
+            "DIRECT_SPEECH",
+            "NEW_SIGHT"
+          ],
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action_type",
+        "reason"
+      ],
+      "title": "ActionInterruptedPayload",
+      "type": "object"
+    },
+    "ActionProgressedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "action_type": {
+          "title": "Action Type",
+          "type": "string"
+        },
+        "elapsed_ticks": {
+          "minimum": 0,
+          "title": "Elapsed Ticks",
+          "type": "integer"
+        },
+        "remaining_ticks": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Remaining Ticks"
+        },
+        "route_cursor": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Route Cursor"
+        }
+      },
+      "required": [
+        "action_type",
+        "elapsed_ticks",
+        "remaining_ticks",
+        "route_cursor"
+      ],
+      "title": "ActionProgressedPayload",
+      "type": "object"
+    },
+    "ActionStartedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "action_type": {
+          "title": "Action Type",
+          "type": "string"
+        },
+        "plan_id": {
+          "title": "Plan Id",
+          "type": "string"
+        },
+        "duration_ticks": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Duration Ticks"
+        }
+      },
+      "required": [
+        "action_type",
+        "plan_id",
+        "duration_ticks"
+      ],
+      "title": "ActionStartedPayload",
+      "type": "object"
+    },
+    "ActionSucceededPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "action_type": {
+          "title": "Action Type",
+          "type": "string"
+        },
+        "result_code": {
+          "const": "OK",
+          "title": "Result Code",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action_type",
+        "result_code"
+      ],
+      "title": "ActionSucceededPayload",
+      "type": "object"
+    },
+    "ActiveActionDisplay": {
+      "additionalProperties": false,
+      "properties": {
+        "intent_id": {
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "action_type": {
+          "title": "Action Type",
+          "type": "string"
+        },
+        "tick_started": {
+          "minimum": 0,
+          "title": "Tick Started",
+          "type": "integer"
+        },
+        "remaining_ticks": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Remaining Ticks"
+        }
+      },
+      "required": [
+        "intent_id",
+        "action_type",
+        "tick_started",
+        "remaining_ticks"
+      ],
+      "title": "ActiveActionDisplay",
+      "type": "object"
+    },
+    "AgentFallbackUsedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "TIMEOUT",
+            "PARSE_ERROR",
+            "BUDGET",
+            "PROVIDER_ERROR"
+          ],
+          "title": "Reason",
+          "type": "string"
+        },
+        "fallback_policy_id": {
+          "title": "Fallback Policy Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resident_id",
+        "reason",
+        "fallback_policy_id"
+      ],
+      "title": "AgentFallbackUsedPayload",
+      "type": "object"
+    },
+    "CanteenFilledPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "canteen_id": {
+          "title": "Canteen Id",
+          "type": "string"
+        },
+        "servings_before": {
+          "minimum": 0,
+          "title": "Servings Before",
+          "type": "integer"
+        },
+        "servings_after": {
+          "minimum": 0,
+          "title": "Servings After",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "canteen_id",
+        "servings_before",
+        "servings_after"
+      ],
+      "title": "CanteenFilledPayload",
+      "type": "object"
+    },
+    "ConditionBounds": {
+      "additionalProperties": false,
+      "description": "Effective needs bounds; the minimum is always 0 and below the maximum.",
+      "properties": {
+        "min_value": {
+          "const": 0,
+          "title": "Min Value",
+          "type": "integer"
+        },
+        "max_value": {
+          "minimum": 1,
+          "title": "Max Value",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "min_value",
+        "max_value"
+      ],
+      "title": "ConditionBounds",
+      "type": "object"
+    },
+    "ConditionUpdatedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "satiety_before": {
+          "minimum": 0,
+          "title": "Satiety Before",
+          "type": "integer"
+        },
+        "satiety_after": {
+          "minimum": 0,
+          "title": "Satiety After",
+          "type": "integer"
+        },
+        "hydration_before": {
+          "minimum": 0,
+          "title": "Hydration Before",
+          "type": "integer"
+        },
+        "hydration_after": {
+          "minimum": 0,
+          "title": "Hydration After",
+          "type": "integer"
+        },
+        "stamina_before": {
+          "minimum": 0,
+          "title": "Stamina Before",
+          "type": "integer"
+        },
+        "stamina_after": {
+          "minimum": 0,
+          "title": "Stamina After",
+          "type": "integer"
+        },
+        "health_before": {
+          "minimum": 0,
+          "title": "Health Before",
+          "type": "integer"
+        },
+        "health_after": {
+          "minimum": 0,
+          "title": "Health After",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "resident_id",
+        "satiety_before",
+        "satiety_after",
+        "hydration_before",
+        "hydration_after",
+        "stamina_before",
+        "stamina_after",
+        "health_before",
+        "health_after"
+      ],
+      "title": "ConditionUpdatedPayload",
+      "type": "object"
+    },
+    "ConfigChangedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "parameter": {
+          "title": "Parameter",
+          "type": "string"
+        },
+        "old_value": {
+          "title": "Old Value",
+          "type": "integer"
+        },
+        "new_value": {
+          "title": "New Value",
+          "type": "integer"
+        },
+        "effective_tick": {
+          "minimum": 0,
+          "title": "Effective Tick",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "parameter",
+        "old_value",
+        "new_value",
+        "effective_tick"
+      ],
+      "title": "ConfigChangedPayload",
+      "type": "object"
+    },
+    "Coord": {
+      "additionalProperties": false,
+      "description": "A tile coordinate ``{x, y}``; (0,0) is top left.",
+      "properties": {
+        "x": {
+          "minimum": 0,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "minimum": 0,
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "Coord",
+      "type": "object"
+    },
+    "CorpseCreatedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "corpse_id": {
+          "title": "Corpse Id",
+          "type": "string"
+        },
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        }
+      },
+      "required": [
+        "corpse_id",
+        "resident_id",
+        "position"
+      ],
+      "title": "CorpseCreatedPayload",
+      "type": "object"
+    },
+    "CorpseFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        }
+      },
+      "required": [
+        "id",
+        "resident_id",
+        "position"
+      ],
+      "title": "CorpseFrame",
+      "type": "object"
+    },
+    "DisplayFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "residents": {
+          "items": {
+            "$ref": "#/$defs/ResidentFrame"
+          },
+          "title": "Residents",
+          "type": "array"
+        },
+        "fruit_trees": {
+          "items": {
+            "$ref": "#/$defs/FruitTreeFrame"
+          },
+          "title": "Fruit Trees",
+          "type": "array"
+        },
+        "ground_fruit": {
+          "items": {
+            "$ref": "#/$defs/GroundFruitFrame"
+          },
+          "title": "Ground Fruit",
+          "type": "array"
+        },
+        "ground_canteen": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GroundCanteenFrame"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "corpses": {
+          "items": {
+            "$ref": "#/$defs/CorpseFrame"
+          },
+          "title": "Corpses",
+          "type": "array"
+        },
+        "event_range": {
+          "$ref": "#/$defs/EventRange"
+        }
+      },
+      "required": [
+        "tick",
+        "residents",
+        "fruit_trees",
+        "ground_fruit",
+        "ground_canteen",
+        "corpses",
+        "event_range"
+      ],
+      "title": "DisplayFrame",
+      "type": "object"
+    },
+    "EventRange": {
+      "additionalProperties": false,
+      "properties": {
+        "first_index": {
+          "minimum": 0,
+          "title": "First Index",
+          "type": "integer"
+        },
+        "count": {
+          "minimum": 0,
+          "title": "Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "first_index",
+        "count"
+      ],
+      "title": "EventRange",
+      "type": "object"
+    },
+    "ExplorationUpdatedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "newly_seen_tile_indices": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Newly Seen Tile Indices",
+          "type": "array"
+        }
+      },
+      "required": [
+        "resident_id",
+        "newly_seen_tile_indices"
+      ],
+      "title": "ExplorationUpdatedPayload",
+      "type": "object"
+    },
+    "FruitConsumedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "quantity": {
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        },
+        "satiety_before": {
+          "minimum": 0,
+          "title": "Satiety Before",
+          "type": "integer"
+        },
+        "satiety_after": {
+          "minimum": 0,
+          "title": "Satiety After",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "quantity",
+        "satiety_before",
+        "satiety_after"
+      ],
+      "title": "FruitConsumedPayload",
+      "type": "object"
+    },
+    "FruitGatheredPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "tree_id": {
+          "title": "Tree Id",
+          "type": "string"
+        },
+        "quantity": {
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        },
+        "stock_before": {
+          "minimum": 0,
+          "title": "Stock Before",
+          "type": "integer"
+        },
+        "stock_after": {
+          "minimum": 0,
+          "title": "Stock After",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tree_id",
+        "quantity",
+        "stock_before",
+        "stock_after"
+      ],
+      "title": "FruitGatheredPayload",
+      "type": "object"
+    },
+    "FruitRegrewPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "tree_id": {
+          "title": "Tree Id",
+          "type": "string"
+        },
+        "quantity": {
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        },
+        "stock_before": {
+          "minimum": 0,
+          "title": "Stock Before",
+          "type": "integer"
+        },
+        "stock_after": {
+          "minimum": 0,
+          "title": "Stock After",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tree_id",
+        "quantity",
+        "stock_before",
+        "stock_after"
+      ],
+      "title": "FruitRegrewPayload",
+      "type": "object"
+    },
+    "FruitTreeFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "stock": {
+          "minimum": 0,
+          "title": "Stock",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "position",
+        "stock"
+      ],
+      "title": "FruitTreeFrame",
+      "type": "object"
+    },
+    "GodInterventionRecordedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "intervention_id": {
+          "title": "Intervention Id",
+          "type": "string"
+        },
+        "recipient_id": {
+          "title": "Recipient Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "dream",
+            "faint_thought"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "transcript_retained": {
+          "title": "Transcript Retained",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "intervention_id",
+        "recipient_id",
+        "kind",
+        "transcript_retained"
+      ],
+      "title": "GodInterventionRecordedPayload",
+      "type": "object"
+    },
+    "GroundCanteenFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "servings": {
+          "minimum": 0,
+          "title": "Servings",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "position",
+        "servings"
+      ],
+      "title": "GroundCanteenFrame",
+      "type": "object"
+    },
+    "GroundFruitFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "quantity": {
+          "minimum": 0,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "position",
+        "quantity"
+      ],
+      "title": "GroundFruitFrame",
+      "type": "object"
+    },
+    "ItemDroppedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "item_type": {
+          "enum": [
+            "fruit",
+            "canteen"
+          ],
+          "title": "Item Type",
+          "type": "string"
+        },
+        "quantity": {
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        },
+        "canteen_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Canteen Id"
+        },
+        "canteen_servings": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Canteen Servings"
+        }
+      },
+      "required": [
+        "resident_id",
+        "position",
+        "item_type",
+        "quantity",
+        "canteen_id",
+        "canteen_servings"
+      ],
+      "title": "ItemDroppedPayload",
+      "type": "object"
+    },
+    "ItemGivenPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "from_id": {
+          "title": "From Id",
+          "type": "string"
+        },
+        "to_id": {
+          "title": "To Id",
+          "type": "string"
+        },
+        "item_type": {
+          "enum": [
+            "fruit",
+            "canteen"
+          ],
+          "title": "Item Type",
+          "type": "string"
+        },
+        "quantity": {
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        },
+        "canteen_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Canteen Id"
+        }
+      },
+      "required": [
+        "from_id",
+        "to_id",
+        "item_type",
+        "quantity",
+        "canteen_id"
+      ],
+      "title": "ItemGivenPayload",
+      "type": "object"
+    },
+    "ItemPickedUpPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "item_type": {
+          "enum": [
+            "fruit",
+            "canteen"
+          ],
+          "title": "Item Type",
+          "type": "string"
+        },
+        "quantity": {
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        },
+        "canteen_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Canteen Id"
+        }
+      },
+      "required": [
+        "resident_id",
+        "position",
+        "item_type",
+        "quantity",
+        "canteen_id"
+      ],
+      "title": "ItemPickedUpPayload",
+      "type": "object"
+    },
+    "LegendEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "symbol": {
+          "maxLength": 1,
+          "minLength": 1,
+          "pattern": "^[ -~]$",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "terrain": {
+          "enum": [
+            "sea",
+            "beach",
+            "grass",
+            "woods",
+            "rock",
+            "spring",
+            "cave",
+            "fruit_tree",
+            "damp_moss"
+          ],
+          "title": "Terrain",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol",
+        "terrain"
+      ],
+      "title": "LegendEntry",
+      "type": "object"
+    },
+    "ReplayClock": {
+      "additionalProperties": false,
+      "properties": {
+        "tick_minutes": {
+          "minimum": 1,
+          "title": "Tick Minutes",
+          "type": "integer"
+        },
+        "start_hour": {
+          "maximum": 23,
+          "minimum": 0,
+          "title": "Start Hour",
+          "type": "integer"
+        },
+        "day_start_hour": {
+          "maximum": 24,
+          "minimum": 0,
+          "title": "Day Start Hour",
+          "type": "integer"
+        },
+        "day_end_hour": {
+          "maximum": 24,
+          "minimum": 0,
+          "title": "Day End Hour",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tick_minutes",
+        "start_hour",
+        "day_start_hour",
+        "day_end_hour"
+      ],
+      "title": "ReplayClock",
+      "type": "object"
+    },
+    "ReplayMap": {
+      "additionalProperties": false,
+      "properties": {
+        "width": {
+          "minimum": 1,
+          "title": "Width",
+          "type": "integer"
+        },
+        "height": {
+          "minimum": 1,
+          "title": "Height",
+          "type": "integer"
+        },
+        "rows": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^[~.,W^SCFM]+$",
+            "type": "string"
+          },
+          "title": "Rows",
+          "type": "array"
+        },
+        "terrain_legend": {
+          "items": {
+            "$ref": "#/$defs/LegendEntry"
+          },
+          "title": "Terrain Legend",
+          "type": "array"
+        }
+      },
+      "required": [
+        "width",
+        "height",
+        "rows",
+        "terrain_legend"
+      ],
+      "title": "ReplayMap",
+      "type": "object"
+    },
+    "ReplayResident": {
+      "additionalProperties": false,
+      "description": "Label only; carries no state.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "display_name"
+      ],
+      "title": "ReplayResident",
+      "type": "object"
+    },
+    "ResidentDiedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "cause": {
+          "const": "DEPRIVATION",
+          "title": "Cause",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resident_id",
+        "position",
+        "cause"
+      ],
+      "title": "ResidentDiedPayload",
+      "type": "object"
+    },
+    "ResidentFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "alive": {
+          "title": "Alive",
+          "type": "boolean"
+        },
+        "satiety": {
+          "minimum": 0,
+          "title": "Satiety",
+          "type": "integer"
+        },
+        "hydration": {
+          "minimum": 0,
+          "title": "Hydration",
+          "type": "integer"
+        },
+        "stamina": {
+          "minimum": 0,
+          "title": "Stamina",
+          "type": "integer"
+        },
+        "health": {
+          "minimum": 0,
+          "title": "Health",
+          "type": "integer"
+        },
+        "fruit_count": {
+          "minimum": 0,
+          "title": "Fruit Count",
+          "type": "integer"
+        },
+        "canteen_servings": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Canteen Servings"
+        },
+        "active_action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActiveActionDisplay"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "position",
+        "alive",
+        "satiety",
+        "hydration",
+        "stamina",
+        "health",
+        "fruit_count",
+        "canteen_servings",
+        "active_action"
+      ],
+      "title": "ResidentFrame",
+      "type": "object"
+    },
+    "ResidentMovedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/Coord"
+        },
+        "to": {
+          "$ref": "#/$defs/Coord"
+        },
+        "step_cost_units": {
+          "minimum": 1,
+          "title": "Step Cost Units",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "step_cost_units"
+      ],
+      "title": "ResidentMovedPayload",
+      "type": "object"
+    },
+    "StaminaActionCostAppliedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "amount": {
+          "minimum": 0,
+          "title": "Amount",
+          "type": "integer"
+        },
+        "reason": {
+          "enum": [
+            "gather",
+            "move"
+          ],
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "amount",
+        "reason"
+      ],
+      "title": "StaminaActionCostAppliedPayload",
+      "type": "object"
+    },
+    "UtteranceHeardPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "utterance_id": {
+          "title": "Utterance Id",
+          "type": "string"
+        },
+        "listener_id": {
+          "title": "Listener Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "utterance_id",
+        "listener_id"
+      ],
+      "title": "UtteranceHeardPayload",
+      "type": "object"
+    },
+    "UtteranceRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "item_type": {
+          "title": "Item Type",
+          "type": "string"
+        },
+        "quantity": {
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "item_type",
+        "quantity"
+      ],
+      "title": "UtteranceRequest",
+      "type": "object"
+    },
+    "UtteranceSpokenPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "utterance_id": {
+          "title": "Utterance Id",
+          "type": "string"
+        },
+        "addressee_id": {
+          "title": "Addressee Id",
+          "type": "string"
+        },
+        "speech_act": {
+          "enum": [
+            "statement",
+            "request",
+            "accept",
+            "refuse"
+          ],
+          "title": "Speech Act",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtteranceRequest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "in_reply_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "In Reply To"
+        }
+      },
+      "required": [
+        "utterance_id",
+        "addressee_id",
+        "speech_act",
+        "text",
+        "request",
+        "in_reply_to"
+      ],
+      "title": "UtteranceSpokenPayload",
+      "type": "object"
+    },
+    "WaterDrankPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "enum": [
+            "spring",
+            "canteen"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "servings": {
+          "minimum": 1,
+          "title": "Servings",
+          "type": "integer"
+        },
+        "hydration_before": {
+          "minimum": 0,
+          "title": "Hydration Before",
+          "type": "integer"
+        },
+        "hydration_after": {
+          "minimum": 0,
+          "title": "Hydration After",
+          "type": "integer"
+        },
+        "canteen_servings_after": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Canteen Servings After"
+        }
+      },
+      "required": [
+        "source",
+        "servings",
+        "hydration_before",
+        "hydration_after",
+        "canteen_servings_after"
+      ],
+      "title": "WaterDrankPayload",
+      "type": "object"
+    },
+    "WorldEvent": {
+      "additionalProperties": false,
+      "description": "Objective event envelope (Interface Contract §3.1) with a typed payload.",
+      "properties": {
+        "schema_version": {
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "seq_in_tick": {
+          "minimum": 0,
+          "title": "Seq In Tick",
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "world_initialized",
+            "config_changed",
+            "action_started",
+            "action_progressed",
+            "resident_moved",
+            "action_succeeded",
+            "action_failed",
+            "action_interrupted",
+            "fruit_gathered",
+            "fruit_consumed",
+            "water_drank",
+            "canteen_filled",
+            "stamina_action_cost_applied",
+            "fruit_regrew",
+            "condition_updated",
+            "utterance_spoken",
+            "utterance_heard",
+            "item_given",
+            "item_picked_up",
+            "resident_died",
+            "corpse_created",
+            "item_dropped",
+            "exploration_updated",
+            "agent_fallback_used",
+            "god_intervention_recorded"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "actor_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Actor Id"
+        },
+        "target_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target Id"
+        },
+        "intent_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Intent Id"
+        },
+        "llm_call_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Llm Call Id"
+        },
+        "caused_by_event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Caused By Event Ids",
+          "type": "array"
+        },
+        "payload": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorldInitializedPayload"
+            },
+            {
+              "$ref": "#/$defs/ConfigChangedPayload"
+            },
+            {
+              "$ref": "#/$defs/ActionStartedPayload"
+            },
+            {
+              "$ref": "#/$defs/ActionProgressedPayload"
+            },
+            {
+              "$ref": "#/$defs/ResidentMovedPayload"
+            },
+            {
+              "$ref": "#/$defs/ActionSucceededPayload"
+            },
+            {
+              "$ref": "#/$defs/ActionFailedPayload"
+            },
+            {
+              "$ref": "#/$defs/ActionInterruptedPayload"
+            },
+            {
+              "$ref": "#/$defs/FruitGatheredPayload"
+            },
+            {
+              "$ref": "#/$defs/FruitConsumedPayload"
+            },
+            {
+              "$ref": "#/$defs/WaterDrankPayload"
+            },
+            {
+              "$ref": "#/$defs/CanteenFilledPayload"
+            },
+            {
+              "$ref": "#/$defs/StaminaActionCostAppliedPayload"
+            },
+            {
+              "$ref": "#/$defs/FruitRegrewPayload"
+            },
+            {
+              "$ref": "#/$defs/ConditionUpdatedPayload"
+            },
+            {
+              "$ref": "#/$defs/UtteranceSpokenPayload"
+            },
+            {
+              "$ref": "#/$defs/UtteranceHeardPayload"
+            },
+            {
+              "$ref": "#/$defs/ItemGivenPayload"
+            },
+            {
+              "$ref": "#/$defs/ItemPickedUpPayload"
+            },
+            {
+              "$ref": "#/$defs/ResidentDiedPayload"
+            },
+            {
+              "$ref": "#/$defs/CorpseCreatedPayload"
+            },
+            {
+              "$ref": "#/$defs/ItemDroppedPayload"
+            },
+            {
+              "$ref": "#/$defs/ExplorationUpdatedPayload"
+            },
+            {
+              "$ref": "#/$defs/AgentFallbackUsedPayload"
+            },
+            {
+              "$ref": "#/$defs/GodInterventionRecordedPayload"
+            }
+          ],
+          "title": "Payload"
+        }
+      },
+      "required": [
+        "schema_version",
+        "run_id",
+        "event_id",
+        "tick",
+        "seq_in_tick",
+        "type",
+        "actor_id",
+        "target_id",
+        "intent_id",
+        "llm_call_id",
+        "caused_by_event_ids",
+        "payload"
+      ],
+      "title": "WorldEvent",
+      "type": "object"
+    },
+    "WorldInitializedPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "config_hash": {
+          "title": "Config Hash",
+          "type": "string"
+        },
+        "map_hash": {
+          "title": "Map Hash",
+          "type": "string"
+        },
+        "initial_snapshot_hash": {
+          "title": "Initial Snapshot Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "config_hash",
+        "map_hash",
+        "initial_snapshot_hash"
+      ],
+      "title": "WorldInitializedPayload",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "replay_schema_version": {
+      "const": "0.1",
+      "title": "Replay Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "world_id": {
+      "title": "World Id",
+      "type": "string"
+    },
+    "config_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "map_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Map Hash",
+      "type": "string"
+    },
+    "clock": {
+      "$ref": "#/$defs/ReplayClock"
+    },
+    "condition_bounds": {
+      "$ref": "#/$defs/ConditionBounds"
+    },
+    "map": {
+      "$ref": "#/$defs/ReplayMap"
+    },
+    "residents": {
+      "items": {
+        "$ref": "#/$defs/ReplayResident"
+      },
+      "title": "Residents",
+      "type": "array"
+    },
+    "frames": {
+      "items": {
+        "$ref": "#/$defs/DisplayFrame"
+      },
+      "minItems": 1,
+      "title": "Frames",
+      "type": "array"
+    },
+    "events": {
+      "items": {
+        "$ref": "#/$defs/WorldEvent"
+      },
+      "title": "Events",
+      "type": "array"
+    }
+  },
+  "required": [
+    "replay_schema_version",
+    "run_id",
+    "world_id",
+    "config_hash",
+    "map_hash",
+    "clock",
+    "condition_bounds",
+    "map",
+    "residents",
+    "frames",
+    "events"
+  ],
+  "title": "ReplayBundle",
+  "type": "object"
+}
