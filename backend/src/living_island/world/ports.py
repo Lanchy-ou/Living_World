@@ -137,8 +137,13 @@ class ObservationAccumulator:
         return tuple(r.model_copy(deep=True) for r in self._receipt_baseline)
 
 
-def begin_observation_tick(state: WorldState, completed_tick: int) -> ObservationAccumulator:
-    raise NotImplementedError("P1-02")
+def begin_observation_tick(
+    state: WorldState, completed_tick: int, content: WorldContent
+) -> ObservationAccumulator:
+    # Imported here: observation.py builds the models defined above (P1-02).
+    from living_island.world import observation
+
+    return observation.begin_observation_tick(state, completed_tick, content)
 
 
 def observe_step(
@@ -148,11 +153,15 @@ def observe_step(
     position: Coord,
     step_index: int,
 ) -> None:
-    raise NotImplementedError("P1-02")
+    from living_island.world import observation
+
+    observation.observe_step(acc, state, actor_id, position, step_index)
 
 
 def finish_observation_tick(acc: ObservationAccumulator, state: WorldState) -> ObservationBatch:
-    raise NotImplementedError("P1-02")
+    from living_island.world import observation
+
+    return observation.finish_observation_tick(acc, state)
 
 
 # ---------------------------------------------------------------------------

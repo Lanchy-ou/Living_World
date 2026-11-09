@@ -186,7 +186,7 @@ def test_port_signatures_frozen() -> None:
         return list(inspect.signature(fn).parameters)
 
     assert params(ports.create_engine) == ["content", "restored_world"]
-    assert params(ports.begin_observation_tick) == ["state", "completed_tick"]
+    assert params(ports.begin_observation_tick) == ["state", "completed_tick", "content"]
     assert params(ports.observe_step) == ["acc", "state", "actor_id", "position", "step_index"]
     assert params(ports.finish_observation_tick) == ["acc", "state"]
     hints = inspect.get_annotations(ports.WorldEngine.append_fact)
