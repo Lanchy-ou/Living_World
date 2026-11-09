@@ -143,8 +143,8 @@ def sample_sight(
     """Everything ``actor_id`` sees from ``position`` using the completed tick's clock.
 
     Other living residents, corpses, fruit trees (stock band only), ground fruit piles
-    (exact quantity) and a ground canteen are entities. The observer is excluded. Cues are
-    reported separately: ``distant`` with the generic description, or ``near`` (within
+    (exact quantity), a ground canteen and cues are entities. The observer is excluded. A cue
+    also carries a detail record: ``distant`` with the generic description, or ``near`` (within
     ``cue_detail_radius_tiles`` and in sight) with the detailed description and direction.
     Static terrain is not remembered here; remote live stock is never read for unseen tiles.
     """
@@ -183,13 +183,14 @@ def sample_sight(
     canteen = state.unique_canteen
     if canteen.ground_position is not None and seen(canteen.ground_position):
         entities.append(EntityView(canteen.id, "canteen", canteen.ground_position, (), None, None))
-    entities.sort(key=lambda e: e.entity_id)
 
     descriptions = {c.id: c for c in config.world.cues}
     cues: list[CueView] = []
     for cue in state.cues:
         if not seen(cue.position):
             continue
+        # A cue is also an ordinary entity (WR §4.1, IC §2.5); its detail stays in ``cues``.
+        entities.append(EntityView(cue.id, "cue", cue.position, (), None, None))
         spec = descriptions[cue.id]
         if manhattan(position, cue.position) <= config.perception.cue_detail_radius_tiles:
             cues.append(
@@ -198,4 +199,5 @@ def sample_sight(
         else:
             cues.append(CueView(cue.id, cue.position, "distant", spec.visible_description, None))
     cues.sort(key=lambda c: c.cue_id)
+    entities.sort(key=lambda e: e.entity_id)
     return Sight(tuple(tiles), tuple(entities), tuple(cues))

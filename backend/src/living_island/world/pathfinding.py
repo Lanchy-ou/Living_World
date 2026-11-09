@@ -25,10 +25,8 @@ NEIGHBOR_STEPS: tuple[tuple[int, int], ...] = ((0, -1), (1, 0), (0, 1), (-1, 0))
 class PathResult:
     """Outcome of one search.
 
-    ``route`` lists the tiles to enter in order (start excluded). For ``PATH_BLOCKED`` on a
-    permitted unexplored frontier target it holds the approach tiles up to, but excluding,
-    the impassable target; for any other blocked or unreachable result it is empty.
-    ``cost`` is the sum of the route's search costs.
+    ``route`` lists the tiles to enter in order (start excluded); it is empty for
+    ``PATH_BLOCKED`` and ``NO_PATH``. ``cost`` is the sum of the route's search costs.
     """
 
     status: PathStatus
@@ -36,16 +34,18 @@ class PathResult:
     cost: int
 
 
-def _is_frontier(
-    smap: StaticMap, explored: Collection[int], x: int, y: int, start_index: int
-) -> bool:
-    """An unexplored tile orthogonally adjacent to an explored passable tile (or the start)."""
+def _is_frontier(smap: StaticMap, explored: Collection[int], x: int, y: int) -> bool:
+    """An unexplored tile orthogonally adjacent to an already explored passable tile.
+
+    The start tile is not implicitly explored: only the explored set counts.
+    """
     for dx, dy in NEIGHBOR_STEPS:
         nx, ny = x + dx, y + dy
-        if not smap.in_bounds(nx, ny):
-            continue
-        idx = smap.index(nx, ny)
-        if (idx in explored or idx == start_index) and smap.step_cost(nx, ny) is not None:
+        if (
+            smap.in_bounds(nx, ny)
+            and smap.index(nx, ny) in explored
+            and smap.step_cost(nx, ny) is not None
+        ):
             return True
     return False
 
@@ -55,25 +55,23 @@ def find_path(
 ) -> PathResult:
     """Shortest route from ``start`` to ``target`` through explored passable tiles.
 
-    One adjacent unexplored frontier ``target`` may be the final tile; the search costs it as
-    grass (``step_cost_grass``) without consulting its terrain. If the target is impassable
-    the result is ``PATH_BLOCKED``; if no route exists, ``NO_PATH``. A target that is neither
-    explored nor an adjacent frontier is outside the search space and yields ``NO_PATH``.
+    One adjacent unexplored frontier ``target`` may be the final tile. It is always charged
+    ``step_cost_grass`` whatever its real terrain: its passability and actual cost are decided
+    when the step is executed (P1-04, WR §5.3), so this search never reads them. A known
+    (explored) impassable target is ``PATH_BLOCKED``; a target that is neither explored nor
+    an adjacent frontier, or that cannot be reached, is ``NO_PATH``.
     """
     if not (smap.in_bounds(start.x, start.y) and smap.in_bounds(target.x, target.y)):
         raise ValueError("start and target must lie inside the map")
     start_index = smap.index(start.x, start.y)
     target_index = smap.index(target.x, target.y)
     target_explored = target_index in explored
-    target_cost = smap.step_cost(target.x, target.y)
 
-    if target_explored and target_cost is None:
+    if target_explored and smap.step_cost(target.x, target.y) is None:
         return PathResult("PATH_BLOCKED", (), 0)
     if start_index == target_index:
         return PathResult("ok", (), 0)
-    frontier_target = not target_explored and _is_frontier(
-        smap, explored, target.x, target.y, start_index
-    )
+    frontier_target = not target_explored and _is_frontier(smap, explored, target.x, target.y)
     if not target_explored and not frontier_target:
         return PathResult("NO_PATH", (), 0)
 
@@ -122,18 +120,4 @@ def find_path(
         route_indices.append(cur)
         cur = pred[cur]
     route_indices.reverse()
-
-    if frontier_target and target_cost is None:
-        # Authoritative check on reaching the frontier tile: impassable, so never entered.
-        # dist[target] = dist[last approach tile] + grass_cost.
-        approach = route_indices[:-1]
-        return PathResult(
-            "PATH_BLOCKED",
-            tuple(smap.coord(i) for i in approach),
-            dist[target_index] - smap.grass_cost,
-        )
-    return PathResult(
-        "ok",
-        tuple(smap.coord(i) for i in route_indices),
-        dist[target_index],
-    )
+    return PathResult("ok", tuple(smap.coord(i) for i in route_indices), dist[target_index])

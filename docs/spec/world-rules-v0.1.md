@@ -47,6 +47,8 @@ Sight radius and hearing radius are in **tiles**, derived from this physical sca
 
 Reject invalid content at creation, not during play: dimensions, tile size, movement budget, each action duration, regrowth period, inventory capacity and plan limit must be positive integers; each passable entry cost must be in `1..map.walk_cost_budget_per_tick`. `needs.min_value` is 0; maximum is positive; initial conditions and urgent/recovery/sign thresholds are within bounds; decay/cost/gain rates are nonnegative. Need-band cutoffs are four strictly increasing interior values. Initial stock/servings are within their nonnegative capacities, seed is in `1..2^32-1`, phases are in `0..fruit.regrow_ticks-1`, initial canteen owner is a configured resident, and IDs/marker positions are unique in their respective domains. Tick minutes divide 1440; start hour is in `0..23`, and `0 <= day_start_hour < day_end_hour <= 24`. Perception radii are nonnegative integers. Physical configuration contains no floats.
 
+**[CR-002]** Resident, fruit tree, cue and canteen IDs are unique across all four domains together, and no configured ID may start with `ground_fruit@` or `corpse@` (reserved for derived entity IDs).
+
 ### 1.2 `.map` file grammar, underlying terrain and validation
 
 - UTF-8, no BOM, LF (`\n`) line endings. Exactly `map.height` nonempty rows; each row is exactly `map.width` ASCII characters. No headers, comments, blank lines, tabs or trailing spaces. Top-left character is `(0,0)`.

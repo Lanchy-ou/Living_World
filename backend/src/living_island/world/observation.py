@@ -13,16 +13,18 @@ applied by the engine in phase 6). Novelty compares against the immutable tick-s
 baseline held by the accumulator. Descriptors are captured when seen. Hearing and action
 feedback are not assembled here (P1-04).
 
-Content binding: the frozen port signatures carry no map or config, so content is looked up
-by the ``(config_hash, map_hash)`` identity stored in ``WorldState``. The engine (or a test)
-calls ``register_content`` once per verified ``WorldContent`` (open question OQ-009).
+Content ([CR-002]): ``begin_observation_tick`` receives the verified ``WorldContent`` and the
+accumulator keeps a private deep copy; ``observe_step`` and ``finish_observation_tick`` read
+content only from the accumulator, so later changes to the caller's object have no effect.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
-from living_island.world.content import WorldContent
+from living_island.world.content import WorldContent, map_hash
 from living_island.world.perception import (
     CueView,
     EntityView,
@@ -57,46 +59,24 @@ from living_island.world.state import (
 )
 
 # ---------------------------------------------------------------------------
-# Content binding
+# Derived tile views
 # ---------------------------------------------------------------------------
 
-
-@dataclass(frozen=True)
-class BoundContent:
-    """Verified content plus its derived static map and shared immutable tile views."""
-
-    content: WorldContent
-    smap: StaticMap
-    tile_views: tuple[TileView, ...]
+# Immutable, shared TileView objects per map, keyed by the canonical map hash recomputed from
+# the rows that built them. This caches derived data only (never content) and cannot go stale.
+_TILE_VIEWS: dict[str, tuple[TileView, ...]] = {}
 
 
-_BOUND: dict[tuple[str, str], BoundContent] = {}
-
-
-def register_content(content: WorldContent) -> None:
-    """Make verified content available to the observation ports by its hashes (idempotent)."""
-    key = (content.config_hash, content.map_hash)
-    if key in _BOUND:
-        return
-    smap = StaticMap.from_content(content)
-    views = tuple(
-        TileView(
-            position=smap.coord(i),
-            terrain=smap.terrain(i % smap.width, i // smap.width),
+def _tile_views(smap: StaticMap, rows: list[str]) -> tuple[TileView, ...]:
+    key = map_hash(rows)
+    views = _TILE_VIEWS.get(key)
+    if views is None:
+        views = tuple(
+            TileView(position=smap.coord(i), terrain=smap.terrain(i % smap.width, i // smap.width))
+            for i in range(smap.width * smap.height)
         )
-        for i in range(smap.width * smap.height)
-    )
-    _BOUND[key] = BoundContent(content, smap, views)
-
-
-def bound_content_for(state: WorldState) -> BoundContent:
-    try:
-        return _BOUND[(state.config_hash, state.map_hash)]
-    except KeyError:
-        raise ValueError(
-            "world content for this state's config_hash/map_hash is not registered; "
-            "call register_content(content) first"
-        ) from None
+        _TILE_VIEWS[key] = views
+    return views
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +100,48 @@ class _ActorSteps:
     cues: dict[str, CueView] = field(default_factory=dict)  # highest detail seen
 
 
+@dataclass(frozen=True)
+class _KnownIndex:
+    """Novelty lookups derived once from the immutable tick-start baseline.
+
+    Every value is a frozenset or a read-only mapping, so nothing here can be changed after
+    construction (WR §5.1 step 6: compare against receipts at the start of the tick).
+    """
+
+    ids: Mapping[str, frozenset[str]]
+    triples: Mapping[str, frozenset[_Triple]]
+    cue_detail: Mapping[str, Mapping[str, str]]
+
+
+def _build_known(baseline: tuple[ExposureReceipts, ...]) -> _KnownIndex:
+    return _KnownIndex(
+        ids=MappingProxyType(
+            {r.resident_id: frozenset(e.entity_id for e in r.entities) for r in baseline}
+        ),
+        triples=MappingProxyType(
+            {
+                r.resident_id: frozenset(
+                    (e.entity_id, e.entity_type, e.position.x, e.position.y) for e in r.entities
+                )
+                for r in baseline
+            }
+        ),
+        cue_detail=MappingProxyType(
+            {
+                r.resident_id: MappingProxyType(
+                    {c.cue_id: c.detail_level for c in r.cue_detail_seen}
+                )
+                for r in baseline
+            }
+        ),
+    )
+
+
+_NO_IDS: frozenset[str] = frozenset()
+_NO_TRIPLES: frozenset[_Triple] = frozenset()
+_NO_CUES: Mapping[str, str] = MappingProxyType({})
+
+
 class WorkingAccumulator(ObservationAccumulator):
     """``ObservationAccumulator`` plus the private per-tick working data of P1-02."""
 
@@ -127,22 +149,15 @@ class WorkingAccumulator(ObservationAccumulator):
         self,
         completed_tick: int,
         receipt_baseline: tuple[ExposureReceipts, ...],
-        bound: BoundContent,
+        content: WorldContent,
     ):
         super().__init__(completed_tick, receipt_baseline)
-        self.bound = bound
-        self.steps: dict[str, _ActorSteps] = {}
-        baseline = self._receipt_baseline  # private immutable copy; never mutated
-        self.known_ids = {r.resident_id: {e.entity_id for e in r.entities} for r in baseline}
-        self.known_triples: dict[str, set[_Triple]] = {
-            r.resident_id: {
-                (e.entity_id, e.entity_type, e.position.x, e.position.y) for e in r.entities
-            }
-            for r in baseline
-        }
-        self.known_cue_detail: dict[str, dict[str, str]] = {
-            r.resident_id: {c.cue_id: c.detail_level for c in r.cue_detail_seen} for r in baseline
-        }
+        # [CR-002] A private deep copy: later changes to the caller's object cannot matter.
+        self._content = content.model_copy(deep=True)
+        self._smap = StaticMap.from_content(self._content)
+        self._tile_views = _tile_views(self._smap, self._content.map_rows)
+        self._steps: dict[str, _ActorSteps] = {}
+        self._known = _build_known(self._receipt_baseline)  # from the private baseline copy
 
 
 def _record_cues(into: dict[str, CueView], cues: tuple[CueView, ...]) -> None:
@@ -162,12 +177,15 @@ def _living(state: WorldState, actor_id: str) -> ResidentPhysicalState:
     raise ValueError(f"unknown resident {actor_id!r}")
 
 
-def begin_observation_tick(state: WorldState, completed_tick: int) -> ObservationAccumulator:
-    """Open a tick: freeze the tick-start receipt baseline and bind the content."""
+def begin_observation_tick(
+    state: WorldState, completed_tick: int, content: WorldContent
+) -> ObservationAccumulator:
+    """Open a tick: freeze the tick-start receipt baseline and keep a copy of the content."""
     if completed_tick < 0:
         raise ValueError("completed_tick must be nonnegative")
-    bound = bound_content_for(state)
-    return WorkingAccumulator(completed_tick, tuple(state.exposure_receipts_by_resident), bound)
+    if (content.config_hash, content.map_hash) != (state.config_hash, state.map_hash):
+        raise ValueError("content hashes do not match the world state's config_hash/map_hash")
+    return WorkingAccumulator(completed_tick, tuple(state.exposure_receipts_by_resident), content)
 
 
 def observe_step(
@@ -181,18 +199,16 @@ def observe_step(
     if not isinstance(acc, WorkingAccumulator):
         raise TypeError("accumulator was not created by begin_observation_tick")
     _living(state, actor_id)
-    smap = acc.bound.smap
+    smap = acc._smap
     if not smap.in_bounds(position.x, position.y):
         raise ValueError("observed position is outside the map")
-    work = acc.steps.setdefault(actor_id, _ActorSteps())
+    work = acc._steps.setdefault(actor_id, _ActorSteps())
     if step_index != work.last_step + 1:
         raise ValueError(
             f"step_index must be consecutive from 1: expected {work.last_step + 1}, "
             f"got {step_index}"
         )
-    sight = sample_sight(
-        smap, acc.bound.content.config, state, actor_id, position, acc.completed_tick
-    )
+    sight = sample_sight(smap, acc._content.config, state, actor_id, position, acc.completed_tick)
     work.last_step = step_index
     work.tiles.update(sight.tile_indices)
     for view in sight.entities:
@@ -239,8 +255,7 @@ def finish_observation_tick(acc: ObservationAccumulator, state: WorldState) -> O
     """
     if not isinstance(acc, WorkingAccumulator):
         raise TypeError("accumulator was not created by begin_observation_tick")
-    bound = acc.bound
-    smap, config = bound.smap, bound.content.config
+    smap, config = acc._smap, acc._content.config
     samples: list[ObservationSample] = []
     new_tiles: list[NewStaticTiles] = []
     receipt_updates: list[ExposureReceiptUpdate] = []
@@ -253,7 +268,7 @@ def finish_observation_tick(acc: ObservationAccumulator, state: WorldState) -> O
         end: Sight = sample_sight(
             smap, config, state, actor_id, resident.position, acc.completed_tick
         )
-        work = acc.steps.get(actor_id) or _ActorSteps()
+        work = acc._steps.get(actor_id) or _ActorSteps()
 
         # Footprint: static tiles only.
         seen_tiles = set(end.tile_indices) | work.tiles
@@ -281,19 +296,19 @@ def finish_observation_tick(acc: ObservationAccumulator, state: WorldState) -> O
         cues = dict(work.cues)
         _record_cues(cues, end.cues)
 
-        # Exposures for the receipts. Own identity and carried canteen are exposed at the
-        # boundary (Interface Contract §2.1) but are never "sights" for novelty.
+        # Exposures for the receipts. Cues are ordinary entities and arrive through
+        # ``sight.entities``. The actor's own identity and carried canteen are exposed at the
+        # boundary (Interface Contract §2.1).
         sighted: set[_Triple] = set(work.exposures)
         sighted.update(_triple(e) for e in end.entities)
-        sighted.update((c.cue_id, "cue", c.position.x, c.position.y) for c in cues.values())
         own: set[_Triple] = {(actor_id, "resident", resident.position.x, resident.position.y)}
         inventory = own_inventory(state, resident)
         if inventory.canteen_id is not None:
             own.add((inventory.canteen_id, "canteen", resident.position.x, resident.position.y))
 
-        known_ids = acc.known_ids.get(actor_id, set())
-        known_triples = acc.known_triples.get(actor_id, set())
-        known_cues = acc.known_cue_detail.get(actor_id, {})
+        known_ids = acc._known.ids.get(actor_id, _NO_IDS)
+        known_triples = acc._known.triples.get(actor_id, _NO_TRIPLES)
+        known_cues = acc._known.cue_detail.get(actor_id, _NO_CUES)
 
         fresh_triples = sorted((sighted | own) - known_triples, key=lambda t: (t[0], t[3], t[2]))
         cue_updates = [
@@ -316,15 +331,19 @@ def finish_observation_tick(acc: ObservationAccumulator, state: WorldState) -> O
                 )
             )
 
-        # NEW_SIGHT: first exposure of an entity ID, or first distant->near cue upgrade,
-        # against the tick-start receipts. The initial scan seeds without interrupting.
+        # NEW_SIGHT: the first exposure of an entity ID (seen, or the inventory canteen), or
+        # the first distant->near cue upgrade, against the tick-start receipts. Self is never
+        # counted. The initial scan seeds receipts without an interrupt.
         if acc.completed_tick > 0:
-            novel_entity = any(t[0] not in known_ids and t[1] != "cue" for t in sighted)
+            novel_entity = any(t[0] not in known_ids for t in sighted)
+            novel_inventory = (
+                inventory.canteen_id is not None and inventory.canteen_id not in known_ids
+            )
             novel_cue = any(
-                cid not in known_ids or (known_cues.get(cid) != "near" and c.detail_level == "near")
+                c.detail_level == "near" and known_cues.get(cid) != "near"
                 for cid, c in cues.items()
             )
-            if novel_entity or novel_cue:
+            if novel_entity or novel_inventory or novel_cue:
                 new_sight_ids.append(actor_id)
 
         if added:
@@ -338,10 +357,10 @@ def finish_observation_tick(acc: ObservationAccumulator, state: WorldState) -> O
                 own_condition=own_condition(config, resident),
                 own_position=resident.position,
                 own_inventory=inventory,
-                visible_tiles=[bound.tile_views[i] for i in end.tile_indices],
+                visible_tiles=[acc._tile_views[i] for i in end.tile_indices],
                 visible_entities=[_entity_to_visible(e) for e in end.entities],
                 transient_sightings=transient,
-                explored_static_tiles=[bound.tile_views[i] for i in explored_after],
+                explored_static_tiles=[acc._tile_views[i] for i in explored_after],
                 environmental_cues=[_cue_to_protocol(c) for _, c in sorted(cues.items())],
             )
         )

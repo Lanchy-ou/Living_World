@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from world_builders import default_content, static_map
 
 from living_island.world.pathfinding import PathResult, find_path
@@ -137,13 +138,22 @@ def test_frontier_must_touch_an_explored_passable_tile() -> None:
 # --------------------------------------------------------------- failures are pure results
 
 
-def test_impassable_unexplored_frontier_target_is_path_blocked_with_approach_route() -> None:
-    smap = static_map([",,^"])
+@pytest.mark.parametrize("symbol", [",", ".", "W", "F", "M", "C", "^", "~", "S"])
+def test_unseen_frontier_target_routes_identically_whatever_its_terrain(symbol: str) -> None:
+    """G2-01: WR §5.3 charges an unexplored frontier tile as grass and defers passability
+    and the actual cost to step execution (P1-04); the search never peeks at its terrain."""
+    smap = static_map([",," + symbol])
     explored = {smap.index(0, 0), smap.index(1, 0)}
     result = find_path(smap, explored, c(0, 0), c(2, 0))
-    assert result.status == "PATH_BLOCKED"
-    assert result.route == (c(1, 0),)  # walk up to, never into, the rock
-    assert result.cost == 1
+    assert result == PathResult("ok", (c(1, 0), c(2, 0)), 2)
+
+
+def test_start_is_not_implicitly_explored() -> None:
+    """G2-01: a frontier tile must touch an already explored passable tile."""
+    smap = static_map([",,,"])
+    assert find_path(smap, set(), c(0, 0), c(1, 0)) == PathResult("NO_PATH", (), 0)
+    explored = {smap.index(0, 0)}
+    assert find_path(smap, explored, c(0, 0), c(1, 0)).status == "ok"
 
 
 def test_explored_impassable_target_is_path_blocked() -> None:

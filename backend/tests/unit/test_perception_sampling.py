@@ -110,7 +110,7 @@ def test_entities_exclude_self_and_sort_by_id() -> None:
     place(state, "mia", 5, 3)
     s = sight(content, state, smap, "ella")
     assert "ella" not in ids(s)
-    assert ids(s) == sorted(ids(s)) == ["fruit_01", "mia", "ryan"]
+    assert ids(s) == sorted(ids(s)) == ["fruit_01", "mia", "moss_east_01", "ryan"]
 
 
 def test_visible_fruit_tree_exposes_band_not_stock() -> None:

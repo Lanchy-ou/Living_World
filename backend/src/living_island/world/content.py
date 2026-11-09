@@ -222,6 +222,10 @@ class ResidentConfig(ContentModel):
     initial_goal: str
 
 
+# Prefixes of IDs derived by the world for ground fruit piles and corpses (IC §2.2).
+RESERVED_ID_PREFIXES = ("ground_fruit@", "corpse@")
+
+
 def _unique(values: list[Any], what: str) -> None:
     if len(set(values)) != len(values):
         raise ValueError(f"{what} must be unique")
@@ -274,6 +278,24 @@ class EffectiveConfig(ContentModel):
         _unique([tuple(c.position) for c in self.world.cues], "cue positions")
         if self.canteen.initial_owner_id not in resident_ids:
             raise ValueError("canteen.initial_owner_id must be a configured resident")
+        # [CR-002] One entity namespace: IDs never collide across domains, and the derived
+        # ID forms ``ground_fruit@<x>,<y>`` and ``corpse@<resident_id>`` stay unambiguous.
+        all_ids = [
+            *resident_ids,
+            *(t.id for t in self.world.fruit_trees),
+            *(c.id for c in self.world.cues),
+            self.canteen.unique_item_id,
+        ]
+        if len(set(all_ids)) != len(all_ids):
+            raise ValueError(
+                "resident, fruit tree, cue and canteen IDs must be unique across all domains"
+            )
+        reserved = [i for i in all_ids if i.startswith(RESERVED_ID_PREFIXES)]
+        if reserved:
+            raise ValueError(
+                f"configured IDs must not start with a reserved prefix "
+                f"{RESERVED_ID_PREFIXES!r}: {reserved!r}"
+            )
         return self
 
 

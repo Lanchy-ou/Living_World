@@ -295,7 +295,8 @@ and mutation boundaries cannot change without a change request.
 WorldContent { config:EffectiveConfig,map_rows:array<string>,config_hash:string,map_hash:string }
 # world/ports.py; signatures are normative, bodies arrive in the indicated tasks
 create_engine(content:WorldContent,restored_world:WorldState|null) -> WorldEngine
-begin_observation_tick(state:WorldState, completed_tick:integer) -> ObservationAccumulator
+begin_observation_tick(state:WorldState, completed_tick:integer,
+                       content:WorldContent) -> ObservationAccumulator   # [CR-002]
 observe_step(acc:ObservationAccumulator, state:WorldState,
              actor_id:string, position:Coord, step_index:integer) -> None
 finish_observation_tick(acc:ObservationAccumulator, state:WorldState) -> ObservationBatch
@@ -320,7 +321,8 @@ BoundaryObserver(snapshot:WorldState, new_events:tuple<WorldEvent,...>) -> None
 run(..., on_boundary_committed:BoundaryObserver|null) -> RunResult
 ```
 
-ObservationAccumulator stores a read-only tick-start receipt baseline, per-actor step
+ObservationAccumulator stores **[CR-002]** a private deep copy of the verified `content`
+(observe_step and finish_observation_tick read content only from it) and a read-only tick-start receipt baseline, per-actor step
 samples/unions and highest observed cue detail. Observe calls modify only this accumulator,
 not receipts/footprints in WorldState. Capture visible descriptor values immediately.
 Use completed_tick clock/radius for all samples and the boundary scan; there is no sub-tick

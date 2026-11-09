@@ -55,11 +55,12 @@ def c(x: int, y: int) -> Coord:
 
 
 def run_tick(
+    content: WorldContent,
     state: WorldState,
     completed_tick: int,
     steps: Mapping[str, Sequence[Coord]] | None = None,
 ) -> ObservationBatch:
-    acc = begin_observation_tick(state, completed_tick)
+    acc = begin_observation_tick(state, completed_tick, content)
     for actor, positions in (steps or {}).items():
         for n, pos in enumerate(positions, start=1):
             observe_step(acc, state, actor, pos, n)
@@ -110,7 +111,7 @@ def seed_receipts(
 def test_tick_zero_scan_seeds_receipts_and_creates_no_new_sight() -> None:
     content = default_content()
     state = fresh_state(content)
-    batch = run_tick(state, 0)
+    batch = run_tick(content, state, 0)
     assert [s.actor_id for s in batch.physical_samples_by_actor] == ["ella", "mia", "ryan"]
     assert batch.new_sight_actor_ids == []
     updates = {u.actor_id: u for u in batch.exposure_receipt_updates}
@@ -129,8 +130,9 @@ def test_tick_zero_scan_seeds_receipts_and_creates_no_new_sight() -> None:
 
 
 def test_tick_zero_footprint_is_exactly_the_visible_tiles() -> None:
-    state = fresh_state(default_content())
-    batch = run_tick(state, 0)
+    content = default_content()
+    state = fresh_state(content)
+    batch = run_tick(content, state, 0)
     for sample in batch.physical_samples_by_actor:
         new = next(t for t in batch.new_static_tiles_by_actor if t.actor_id == sample.actor_id)
         width = default_content().config.map.width
@@ -141,8 +143,9 @@ def test_tick_zero_footprint_is_exactly_the_visible_tiles() -> None:
 
 
 def test_batch_arrays_are_sorted_by_actor_id() -> None:
-    state = fresh_state(default_content())
-    batch = run_tick(state, 0)
+    content = default_content()
+    state = fresh_state(content)
+    batch = run_tick(content, state, 0)
     for rows in (
         batch.physical_samples_by_actor,
         batch.new_static_tiles_by_actor,
@@ -156,13 +159,13 @@ def test_batch_arrays_are_sorted_by_actor_id() -> None:
 def test_dead_residents_get_no_sample() -> None:
     content, state = tiny()
     resident(state, "ryan").alive = False
-    batch = run_tick(state, 1)
+    batch = run_tick(content, state, 1)
     assert [s.actor_id for s in batch.physical_samples_by_actor] == ["ella", "mia"]
 
 
 def test_sample_fits_the_perception_model() -> None:
     content, state = tiny()
-    sample = run_tick(state, 1).physical_samples_by_actor[0]
+    sample = run_tick(content, state, 1).physical_samples_by_actor[0]
     Perception.model_validate(
         {**sample.model_dump(), "heard_utterances": [], "last_action_feedback": None}
     )
@@ -174,13 +177,13 @@ def test_sample_fits_the_perception_model() -> None:
 def test_observe_calls_modify_only_the_accumulator() -> None:
     content, state = tiny(day_radius_tiles=3)
     before = state.model_dump_json()
-    run_tick(state, 1, {"ella": [c(4, 2), c(5, 2)]})
+    run_tick(content, state, 1, {"ella": [c(4, 2), c(5, 2)]})
     assert state.model_dump_json() == before
 
 
 def test_receipt_baseline_is_an_immutable_tick_start_copy() -> None:
     content, state = tiny()
-    acc = begin_observation_tick(state, 1)
+    acc = begin_observation_tick(state, 1, content)
     assert isinstance(acc, ObservationAccumulator)
     assert acc.completed_tick == 1
     seed_receipts(state, "ella", [("mia", "resident", 12, 3)])  # engine mutates state later
@@ -193,7 +196,7 @@ def test_receipt_baseline_is_an_immutable_tick_start_copy() -> None:
 
 def test_novelty_ignores_receipts_added_to_state_after_begin() -> None:
     content, state = tiny()
-    acc = begin_observation_tick(state, 1)
+    acc = begin_observation_tick(state, 1, content)
     observe_step(acc, state, "ella", c(4, 3), 1)
     seed_receipts(state, "ella", [("mia", "resident", 12, 3), ("fruit_01", "fruit_tree", 10, 2)])
     batch = finish_observation_tick(acc, state)
@@ -207,7 +210,7 @@ def test_intermediate_sign_and_near_cue_survive_in_the_batch() -> None:
     content, state = tiny(day_radius_tiles=3, cue_detail_radius_tiles=1)
     resident(state, "mia").health = 3000  # visibly weak
     place(state, "mia", 3, 1)
-    acc = begin_observation_tick(state, 1)
+    acc = begin_observation_tick(state, 1, content)
     observe_step(acc, state, "ella", c(3, 2), 1)  # moss at distance 2: distant; mia adjacent
     observe_step(acc, state, "ella", c(4, 2), 2)  # moss at distance 1: near
     # The world moves on before the boundary: values must not be re-read.
@@ -217,8 +220,8 @@ def test_intermediate_sign_and_near_cue_survive_in_the_batch() -> None:
     batch = finish_observation_tick(acc, state)
 
     sample = sample_of(batch, "ella")
-    # ryan (3,4) was also in view at both steps; one entry per entity, sorted by ID.
-    assert [t.entity_id for t in sample.transient_sightings] == ["mia", "ryan"]
+    # ryan (3,4) and the cue were also in view at the steps; one entry per entity, by ID.
+    assert [t.entity_id for t in sample.transient_sightings] == ["mia", "moss_east_01", "ryan"]
     mia = sample.transient_sightings[0]
     assert (mia.position, mia.seen_at_step) == (c(3, 1), 2)  # last intermediate sighting
     assert mia.observable_signs == ["weak"]  # captured, not refreshed
@@ -234,7 +237,7 @@ def test_intermediate_sign_and_near_cue_survive_in_the_batch() -> None:
 def test_transient_keeps_last_step_and_excludes_entities_visible_at_tick_end() -> None:
     content, state = tiny(day_radius_tiles=3)
     # ryan (3,4) is in view at steps 1 and 2 but not from the tick-end tile (9,3).
-    acc = begin_observation_tick(state, 1)
+    acc = begin_observation_tick(state, 1, content)
     observe_step(acc, state, "ella", c(3, 3), 1)
     observe_step(acc, state, "ella", c(4, 4), 2)
     place(state, "ella", 9, 3)
@@ -244,7 +247,7 @@ def test_transient_keeps_last_step_and_excludes_entities_visible_at_tick_end() -
 
     # Seen at an intermediate step AND still visible at tick end: not transient.
     place(state, "ella", 3, 3)
-    acc = begin_observation_tick(state, 2)
+    acc = begin_observation_tick(state, 2, content)
     observe_step(acc, state, "ella", c(3, 3), 1)
     place(state, "ella", 4, 3)
     sample = sample_of(finish_observation_tick(acc, state), "ella")
@@ -259,7 +262,7 @@ def test_first_exposure_is_new_sight_even_after_several_observe_calls() -> None:
     content, state = tiny()
     # fruit_01 (10,2) is in view at every step; naive "seen earlier this tick" logic would
     # lose it. Novelty is judged against the tick-start receipts only.
-    batch = run_tick(state, 1, {"ella": [c(5, 2), c(6, 2), c(7, 2)]})
+    batch = run_tick(content, state, 1, {"ella": [c(5, 2), c(6, 2), c(7, 2)]})
     assert "ella" in batch.new_sight_actor_ids
 
 
@@ -273,11 +276,12 @@ def test_previously_exposed_entities_do_not_retrigger_new_sight() -> None:
             ("mia", "resident", 12, 3),
             ("ryan", "resident", 3, 4),
             ("moss_east_01", "cue", 4, 1),
+            ("canteen_01", "canteen", 3, 3),  # Ella's inventory canteen is already known
         ],
         [("moss_east_01", "distant")],
     )
     place(state, "mia", 11, 3)  # moved: a new position, not a new entity
-    batch = run_tick(state, 1, {"ella": [c(5, 3), c(6, 3)]})
+    batch = run_tick(content, state, 1, {"ella": [c(5, 3), c(6, 3)]})
     assert "ella" not in batch.new_sight_actor_ids
     update = next(u for u in batch.exposure_receipt_updates if u.actor_id == "ella")
     assert ("mia", "resident", 11, 3) in {
@@ -287,7 +291,7 @@ def test_previously_exposed_entities_do_not_retrigger_new_sight() -> None:
 
 def test_new_sight_is_reported_once_per_actor_in_sorted_order() -> None:
     content, state = tiny()
-    batch = run_tick(state, 1, {"ella": [c(5, 2), c(6, 2)]})
+    batch = run_tick(content, state, 1, {"ella": [c(5, 2), c(6, 2)]})
     assert batch.new_sight_actor_ids == sorted(set(batch.new_sight_actor_ids))
     assert batch.new_sight_actor_ids.count("ella") == 1
 
@@ -310,11 +314,11 @@ def test_cue_novelty_and_receipt_upgrade(
     place(state, "ella", end_x, 1)
     # Keep everything else already known so only the cue can be novel for ella.
     known = [("ryan", "resident", 3, 4), ("mia", "resident", 12, 3)]
-    known += [("fruit_01", "fruit_tree", 10, 2)]
+    known += [("fruit_01", "fruit_tree", 10, 2), ("canteen_01", "canteen", 3, 3)]
     if baseline:
         known.append(("moss_east_01", "cue", 4, 1))
     seed_receipts(state, "ella", known, [("moss_east_01", baseline)] if baseline else [])
-    batch = run_tick(state, 1)
+    batch = run_tick(content, state, 1)
     assert ("ella" in batch.new_sight_actor_ids) is expected_new_sight
     update = next((u for u in batch.exposure_receipt_updates if u.actor_id == "ella"), None)
     levels = [c_.detail_level for c_ in update.cue_detail_seen] if update else []
@@ -329,13 +333,13 @@ def test_footprint_keeps_static_terrain_but_not_dynamic_stock() -> None:
     width = content.config.map.width
     tree_tile = 2 * width + 10
     place(state, "ella", 9, 2)  # tree (10,2) adjacent
-    first = run_tick(state, 1)
+    first = run_tick(content, state, 1)
     assert "fruit_01" in [e.entity_id for e in sample_of(first, "ella").visible_entities]
     apply_batch(state, first)
 
     place(state, "ella", 3, 3)  # walk away; the tree is far outside sight
     state.fruit_nodes[0].stock = 5  # remote change must not leak
-    second = run_tick(state, 2)
+    second = run_tick(content, state, 2)
     sample = sample_of(second, "ella")
     explored = {(t.position.x, t.position.y): t.terrain for t in sample.explored_static_tiles}
     assert explored[(10, 2)] == "fruit_tree"  # static terrain persists
@@ -348,10 +352,10 @@ def test_footprint_keeps_static_terrain_but_not_dynamic_stock() -> None:
 
 def test_second_identical_tick_adds_nothing_once_applied() -> None:
     content, state = tiny()
-    first = run_tick(state, 1)
+    first = run_tick(content, state, 1)
     assert first.new_static_tiles_by_actor and first.exposure_receipt_updates
     apply_batch(state, first)
-    second = run_tick(state, 2)
+    second = run_tick(content, state, 2)
     assert second.new_static_tiles_by_actor == []
     assert second.exposure_receipt_updates == []
     assert second.new_sight_actor_ids == []
@@ -361,7 +365,7 @@ def test_receipts_authorize_only_exposed_ids() -> None:
     content, state = tiny(day_radius_tiles=3)
     state.ground_fruit = [GroundFruitPile(position=c(4, 3), quantity=2)]
     place(state, "ella", 5, 3)
-    apply_batch(state, run_tick(state, 1))
+    apply_batch(state, run_tick(content, state, 1))
     receipts = receipts_of(state, "ella")
     assert receipt_authorizes_entity(receipts, "ryan")
     assert receipt_authorizes_entity(receipts, ground_fruit_id(c(4, 3)))
@@ -404,7 +408,7 @@ def test_batch_has_no_hidden_spring_exact_needs_or_remote_stock() -> None:
     resident(state, "mia").hydration = 4322
     for node in state.fruit_nodes:
         node.stock = 4
-    batch = run_tick(state, 0)
+    batch = run_tick(content, state, 0)
     text = canonical_json_bytes(batch.model_dump(mode="json")).decode()
     spring = state.spring
     assert not any(
@@ -422,7 +426,7 @@ def scenario_bytes() -> bytes:
     content, state = tiny(day_radius_tiles=3)
     resident(state, "mia").health = 3000
     place(state, "mia", 3, 1)
-    acc = begin_observation_tick(state, 1)
+    acc = begin_observation_tick(state, 1, content)
     observe_step(acc, state, "ella", c(3, 2), 1)
     observe_step(acc, state, "ella", c(4, 2), 2)
     place(state, "ella", 9, 3)
@@ -447,7 +451,7 @@ def test_identical_inputs_give_byte_identical_canonical_json_with_integers_only(
 
 def test_step_indexes_must_be_consecutive_from_one() -> None:
     content, state = tiny()
-    acc = begin_observation_tick(state, 1)
+    acc = begin_observation_tick(state, 1, content)
     with pytest.raises(ValueError, match="consecutive"):
         observe_step(acc, state, "ella", c(4, 3), 2)
     observe_step(acc, state, "ella", c(4, 3), 1)
@@ -457,7 +461,7 @@ def test_step_indexes_must_be_consecutive_from_one() -> None:
 
 def test_observe_rejects_dead_unknown_and_out_of_map() -> None:
     content, state = tiny()
-    acc = begin_observation_tick(state, 1)
+    acc = begin_observation_tick(state, 1, content)
     resident(state, "ryan").alive = False
     with pytest.raises(ValueError, match="dead"):
         observe_step(acc, state, "ryan", c(3, 4), 1)
@@ -467,15 +471,109 @@ def test_observe_rejects_dead_unknown_and_out_of_map() -> None:
         observe_step(acc, state, "ella", c(99, 99), 1)
 
 
-def test_unregistered_content_and_foreign_accumulators_are_refused() -> None:
+def test_mismatched_content_and_foreign_accumulators_are_refused() -> None:
     content, state = tiny()
     state.map_hash = "0" * 64
-    with pytest.raises(ValueError, match="not registered"):
-        begin_observation_tick(state, 1)
+    with pytest.raises(ValueError, match="do not match"):
+        begin_observation_tick(state, 1, content)
     with pytest.raises(ValueError):
-        begin_observation_tick(fresh_state(content), -1)
+        begin_observation_tick(fresh_state(content), -1, content)
     foreign = ObservationAccumulator(1, ())
     with pytest.raises(TypeError):
         observe_step(foreign, fresh_state(content), "ella", c(3, 3), 1)
     with pytest.raises(TypeError):
         finish_observation_tick(foreign, fresh_state(content))
+
+
+def test_mutating_the_supplied_content_after_begin_changes_nothing() -> None:
+    """G2-02 / CR-002(a): the accumulator keeps its own deep copy of the content."""
+    content, state = tiny()
+    expected = run_tick(content, state, 1).model_dump(mode="json")
+    acc = begin_observation_tick(state, 1, content)
+    cutoffs = content.config.perception.need_band_cutoffs
+    original = list(cutoffs)
+    cutoffs[:] = [9000, 9100, 9200, 9300]  # ella's 8500 stamina would read "critical"
+    content.map_rows[3] = "~" * len(content.map_rows[3])  # blind the map as well
+    try:
+        batch = finish_observation_tick(acc, state)
+    finally:
+        cutoffs[:] = original
+        content.map_rows[3] = TINY[3]
+    assert batch.model_dump(mode="json") == expected
+    assert sample_of(batch, "ella").own_condition.stamina != "critical"
+
+
+# ------------------------------------------------------------------ rework round 1
+
+
+def test_novelty_indices_are_private_and_immutable() -> None:
+    """G2-03: novelty reads only an immutable index derived from the immutable baseline."""
+    content, state = tiny(day_radius_tiles=0, night_radius_tiles=0)
+    seed_receipts(
+        state, "ella", [("fruit_01", "fruit_tree", 10, 2), ("canteen_01", "canteen", 3, 3)]
+    )
+    acc = begin_observation_tick(state, 1, content)
+    for name in ("known_ids", "known_triples", "known_cue_detail"):
+        assert not hasattr(acc, name)  # no public mutable index
+    index = acc._known
+    with pytest.raises((AttributeError, TypeError)):
+        index.ids["ella"].add("ryan")
+    with pytest.raises((AttributeError, TypeError)):
+        index.ids["ella"] = frozenset({"ryan"})
+    with pytest.raises((AttributeError, TypeError)):
+        index.ids = {}
+    place(state, "ella", 10, 2)  # standing on the tree: it is already in the baseline
+    batch = finish_observation_tick(acc, state)
+    assert "ella" not in batch.new_sight_actor_ids
+    # A tampered baseline copy must not leak into the accumulator either.
+    acc.receipt_baseline[0].entities.clear()
+    assert "fruit_01" in acc._known.ids["ella"]
+
+
+def test_cues_are_ordinary_entities_and_keep_their_detail() -> None:
+    """G2-04: WR §4.1 / §5.1 step 5 / IC §2.5 treat cues as one of the six entity types."""
+    content, state = tiny(day_radius_tiles=3, cue_detail_radius_tiles=1)
+    place(state, "ella", 5, 1)
+    sample = sample_of(run_tick(content, state, 1), "ella")
+    entity = next(e for e in sample.visible_entities if e.entity_id == "moss_east_01")
+    assert entity.entity_type == "cue" and entity.position == MOSS
+    assert (entity.observable_signs, entity.fruit_band, entity.quantity) == ([], None, None)
+    [cue] = sample.environmental_cues
+    assert (cue.cue_id, cue.detail_level) == ("moss_east_01", "near")
+
+
+def test_step_only_cue_is_a_transient_sighting_with_its_step() -> None:
+    content, state = tiny(day_radius_tiles=3, cue_detail_radius_tiles=1)
+    acc = begin_observation_tick(state, 1, content)
+    observe_step(acc, state, "ella", c(3, 2), 1)  # distant
+    observe_step(acc, state, "ella", c(4, 2), 2)  # near
+    place(state, "ella", 9, 3)  # the cue is out of sight at tick end
+    sample = sample_of(finish_observation_tick(acc, state), "ella")
+    [moss] = [t for t in sample.transient_sightings if t.entity_id == "moss_east_01"]
+    assert (moss.entity_type, moss.seen_at_step, moss.position) == ("cue", 2, MOSS)
+    assert (moss.observable_signs, moss.fruit_band, moss.quantity) == ([], None, None)
+    assert "moss_east_01" not in [e.entity_id for e in sample.visible_entities]
+    assert [c_.detail_level for c_ in sample.environmental_cues] == ["near"]
+
+
+def test_first_exposure_of_an_inventory_canteen_is_new_sight() -> None:
+    """G2-05: the canteen ID counts as exposed through inventory; self never does."""
+    content, state = tiny(day_radius_tiles=0, night_radius_tiles=0)
+    assert state.unique_canteen.holder_id == "ella"
+    # Tick zero seeds receipts without a trigger, canteen included.
+    zero = run_tick(content, state, 0)
+    assert zero.new_sight_actor_ids == []
+    apply_batch(state, zero)
+    assert run_tick(content, state, 1).new_sight_actor_ids == []  # known canteen, known self
+    # A give at a completed boundary: Mia's first canteen exposure is NEW_SIGHT; Ella's is not.
+    state.unique_canteen = state.unique_canteen.model_copy(update={"holder_id": "mia"})
+    given = run_tick(content, state, 2)
+    assert given.new_sight_actor_ids == ["mia"]
+    apply_batch(state, given)
+    assert run_tick(content, state, 3).new_sight_actor_ids == []
+
+
+def test_a_fresh_baseline_never_counts_self_as_a_sight() -> None:
+    content, state = tiny(day_radius_tiles=0, night_radius_tiles=0)
+    batch = run_tick(content, state, 1)  # empty baselines, nobody in sight
+    assert batch.new_sight_actor_ids == ["ella"]  # only the canteen holder's inventory ID

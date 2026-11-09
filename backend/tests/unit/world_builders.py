@@ -14,7 +14,6 @@ from living_island.world.content import (
     build_world_content,
     map_bytes_from_rows,
 )
-from living_island.world.observation import register_content
 from living_island.world.protocol import Coord
 from living_island.world.space import StaticMap
 from living_island.world.state import WorldState
@@ -23,9 +22,7 @@ WORLDS = Path(__file__).resolve().parents[3] / "content" / "worlds"
 
 
 def default_content() -> WorldContent:
-    content = load_world_content(WORLDS / "default.toml")
-    register_content(content)
-    return content
+    return load_world_content(WORLDS / "default.toml")
 
 
 def static_map(rows: list[str]) -> StaticMap:
@@ -69,9 +66,7 @@ def tiny_content(
     data["residents"] = [{**by_id[rid], "position": list(pos)} for rid, pos in residents.items()]
     data["canteen"]["initial_owner_id"] = next(iter(residents))
     data["perception"].update(perception)
-    content = build_world_content(data, map_bytes_from_rows(rows))
-    register_content(content)
-    return content
+    return build_world_content(data, map_bytes_from_rows(rows))
 
 
 def fresh_state(content: WorldContent) -> WorldState:

@@ -1,7 +1,7 @@
 """Frozen world integration ports (implementation plan §2.1).
 
-Signatures are normative for P1. Bodies arrive later: observation (P1-02, implemented in
-``observation.py``), the engine in P1-04. Only engine ports mutate world state.
+Signatures are normative for P1. Bodies arrive later: observation in P1-02, the engine in
+P1-04. Only engine ports mutate world state.
 """
 
 from __future__ import annotations
@@ -137,11 +137,13 @@ class ObservationAccumulator:
         return tuple(r.model_copy(deep=True) for r in self._receipt_baseline)
 
 
-def begin_observation_tick(state: WorldState, completed_tick: int) -> ObservationAccumulator:
+def begin_observation_tick(
+    state: WorldState, completed_tick: int, content: WorldContent
+) -> ObservationAccumulator:
     # Imported here: observation.py builds the models defined above (P1-02).
     from living_island.world import observation
 
-    return observation.begin_observation_tick(state, completed_tick)
+    return observation.begin_observation_tick(state, completed_tick, content)
 
 
 def observe_step(
