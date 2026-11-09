@@ -433,7 +433,7 @@ Verification commands:
 Open risks / deferred decisions:
 ```
 
-## 6. Handoff record (in `docs/tasks/<id>.md`, per AGENTS.md)
+## 6. Handoff record (in `docs/tasks/<phase>/<id>.md`, per AGENTS.md)
 
 Required fields:
 1. `base_commit` and `result_commit`;

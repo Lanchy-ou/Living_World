@@ -14,9 +14,9 @@ intents; the frontend only displays state and sends commands.
 - Specs: `docs/spec/` (`world-rules-v0.1.md`, `interface-contract-v0.1.md`,
   `balance-notes-v0.1.md`, `agent-interface-v0.1.md`, `p1-replay-frontend-v0.1.md`,
   `open-questions.md`).
-- P1 plan: `docs/tasks/p1-implementation-plan-v0.1.md` (tasks, lanes, gates, handoff
+- P1 plan: `docs/plans/p1-implementation-plan-v0.1.md` (tasks, lanes, gates, handoff
   fields, change requests).
-- Decisions: `docs/adr/`. Task briefs and handoffs: `docs/tasks/`.
+- Decisions: `docs/adr/`. Task briefs and handoffs: `docs/tasks/<phase>/` (e.g. `docs/tasks/p1/`).
 
 ## Source of truth order
 
@@ -92,7 +92,7 @@ uv run --directory backend python ../scripts/gen_types.py
   must stay green.
 - Code, comments and docs are written in English.
 - Scripts must be cross-platform: Python scripts or `package.json` scripts only.
-- When done, append a "Handoff" section to `docs/tasks/<id>.md`: what changed, commands
+- When done, append a "Handoff" section to `docs/tasks/<phase>/<id>.md`: what changed, commands
   run and their results, deviations, open questions, **plus** the seven required
   fields (plan §6).
 - Every task passes Gate 1 (executor checks) and Gate 2 (independent reviewer). Gate 3

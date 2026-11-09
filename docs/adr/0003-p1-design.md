@@ -3,7 +3,7 @@
 - Status: accepted
 - Date: 2026-11-08
 - Task: P1-00 (specs: `docs/spec/agent-interface-v0.1.md`,
-  `docs/spec/p1-replay-frontend-v0.1.md`; plan: `docs/tasks/p1-implementation-plan-v0.1.md`)
+  `docs/spec/p1-replay-frontend-v0.1.md`; plan: `docs/plans/p1-implementation-plan-v0.1.md`)
 
 ## Context
 
