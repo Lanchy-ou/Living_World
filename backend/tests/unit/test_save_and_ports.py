@@ -185,7 +185,8 @@ def test_port_signatures_frozen() -> None:
     def params(fn: Any) -> list[str]:
         return list(inspect.signature(fn).parameters)
 
-    assert params(ports.create_engine) == ["content", "restored_world"]
+    assert params(ports.create_engine) == ["content", "restored_world", "history"]
+    assert inspect.signature(ports.create_engine).parameters["history"].default == ()
     assert params(ports.begin_observation_tick) == ["state", "completed_tick", "content"]
     assert params(ports.observe_step) == ["acc", "state", "actor_id", "position", "step_index"]
     assert params(ports.finish_observation_tick) == ["acc", "state"]
@@ -219,11 +220,6 @@ def test_observation_sample_omits_hearing_and_feedback() -> None:
         "heard_utterances",
         "last_action_feedback",
     }
-
-
-def test_port_bodies_not_implemented() -> None:
-    with pytest.raises(NotImplementedError):
-        ports.create_engine(None, None)  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------- consumer imports
