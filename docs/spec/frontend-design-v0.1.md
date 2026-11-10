@@ -71,7 +71,8 @@ HTML Canvas 2D, no rendering library, no new dependency. See ADR 0005.
   tile, anchored on it.
 - **Large maps:** if `max(map.width, map.height) × 16 > 4096`, the terrain falls back to flat
   colour tiles (4 px, or 1 px above 1,024 tiles per side), with no decorations and no fruit in
-  the canopies. Entities, labels and everything else work as usual.
+  the canopies. Entities, labels and everything else work as usual. An undefined terrain
+  symbol is a magenta and black checker at full detail and solid magenta in this fallback.
 
 ### 3.2 Layer order (bottom to top)
 
@@ -99,7 +100,8 @@ inside that tile when at rest:
 |---|---|---|
 | Resident | x 0, y +0.30 (feet) | bottom centre on the anchor |
 | Residents sharing a tile | spread evenly over ±0.28 in x | centres at least 0.62 sprite widths apart |
-| Corpse | x 0, y +0.12 | centred on the anchor; several corpses are spread like residents |
+| Corpse | x 0, y +0.12 | centred on the anchor |
+| Corpses sharing a tile | spread evenly over ±0.20 in x | centres at least 0.7 sprite widths apart |
 | Ground fruit | x −0.22, y +0.25 | left of the tile centre |
 | Ground canteen | x +0.22, y +0.25 | right of the tile centre |
 
@@ -117,18 +119,22 @@ and none is used as a world fact.
   `resident_moved` event per entered tile. The path of a resident in tick `t` is its position
   in frame `t−1` followed by the `to` of each of its `resident_moved` events in frame `t`'s
   event slice, in order. It is used only if every event starts where the previous one ended
-  and the last one ends at the position in frame `t`.
-- **No invented routes.** If the events do not chain that way, a move to an adjacent tile is
-  drawn as a straight slide and any other move as a jump.
-- **Slide.** While playing, after the current tick advances by exactly one, the sprite moves
-  along that path over one beat (`1000 / speed` ms). After a single manual step forward it
-  takes 160 ms. Seeking, stepping back and loading show the frame at once. When the slide ends,
-  and whenever the viewer is paused, every resident is on its recorded tile.
+  and the last one ends at the position in frame `t`. A recorded walk that returns to its
+  starting tile is drawn too.
+- **No invented routes.** If the events do not chain that way: when the two recorded tiles
+  are adjacent (diagonals included) the move is drawn as one straight slide between them; in
+  every other case it is drawn as a jump.
+- **Slide.** Whenever the current tick advances by exactly one (playing, a step forward, or a
+  seek or event click that lands on the next tick), the sprite moves along that path: over one
+  beat (`1000 / speed` ms) while playing, over 160 ms otherwise. Every other change of tick
+  (a longer seek, a step back, loading) shows the frame at once. If playback is paused during
+  a slide, the slide finishes within 160 ms. When no slide is running, every resident is on
+  its recorded tile.
 - **Facing.** `right`, `left`, `down` or `up`, from the direction of the path segment being
   walked; at rest, from the last recorded step up to this tick; `down` before any move.
   Horizontal wins on a diagonal step.
 - **Frames.** `idle` at rest; `walk_a` and `walk_b` alternate twice per tile while sliding.
-- **Bubbles.** One bubble above a living resident, from recorded data only (§5).
+- **Bubbles.** At most one bubble above a living resident, from recorded data only (§5).
 - **Ambient shimmer.** Water glints and the foam line alternate between two prepared terrain
   images every 0.9 s. Positions do not change.
 - **Reduced motion.** With `prefers-reduced-motion: reduce` there is no slide and no shimmer.
@@ -157,8 +163,9 @@ frontend/src/render/terrainLayer.ts   map -> terrain pixels (code, not an asset)
   `item/<fruit_1|fruit_2|fruit_3|canteen|tree_fruit|apple>`,
   `emote/<sleep|water|fruit|fail|rest|talk|hand>`.
 - **Resident looks** depend only on the resident's index in `bundle.residents`: hair shape
-  cycles with period 3, hair colour with period 5, shirt colour with period 8, letters with
-  period 26. Names and IDs are never matched.
+  cycles with period 3, hair colour with period 5, shirt colour with period 8, trouser colour
+  with period 3 and letters with period 26. Names and IDs are never matched.
+- **Badges.** A fruit-tree stock badge of 0 is drawn fainter. This restates the recorded zero.
 - **Variation** (tree shapes, tufts, wave marks) uses a deterministic hash of tile or pixel
   coordinates. `Math.random` is not used.
 - **Adding an asset** needs no design decision: add the grid or generator to the matching
@@ -195,10 +202,10 @@ in this repository, and a row in both records in the same commit.
 | Area | Behaviour | Change from P1 §4 |
 |---|---|---|
 | Map | Fills the stage. Drag to pan; wheel, pinch, double click, `+`/`-` keys and the buttons zoom; "View entire island" (or `0`) returns to zoom 1, centred. Arrow keys pan when the map has focus. | Continuous zoom instead of ×1/×2/×4. Pan is clamped so the map always covers the centre of the view (any tile can be centred, also past a floating panel); P1 clamped to the content edges. |
-| Global status | Day, time, day or night; living residents; total fruit on trees; ground fruit (only when there is some); where each canteen is and its servings. | New. Counts and sums of recorded values only (§5). |
+| Global status | Day, time, day or night; living residents; total fruit on trees; ground fruit (only when there is some); where each canteen is and its servings. The bar has a fixed height and does not wrap, so it never resizes the map; chips that do not fit are clipped. | New. Counts and sums of recorded values only (§5). |
 | Roster | One button per declared resident with letter, face and name; a dead resident is greyed and marked "dead". Click selects or deselects. | Replaces the resident drop-down. Gives keyboard access to selection. |
 | Resident panel | Opens when a resident, its tag, its corpse or its roster button is clicked. Shows portrait, name, ID, alive or dead, tile, move since the previous tick, status chip, recorded death tick and cause, the four conditions as bars with raw values and change, fruit, canteen, the recorded action (type, start tick, remaining ticks, intent ID) and this tick's events for the resident. | Same data as P1 §4.3 plus the status chip, the death record and the tick's events. Nobody is selected after loading (P1 selected the first resident). |
-| Selection rule | Selecting never changes the camera and never pauses playback. "Follow on the map" is a separate, opt-in checkbox in the panel; dragging the map turns it off. | Follow was already optional; the rule is now explicit and tested. |
+| Selection rule | Selecting never changes the camera and never pauses playback. "Follow on the map" is a separate, opt-in checkbox in the panel and belongs to the resident it was ticked for: dragging the map, selecting another resident, closing the panel or unticking it turns follow off, and the view stays where it was. A double click on the map zooms in at that point (and, on a resident, also selects it). | Follow was already optional; the rule is now explicit and tested. |
 | Details drawer | Closed by default. Events: the P1 event table with the resident and failure filters; clicking an event seeks to its tick and shows its raw JSON. Resources: the P1 resource lists. Legend: terrain, residents, objects, bubbles. Clicking an event in the resident panel opens the drawer on that event. | The same panels as P1 §4.3–§4.4, moved from always-visible to on demand. The legend moves here. |
 | Playback bar | First, step back, play or pause, step forward, last; clock; seek slider; tick field; speeds 1, 2, 4, 8, 16 ticks per second. Space plays or pauses; Escape closes the panel, then the drawer. | Same controls and semantics as P1 §4.2; speed is a button group instead of a drop-down. |
 | Loading | "Open replay…", drag and drop anywhere, and "Example". A refused file shows the validation error over the stage; the loaded replay stays; nothing is repaired. | Unchanged behaviour; the file input is behind a button. |
@@ -241,9 +248,9 @@ unchanged since `821cd88`.
 | Status chip, bubble: failure | `action_failed` of the tick by this actor: `payload.action_type`, `payload.failure_code` | `facts.py:113` |
 | Status chip: interruption | `action_interrupted`: `payload.action_type`, `payload.reason` | `facts.py:118` |
 | Status chip: finished action | `action_succeeded`: `payload.action_type` | `facts.py:108` |
-| Bubble: water | active `drink` or `fill_canteen`; or `water_drank`, `canteen_filled` this tick | `facts.py:136`, `144` |
-| Bubble: fruit | active `gather` or `eat`; or `fruit_gathered`, `fruit_consumed` this tick | `facts.py:123`, `130` |
-| Bubble: talk, hand | active `talk`, `give`, `pick_up`; or `utterance_spoken`, `item_given`, `item_picked_up` this tick | `facts.py:179`, `193`, `201` |
+| Bubble: water | active `drink` or `fill_canteen`; else `water_drank`, `canteen_filled` by this actor this tick | `facts.py:136`, `144` |
+| Bubble: fruit | active `gather` or `eat`; else `fruit_gathered`, `fruit_consumed` by this actor this tick | `facts.py:123`, `130` |
+| Bubble: talk, hand | active `talk`, `give`, `pick_up`; else `utterance_spoken`, `item_given`, `item_picked_up` by this actor this tick | `facts.py:179`, `193`, `201` |
 | Bubble: sleep, rest | active `sleep`, `rest` | `replay.py:133` |
 | Death tick and cause | `resident_died`: `tick`, `payload.resident_id`, `payload.cause` | `facts.py:209`, `318` |
 | Event table and filters | as P1 §4.4 | unchanged |
@@ -252,6 +259,12 @@ unchanged since `821cd88`.
 this tick → `active_action` → an `action_interrupted` → an `action_succeeded` → "No action
 recorded". Action types are shown through a fixed name table (`move_to` → "Walking", and so
 on); an unknown type is shown as recorded.
+
+**Bubble order** (first match, living residents only): an `action_failed` of this actor in this
+tick → the bubble of the active action, if that action type has one (`move_to` and `wait` have
+none) → the bubble of the last matching event of this actor in this tick → no bubble. So a
+resident that gathered fruit and then started walking in the same tick shows "Walking" with
+the fruit bubble. The death record is found by reading events up to the current tick.
 
 **Not shown, because the replay has no field for it:** maximum tree stock, need bands or
 thresholds, what a resident sees, goals, personality, memory, relationships, speech text
@@ -262,9 +275,13 @@ outside the event table, and why anything happened. See OQ-079 to OQ-081.
 - It computes no legality, physiology, resource change or outcome. Bars are
   `(value − min) / (max − min)` of recorded values. There are no "low" or "critical" marks,
   because the thresholds are rules and are not in the replay.
-- It never predicts: the slide uses the previous and current recorded frames, never the next.
-- It never fills a gap: an undefined terrain symbol is drawn as a magenta checker; a move
-  whose events do not chain is drawn as a jump.
+- It never predicts: everything shown at tick `t` reads frames and events up to `t` only (the
+  slide uses frames `t−1` and `t` and the events of `t`), never anything later.
+- It never fills a gap: an undefined terrain symbol is drawn as a magenta marker; a move whose
+  events do not chain is drawn as one straight slide if the two recorded tiles are adjacent,
+  and otherwise as a jump (§3.4).
+- Results are memoised (sprites, and facings per loaded bundle). A loaded bundle is never
+  mutated, so memoisation cannot change what is drawn.
 - Display state is limited to the camera, the selection, the filters, the open panel and the
   timing of the current slide. None of it is saved or sent anywhere.
 
@@ -277,13 +294,14 @@ outside the event table, and why anything happened. See OQ-079 to OQ-081.
 | FE-03 Read-only | Kept, and restated in §6. |
 | FE-04 Simple 2D Canvas, "coloured tiles and basic shapes" | **Superseded.** Still Canvas 2D, now with pixel art. Art remains outside the acceptance criteria of P1; it is covered by §8 here. |
 | §2 Replay data, validation, capture | Kept unchanged. No contract, schema or generated file changes. |
-| §3 Structure | Kept. Additions: `render/assets/`, `render/terrainLayer.ts`, `render/scene.ts`, `render/motion.ts`, `render/atlas.ts`. "Rendering reads only `currentFrame`" becomes: rendering reads the current frame, the previous frame and the current tick's events, only for the slide and the facing; it still never simulates. |
+| §3 Structure | Kept. Additions: `render/assets/`, `render/terrainLayer.ts`, `render/scene.ts`, `render/motion.ts`, `render/atlas.ts`. "Rendering reads only `currentFrame`" becomes: rendering reads frames and events up to the current tick (the previous frame and the tick's events for the slide, earlier move events for the facing, the death event for the death note); it never reads later data and still never simulates. |
 | §4.1 Map and camera | **Changed:** continuous zoom (§3.1); pan clamp (§4); residents drawn as sprites with a letter tag; trees show fruit as well as the stock number; shared-tile offsets per §3.3; legend on demand. Kept: grid from the bundle, fit formula, drag to pan, optional follow, colour never the only cue, night from the clock. |
 | §4.2 Timeline and controls | Kept, including the clock formulas and the five speeds. |
 | §4.3 Panels | Kept data; new placement (§4). Added: status chip, death record, events of the tick. Nobody is selected after loading. |
 | §4.4 Events and debugging | Kept unchanged, inside the drawer. |
 | §5 Fixtures and edge cases | Kept. |
-| §6 Technical constraints | Kept: React, strict TypeScript, Vite, Canvas, local file only, no network. No new dependency. "Canvas drawing is pure" holds: `drawFrame` depends only on its arguments. |
+| Small display changes | The night tint covers the whole view, not only the map rectangle. The validation error box can be dismissed. The status line names items in text ("fruit on the ground", "Canteen with C"). |
+| §6 Technical constraints | Kept: React, strict TypeScript, Vite, Canvas, local file only, no network. No new dependency. "Canvas drawing is pure" holds in this sense: for an immutable bundle, `drawFrame` depends only on its arguments; module state is memoisation only. |
 | FE-T01, T02, T03, T05, T06, T07, T08, T09, T12 | Apply unchanged; their tests are unchanged. |
 | FE-T04 Shared tile, corpse, ground items | Applies. Its test is unchanged; PF-T03 adds the sprite cases. |
 | FE-T10 Camera | Applies with the new camera: the test now uses a continuous zoom and the new pan clamp; the "every entity at its recorded tile" assertions are unchanged. |
@@ -298,22 +316,26 @@ outside the event table, and why anything happened. See OQ-079 to OQ-081.
 | PF-T02 | Layer order | Layers are painted in the order of §3.2, and each sprite in its layer | automated |
 | PF-T03 | Shared tile, corpse, ground items | All are visible; residents on one tile are drawn apart with distinct tags; a corpse keeps its tile, has a non-colour mark and stands for the dead resident; sprites never go below the minimum scale | automated |
 | PF-T04 | Zoom and pan | At rest every anchor maps back to its recorded tile at any zoom and pan; zoom is clamped between fit and closest; zooming at a point keeps that map point in place | automated |
-| PF-T05 | Selection | Selecting changes neither camera nor playback; nobody is selected after loading; follow is opt-in | automated |
-| PF-T06 | Motion is presentation only | Paths start at the previous and end at the current recorded tile and follow the recorded move events; a broken chain is drawn as a jump; progress 1 equals the recorded frame; drawing never changes the bundle; drawing is deterministic | automated |
+| PF-T05 | Selection | Selecting changes neither camera nor playback; nobody is selected after loading; follow is opt-in and ends, with the view kept, when the selection changes (automated on the store and the layout; the click handlers are checked by review and by hand) | automated, plus review |
+| PF-T06 | Motion is presentation only | Paths start at the previous and end at the current recorded tile and follow the recorded move events, including a recorded round trip; without a chaining record an adjacent move is a straight slide and any other move a jump; progress 1 equals the recorded frame; drawing never changes the bundle; drawing is deterministic | automated |
 | PF-T07 | Data-driven map | The terrain picture is a deterministic function of the map; changing a tile changes it; each terrain looks different; an undefined symbol is marked; other sizes draw; very large maps fall back | automated |
 | PF-T08 | Assets | Every sprite key a scene uses resolves; residents differ in pixels, silhouette and letter; sprite grids are validated | automated |
 | PF-T09 | Fruit trees | Canopy fruit and the badge come from the recorded stock; the badge is exact | automated |
-| PF-T10 | Status line and status chip | Values equal counts and sums of the frame; the chip restates recorded fields; a death is not shown before its tick | automated |
-| PF-T11 | 1,009 frames at 16 ticks per second | One recorded frame per beat, none skipped, 1,008 beats; and in the browser a real rule-based default-island replay advances at 16 ticks per second | automated, plus manual timing |
+| PF-T10 | Status line and status chip | Values equal counts and sums of the frame; the chip and the bubble follow the orders of §5; a death is not shown before its tick | automated |
+| PF-T11 | 1,009 frames at 16 ticks per second | One recorded frame per beat, none skipped, 1,008 beats (automated; this part does not measure time); and in the browser a real rule-based default-island replay advances at 16 ticks per second (manual timing; the playback timer has no automated test) | automated, plus manual timing |
 | PF-T12 | No game logic; contract untouched | Reviewer finds no rule in the frontend; `gen_types.py` leaves no diff; no file under `backend/`, `contract/` or `src/api/generated/` changes | Gate 2, `git diff` |
-| PF-T13 | Asset record | Every asset module is listed with source and license; no third-party asset | automated, plus review |
+| PF-T13 | Asset record | Every asset module has a row with contents, method, source and licence filled in; no third-party asset | automated, plus review |
 | PF-T14 | Real replays | A rule-based default-island replay, an S1 replay and the P1 demo replay load and play: zoom and pan, shared tiles, night, death, dropped canteen, error handling | manual, recorded in the handoff |
 
 ## 9. Known limits
 
 - The canopy shows at most 8 fruit; the badge is exact (OQ-079).
 - Looks are assigned by list index, so a run with different residents reuses the same looks in
-  order (OQ-080).
+  order (OQ-080). Looks also repeat within a large run: letters from the 27th resident, letter
+  and hair shape together from the 79th, and the whole sprite from the 121st. The default
+  world has three residents.
 - No low-need warning is shown (OQ-081).
 - Two frames of ambient shimmer cost a second terrain image (about 4 MB for the default map).
+  The cost grows with the map area: a 256×256 map needs two 4096×4096 images and takes over a
+  second per image to build.
 - Touch pinch zoom is implemented but was only exercised with mouse and wheel.

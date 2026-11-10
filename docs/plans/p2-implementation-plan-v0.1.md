@@ -355,8 +355,9 @@ canteen. The entity and its initial slot remain. Remaining confounds and how to 
 - **Files:** `frontend/**` except `frontend/src/api/generated/`; asset files under the
   path the design spec fixes, with their license record; under Amendment 2 also
   `docs/spec/frontend-design-v0.1.md` (new), `docs/adr/0005-frontend-rendering.md` (new),
-  `docs/design/**`, the P2-F0 and P2-F1 task cards, this plan (Amendment 2 only) and
-  `docs/spec/open-questions.md` (append only). No change to `contract/`, the backend,
+  `docs/design/**`, the P2-F0 and P2-F1 task cards, this plan (Amendment 2 only),
+  `docs/spec/open-questions.md` (append only) and the "Inspect the replay" section of
+  `README.md`. No change to `contract/`, the backend,
   generated files or any existing spec.
 - **Deliverables:** the design on the existing replay viewer, including the rendering
   approach and assets; the design spec with the asset interface, data mapping, change set

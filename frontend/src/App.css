@@ -222,7 +222,7 @@ select:focus-visible {
 
 .hud {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
@@ -246,11 +246,13 @@ select:focus-visible {
   background: var(--paper-3);
 }
 
+/* When space is short the file name gives way first, then the status chips are clipped. */
 .topbar-actions {
   display: flex;
-  flex: none;
+  flex: 0 100 auto;
   align-items: center;
   gap: 10px;
+  min-width: 0;
   margin-left: auto;
 }
 
@@ -261,7 +263,22 @@ select:focus-visible {
   gap: 6px;
 }
 
+.detail-toggles {
+  flex: none;
+}
+
+.load {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.load button {
+  flex: none;
+}
+
 .file-name {
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;

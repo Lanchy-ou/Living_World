@@ -20,7 +20,8 @@ residents, a few items, at most 16 recorded frames per second.
   - The static terrain is rendered once per map into an offscreen canvas at 16 source pixels
     per tile and reused; each animation frame is one large `drawImage` plus a few dozen small
     ones. Measured on the 1,009-frame rule-based default-island replay: about 0.07 ms of
-    script time per frame, and about 180 ms once to build both terrain images.
+    script time per frame, and about 180 ms once to build both terrain images (method and
+    limits: P2-F1 handoff, "Measurements").
   - A WebGL library would add bundle size and a second rendering model for no visible gain at
     this scale.
 - **Art is TypeScript source, not image files.**
@@ -31,12 +32,15 @@ residents, a few items, at most 16 recorded frames per second.
     so image files can replace code art later without touching the scene.
 - **Scene and painting are separate and pure.**
   - `buildScene` turns a recorded frame and a view into plain data (what, where, which layer);
-    `drawFrame` paints it. Neither keeps state, uses randomness or touches the network. The
-    only display state is the camera, the selection and the timing of the current slide.
+    `drawFrame` paints it. Neither uses randomness or touches the network, and for an
+    immutable bundle each depends only on its arguments; the only module state is memoisation
+    (sprite caches, facings per loaded bundle). The only display state is the camera, the
+    selection and the timing of the current slide.
 - **Motion is presentation only.**
   - Walking between tiles follows the recorded `resident_moved` events of the tick. If they do
-    not chain to the recorded position, the move is drawn as a jump. Facing comes from recorded
-    displacement. Nothing is predicted and nothing is written back.
+    not chain to the recorded position, an adjacent move is drawn as one straight slide and any
+    other move as a jump. Facing comes from recorded displacement. Nothing is predicted and
+    nothing is written back.
 
 ## Alternatives considered
 
@@ -57,7 +61,7 @@ residents, a few items, at most 16 recorded frames per second.
 - No change to `contract/`, the backend, the replay schema or generated files.
 - The viewer bundle grows only by the art, renderer and interface source: the production
   script went from 436.5 kB to about 477 kB (139 kB gzipped), and the stylesheet from 1.8 kB
-  to about 10 kB. `package.json` and the lockfile are unchanged.
+  to about 10 kB (method: P2-F1 handoff, "Measurements"). `package.json` and the lockfile are unchanged.
 - A second cached terrain image is kept for the water shimmer (about 4 MB for the default map).
 - Maps larger than 256 tiles per side fall back to flat tiles (spec §3.1).
 - If the owner later prefers painted image assets, the work is contained in `render/assets/`

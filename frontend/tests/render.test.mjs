@@ -18,7 +18,7 @@ import {
   residentSprite,
 } from "../src/render/assets/residentArt.ts";
 import { FRUIT_SLOTS } from "../src/render/assets/terrainArt.ts";
-import { clampZoom, layoutFor, maxZoom, screenToTile, zoomAt } from "../src/render/camera.ts";
+import { clampZoom, layoutFor, maxZoom, panOf, screenToTile, zoomAt } from "../src/render/camera.ts";
 import { drawFrame } from "../src/render/drawFrame.ts";
 import { facingAt, facingOf, pathInto, poseAt } from "../src/render/motion.ts";
 import { MIN_ENTITY_SCALE, SCENE_LAYERS, buildScene, computeSprites, residentAt } from "../src/render/scene.ts";
@@ -228,6 +228,52 @@ test("PF-T05: follow is opt-in and centres the selected resident's recorded tile
   assert.ok(Math.abs(layout.offsetY + (ella.position.y + 0.5) * layout.tile - VIEW.height / 2) < 1e-6);
 });
 
+test("PF-T05: follow belongs to one resident and ends, with the view kept, when the selection changes", () => {
+  const bundle = loadHandmade("move-and-gather.json");
+  const near = (a, b) => Math.abs(a.tile - b.tile) < 1e-6 && Math.abs(a.offsetX - b.offsetX) < 1e-6 && Math.abs(a.offsetY - b.offsetY) < 1e-6;
+  // what the map does while following: it tells the store where the follow camera is
+  const follow = (store, id) => {
+    store.selectResident(id);
+    store.setCamera({ zoom: 1.6, follow: true });
+    const shown = viewLayout(bundle, 2, VIEW, store.getState().camera, id);
+    const state = store.getState();
+    const pan = panOf(VIEW, bundle.map, shown);
+    store.noteFollowPan(pan.panX, pan.panY);
+    assert.equal(store.getState(), state, "noting the follow pan is not a state change");
+    return shown;
+  };
+  const changes = [
+    ["selecting another resident", (store) => store.selectResident("mia"), "mia"],
+    ["closing the panel", (store) => store.selectResident(null), null],
+    ["switching follow off", (store) => store.setCamera({ follow: false }), "ella"],
+  ];
+  for (const [what, change, selected] of changes) {
+    const store = new ReplayStore();
+    store.load(bundle);
+    store.play();
+    const shown = follow(store, "ella");
+    change(store);
+    const now = store.getState();
+    assert.equal(now.camera.follow, false, what);
+    assert.equal(now.selectedResidentId, selected, what);
+    assert.equal(now.playing, true, what);
+    assert.ok(near(viewLayout(bundle, 2, VIEW, now.camera, now.selectedResidentId), shown), `${what}: the view stays`);
+    // with follow off, a later selection cannot move the camera
+    store.selectResident("ryan");
+    assert.ok(near(viewLayout(bundle, 2, VIEW, store.getState().camera, "ryan"), shown), `${what}: later selection`);
+    assert.equal(store.getState().camera.follow, false);
+  }
+  // selecting the resident that is already selected keeps following it
+  const store = new ReplayStore();
+  store.load(bundle);
+  follow(store, "ella");
+  store.selectResident("ella");
+  assert.equal(store.getState().camera.follow, true);
+  // a drag gives its own pan, which wins over the remembered follow pan
+  store.setCamera({ panX: 5, panY: -7, follow: false });
+  assert.deepEqual([store.getState().camera.panX, store.getState().camera.panY], [5, -7]);
+});
+
 test("PF-T06: a path starts at the previous recorded tile and ends at the current one", () => {
   for (const bundle of [realExport(), loadHandmade("move-and-gather.json")]) {
     let moved = 0;
@@ -292,6 +338,106 @@ test("PF-T06: the path follows the recorded resident_moved events, tile by tile"
   assert.deepEqual(pathInto(broken, 2, id), [steps[2]]);
   const jump = poseAt(broken, 2, id, 0.5);
   assert.deepEqual([jump.x, jump.y, jump.moving], [steps[2].x, steps[2].y, false]);
+});
+
+/** Test helper: a copy of `bundle` whose slice for `tick` is replaced by events of `actorId`. */
+function withTickEvents(bundle, tick, actorId, specs) {
+  const b = structuredClone(bundle);
+  const template = b.events[0];
+  const events = specs.map(([type, payload]) => ({ ...structuredClone(template), tick, type, actor_id: actorId, target_id: null, payload }));
+  const range = b.frames[tick].event_range;
+  b.events.splice(range.first_index, range.count, ...events);
+  const shift = events.length - range.count;
+  range.count = events.length;
+  for (let t = tick + 1; t < b.frames.length; t++) b.frames[t].event_range.first_index += shift;
+  return b;
+}
+
+const residentIn = (bundle, tick, id) => bundle.frames[tick].residents.find((r) => r.id === id);
+
+test("PF-T06: without a chaining record only an adjacent move slides, and a recorded round trip is drawn", () => {
+  const base = loadHandmade("contention.json"); // nobody moves in this fixture
+  const id = "ella";
+  const at = { ...residentIn(base, 1, id).position };
+  const moveTo = (bundle, to) => {
+    for (let t = 2; t < bundle.frames.length; t++) residentIn(bundle, t, id).position = { ...to };
+    return bundle;
+  };
+  const step = (from, to) => ["resident_moved", { from, to, step_cost_units: 1 }];
+  const right = { x: at.x + 1, y: at.y };
+  const diagonal = { x: at.x + 1, y: at.y + 1 };
+  const far = { x: at.x + 3, y: at.y };
+
+  // adjacent, no move event: a straight slide between the two recorded tiles
+  const adjacent = moveTo(withTickEvents(base, 2, id, []), diagonal);
+  assert.deepEqual(pathInto(adjacent, 2, id), [at, diagonal]);
+  const half = poseAt(adjacent, 2, id, 0.5);
+  assert.deepEqual([half.x, half.y, half.moving], [at.x + 0.5, at.y + 0.5, true]);
+
+  // adjacent, but the recorded events start somewhere else: still only the straight slide
+  const mismatch = moveTo(withTickEvents(base, 2, id, [step({ x: 0, y: 0 }, right)]), right);
+  assert.deepEqual(pathInto(mismatch, 2, id), [at, right]);
+
+  // not adjacent and no chaining record: a jump, never an invented route
+  const jump = moveTo(withTickEvents(base, 2, id, []), far);
+  assert.deepEqual(pathInto(jump, 2, id), [far]);
+  assert.equal(poseAt(jump, 2, id, 0.5).moving, false);
+
+  // a chain that overshoots the recorded position is not used either
+  const overshoot = moveTo(withTickEvents(base, 2, id, [step(at, right), step(right, far)]), right);
+  assert.deepEqual(pathInto(overshoot, 2, id), [at, right]);
+
+  // a recorded walk out and back is drawn, although the position did not change
+  const roundTrip = withTickEvents(base, 2, id, [step(at, right), step(right, at)]);
+  assert.deepEqual(pathInto(roundTrip, 2, id), [at, right, at]);
+  const out = poseAt(roundTrip, 2, id, 0.25);
+  assert.deepEqual([out.x, out.y, out.facing, out.moving], [at.x + 0.5, at.y, "right", true]);
+  assert.equal(poseAt(roundTrip, 2, id, 0.75).facing, "left");
+  assert.equal(facingAt(roundTrip, 2, id), "left");
+  const rest = poseAt(roundTrip, 2, id, 1);
+  assert.deepEqual([rest.x, rest.y, rest.moving], [at.x, at.y, false]);
+
+  // move events of another resident are ignored
+  const other = withTickEvents(base, 2, "mia", [step(at, right)]);
+  assert.deepEqual(pathInto(other, 2, id), [at]);
+});
+
+test("PF-T10: status chip precedence and bubbles follow the recorded data", () => {
+  const base = loadHandmade("contention.json");
+  const id = "ella";
+  const tick = 2;
+  const scene = (specs, patch = {}) => {
+    const b = withTickEvents(base, tick, id, specs);
+    Object.assign(residentIn(b, tick, id), { active_action: null, alive: true }, patch);
+    const a = activityOf(b, tick, id);
+    return [a.kind, a.label, a.emote, a.code];
+  };
+  const active = (action_type) => ({ active_action: { intent_id: "x", action_type, tick_started: 1, remaining_ticks: 2 } });
+  const ok = (action_type) => ["action_succeeded", { action_type, result_code: "OK" }];
+  const failed = ["action_failed", { action_type: "gather", failure_code: "RESOURCE_TAKEN" }];
+  const interrupted = ["action_interrupted", { action_type: "sleep", reason: "URGENT_NEED" }];
+  const gathered = ["fruit_gathered", { tree_id: "t", stock_before: 2, stock_after: 1 }];
+  const drank = ["water_drank", { source: "spring", hydration_before: 1, hydration_after: 2 }];
+
+  // order: dead, failed, active, interrupted, finished, none
+  assert.deepEqual(scene([failed, interrupted, ok("eat")], { alive: false }), ["dead", "Dead", null, null]);
+  assert.deepEqual(scene([interrupted, ok("eat"), failed], active("sleep")), ["failed", "Gathering failed: RESOURCE_TAKEN", "fail", "RESOURCE_TAKEN"]);
+  assert.deepEqual(scene([interrupted, ok("eat")], active("sleep")), ["active", "Sleeping", "sleep", null]);
+  assert.deepEqual(scene([ok("eat"), interrupted]), ["interrupted", "Sleeping interrupted: URGENT_NEED", null, "URGENT_NEED"]);
+  assert.deepEqual(scene([drank, ok("drink")]), ["finished", "Drinking (finished)", "water", null]);
+  assert.deepEqual(scene([]), ["none", "No action recorded", null, null]);
+
+  // bubble: the active action's own bubble first, else an event recorded this tick
+  assert.deepEqual(scene([gathered, ok("gather")], active("move_to")), ["active", "Walking", "fruit", null]);
+  assert.deepEqual(scene([gathered], active("drink")), ["active", "Drinking", "water", null]);
+  assert.deepEqual(scene([gathered]), ["none", "No action recorded", "fruit", null]);
+  assert.deepEqual(scene([ok("move_to")]), ["finished", "Walking (finished)", null, null]);
+  // an action type the viewer has no name for is shown as recorded
+  assert.deepEqual(scene([], active("dance")), ["active", "dance", null, null]);
+  // events of another resident never show on this one
+  const b = withTickEvents(base, tick, "mia", [failed, gathered]);
+  Object.assign(residentIn(b, tick, id), { active_action: null, alive: true });
+  assert.deepEqual([activityOf(b, tick, id).kind, activityOf(b, tick, id).emote], ["none", null]);
 });
 
 test("PF-T06: facing comes only from recorded displacement", () => {
@@ -516,8 +662,17 @@ test("PF-T11: a 1,009-frame bundle plays through one recorded frame per beat at 
 test("PF-T13: the asset record names every asset module", () => {
   const dir = fileURLToPath(new URL("../src/render/assets/", import.meta.url));
   const readme = readText(`${dir}README.md`);
+  const rows = readme
+    .split("\n")
+    .filter((line) => line.startsWith("| `"))
+    .map((line) => line.split("|").slice(1, -1).map((cell) => cell.trim()));
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".ts"))) {
-    assert.ok(readme.includes(`\`${file}\``), `${file} is recorded in assets/README.md`);
+    const row = rows.find((cells) => cells[0] === `\`${file}\``);
+    assert.ok(row !== undefined, `${file} is recorded in assets/README.md`);
+    // file, contents, how it was made, source or author, licence: none may be empty
+    assert.equal(row.length, 5, file);
+    assert.ok(row.every((cell) => cell.length > 0), `${file} has every column filled in`);
   }
+  assert.equal(rows.length, readdirSync(dir).filter((f) => f.endsWith(".ts")).length, "no row for a missing file");
   assert.match(readme, /third-party/i);
 });
