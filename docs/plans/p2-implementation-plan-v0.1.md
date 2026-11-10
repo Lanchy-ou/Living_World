@@ -3,6 +3,9 @@
 > **Approved v0.1 (2026-11-10).** The owner approved this plan. Decisions are tagged **[C]**
 > (confirmed by the owner) or **[P]** (direction approved; P2-00 fixes the details in specs
 > and the owner signs them off at M5). Until P2-00 merges, the P1 specs stay unchanged.
+>
+> **Amendment 1 (owner, 2026-11-10):** PD-08 changed. Frontend design and implementation
+> (P2-F0, P2-F1, milestone MF) are inserted after P2-03 and before P2-04.
 
 **Milestone P2, "Residents Survive":** on the default island, three rule-based residents
 survive seven game days together in most registered test seeds, using only their own
@@ -30,7 +33,7 @@ its benefit is measured.
 | PD-05 | At least 15 of 20 registered acceptance seeds end with all three residents alive at tick 1008. All acceptance runs must also pass the technical checks (§1.1). | [P] |
 | PD-06 | The private-state boundary of the rule policy (§1.2). | [P] |
 | PD-07 | The canteen comparison design (§1.3). | [P] |
-| PD-08 | Start frontend visual and art work as a separate effort after M7 sign-off. | [C] |
+| PD-08 | Frontend design and implementation run after P2-03 and before P2-04: a design spec signed off at MF (P2-F0), then its implementation on the existing replay contract (P2-F1). Amended by the owner on 2026-11-10; it replaces "after M7". | [C] |
 
 ### 0.2 Management decisions (unchanged from P1)
 
@@ -41,8 +44,9 @@ its benefit is measured.
   contracts.
 
 **P2 scope exclusions:** LLM policies, the memory system (P4), relationships, animals, tools
-other than the canteen, dreams, WebSocket live view, and frontend visual or art work.
-P2 uses the existing replay viewer for inspection and sign-off.
+other than the canteen, dreams and WebSocket live view. Frontend work is limited to P2-F0
+and P2-F1: display only, on the existing replay contract, with no contract or backend
+change.
 
 ## 1. Design and acceptance decisions
 
@@ -305,9 +309,52 @@ canteen. The entity and its initial slot remain. Remaining confounds and how to 
     same world config hash. It can ship on P1 policies and fixtures; the rule-policy batch
     is exercised after both lanes merge in P2-04.
 
+### P2-F0: Frontend design spec (documentation only)
+
+- **Lane:** after P2-03; the only active task. Inserted by Amendment 1 (PD-08).
+- **Files:**
+  - `docs/spec/frontend-design-v0.1.md` (new);
+  - an ADR for the rendering approach, if one is chosen (for example Canvas 2D or PixiJS);
+  - style samples and asset-pipeline notes under `docs/design/`;
+  - new OQs.
+  No code; no change to `contract/` or other specs.
+- **Deliverables:**
+  - the visual direction, with a small set of style samples compared;
+  - the asset interface (product document §9.2):
+    - tile pixel size, layer order, resident facing and animation conventions;
+    - naming and file layout;
+    - a license and source record for every third-party asset;
+  - layout and interaction for the replay viewer: map, time controls, resident and event
+    panels and the debug view;
+  - a mapping from each displayed element to an existing `ReplayBundle` / `DisplayFrame`
+    field. Any element without a field is out of scope and becomes an OQ for a later phase;
+  - the change set against `p1-replay-frontend-v0.1.md`, stating what changes and what
+    stays;
+  - acceptance checks for P2-F1.
+- **Pass evidence:**
+  - every displayed element maps to an existing contract field;
+  - no game logic is placed in the frontend (AGENTS.md principle 6);
+  - Gate 3 (MF): the owner approves the design and the style.
+
+### P2-F1: Frontend implementation
+
+- **Lane:** after MF. Runs before P2-04 (Amendment 1).
+- **Files:** `frontend/**` except `frontend/src/api/generated/`; asset files under the
+  path P2-F0 fixes, with their license record. No change to `contract/`, the backend,
+  generated files or specs.
+- **Deliverables:** the approved design on the existing replay viewer, including the
+  rendering approach and assets, and the P2-F0 acceptance checks as tests where they can be
+  automated.
+- **Pass evidence:**
+  - frontend lint, typecheck, build, test and test:schema pass; type generation leaves
+    no diff;
+  - the P1 replay and a rule-based default-island replay load and play;
+  - the P2-F0 acceptance checks hold;
+  - the owner watches one replay in the new viewer before merge.
+
 ### P2-04: Comparison experiments and tuning
 
-- **Lane:** after P2-02 and P2-03. Development seeds only.
+- **Lane:** after P2-02, P2-03 and P2-F1. Development seeds only.
 - **Files:** experiment reports under `docs/tasks/p2/`. Stage candidates in separate
   experiment inputs. Apply the recommended `content/worlds/default.toml` numeric changes
   only after M6 approval. A map placement change requires explicit PD-04 approval, including
@@ -349,8 +396,8 @@ canteen. The entity and its initial slot remain. Remaining confounds and how to 
 ## 3. Order and lanes
 
 ```text
-P2-00 (M5) ─ P2-01 ─ P2-02 ─┬─ P2-04 (M6) ─ P2-05 (M7)
-          └─ P2-03 ─────────┘
+P2-00 (M5) ─ P2-01 ─ P2-02 ─┐
+          └─ P2-03 ─────────┴─ P2-F0 (MF) ─ P2-F1 ─ P2-04 (M6) ─ P2-05 (M7)
 ```
 
 - The world lane runs P2-01 then P2-02. The side lane runs P2-03.
@@ -359,12 +406,16 @@ P2-00 (M5) ─ P2-01 ─ P2-02 ─┬─ P2-04 (M6) ─ P2-05 (M7)
 - Parallel file scopes do not overlap. P2-01 owns policy wiring and the initial stub in
   `agents/rule_based/`. After it merges, P2-02 takes over that directory. P2-03 owns
   `scripts/` and its analysis module.
-- Frontend visual and art work starts after M7 (PD-08). P2 has no target date; measured
-  experiment time and the required reviews determine when each milestone closes.
+- P2-F0 and P2-F1 run one at a time after P2-03 and before P2-04 (PD-08, Amendment 1).
+  They own `frontend/` (except generated files) and the design documents. If M6 changes
+  the map or numbers, the viewer needs no change, because it draws from replay data.
+- P2 has no target date; measured experiment time and the required reviews determine when
+  each milestone closes.
 
 ## 4. Milestones (Gate 3)
 
 - **M5:** P2 specs approved: the rule policy, experiments, PD-05..07 and CR-004.
+- **MF:** frontend design and style approved (P2-F0).
 - **M6:** tuned default config approved, including any map change.
 - **M7:** final P2 acceptance.
 
@@ -382,7 +433,8 @@ P2-00 (M5) ─ P2-01 ─ P2-02 ─┬─ P2-04 (M6) ─ P2-05 (M7)
 | B08 | Experiments reproducible | manifests rerun to identical counts and hashes |
 | B09 | P1 compatibility | P1 tests and replays; M4 hashes reproduced from the frozen P1 inputs |
 | B10 | CI and generated types clean | CI on `main` |
-| B11 | Records complete | handoffs, reviews, M5–M7 sign-offs, retrospective |
+| B11 | Records complete | handoffs, reviews, M5, MF, M6 and M7 sign-offs, retrospective |
+| B12 | Frontend design implemented | MF sign-off; P2-F1 checks; the replays play in the new viewer |
 
 **Allowed:** a small canteen benefit; deaths in some seeds within PD-05; dull behavior.
 **Not allowed:**
