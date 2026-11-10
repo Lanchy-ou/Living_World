@@ -6,6 +6,13 @@
 >
 > **Amendment 1 (owner, 2026-11-10):** PD-08 changed. Frontend design and implementation
 > (P2-F0, P2-F1, milestone MF) are inserted after P2-03 and before P2-04.
+>
+> **Amendment 2 (owner, 2026-11-11):** the separate design-approval step is replaced by
+> direct implementation. P2-F0 is folded into P2-F1: the style is chosen by the owner
+> (warm top-down pixel art, concept "A"), no alternative style options are produced, and the
+> design spec is written alongside the code. MF moves from "before P2-F1" to the owner's
+> review of the working viewer at the end of P2-F1. Gate 1 and Gate 2 are unchanged. The
+> owner's instruction is quoted in `docs/tasks/p2/P2-F1.md`.
 
 **Milestone P2, "Residents Survive":** on the default island, three rule-based residents
 survive seven game days together in most registered test seeds, using only their own
@@ -33,7 +40,7 @@ its benefit is measured.
 | PD-05 | At least 15 of 20 registered acceptance seeds end with all three residents alive at tick 1008. All acceptance runs must also pass the technical checks (§1.1). | [P] |
 | PD-06 | The private-state boundary of the rule policy (§1.2). | [P] |
 | PD-07 | The canteen comparison design (§1.3). | [P] |
-| PD-08 | Frontend design and implementation run after P2-03 and before P2-04: a design spec signed off at MF (P2-F0), then its implementation on the existing replay contract (P2-F1). Amended by the owner on 2026-11-10; it replaces "after M7". | [C] |
+| PD-08 | Frontend design and implementation run after P2-03 and before P2-04: a design spec signed off at MF (P2-F0), then its implementation on the existing replay contract (P2-F1). Amended by the owner on 2026-11-10; it replaces "after M7". Amended again on 2026-11-11 (Amendment 2): P2-F0 is folded into P2-F1, and MF is the owner's review of the working viewer. | [C] |
 
 ### 0.2 Management decisions (unchanged from P1)
 
@@ -311,6 +318,11 @@ canteen. The entity and its initial slot remain. Remaining confounds and how to 
 
 ### P2-F0: Frontend design spec (documentation only)
 
+> **Folded into P2-F1 by Amendment 2 (2026-11-11).** No separate P2-F0 task runs and no
+> style options are compared. The deliverables below that still apply (asset interface,
+> layout, data mapping, change set, acceptance checks) are delivered by P2-F1 in
+> `docs/spec/frontend-design-v0.1.md`. The text below is kept as the record of Amendment 1.
+
 - **Lane:** after P2-03; the only active task. Inserted by Amendment 1 (PD-08).
 - **Files:**
   - `docs/spec/frontend-design-v0.1.md` (new);
@@ -338,19 +350,25 @@ canteen. The entity and its initial slot remain. Remaining confounds and how to 
 
 ### P2-F1: Frontend implementation
 
-- **Lane:** after MF. Runs before P2-04 (Amendment 1).
+- **Lane:** after P2-03. Runs before P2-04 (Amendment 1). Under Amendment 2 it starts
+  without a prior MF and also delivers the P2-F0 design documents.
 - **Files:** `frontend/**` except `frontend/src/api/generated/`; asset files under the
-  path P2-F0 fixes, with their license record. No change to `contract/`, the backend,
-  generated files or specs.
-- **Deliverables:** the approved design on the existing replay viewer, including the
-  rendering approach and assets, and the P2-F0 acceptance checks as tests where they can be
-  automated.
+  path the design spec fixes, with their license record; under Amendment 2 also
+  `docs/spec/frontend-design-v0.1.md` (new), `docs/adr/0005-frontend-rendering.md` (new),
+  `docs/design/**`, the P2-F0 and P2-F1 task cards, this plan (Amendment 2 only) and
+  `docs/spec/open-questions.md` (append only). No change to `contract/`, the backend,
+  generated files or any existing spec.
+- **Deliverables:** the design on the existing replay viewer, including the rendering
+  approach and assets; the design spec with the asset interface, data mapping, change set
+  against `p1-replay-frontend-v0.1.md` and acceptance checks; and those checks as tests
+  where they can be automated.
 - **Pass evidence:**
   - frontend lint, typecheck, build, test and test:schema pass; type generation leaves
     no diff;
   - the P1 replay and a rule-based default-island replay load and play;
-  - the P2-F0 acceptance checks hold;
-  - the owner watches one replay in the new viewer before merge.
+  - the design spec's acceptance checks hold;
+  - Gate 3 (MF, Amendment 2): the owner watches one replay in the new viewer and approves
+    the design and the style before merge.
 
 ### P2-04: Comparison experiments and tuning
 
@@ -400,6 +418,8 @@ P2-00 (M5) ─ P2-01 ─ P2-02 ─┐
           └─ P2-03 ─────────┴─ P2-F0 (MF) ─ P2-F1 ─ P2-04 (M6) ─ P2-05 (M7)
 ```
 
+Under Amendment 2 the frontend segment is `P2-F1 (MF)`: one task, with MF at its end.
+
 - The world lane runs P2-01 then P2-02. The side lane runs P2-03.
 - A Gate 2 review takes one of the two slots, so the side lane pauses while a world-lane
   review runs.
@@ -415,7 +435,8 @@ P2-00 (M5) ─ P2-01 ─ P2-02 ─┐
 ## 4. Milestones (Gate 3)
 
 - **M5:** P2 specs approved: the rule policy, experiments, PD-05..07 and CR-004.
-- **MF:** frontend design and style approved (P2-F0).
+- **MF:** frontend design and style approved. Under Amendment 2 the owner approves by
+  reviewing the working viewer at the end of P2-F1.
 - **M6:** tuned default config approved, including any map change.
 - **M7:** final P2 acceptance.
 
