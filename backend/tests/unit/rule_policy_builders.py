@@ -290,3 +290,153 @@ def res_t(rid: str) -> dict[str, Any]:
 
 def ent_t(eid: str) -> dict[str, Any]:
     return {"kind": "entity", "id": eid}
+
+
+# --- whole-object comparison (Gate 2 G2-02) -------------------------------------------------
+
+import copy  # noqa: E402
+import json  # noqa: E402
+from collections import deque  # noqa: E402
+from collections.abc import Iterator  # noqa: E402
+
+
+def canon(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def plan_obj(
+    tick: int, ordinal: int, intents: list[tuple[str, Any, dict[str, Any]]], actor: str = "a"
+) -> dict[str, Any]:
+    """The full expected ``ActionPlan`` as canonical JSON data."""
+    plan_id = f"{actor}:p{ordinal:06d}"
+    return {
+        "plan_id": plan_id,
+        "actor_id": actor,
+        "created_at_tick": tick,
+        "intents": [
+            {
+                "intent_id": f"{plan_id}:i{i}",
+                "plan_id": plan_id,
+                "actor_id": actor,
+                "action_type": action,
+                "target": target,
+                "parameters": parameters,
+                "reason": None,
+            }
+            for i, (action, target, parameters) in enumerate(intents)
+        ],
+    }
+
+
+def state_obj(**updates: Any) -> dict[str, Any]:
+    """The full expected ``RuleStateV0_1`` (every field present)."""
+    return {**empty_state(), **updates}
+
+
+def ref(ordinal: int, index: int, action: str, target: Any, actor: str = "a") -> dict[str, Any]:
+    return {
+        "intent_id": f"{actor}:p{ordinal:06d}:i{index}",
+        "action_type": action,
+        "target": target,
+    }
+
+
+def decide_step(
+    policy: RuleBasedPolicy, p: Perception, ordinal: int
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Decide and commit; returns the full ActionPlan and the full committed state."""
+    outcome = policy.decide(request(p, ordinal))
+    policy.finish_decision(True)
+    return outcome.plan.model_dump(mode="json"), policy.export_state()
+
+
+def verify(actual: list[tuple[Any, Any]], expected: list[tuple[Any, Any]]) -> None:
+    """Whole canonical objects, decision by decision."""
+    assert len(actual) == len(expected), "decision count"
+    for i, ((plan_a, state_a), (plan_e, state_e)) in enumerate(zip(actual, expected, strict=True)):
+        assert canon(plan_a) == canon(plan_e), f"plan of decision {i}"
+        assert canon(state_a) == canon(state_e), f"state of decision {i}"
+
+
+def _leaf_paths(value: Any, path: tuple[Any, ...] = ()) -> Iterator[tuple[Any, ...]]:
+    if isinstance(value, dict):
+        for key in value:
+            yield from _leaf_paths(value[key], (*path, key))
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            yield from _leaf_paths(item, (*path, i))
+    else:
+        yield path
+
+
+def _tweak(leaf: Any) -> Any:
+    if isinstance(leaf, bool):
+        return not leaf
+    if isinstance(leaf, int):
+        return leaf + 1
+    if isinstance(leaf, str):
+        return leaf + "x"
+    return "x"
+
+
+def mutants(value: Any) -> Iterator[Any]:
+    """Every single-leaf change of ``value``, plus every list shortened by its last item."""
+    for path in _leaf_paths(value):
+        clone = copy.deepcopy(value)
+        node = clone
+        for key in path[:-1]:
+            node = node[key]
+        if path:
+            node[path[-1]] = _tweak(node[path[-1]])
+            yield clone
+
+    def lists(node: Any, path: tuple[Any, ...]) -> Iterator[tuple[Any, ...]]:
+        if isinstance(node, list):
+            if node:
+                yield path
+            for i, item in enumerate(node):
+                yield from lists(item, (*path, i))
+        elif isinstance(node, dict):
+            for key, item in node.items():
+                yield from lists(item, (*path, key))
+
+    for path in lists(value, ()):
+        clone = copy.deepcopy(value)
+        node = clone
+        for key in path:
+            node = node[key]
+        node.pop()
+        yield clone
+
+
+def bfs_distances(passable: set[Pos], start: Pos) -> dict[Pos, int]:
+    """Independent unit-cost BFS in N, E, S, W order (the test's oracle for §2 ``d``)."""
+    dist = {start: 0}
+    queue = deque([start])
+    while queue:
+        x, y = queue.popleft()
+        for n in ((x, y - 1), (x + 1, y), (x, y + 1), (x - 1, y)):
+            if n in passable and n not in dist:
+                dist[n] = dist[(x, y)] + 1
+                queue.append(n)
+    return dist
+
+
+def frontier_distances(
+    explored: set[Pos], passable: set[Pos], start: Pos, width: int, height: int
+) -> dict[Pos, int]:
+    """§2 frontier tiles with their distance, from the oracle BFS."""
+    dist = bfs_distances(passable, start)
+    out: dict[Pos, int] = {}
+    for x in range(width):
+        for y in range(height):
+            if (x, y) in explored:
+                continue
+            near = [
+                dist[n]
+                for n in ((x, y - 1), (x + 1, y), (x, y + 1), (x - 1, y))
+                if n in passable and n in dist
+            ]
+            if near:
+                out[(x, y)] = 1 + min(near)
+    return out

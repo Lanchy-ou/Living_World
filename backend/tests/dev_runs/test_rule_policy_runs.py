@@ -41,9 +41,11 @@ S1 = ROOT / "content" / "scenarios" / "s1-spring-visible" / "orig.toml"
 DEFAULT = ROOT / "content" / "worlds" / "default.toml"
 
 
-def cli(*args: str) -> subprocess.CompletedProcess[str]:
+def cli(peak: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run the CLI in-process via ``peak_cli.py``, which writes back-off peaks to ``peak``."""
+    peak.parent.mkdir(parents=True, exist_ok=True)
     return subprocess.run(
-        [sys.executable, "-m", "living_island", *args],
+        [sys.executable, str(Path(__file__).with_name("peak_cli.py")), str(peak), *args],
         cwd=BACKEND,
         capture_output=True,
         text=True,
@@ -53,7 +55,9 @@ def cli(*args: str) -> subprocess.CompletedProcess[str]:
 
 def run_case(config: Path, seed: int, out: Path, ticks: int = 1008) -> dict[str, object]:
     started = time.monotonic()
+    peak_file = out.parent.parent / "peaks" / f"{out.parent.name}-s{seed}.json"
     done = cli(
+        peak_file,
         "run", "--config", str(config), "--ticks", str(ticks), "--seed", str(seed),
         "--policy", "rule-based", "--out", str(out), "--export-replay",
     )  # fmt: skip
@@ -70,8 +74,27 @@ def run_case(config: Path, seed: int, out: Path, ticks: int = 1008) -> dict[str,
         alive={r["id"]: r["alive"] for r in world["residents"]},
         substituted=sum(1 for r in records if r["substituted"]),
         decisions=len(records),
+        peak_backoff=json.loads(peak_file.read_text(encoding="utf-8")),
     )
     return result
+
+
+def _peaks(rows: list[dict[str, object]], kind: str) -> int:
+    values = [
+        counts[kind]
+        for row in rows
+        for counts in row.get("peak_backoff", {}).values()  # type: ignore[attr-defined]
+    ]
+    return max(values, default=0)
+
+
+def peak_local(rows: list[dict[str, object]]) -> int:
+    """Largest number of local back-off entries any resident held after any decision."""
+    return _peaks(rows, "local")
+
+
+def peak_failure(rows: list[dict[str, object]]) -> int:
+    return _peaks(rows, "failure")
 
 
 def tree_tiles(config: Path) -> dict[str, tuple[int, int]]:
@@ -90,7 +113,13 @@ def test_s1_twenty_development_seeds():
             pool.map(lambda seed: run_case(S1, seed, OUT / "s1" / f"s{seed}"), DEVELOPMENT_SEEDS)
         )
     total = round(time.monotonic() - started, 1)
-    summary = {"workers": WORKERS, "total_wall_s": total, "cases": rows}
+    summary = {
+        "workers": WORKERS,
+        "total_wall_s": total,
+        "max_peak_local_backoff": peak_local(rows),
+        "max_peak_failure_backoff": peak_failure(rows),
+        "cases": rows,
+    }
     (OUT / "s1-summary.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     print(json.dumps(summary, indent=1))
     failures = [
@@ -102,6 +131,7 @@ def test_s1_twenty_development_seeds():
         or r.get("substituted") != 0
     ]
     assert failures == []
+    assert peak_local(rows) <= 64  # OQ-064 local entry limit
     trees = tree_tiles(S1)
     for row in rows:
         assert no_repeat_violations(OUT / "s1" / f"s{row['seed']}", trees) == []
@@ -112,8 +142,13 @@ def test_s2_no_repeat_on_development_seeds():
     seeds = DEVELOPMENT_SEEDS[: int(os.environ.get("P2_S2_SEEDS", "4"))]
     with ThreadPoolExecutor(WORKERS) as pool:
         rows = list(pool.map(lambda seed: run_case(DEFAULT, seed, OUT / "s2" / f"s{seed}"), seeds))
-    (OUT / "s2-summary.json").write_text(json.dumps(rows, indent=1), encoding="utf-8")
-    print(json.dumps(rows, indent=1))
+    summary = {
+        "max_peak_local_backoff": peak_local(rows),
+        "max_peak_failure_backoff": peak_failure(rows),
+        "cases": rows,
+    }
+    (OUT / "s2-summary.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
+    print(json.dumps(summary, indent=1))
     trees = tree_tiles(DEFAULT)
     for row in rows:
         assert row["exit"] == 0, row
@@ -125,6 +160,7 @@ def test_rule_run_resume_and_reexecute():
     base = OUT / "resume"
     source = base / "source"
     done = cli(
+        base / "peaks" / "source.json",
         "run", "--config", str(DEFAULT), "--ticks", "432", "--seed", "937154673",
         "--policy", "rule-based", "--out", str(source), "--checkpoint-every", "144",
     )  # fmt: skip
@@ -139,6 +175,7 @@ def test_rule_run_resume_and_reexecute():
     assert populated, "no rule state at the boundary"
     resumed = base / "resumed"
     done = cli(
+        base / "peaks" / "resume.json",
         "resume", "--checkpoint", str(source / "checkpoint-0000000144.json"),
         "--source-run", str(source), "--ticks", "288", "--out", str(resumed),
     )  # fmt: skip
@@ -152,7 +189,14 @@ def test_rule_run_resume_and_reexecute():
     name = "checkpoint-0000000432.json"
     assert (resumed / name).read_bytes() == (source / name).read_bytes(), name
     again = base / "reexecuted"
-    done = cli("reexecute", "--source-run", str(source), "--out", str(again))
+    done = cli(
+        base / "peaks" / "reexec.json",
+        "reexecute",
+        "--source-run",
+        str(source),
+        "--out",
+        str(again),
+    )
     assert done.returncode == 0, done.stderr
     assert (again / "events.jsonl").read_bytes() == (source / "events.jsonl").read_bytes()
     assert (again / "decisions.jsonl").read_bytes() == (source / "decisions.jsonl").read_bytes()

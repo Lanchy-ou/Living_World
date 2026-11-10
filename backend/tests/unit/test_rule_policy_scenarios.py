@@ -15,12 +15,17 @@ from rule_policy_builders import (
     failed,
     ground_canteen,
     make_policy,
+    mutants,
     params,
     perception,
+    plan_obj,
+    ref,
     resident,
+    state_obj,
     step,
     tile_t,
     tiles,
+    verify,
 )
 from rule_policy_checks import no_repeat_violations
 from test_sim_runtime import ROWS, WaitPolicy
@@ -78,8 +83,10 @@ class Injected(RuleBasedPolicy):
     def __init__(self, cfg: PolicyConfig, first: list[IntentTemplate], refs: list[IssuedIntent]):
         super().__init__(cfg)
         self._first, self._refs = first, refs
+        self.packets: dict[int, Any] = {}  # decision tick -> the perception it decided on
 
     def decide(self, request: Any) -> OkOutcome:
+        self.packets[request.tick] = request.context.perception
         outcome = super().decide(request)
         if request.decision_ordinal != 0:
             return outcome
@@ -121,58 +128,183 @@ def committed(runtime: Runtime) -> dict[str, Any]:
     return runtime.export_state().policy_state  # type: ignore[return-value]
 
 
-CUE = {"cue_id": "moss_east_01", "position": {"x": 15, "y": 32}}
+NEAR_EAST = ("moss_east_01", "near", "east")
+DISTANT = ("moss_east_01", "distant", None)
 
 
-@pytest.mark.parametrize(
-    ("target", "triggers"),
-    [((21, 32), {"ACTION_INTERRUPTED", "NEW_SIGHT"}), ((16, 32), {"NEW_SIGHT", "PLAN_FINISHED"})],
-    ids=["dv11a-interrupted-move", "dv11b-completed-move"],
-)
-def test_dv11_decision_captures_near_cue_direction(target, triggers):
+def _impression(detail: str = "near", direction: str | None = "east") -> dict[str, Any]:
+    return {
+        "cue_id": "moss_east_01",
+        "position": {"x": 15, "y": 32},
+        "detail_level": detail,
+        "direction": direction,
+    }
+
+
+def _cues(perception: Any) -> list[tuple[str, str, str | None]]:
+    return [(c.cue_id, c.detail_level, c.direction) for c in perception.environmental_cues]
+
+
+def _record_pair(runtime: Runtime, record: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    return record.plan.model_dump(mode="json"), committed(runtime)
+
+
+def _tile_move(actor: str, ordinal: int, x: int, y: int, tick: int):
+    return plan_obj(tick, ordinal, [("move_to", tile_t(x, y), {})], actor=actor)
+
+
+def _assert_whole_objects_and_rejections(steps: Any, expected: Any) -> None:
+    verify(steps, expected)
+    for i, (plan, state) in enumerate(expected):
+        for wrong in mutants(plan):
+            with pytest.raises(AssertionError, match=f"plan of decision {i}"):
+                verify(steps, [*expected[:i], (wrong, state), *expected[i + 1 :]])
+        for wrong in mutants(state):
+            with pytest.raises(AssertionError, match=f"state of decision {i}"):
+                verify(steps, [*expected[:i], (plan, wrong), *expected[i + 1 :]])
+
+
+# DV-11 expectations. The tick-0 plan is injected; the tick-1 plan is the rule policy's own
+# (R8b tree stand, which precedes exploration). Both are pinned as whole objects.
+DV11 = {
+    "dv11a-interrupted-move": dict(
+        target=(21, 32),
+        triggers={"ACTION_INTERRUPTED", "NEW_SIGHT"},
+        position=(20, 32),
+        expected=[
+            (
+                _tile_move("ella", 0, 21, 32, 0),
+                state_obj(
+                    issued_intents=[ref(0, 0, "move_to", tile_t(21, 32), "ella")],
+                    cue_impressions=[_impression("distant", None)],
+                ),
+            ),
+            (
+                _tile_move("ella", 1, 17, 36, 1),
+                state_obj(
+                    commitment={"goal": "tree", "target": {"x": 17, "y": 36}, "set_at_tick": 1},
+                    issued_intents=[ref(1, 0, "move_to", tile_t(17, 36), "ella")],
+                    cue_impressions=[_impression()],
+                ),
+            ),
+        ],
+    ),
+    "dv11b-completed-move": dict(
+        target=(16, 32),
+        triggers={"NEW_SIGHT", "PLAN_FINISHED"},
+        position=(16, 32),
+        expected=[
+            (
+                _tile_move("ella", 0, 16, 32, 0),
+                state_obj(
+                    issued_intents=[ref(0, 0, "move_to", tile_t(16, 32), "ella")],
+                    cue_impressions=[_impression("distant", None)],
+                ),
+            ),
+            (
+                _tile_move("ella", 1, 16, 35, 1),
+                state_obj(
+                    commitment={"goal": "tree", "target": {"x": 16, "y": 35}, "set_at_tick": 1},
+                    issued_intents=[ref(1, 0, "move_to", tile_t(16, 35), "ella")],
+                    cue_impressions=[_impression()],
+                ),
+            ),
+        ],
+    ),
+}
+
+
+def run_dv11(case: dict[str, Any]):
+    target = case["target"]
     content = default_content()
     cfg = policy_config(content)
-    ella = Injected(cfg, [move_template(*target)], [])
-    ella._refs = [
+    refs = [
         IssuedIntent(
             intent_id="ella:p000000:i0",
             action_type="move_to",
             target=TileTarget(kind="tile", position=Coord(x=target[0], y=target[1])),
         )
     ]
+    ella = Injected(cfg, [move_template(*target)], refs)
     loop, runtimes = build_loop(content, {"ella": ella}, cfg)
-    _, record = advance_until(loop, "ella", 1)
-    assert record.tick == 1
-    assert set(record.triggers) == triggers
-    saved = committed(runtimes["ella"])
-    assert saved["cue_impressions"] == [{**CUE, "detail_level": "near", "direction": "east"}]
+    steps = []
+    triggers: dict[int, Any] = {}
+    for _ in range(40):
+        _, records = loop.advance()
+        for record in records:
+            if record.actor_id == "ella":
+                steps.append(_record_pair(runtimes["ella"], record))
+                triggers[record.tick] = set(record.triggers)
+        if len(steps) == 2:
+            break
+    return steps, triggers, {t: _cues(p) for t, p in ella.packets.items()}, ella.packets[1]
 
 
-def test_dv10_decision_only_capture_loses_a_cue_seen_during_rest():
-    content = variant(
+@pytest.mark.parametrize("name", sorted(DV11))
+def test_dv11_decision_captures_near_cue_direction(name):
+    case = DV11[name]
+    steps, triggers, packet_cues, packet = run_dv11(case)
+    assert triggers[1] == case["triggers"]
+    assert (packet.own_position.x, packet.own_position.y) == case["position"]
+    assert packet_cues == {0: [DISTANT], 1: [NEAR_EAST]}  # the cue is in the decision packet
+    _assert_whole_objects_and_rejections(steps, case["expected"])
+
+
+def dv10_content() -> WorldContent:
+    return variant(
         {"mia": (14, 32)},
         time={"start_hour": 5, "day_start_hour": 6, "day_end_hour": 7},
         perception={"night_radius_tiles": 0, "cue_detail_radius_tiles": 1},
         actions={"rest_ticks": 20},
     )
+
+
+DV10_EXPECTED = [
+    (
+        plan_obj(0, 0, [("rest", None, {})], actor="mia"),
+        state_obj(issued_intents=[ref(0, 0, "rest", None, "mia")]),
+    ),
+    (
+        _tile_move("mia", 1, 16, 35, 20),
+        state_obj(
+            commitment={"goal": "tree", "target": {"x": 16, "y": 35}, "set_at_tick": 20},
+            issued_intents=[ref(1, 0, "move_to", tile_t(16, 35), "mia")],
+            cue_impressions=[],
+        ),
+    ),
+]
+
+
+def run_dv10():
+    content = dv10_content()
     cfg = policy_config(content)
     rest = IntentTemplate(
         action_type="rest", target=None, parameters=EmptyParameters(), reason=None
     )
-    mia = Injected(
-        cfg,
-        [rest],
-        [IssuedIntent(intent_id="mia:p000000:i0", action_type="rest", target=None)],
-    )
+    refs = [IssuedIntent(intent_id="mia:p000000:i0", action_type="rest", target=None)]
+    mia = Injected(cfg, [rest], refs)
     loop, runtimes = build_loop(content, {"mia": mia}, cfg)
-    seen: dict[int, list[str]] = {}
+    steps = []
+    delivered: dict[int, Any] = {}
     for _ in range(21):
-        _, records = loop.advance()
-        for record in records:
-            if record.actor_id == "mia":
-                seen[record.tick] = list(record.triggers)
-    assert sorted(seen) == [0, 20]  # the rest runs undisturbed from tick 0 to tick 20
-    assert committed(runtimes["mia"])["cue_impressions"] == []
+        commit, records = loop.advance()
+        for delivery in commit.pending_deliveries:
+            if delivery.actor_id == "mia":
+                delivered[delivery.perception.tick] = _cues(delivery.perception)
+        steps += [_record_pair(runtimes["mia"], r) for r in records if r.actor_id == "mia"]
+    return steps, delivered, {t: _cues(p) for t, p in mia.packets.items()}
+
+
+def test_dv10_decision_only_capture_loses_a_cue_seen_during_rest():
+    steps, delivered, decided = run_dv10()
+    # Tick 6 (06:00, daylight): the packet carries the cue and NEW_SIGHT, but Mia only rests.
+    assert all(delivered[t] == [NEAR_EAST] for t in range(6, 12))
+    assert all(delivered[t] == [] for t in [*range(1, 6), *range(12, 21)])
+    assert sorted(decided) == [0, 20]  # no decision between tick 0 and tick 20
+    # The decision at tick 20 gets a packet without the cue: the loss is expected.
+    assert decided == {0: [], 20: []}
+    assert steps[1][1]["cue_impressions"] == []
+    _assert_whole_objects_and_rejections(steps, DV10_EXPECTED)
 
 
 # --- canteen: drink, fill (probe outcomes) and give in the engine --------------------------
