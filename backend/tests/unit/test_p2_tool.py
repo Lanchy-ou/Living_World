@@ -872,3 +872,59 @@ def test_the_round_gate_takes_the_development_seed_list() -> None:
         gate = done["s2-default.orig"][f"paired_base_vs_{variant}"]
         assert gate["technical"] == "FAIL" and gate["pairs_used"] == 0
         assert len(gate["missing_cases"]) == 2 * 20  # every development case is missing
+
+
+def _treatment_fails(intact: bool) -> Any:
+    """A runner whose two treatment arms exit 1, with intact artifacts or no directory at all."""
+
+    def runner(args: Any, repo: Path) -> Any:
+        treatment = "--rule-canteen" in args or "--rule-cue" in args
+        if treatment and not intact:
+            return tool.CliResult(1, "stub: nothing ran")
+        done = inprocess(args, repo)
+        return tool.CliResult(1 if treatment else done.returncode, done.output)
+
+    return runner
+
+
+@pytest.mark.parametrize("intact", [True, False], ids=["intact-artifacts", "no-directory"])
+def test_batch_and_standalone_report_give_the_same_paired_rounds(
+    tmp_path: Path, intact: bool
+) -> None:
+    """G2-R3-01: failed treatment arms keep their paired FAIL rows after a standalone report."""
+    repo, commit = make_repo(tmp_path)
+    seed = tool.DEVELOPMENT_SEEDS[0]
+    variants = ("base", "cue-ignored", "canteen-restricted")
+    specs = [tool.CaseSpec("s2-default", "orig", v) for v in variants]
+    tool.run_batch(
+        "arms",
+        [seed],
+        specs,
+        repo=repo,
+        runner=_treatment_fails(intact),
+        registry=registry_for(commit),
+    )
+    batch = repo / "runs" / "p2" / "arms"
+    comparisons = batch / "summary" / "comparisons.json"
+    from_batch = json.loads(comparisons.read_text(encoding="utf-8"))
+    base_id = f"s2-default.orig.base.s{seed}"
+    assert sorted(p.name for p in (batch / "manifests").glob("*.json")) == [f"{base_id}.json"]
+    rows = from_batch["s2-default.orig"]
+    for variant in ("cue-ignored", "canteen-restricted"):
+        case_id = f"s2-default.orig.{variant}.s{seed}"
+        paired = rows[f"paired_base_vs_{variant}"]
+        assert paired["technical"] == "FAIL" and paired["pairs_used"] == 0
+        gap = {"seed": seed, "arm": "treatment"}
+        if intact:
+            assert paired["invalid_cases"] == [case_id] and gap not in paired["missing_cases"]
+        else:
+            assert paired["invalid_cases"] == [] and gap in paired["missing_cases"]
+        assert len(paired["missing_cases"]) >= 2 * 19  # the other development seeds
+    comparisons.unlink()
+    report = tool.run_report("arms", repo=repo)
+    assert json.loads(comparisons.read_text(encoding="utf-8")) == from_batch
+    if intact:
+        treatments = sorted(f"s2-default.orig.{v}.s{seed}" for v in variants[1:])
+        assert report["invalid"] == treatments
+    else:
+        assert report["invalid"] == [] and report["missing"] == []

@@ -30,6 +30,7 @@ from typing import Any
 from living_island.agents.types import PolicyConfig, RuleParams
 from living_island.analysis.canon import canonical_bytes_of_data, canonical_sha256
 from living_island.analysis.compare import (
+    DIRECTION,
     S4_SCALARS,
     S5_SCALARS,
     RunSummary,
@@ -670,11 +671,10 @@ def run_batch(
         if done.returncode != 0:
             # §0, §4 check 1: a manifest exists only after the CLI exits 0. The exit status is
             # kept nowhere; the case directory without a manifest is what later commands see.
-            record = metric_record(loaded)
-            records[case_id] = record
+            records[case_id] = metric_record(loaded)
             result.invalid.append(case_id)
-            if loaded.data is not None:
-                summaries.append((spec, summarize_run_of(loaded, case_id, seed, record)))
+            if run_dir.is_dir():
+                summaries.append((spec, summarize_run_of(loaded, case_id, seed, False, None)))
             continue
         try:
             tick0 = loaded.inputs.tick0
@@ -693,6 +693,8 @@ def run_batch(
             )
         except Refusal as refusal:
             result.failures.append({"case_id": case_id, "refusal": str(refusal)})
+            if run_dir.is_dir():  # no manifest: report sees an invalid case of this arm
+                summaries.append((spec, summarize_run_of(loaded, case_id, seed, False, None)))
             continue
         write_batch_file(
             batch_dir, f"manifests/{case_id}.json", json_text(manifest.model_dump(mode="json"))
@@ -702,8 +704,14 @@ def run_batch(
         records[case_id] = record
         if not record["valid"]:
             result.invalid.append(case_id)
-        if loaded.data is not None:
-            summaries.append((spec, summarize_run_of(loaded, case_id, seed, record)))
+        summaries.append(
+            (
+                spec,
+                summarize_run_of(
+                    loaded, case_id, seed, bool(record["valid"]), record["death_categories"]
+                ),
+            )
+        )
     write_summaries(batch_dir, result.manifests, records, summaries)
     if result.failures:
         write_batch_file(batch_dir, "summary/failures.json", json_text(result.failures))
@@ -711,16 +719,34 @@ def run_batch(
 
 
 def summarize_run_of(
-    loaded: LoadedCase, case_id: str, seed: int, record: dict[str, Any]
+    loaded: LoadedCase, case_id: str, seed: int, valid: bool, categories: dict[str, str] | None
 ) -> RunSummary:
-    assert loaded.data is not None
-    return summarize_run(
-        case_id,
-        seed,
-        bool(record["valid"]),
-        compute_run(loaded.data),
-        record["death_categories"] or {},
-    )
+    """The comparison summary of one existing case directory; an unreadable one is invalid."""
+    if loaded.data is None:
+        return RunSummary(
+            case_id=case_id,
+            seed=seed,
+            valid=False,
+            final_tick=0,
+            scalars=dict.fromkeys(DIRECTION, 0),
+            access={},
+            residents=(),
+            deaths_by_holder={"holder_at_death": 0, "nonholder_at_death": 0},
+            death_categories={},
+            evidence={"c1": [], "a1": [], "a2": []},
+            signature={},
+        )
+    return summarize_run(case_id, seed, valid, compute_run(loaded.data), categories or {})
+
+
+def parse_case_id(case_id: str) -> tuple[CaseSpec, int] | None:
+    """Invert ``<scenario_id>.<revision_label>.<variant_id>.s<seed>`` (§6 case directory name)."""
+    parts = case_id.split(".")
+    if len(parts) != 4 or not parts[3].startswith("s") or not parts[3][1:].isdigit():
+        return None
+    if not all(parts[:3]):
+        return None
+    return CaseSpec(parts[0], parts[1], parts[2]), int(parts[3][1:])
 
 
 def canonical_bytes_text(value: Mapping[str, Any]) -> str:
@@ -739,8 +765,8 @@ def write_summaries(
     records: Mapping[str, dict[str, Any]],
     summaries: Sequence[tuple[CaseSpec, RunSummary]],
 ) -> None:
-    for case_id, record in records.items():
-        write_batch_file(batch_dir, f"summary/metrics/{case_id}.json", json_text(record))
+    for case_id, metrics in records.items():
+        write_batch_file(batch_dir, f"summary/metrics/{case_id}.json", json_text(metrics))
     scalar_names = list(S4_SCALARS)
     lines = []
     for manifest in sorted(manifests, key=lambda m: m.case_id):
@@ -793,10 +819,10 @@ def build_comparisons(summaries: Sequence[tuple[CaseSpec, RunSummary]]) -> dict[
             "arms": {v: arm_report(list(cases.values())) for v, cases in sorted(by_variant.items())}
         }
         for treatment, scalars in (("canteen-restricted", S4_SCALARS), ("cue-ignored", S5_SCALARS)):
-            if "base" in by_variant and treatment in by_variant:
+            if "base" in by_variant or treatment in by_variant:
                 entry[f"paired_base_vs_{treatment}"] = paired_report(
-                    by_variant["base"],
-                    by_variant[treatment],
+                    by_variant.get("base", {}),
+                    by_variant.get(treatment, {}),
                     scalars,
                     expected_seeds=DEVELOPMENT_SEEDS,
                 )
@@ -862,17 +888,27 @@ def run_report(batch_id: str, *, repo: Path = ROOT) -> dict[str, Any]:
         )
         record = metric_record(loaded)
         records[manifest.case_id] = record
-        if loaded.data is not None:
-            spec = CaseSpec(
-                manifest.scenario_id, manifest.revision_label, manifest.policy_variant_id
+        spec = CaseSpec(manifest.scenario_id, manifest.revision_label, manifest.policy_variant_id)
+        summaries.append(
+            (
+                spec,
+                summarize_run_of(
+                    loaded,
+                    manifest.case_id,
+                    manifest.seed,
+                    bool(record["valid"]),
+                    record["death_categories"],
+                ),
             )
-            summaries.append(
-                (spec, summarize_run_of(loaded, manifest.case_id, manifest.seed, record))
-            )
-    for case_id in unpublished:
-        records[case_id] = metric_record(
-            load_case(batch_dir / "cases" / case_id, cli_exit_code=None)
         )
+    for case_id in unpublished:
+        loaded = load_case(batch_dir / "cases" / case_id, cli_exit_code=None)
+        records[case_id] = metric_record(loaded)
+        identity = parse_case_id(case_id)  # the §6 directory name names the arm and the seed
+        if identity is not None:
+            summaries.append(
+                (identity[0], summarize_run_of(loaded, case_id, identity[1], False, None))
+            )
     write_summaries(batch_dir, manifests, records, summaries)
     return {
         "cases": len(manifests) + len(unpublished),
