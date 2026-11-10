@@ -22,7 +22,7 @@ export function EventList({ store }: { store: ReplayStore }) {
   const selected = bundle.events.find((e) => e.event_id === selectedEventId) ?? null;
 
   return (
-    <section className="panel events" aria-label="Events">
+    <section className="events" aria-label="Events">
       <h2>
         Events ({events.length}
         {events.length === bundle.events.length ? "" : ` of ${bundle.events.length}`})
@@ -52,9 +52,11 @@ export function EventList({ store }: { store: ReplayStore }) {
           Failures and interruptions only
         </label>
       </div>
+      <div className="events-body">
       {events.length === 0 ? (
         <p>No events match.</p>
       ) : (
+        <div>
         <table>
           <thead>
             <tr>
@@ -92,14 +94,20 @@ export function EventList({ store }: { store: ReplayStore }) {
             })}
           </tbody>
         </table>
+        {events.length > shown.length && (
+          <p className="hint">
+            Showing {shown.length} of {events.length} events around tick {currentTick}; seek or filter
+            to see others.
+          </p>
+        )}
+        </div>
       )}
-      {events.length > shown.length && (
-        <p className="hint">
-          Showing {shown.length} of {events.length} events around tick {currentTick}; seek or filter
-          to see others.
-        </p>
+      {selected !== null ? (
+        <RawEvent event={selected} />
+      ) : (
+        <p className="hint">Select an event to jump to its tick and see its raw JSON.</p>
       )}
-      {selected !== null && <RawEvent event={selected} />}
+      </div>
     </section>
   );
 }

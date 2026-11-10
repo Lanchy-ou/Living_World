@@ -13,7 +13,7 @@ import {
   tileToScreen,
 } from "../src/render/camera.ts";
 import { computeSprites, drawFrame } from "../src/render/drawFrame.ts";
-import { residentStyle } from "../src/render/theme.ts";
+import { NIGHT_OVERLAY, residentStyle } from "../src/render/theme.ts";
 import { eventInvolvesResident, failureCode, filterEvents, isFailureEvent, summarize } from "../src/panels/eventView.ts";
 import { residentView } from "../src/panels/residentView.ts";
 import { resourcesView } from "../src/panels/resourcesView.ts";
@@ -295,31 +295,40 @@ test("FE-T10: fit-to-view uses min(width/map.width, height/map.height) and zoom 
   const map = { width: 12, height: 8 };
   assert.equal(baseTileSize(VIEW, map), Math.min(600 / 12, 400 / 8));
   const l1 = layoutFor(VIEW, map, { zoom: 1, panX: 0, panY: 0, follow: false });
-  const l2 = layoutFor(VIEW, map, { zoom: 2, panX: 0, panY: 0, follow: false });
-  assert.equal(l2.tile, l1.tile * 2);
+  const l2 = layoutFor(VIEW, map, { zoom: 1.5, panX: 0, panY: 0, follow: false });
+  assert.equal(l2.tile, l1.tile * 1.5);
   assert.equal(panNeeded(VIEW, map, 1), false);
   assert.equal(panNeeded(VIEW, map, 4), true);
   // content smaller than the view is centred; the whole map is visible at fit
   assert.ok(l1.offsetX >= 0 && l1.offsetY >= 0);
   assert.ok(l1.offsetX + 12 * l1.tile <= VIEW.width + 1e-9);
+  assert.ok(Math.abs(l1.offsetY + 4 * l1.tile - VIEW.height / 2) < 1e-9, "pan (0, 0) centres the map");
 });
 
 test("FE-T10: drag-pan is clamped to the content bounds, never to entity positions", () => {
   const map = { width: 12, height: 8 };
-  const cam = { zoom: 4, panX: 0, panY: 0, follow: false };
+  const cam = { zoom: 1.8, panX: 0, panY: 0, follow: false };
+  // The map always covers the centre of the view, so it can never be dragged out of sight.
   const far = dragPan(VIEW, map, cam, -100000, -100000);
   const layout = layoutFor(VIEW, map, { ...cam, ...far });
-  assert.ok(layout.offsetX + map.width * layout.tile >= VIEW.width - 1e-9);
-  assert.ok(layout.offsetY + map.height * layout.tile >= VIEW.height - 1e-9);
+  assert.ok(Math.abs(layout.offsetX + map.width * layout.tile - VIEW.width / 2) < 1e-6);
+  assert.ok(Math.abs(layout.offsetY + map.height * layout.tile - VIEW.height / 2) < 1e-6);
   const back = dragPan(VIEW, map, { ...cam, ...far }, 100000, 100000);
   const l2 = layoutFor(VIEW, map, { ...cam, ...back });
-  assert.ok(l2.offsetX <= 0 && l2.offsetY <= 0);
-  // follow: the followed tile ends up as centred as the clamp allows
-  const layoutNow = layoutFor(VIEW, map, cam);
-  const [px, py] = panToCentre(VIEW, layoutNow.tile, 6, 4);
-  const followed = layoutFor(VIEW, map, { ...cam, panX: px, panY: py });
-  const at = tileToScreen(followed, 6, 4);
-  assert.ok(Math.abs(at.left + followed.tile / 2 - VIEW.width / 2) < 1e-6);
+  assert.ok(Math.abs(l2.offsetX - VIEW.width / 2) < 1e-6 && Math.abs(l2.offsetY - VIEW.height / 2) < 1e-6);
+  // an ordinary drag moves the camera by exactly the drag distance
+  const start = layoutFor(VIEW, map, cam);
+  const moved = layoutFor(VIEW, map, { ...cam, ...dragPan(VIEW, map, cam, -30, 12) });
+  assert.ok(Math.abs(moved.offsetX - (start.offsetX - 30)) < 1e-6);
+  assert.ok(Math.abs(moved.offsetY - (start.offsetY + 12)) < 1e-6);
+  // follow: any tile, including a corner tile, can be centred in the view
+  for (const [x, y] of [[6, 4], [0, 0], [11, 7]]) {
+    const [px, py] = panToCentre(map, start.tile, x, y);
+    const followed = layoutFor(VIEW, map, { ...cam, panX: px, panY: py });
+    const at = tileToScreen(followed, x, y);
+    assert.ok(Math.abs(at.left + followed.tile / 2 - VIEW.width / 2) < 1e-6, `tile ${x},${y} x`);
+    assert.ok(Math.abs(at.top + followed.tile / 2 - VIEW.height / 2) < 1e-6, `tile ${x},${y} y`);
+  }
 });
 
 test("clock: tick / Day d / HH:MM follow the replay-frontend 4.2 formulas", () => {
@@ -356,8 +365,9 @@ test("drawing reads only the current frame and a fake canvas; night shading foll
   const nightCalls = [];
   const nightCtx = new Proxy({}, { get: (_, n) => (...a) => nightCalls.push([n, ...a]), set: (_, n, v) => (nightCalls.push(["set", n, v]), true) });
   drawFrame(nightCtx, night, frameAt(night, 0), layout, VIEW, { selectedResidentId: null });
-  assert.ok(nightCalls.some((c) => c[0] === "set" && c[1] === "fillStyle" && String(c[2]).startsWith("rgba(10")));
-  assert.ok(!calls.some((c) => c[0] === "set" && c[1] === "fillStyle" && String(c[2]).startsWith("rgba(10")));
+  const isNightFill = (c) => c[0] === "set" && c[1] === "fillStyle" && c[2] === NIGHT_OVERLAY;
+  assert.ok(nightCalls.some(isNightFill));
+  assert.ok(!calls.some(isNightFill));
 });
 
 test("resources panel shows empty states and lists every object on a tile", () => {

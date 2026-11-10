@@ -8,10 +8,23 @@ const TITLES: Record<ReplayError["kind"], string> = {
   cross_field: "Cross-field validation failed",
 };
 
-export function ErrorDetails({ error, fileName }: { error: ReplayError; fileName: string | null }) {
+interface Props {
+  error: ReplayError;
+  fileName: string | null;
+  onDismiss?: () => void;
+}
+
+export function ErrorDetails({ error, fileName, onDismiss }: Props) {
   return (
     <section className="error" role="alert" aria-label="Validation error">
-      <h2>File refused: {TITLES[error.kind]}</h2>
+      <div className="error-head">
+        <h2>File refused: {TITLES[error.kind]}</h2>
+        {onDismiss !== undefined && (
+          <button type="button" className="text-button" onClick={onDismiss}>
+            Dismiss
+          </button>
+        )}
+      </div>
       {fileName !== null && <p>File: {fileName}</p>}
       <p>{error.message}</p>
       {error.rule !== undefined && <p>Rule: {error.rule}</p>}

@@ -5,14 +5,16 @@ import type { DisplayFrame, ReplayBundle, WorldEvent } from "./types.ts";
 
 export const SPEEDS = [1, 2, 4, 8, 16] as const;
 export type Speed = (typeof SPEEDS)[number];
-export const ZOOMS = [1, 2, 4] as const;
-export type Zoom = (typeof ZOOMS)[number];
+/** Zoom 1 is "view entire island" (fit to view). The upper limit depends on the viewport. */
+export const FIT_ZOOM = 1;
 
 export interface Camera {
-  zoom: Zoom;
-  /** Pan offset in screen pixels, applied after the fit-to-view layout. */
+  /** Multiplier over the fit-to-view tile size, >= 1. Clamped by the camera layout. */
+  zoom: number;
+  /** Screen-pixel offset of the map centre from the viewport centre; (0, 0) is centred. */
   panX: number;
   panY: number;
+  /** Optional: keep the selected resident centred. Off unless the user turns it on. */
   follow: boolean;
 }
 
@@ -89,13 +91,12 @@ export class ReplayStore {
     for (const l of this.listeners) l();
   }
 
-  /** A newly loaded bundle starts at tick 0, paused. Residents are declared, so select the first. */
+  /** A newly loaded bundle starts at tick 0, paused, with the whole island in view and nobody selected. */
   load(bundle: ReplayBundle, fileName: string | null = null): void {
     this.state = {
       ...initialState(),
       bundle,
       fileName,
-      selectedResidentId: bundle.residents[0]?.id ?? null,
       speed: this.state.speed,
     };
     for (const l of this.listeners) l();
@@ -136,6 +137,7 @@ export class ReplayStore {
     this.set({ speed });
   }
 
+  /** Selecting only changes the selection: it never moves the camera and never pauses playback. */
   selectResident(id: string | null): void {
     this.set({ selectedResidentId: id });
   }

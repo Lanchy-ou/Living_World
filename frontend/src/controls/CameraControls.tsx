@@ -1,34 +1,24 @@
-import { ZOOMS } from "../replay/store.ts";
-import type { ReplayStore, Zoom } from "../replay/store.ts";
-import { useReplayState } from "../replay/useStore.ts";
+import { Icon } from "./icons.tsx";
 
-export function CameraControls({ store }: { store: ReplayStore }) {
-  const { bundle, camera } = useReplayState(store);
-  if (bundle === null) return null;
+interface Props {
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onFit: () => void;
+}
+
+/** Map zoom buttons. They only change the camera; the map component supplies the actions. */
+export function CameraControls({ onZoomIn, onZoomOut, onFit }: Props) {
   return (
-    <section className="camera" aria-label="Camera">
-      <span>Zoom</span>
-      {ZOOMS.map((z) => (
-        <button
-          key={z}
-          type="button"
-          aria-pressed={camera.zoom === z}
-          onClick={() => store.setCamera({ zoom: z as Zoom, panX: 0, panY: 0 })}
-        >
-          ×{z}
-        </button>
-      ))}
-      <button type="button" onClick={() => store.setCamera({ zoom: 1, panX: 0, panY: 0 })}>
-        Fit to view
+    <section className="map-controls" aria-label="Camera">
+      <button type="button" className="icon-button" aria-label="Zoom out" title="Zoom out" onClick={onZoomOut}>
+        <Icon name="minus" />
       </button>
-      <label>
-        <input
-          type="checkbox"
-          checked={camera.follow}
-          onChange={(e) => store.setCamera({ follow: e.target.checked })}
-        />{" "}
-        Follow selected resident
-      </label>
+      <button type="button" className="icon-button" aria-label="Zoom in" title="Zoom in" onClick={onZoomIn}>
+        <Icon name="plus" />
+      </button>
+      <button type="button" className="text-button" title="Show the whole map" onClick={onFit}>
+        <Icon name="fit" /> View entire island
+      </button>
     </section>
   );
 }

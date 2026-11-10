@@ -8,7 +8,7 @@ export function ResourcesPanel({ store }: { store: ReplayStore }) {
   if (bundle === null) return null;
   const view = resourcesView(frameAt(bundle, currentTick));
   return (
-    <section className="panel resources-panel" aria-label="Resources">
+    <section className="resources-panel" aria-label="Resources">
       <h2>Resources at tick {currentTick}</h2>
       <h3>Fruit trees</h3>
       {view.empty.trees ? (
