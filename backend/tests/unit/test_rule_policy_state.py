@@ -172,6 +172,14 @@ def test_rule_state_requires_all_fields_and_no_intents_before_first_decision():
         ResidentRuntimeState.model_validate({**_saved(), "next_decision_ordinal": 0})
 
 
+def _refs(state):
+    return [(r["intent_id"], r["action_type"]) for r in state["issued_intents"]]
+
+
+def _plan_refs(record):
+    return [(i.intent_id, i.action_type) for i in record.plan.intents]
+
+
 def test_rule_policy_commits_only_accepted_plans():
     class RejectSecondPlan(RuleBasedPolicy):
         def decide(self, request):
@@ -190,13 +198,12 @@ def test_rule_policy_commits_only_accepted_plans():
     _, first = loop.advance()
     assert first[0].status == "ok"
     state = runtime.export_state().policy_state
-    assert state["issued_intents"] == [_intent(action_type="wait")]
+    assert _refs(state) == _plan_refs(first[0])
     _, second = loop.advance()
     assert second[0].status == "error"
     assert second[0].substituted
     assert runtime.export_state().policy_state == state
     _, third = loop.advance()
     assert third[0].status == "ok"
-    assert runtime.export_state().policy_state["issued_intents"] == [
-        _intent("ella:p000002:i0", "wait")
-    ]
+    assert _refs(runtime.export_state().policy_state) == _plan_refs(third[0])
+    assert third[0].plan.intents[0].intent_id == "ella:p000002:i0"
