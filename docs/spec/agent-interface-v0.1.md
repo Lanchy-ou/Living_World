@@ -112,7 +112,8 @@ ResidentRuntime {
 
 ```text
 Policy {
-  policy_id: string                               // e.g. "random-v0", "scripted-v0", "recorded-v0"
+  policy_id: string                               // e.g. "random-v0", "scripted-v0", "recorded-v0",
+                                                  // "rule-based-v0" [CR-004]
   decide(request: DecisionRequest) -> DecisionOutcome
   export_state() -> object{}                     // policy-private state for saving; {} if none
 }
@@ -171,12 +172,14 @@ P3 spec; P1 implementers must not invent them.
 
 ```text
 PolicyConfig {
-  policy_id: "random-v0"|"scripted-v0"|"recorded-v0",
+  policy_id: "random-v0"|"scripted-v0"|"recorded-v0"|"rule-based-v0", // [CR-004]
   seed: integer,                       // effective meta.seed, not a hidden RNG stream
   max_plan_actions: integer,           // effective agents.max_plan_actions
   map_width: integer, map_height: integer, // public grid bounds, no terrain/resource contents
   script_sha256: string|null,          // canonical ScriptFixture identity, scripted only
-  source_trace_sha256: string|null     // canonical DecisionTraceManifest identity, recorded only
+  source_trace_sha256: string|null,    // canonical DecisionTraceManifest identity, recorded only
+  rule_params?: RuleParams             // [CR-004] present iff rule-based-v0, absent otherwise;
+                                       // rule-policy-v0.1.md §8
 }
 OwnProfile { profile_id:string,initial_goal:string }
 create_runtime(actor_id:string,policy_config:PolicyConfig,own_profile:OwnProfile,
@@ -196,6 +199,13 @@ Creation starts ordinal/cursor at zero. Restore validates config and actor ident
 restoring counters. PolicyConfig is immutable and saved, so restore cannot silently swap
 the seed, script, recording or policy version. All new P1-only version fields below are
 the literal `"0.1"`; unknown versions are refused without migration.
+
+**[CR-004] Rule lineage on restore.** `rule_params` is omitted from serialization when
+null, so P1 `PolicyConfig` bytes are unchanged; an explicit `"rule_params": null` is
+refused. When a restore has `rule_lineage` (a `rule-based-v0` runtime in the save or in
+an ancestor checkpoint, or a `rule-based-v0` record in the verified decision prefix), the
+restore rules and rejections RJ-1 to RJ-8 of CR-004 (`open-questions.md`, "CR-004")
+apply. Without `rule_lineage`, restore is unchanged.
 
 ## 3. Plans
 
@@ -347,6 +357,10 @@ IntentTemplate { action_type:ActionType,target:ActionTarget,parameters:ActionPar
 - This supplies the P1 recording boundary P3 can extend; it does not implement LLM IO,
   retry or budget handling early.
 
+### 4.4 `RuleBasedPolicy` (`rule-based-v0`) [CR-004]
+
+Specified in `rule-policy-v0.1.md`.
+
 ## 5. Decision records
 
 Each decision appends one canonical JSON line to `runs/<run_id>/decisions.jsonl`, written by
@@ -400,7 +414,8 @@ The `SavePackage.agent_state` (Interface Contract §5) gains one entry per resid
 ResidentRuntimeState {
   actor_id: string, policy_config: PolicyConfig,
   next_decision_ordinal: integer,
-  policy_state: object{},                 // {} for random/recorded; {cursor} for scripted
+  policy_state: object{},                 // {} for random/recorded; {cursor} for scripted;
+                                          // RuleStateV0_1 for rule-based (rule-policy §7) [CR-004]
   latest_perception_tick: integer         // -1 before the first ingest
 }
 ```

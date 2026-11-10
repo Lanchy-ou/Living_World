@@ -1,6 +1,6 @@
 # ADR 0004: P2 design
 
-- Status: proposed (becomes accepted at M5)
+- Status: accepted (owner, M5, 2026-11-10)
 - Date: 2026-11-10
 - Task: P2-00 (specs: `docs/spec/rule-policy-v0.1.md`, `docs/spec/p2-experiments-v0.1.md`;
   plan: `docs/plans/p2-implementation-plan-v0.1.md`; change request: CR-004 in
@@ -86,3 +86,17 @@ decisions and the alternatives the owner's plan rejected.
   creates the S1 and S3 scenario files. P2-03 builds the batch tool and analysis.
 - The open questions OQ-054 to OQ-073 carry the assumptions for the owner's M5
   disposition. OQ-056 and OQ-070 are already decided by the owner.
+
+## M5 note (owner sign-off, 2026-11-10)
+
+- **CR-004:** approved as written. Its spec text is applied in `agent-interface-v0.1.md`
+  §2.2, §2.5, §4.4 and §6, marked `[CR-004]`. `interface-contract-v0.1.md` is unchanged, as
+  CR-004 states. The code is P2-01's.
+- **Accepted with the recorded assumption:** OQ-054, OQ-055, OQ-057 to OQ-062, OQ-064 to
+  OQ-069 and OQ-071 to OQ-073.
+- **OQ-063:** accepted for P2. The spec/code reach mismatch is to be resolved by a later
+  change request.
+- **Owner decisions made earlier:** OQ-056 (decision-only cue capture) and OQ-070
+  (action-kind back-off keys).
+- **OQ-074** (Gate 2 G2-R4-01, for P2-02): accepted. Action-kind matching governs plan
+  blocking only; the R8b and R9 approach exclusions are kept.
