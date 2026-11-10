@@ -910,15 +910,15 @@ def test_batch_and_standalone_report_give_the_same_paired_rounds(
     base_id = f"s2-default.orig.base.s{seed}"
     assert sorted(p.name for p in (batch / "manifests").glob("*.json")) == [f"{base_id}.json"]
     rows = from_batch["s2-default.orig"]
-    for variant in ("cue-ignored", "canteen-restricted"):
+    if not intact:
+        # G2-R4-01: no treatment case exists (no manifest, no directory): no round, not a PASS
+        assert not [key for key in rows if key.startswith("paired_")]
+    for variant in ("cue-ignored", "canteen-restricted") if intact else ():
         case_id = f"s2-default.orig.{variant}.s{seed}"
         paired = rows[f"paired_base_vs_{variant}"]
         assert paired["technical"] == "FAIL" and paired["pairs_used"] == 0
-        gap = {"seed": seed, "arm": "treatment"}
-        if intact:
-            assert paired["invalid_cases"] == [case_id] and gap not in paired["missing_cases"]
-        else:
-            assert paired["invalid_cases"] == [] and gap in paired["missing_cases"]
+        assert paired["invalid_cases"] == [case_id]
+        assert {"seed": seed, "arm": "treatment"} not in paired["missing_cases"]
         assert len(paired["missing_cases"]) >= 2 * 19  # the other development seeds
     comparisons.unlink()
     report = tool.run_report("arms", repo=repo)
@@ -928,3 +928,86 @@ def test_batch_and_standalone_report_give_the_same_paired_rounds(
         assert report["invalid"] == treatments
     else:
         assert report["invalid"] == [] and report["missing"] == []
+
+
+def _paired_keys(report: dict[str, Any]) -> list[str]:
+    return sorted(k for entry in report.values() for k in entry if k.startswith("paired_"))
+
+
+def test_rounds_are_the_section_1_pairs_and_need_a_treatment_case() -> None:
+    """G2-R4-01: base-only S1, S2, S3 and S4 batches emit no round; S4 emits only decay 120."""
+    from test_analysis_compare import summary
+
+    seeds = tool.DEVELOPMENT_SEEDS
+    for scenario in ("s1-spring-visible", "s2-default", "s3-regrow288", "s4-decay120"):
+        base = tool.CaseSpec(scenario, "orig", "base")
+        report = tool.build_comparisons([(base, summary(f"{scenario}{s}", s)) for s in seeds])
+        assert _paired_keys(report) == []  # a missing treatment arm is not a round, nor a PASS
+    s1 = tool.CaseSpec("s1-spring-visible", "orig", "base")
+    s1_report = tool.build_comparisons([(s1, summary(f"s1.{s}", s, all_alive=1)) for s in seeds])
+    assert s1_report["s1-spring-visible.orig"]["s1_line"]["pass"] is True
+    assert _paired_keys(s1_report) == []
+    # S4 at decay 120: only the canteen round; S2 carries both rounds with its own base
+    base120 = tool.CaseSpec("s4-decay120", "orig", "base")
+    restricted120 = tool.CaseSpec("s4-decay120", "orig", "canteen-restricted")
+    report = tool.build_comparisons(
+        [(base120, summary("b", seeds[0])), (restricted120, summary("t", seeds[0]))]
+    )
+    assert _paired_keys(report) == ["paired_base_vs_canteen-restricted"]
+    base2 = tool.CaseSpec("s2-default", "orig", "base")
+    cue2 = tool.CaseSpec("s2-default", "orig", "cue-ignored")
+    report = tool.build_comparisons(
+        [(base2, summary("b", seeds[0])), (cue2, summary("c", seeds[0]))]
+    )
+    assert _paired_keys(report) == ["paired_base_vs_cue-ignored"]
+    # a treatment on a scenario that is not one of its rounds is not paired
+    cue4 = tool.CaseSpec("s4-decay120", "orig", "cue-ignored")
+    report = tool.build_comparisons(
+        [(base120, summary("b", seeds[0])), (cue4, summary("c", seeds[0]))]
+    )
+    assert _paired_keys(report) == []
+
+
+def test_a_base_only_fixture_batch_and_its_report_emit_no_round(tmp_path: Path) -> None:
+    repo, commit = make_repo(tmp_path)
+    spec = tool.CaseSpec("s1-spring-visible", "orig", "base")
+    tool.run_batch(
+        "s1only", SEEDS[:1], [spec], repo=repo, runner=inprocess, registry=registry_for(commit)
+    )
+    comparisons = repo / "runs" / "p2" / "s1only" / "summary" / "comparisons.json"
+    from_batch = json.loads(comparisons.read_text(encoding="utf-8"))
+    assert _paired_keys(from_batch) == [] and "s1_line" in from_batch["s1-spring-visible.orig"]
+    tool.run_report("s1only", repo=repo)
+    assert json.loads(comparisons.read_text(encoding="utf-8")) == from_batch
+
+
+def test_report_overwrites_comparisons_and_keeps_the_round_of_missing_cases(
+    tmp_path: Path,
+) -> None:
+    """G2-R4-02: with both case directories of a pair gone, nothing of the old report survives."""
+    repo, commit = make_repo(tmp_path)
+    seed = tool.DEVELOPMENT_SEEDS[0]
+    specs = [tool.CaseSpec("s2-default", "orig", v) for v in ("base", "cue-ignored")]
+    tool.run_batch(
+        "gone", [seed], specs, repo=repo, runner=inprocess, registry=registry_for(commit)
+    )
+    batch = repo / "runs" / "p2" / "gone"
+    comparisons = batch / "summary" / "comparisons.json"
+    before = json.loads(comparisons.read_text(encoding="utf-8"))
+    assert before["s2-default.orig"]["paired_base_vs_cue-ignored"]["pairs_used"] == 1
+    (batch / "cases").rename(batch / "cases-away")
+    report = tool.run_report("gone", repo=repo)
+    ids = sorted(f"s2-default.orig.{v}.s{seed}" for v in ("base", "cue-ignored"))
+    assert report["missing"] == ids and report["invalid"] == []
+    paired = json.loads(comparisons.read_text(encoding="utf-8"))["s2-default.orig"][
+        "paired_base_vs_cue-ignored"
+    ]
+    assert paired["pairs_used"] == 0 and paired["technical"] == "FAIL"
+    assert len(paired["missing_cases"]) == 2 * 20 and paired["invalid_cases"] == []
+    assert all(v["median"] is None for v in paired["scalars"].values())
+    assert sum(map(sum, paired["access_transition"]["counts"])) == 0
+    assert not list((batch / "summary" / "metrics").glob("*.json"))  # no stale metric records
+    # restoring the directories restores the pair: the report is recomputed, never merged
+    (batch / "cases-away").rename(batch / "cases")
+    tool.run_report("gone", repo=repo)
+    assert json.loads(comparisons.read_text(encoding="utf-8")) == before

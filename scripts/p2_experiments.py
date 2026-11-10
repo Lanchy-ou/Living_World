@@ -21,7 +21,7 @@ import subprocess
 import sys
 import tomllib
 from collections import defaultdict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
@@ -764,7 +764,14 @@ def write_summaries(
     manifests: Sequence[P2CaseManifest],
     records: Mapping[str, dict[str, Any]],
     summaries: Sequence[tuple[CaseSpec, RunSummary]],
+    known: Iterable[tuple[str, str, str]] = (),
 ) -> None:
+    """Rewrite every derived summary from the current inputs; nothing of an older run survives."""
+    stale = batch_dir / "summary" / "metrics"
+    if stale.is_dir():
+        for old in stale.glob("*.json"):
+            if old.stem not in records:
+                old.unlink()
     for case_id, metrics in records.items():
         write_batch_file(batch_dir, f"summary/metrics/{case_id}.json", json_text(metrics))
     scalar_names = list(S4_SCALARS)
@@ -796,30 +803,46 @@ def write_summaries(
         writer = csv.DictWriter(stream, fieldnames=columns, lineterminator="\n")
         writer.writeheader()
         writer.writerows(lines)
-    comparisons = build_comparisons(summaries)
-    if comparisons:
-        write_batch_file(batch_dir, "summary/comparisons.json", json_text(comparisons))
+    comparisons = build_comparisons(summaries, known)
+    write_batch_file(batch_dir, "summary/comparisons.json", json_text(comparisons))  # whole file
 
 
-def build_comparisons(summaries: Sequence[tuple[CaseSpec, RunSummary]]) -> dict[str, Any]:
+# The §1 paired rounds: treatment variant -> (scalars, scenarios whose base it is compared with).
+# S4 at decay 100 is S2 base vs. canteen-restricted, S4 at decay 120 is S4 (s4-decay120), and S5
+# is S2 base vs. cue-ignored. A control and its treatment share scenario and revision label.
+ROUNDS: dict[str, tuple[Sequence[str], frozenset[str]]] = {
+    "canteen-restricted": (S4_SCALARS, frozenset({"s2-default", "s4-decay120"})),
+    "cue-ignored": (S5_SCALARS, frozenset({"s2-default"})),
+}
+
+
+def build_comparisons(
+    summaries: Sequence[tuple[CaseSpec, RunSummary]],
+    known: Iterable[tuple[str, str, str]] = (),
+) -> dict[str, Any]:
     """Per scenario revision: arm reports, paired reports and the pass lines that apply.
 
-    An S4/S5 round is gated on the development seed list only (§1, §2; §4: all 2 x 20 cases exist
-    and are valid). The acceptance list is held out for S2 m6/base in P2-05, so a complete set of
-    acceptance seeds is a technical FAIL here.
+    ``known`` lists the (scenario_id, revision_label, variant_id) of cases that exist but have no
+    summary (a manifest whose directory is missing); they keep their arm, and so their round, in
+    the report. A round is emitted only for its §1 scenarios and only if at least one case of its
+    treatment arm exists. It is gated on the development seed list only (§1, §2; §4: all 2 x 20
+    cases exist and are valid); the acceptance list is held out for S2 m6/base in P2-05, so a
+    complete set of acceptance seeds is a technical FAIL here.
     """
     arms: dict[tuple[str, str], dict[str, dict[int, RunSummary]]] = defaultdict(
         lambda: defaultdict(dict)
     )
     for spec, summary in summaries:
         arms[(spec.scenario_id, spec.label)][spec.variant_id][summary.seed] = summary
+    for scenario_id, label, variant_id in known:
+        arms[(scenario_id, label)][variant_id]  # noqa: B018 - registers the arm
     report: dict[str, Any] = {}
     for (scenario_id, label), by_variant in sorted(arms.items()):
         entry: dict[str, Any] = {
             "arms": {v: arm_report(list(cases.values())) for v, cases in sorted(by_variant.items())}
         }
-        for treatment, scalars in (("canteen-restricted", S4_SCALARS), ("cue-ignored", S5_SCALARS)):
-            if "base" in by_variant or treatment in by_variant:
+        for treatment, (scalars, scenarios) in ROUNDS.items():
+            if scenario_id in scenarios and treatment in by_variant:
                 entry[f"paired_base_vs_{treatment}"] = paired_report(
                     by_variant.get("base", {}),
                     by_variant.get(treatment, {}),
@@ -909,7 +932,12 @@ def run_report(batch_id: str, *, repo: Path = ROOT) -> dict[str, Any]:
             summaries.append(
                 (identity[0], summarize_run_of(loaded, case_id, identity[1], False, None))
             )
-    write_summaries(batch_dir, manifests, records, summaries)
+    known = [
+        (m.scenario_id, m.revision_label, m.policy_variant_id)
+        for m in manifests
+        if m.case_id in missing
+    ]  # a missing directory still registers its arm
+    write_summaries(batch_dir, manifests, records, summaries, known)
     return {
         "cases": len(manifests) + len(unpublished),
         "invalid": sorted(c for c, r in records.items() if not r["valid"]),
