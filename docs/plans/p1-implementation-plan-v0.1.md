@@ -1,5 +1,8 @@
 # Living Island — P1 Implementation Plan v0.1
 
+> **Completed (2026-11-09).** All P1 tasks are accepted and milestone M4 is signed off; see
+> ADR 0003 Addendum M4 and `docs/tasks/p1/P1-retrospective.md`.
+>
 > **Approved v0.1 (2026-11-08).** Amendment A1 (agent interface) is applied by P1-01a and
 > amendment A2 (replay) by P1-01b; until then `interface-contract-v0.1.md` and
 > `world-rules-v0.1.md` are unchanged.
