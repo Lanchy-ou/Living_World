@@ -186,9 +186,7 @@ class Toy:
             **kw,
         )
 
-    def failed(
-        self, tick: int, actor: str, action_type: str, code: str, **kw: Any
-    ) -> WorldEvent:
+    def failed(self, tick: int, actor: str, action_type: str, code: str, **kw: Any) -> WorldEvent:
         return self.event(
             "action_failed",
             tick,

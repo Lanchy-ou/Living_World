@@ -117,13 +117,25 @@ def test_behavior_variation_uses_the_lexicographically_smallest_mode_on_ties() -
 
 def test_ev19_s5_access_split_and_empty_pairs() -> None:
     base = {
-        1: summary("b1", 1, access=("drank", "drank", "not_found"), access_drank=2,
-                   access_not_found=1, ticks_deprived_water=0),
+        1: summary(
+            "b1",
+            1,
+            access=("drank", "drank", "not_found"),
+            access_drank=2,
+            access_not_found=1,
+            ticks_deprived_water=0,
+        ),
         2: summary("b2", 2),
     }
     treat = {
-        1: summary("t1", 1, access=("drank", "not_found", "not_found"), access_drank=1,
-                   access_not_found=2, ticks_deprived_water=7),
+        1: summary(
+            "t1",
+            1,
+            access=("drank", "not_found", "not_found"),
+            access_drank=1,
+            access_not_found=2,
+            ticks_deprived_water=7,
+        ),
         2: summary("t2", 2, valid=False),
     }
     report = paired_report(base, treat, S5_SCALARS)
@@ -163,9 +175,12 @@ def test_even_pair_count_median_is_the_mean_of_the_middle_values() -> None:
     half = paired_report(base, halves, ["ticks_deprived"])["scalars"]["ticks_deprived"]
     assert half["median"] == {"exact": "7/2", "decimal": "3.500000"}
     third = {i: summary(f"t{i}", i, ticks_deprived=d) for i, d in enumerate([1, 2, 5])}
-    assert paired_report({k: base[k] for k in third}, third, ["ticks_deprived"])["scalars"][
-        "ticks_deprived"
-    ]["median"] == 2
+    assert (
+        paired_report({k: base[k] for k in third}, third, ["ticks_deprived"])["scalars"][
+            "ticks_deprived"
+        ]["median"]
+        == 2
+    )
 
 
 def test_a_missing_arm_makes_the_round_technically_fail() -> None:
@@ -259,7 +274,10 @@ def test_frame_problems_cover_capacity_trees_slots_and_conservation() -> None:
         copy[index] = copy[index].model_copy(update=update)
         return frame_problems(tuple(copy), (), LIMITS)
 
-    over = [r.model_copy(update={"canteen_servings": 3}) if r.id == "a" else r for r in frames[1].residents]
+    over = [
+        r.model_copy(update={"canteen_servings": 3}) if r.id == "a" else r
+        for r in frames[1].residents
+    ]
     assert any("servings out of range" in p for p in mutate(1, residents=over))
     full = [
         r.model_copy(update={"fruit_count": 3}) if r.id == "a" else r for r in frames[1].residents
