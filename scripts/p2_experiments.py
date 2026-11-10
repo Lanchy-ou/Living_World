@@ -27,6 +27,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
+from living_island.agents.types import PolicyConfig, RuleParams
 from living_island.analysis.canon import canonical_bytes_of_data, canonical_sha256
 from living_island.analysis.compare import (
     S4_SCALARS,
@@ -108,13 +109,13 @@ def generate_seed_list(
 # Registries (§6)
 # ---------------------------------------------------------------------------
 
-RULE_DEFAULTS: dict[str, Any] = {
-    "rule_params_version": "0.1",
-    "canteen_use": "enabled",
-    "cue_use": "enabled",
-    "fruit_carry_target": 2,
-    "failed_target_retry_ticks": 36,
-}
+RULE_DEFAULTS = RuleParams(
+    rule_params_version="0.1",
+    canteen_use="enabled",
+    cue_use="enabled",
+    fruit_carry_target=2,
+    failed_target_retry_ticks=36,
+)
 
 
 @dataclass(frozen=True)
@@ -124,7 +125,7 @@ class Variant:
     variant_id: str
     policy_id: str  # tick-0 policy_config.policy_id
     flags: tuple[str, ...]  # CLI flags after ``--policy ...``
-    rule_params: dict[str, Any] | None
+    rule_params: RuleParams | None
     needs_script: bool = False
 
     def policy_args(self, script_file: str | None) -> list[str]:
@@ -140,18 +141,18 @@ class Variant:
 VARIANTS: dict[str, Variant] = {
     v.variant_id: v
     for v in (
-        Variant("base", "rule-based-v0", (), dict(RULE_DEFAULTS)),
+        Variant("base", "rule-based-v0", (), RULE_DEFAULTS),
         Variant(
             "canteen-restricted",
             "rule-based-v0",
             ("--rule-canteen", "restricted"),
-            {**RULE_DEFAULTS, "canteen_use": "restricted"},
+            RULE_DEFAULTS.model_copy(update={"canteen_use": "restricted"}),
         ),
         Variant(
             "cue-ignored",
             "rule-based-v0",
             ("--rule-cue", "ignored"),
-            {**RULE_DEFAULTS, "cue_use": "ignored"},
+            RULE_DEFAULTS.model_copy(update={"cue_use": "ignored"}),
         ),
         Variant("p1-random", "random-v0", (), None),
         Variant("p1-scripted", "scripted-v0", (), None, needs_script=True),
@@ -435,21 +436,19 @@ def load_case(
 # ---------------------------------------------------------------------------
 
 
-def policy_config_of(save: SavePackage) -> Any:
+def policy_config_of(save: SavePackage) -> PolicyConfig:
     return save.agent_state.runtime_states[0].policy_config
 
 
-def effective_rule_params(save: SavePackage) -> dict[str, Any] | None:
+def effective_rule_params(save: SavePackage) -> RuleParams | None:
     """``rule_params`` from the tick-zero policy config (absent for P1 policies)."""
-    config = policy_config_of(save)
-    value = getattr(config, "rule_params", None)
-    return None if value is None else dict(value.model_dump(mode="json"))
+    return policy_config_of(save).rule_params
 
 
-def check_rule_params(variant: Variant, effective: Mapping[str, Any] | None) -> None:
+def check_rule_params(variant: Variant, effective: RuleParams | None) -> None:
     """Refuse a case whose effective ``rule_params`` differ from its registered variant."""
     expected = variant.rule_params
-    if (None if effective is None else dict(effective)) != expected:
+    if effective != expected:
         raise Refusal(
             "RULE_PARAMS",
             f"variant {variant.variant_id}: effective rule_params {effective!r} "
@@ -644,7 +643,7 @@ def run_batch(
             write_batch_file(
                 batch_dir,
                 f"variants/{variant.variant_id}.json",
-                canonical_bytes_text(variant.rule_params),
+                canonical_bytes_text(variant.rule_params.model_dump(mode="json")),
             )
     records: dict[str, dict[str, Any]] = {}
     summaries: list[tuple[CaseSpec, RunSummary]] = []

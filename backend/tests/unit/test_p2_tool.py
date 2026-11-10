@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 from p2_tool import SCRIPT_FIXTURE, commit_all, inprocess, make_repo, registry_for, tool
 
+from living_island.agents.types import RuleParams
 from living_island.analysis.validity import assess_validity
 from living_island.contract.replay import GroundCanteenFrame, ReplayBundle
 from living_island.world.protocol import Coord
@@ -327,14 +328,14 @@ def test_unknown_variants_revisions_and_duplicates_are_refused(tmp_path: Path) -
 
 def test_effective_rule_params_must_match_the_registered_variant() -> None:
     base, restricted = tool.VARIANTS["base"], tool.VARIANTS["canteen-restricted"]
-    tool.check_rule_params(base, dict(base.rule_params))  # the registered value passes
+    tool.check_rule_params(base, base.rule_params)  # the registered value passes
     tool.check_rule_params(tool.VARIANTS["p1-random"], None)
     for variant, effective in (
         (base, restricted.rule_params),
         (restricted, base.rule_params),
-        (base, {**base.rule_params, "fruit_carry_target": 3}),
+        (base, base.rule_params.model_copy(update={"fruit_carry_target": 3})),
         (base, None),
-        (tool.VARIANTS["p1-random"], dict(base.rule_params)),
+        (tool.VARIANTS["p1-random"], base.rule_params),
     ):
         assert refusal_code(lambda v=variant, e=effective: tool.check_rule_params(v, e)) == (
             "RULE_PARAMS"
@@ -345,7 +346,9 @@ def test_a_case_with_unexpected_effective_rule_params_gets_no_manifest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     repo, commit = make_repo(tmp_path)
-    monkeypatch.setattr(tool, "effective_rule_params", lambda save: {"unexpected": 1})
+    monkeypatch.setattr(
+        tool, "effective_rule_params", lambda save: tool.VARIANTS["canteen-restricted"].rule_params
+    )
     result = tool.run_batch(
         "bad-params",
         SEEDS[:1],
@@ -361,13 +364,21 @@ def test_a_case_with_unexpected_effective_rule_params_gets_no_manifest(
 
 
 def test_the_registered_rule_variants_and_their_files() -> None:
-    assert tool.VARIANTS["base"].rule_params == {
+    base = tool.VARIANTS["base"].rule_params
+    assert isinstance(base, RuleParams)
+    assert base.model_dump(mode="json") == {
         "rule_params_version": "0.1",
         "canteen_use": "enabled",
         "cue_use": "enabled",
         "fruit_carry_target": 2,
         "failed_target_retry_ticks": 36,
     }
+    assert tool.VARIANTS["canteen-restricted"].rule_params == base.model_copy(
+        update={"canteen_use": "restricted"}
+    )
+    assert tool.VARIANTS["cue-ignored"].rule_params == base.model_copy(
+        update={"cue_use": "ignored"}
+    )
     assert tool.VARIANTS["canteen-restricted"].flags == ("--rule-canteen", "restricted")
     assert tool.VARIANTS["cue-ignored"].flags == ("--rule-cue", "ignored")
     assert tool.VARIANTS["p1-random"].rule_params is None
@@ -627,3 +638,54 @@ def test_check_8_no_substituted_decision(loaded: Any) -> None:
     records = list(loaded.inputs.records)
     records[0] = records[0].model_copy(update={"substituted": True})
     assert failed_checks(dataclasses.replace(loaded.inputs, records=tuple(records))) == (8,)
+
+
+def test_rule_variant_manifests_on_the_rule_policy_stub(tmp_path: Path) -> None:
+    repo, commit = make_repo(tmp_path)
+    ids = ("base", "canteen-restricted", "cue-ignored")
+    specs = [tool.CaseSpec("s2-default", "orig", v) for v in ids]
+    result = tool.run_batch(
+        "rule-variants",
+        SEEDS[:1],
+        specs,
+        ticks=6,
+        repo=repo,
+        runner=inprocess,
+        registry=registry_for(commit),
+    )
+    assert result.failures == [] and len(result.manifests) == 3
+    by_variant = {m.policy_variant_id: m for m in result.manifests}
+    for variant_id, manifest in by_variant.items():
+        registered = tool.VARIANTS[variant_id].rule_params
+        assert isinstance(manifest.rule_params, RuleParams)
+        assert manifest.rule_params == registered  # the manifest holds the effective value
+        assert manifest.policy_id == "rule-based-v0"
+        stored = repo / "runs" / "p2" / "rule-variants" / "variants" / f"{variant_id}.json"
+        assert RuleParams.model_validate_json(stored.read_text(encoding="utf-8")) == registered
+    assert len({m.policy_config_sha256 for m in result.manifests}) == 3
+    assert len({m.case_id for m in result.manifests}) == 3
+    args = {v: m.cli_args[m.cli_args.index("--policy") :] for v, m in by_variant.items()}
+    assert args["base"][:2] == ["--policy", "rule-based"] and "--rule-canteen" not in args["base"]
+    assert args["canteen-restricted"][:4] == [
+        "--policy", "rule-based", "--rule-canteen", "restricted",
+    ]  # fmt: skip
+    assert args["cue-ignored"][:4] == ["--policy", "rule-based", "--rule-cue", "ignored"]
+
+
+def test_a_rule_case_run_with_the_wrong_switch_is_refused(tmp_path: Path) -> None:
+    """The registry says ``canteen-restricted`` but the run used the default switches."""
+    repo, commit = make_repo(tmp_path)
+    variants = dict(tool.VARIANTS)
+    variants["canteen-restricted"] = dataclasses.replace(variants["canteen-restricted"], flags=())
+    spec = tool.CaseSpec("s2-default", "orig", "canteen-restricted")
+    result = tool.run_batch(
+        "wrong-switch",
+        SEEDS[:1],
+        [spec],
+        ticks=6,
+        repo=repo,
+        runner=inprocess,
+        registry=registry_for(commit),
+        variants=variants,
+    )
+    assert result.manifests == [] and "RULE_PARAMS" in result.failures[0]["refusal"]

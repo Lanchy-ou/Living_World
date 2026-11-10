@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, JsonValue
+from pydantic import BaseModel, ConfigDict
+
+from living_island.agents.types import RuleParams
 
 BATCH_ID_PATTERN = re.compile(r"^[a-z0-9-]+$")
 HASH64 = r"^[0-9a-f]{64}$"
@@ -38,7 +40,7 @@ class P2CaseManifest(BaseModel):
     cli_args: list[str]
     policy_id: str  # tick-0 policy_config.policy_id
     policy_variant_id: str
-    rule_params: dict[str, JsonValue] | None  # RuleParams (P2-01) once it exists; null for P1
+    rule_params: RuleParams | None  # tick-0 policy_config.rule_params; null for P1 policies
     script_sha256: str | None
     policy_config_sha256: str
     config_sha256: str  # effective identity, from world_initialized
