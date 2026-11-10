@@ -910,11 +910,11 @@ def test_batch_and_standalone_report_give_the_same_paired_rounds(
     base_id = f"s2-default.orig.base.s{seed}"
     assert sorted(p.name for p in (batch / "manifests").glob("*.json")) == [f"{base_id}.json"]
     rows = from_batch["s2-default.orig"]
-    if not intact:
-        # G2-R4-01: no treatment case exists (no manifest, no directory): no round, not a PASS
-        assert not [key for key in rows if key.startswith("paired_")]
-    for variant in ("cue-ignored", "canteen-restricted") if intact else ():
+    # G2-R5-01: a CLI that wrote nothing still leaves the empty case directory batch created, so
+    # the treatment arm has a (invalid) case and its round is emitted in both modes
+    for variant in ("cue-ignored", "canteen-restricted"):
         case_id = f"s2-default.orig.{variant}.s{seed}"
+        assert (batch / "cases" / case_id).is_dir()
         paired = rows[f"paired_base_vs_{variant}"]
         assert paired["technical"] == "FAIL" and paired["pairs_used"] == 0
         assert paired["invalid_cases"] == [case_id]
@@ -923,11 +923,46 @@ def test_batch_and_standalone_report_give_the_same_paired_rounds(
     comparisons.unlink()
     report = tool.run_report("arms", repo=repo)
     assert json.loads(comparisons.read_text(encoding="utf-8")) == from_batch
-    if intact:
-        treatments = sorted(f"s2-default.orig.{v}.s{seed}" for v in variants[1:])
-        assert report["invalid"] == treatments
-    else:
-        assert report["invalid"] == [] and report["missing"] == []
+    treatments = sorted(f"s2-default.orig.{v}.s{seed}" for v in variants[1:])
+    assert report["invalid"] == treatments and report["missing"] == []
+
+
+def test_every_requested_case_leaves_a_declared_trace(tmp_path: Path) -> None:
+    """G2-R5-01: S2 base and cue-ignored on all 20 development seeds, every treatment dead on start.
+
+    batch creates each requested case's empty directory before the CLI runs, so the S5 round is
+    emitted by batch and by a standalone report alike, with the same rows: technical FAIL, all
+    20 treatment ids invalid, and no pair used.
+    """
+    repo, commit = make_repo(tmp_path)
+    seeds = tool.DEVELOPMENT_SEEDS
+    specs = [tool.CaseSpec("s2-default", "orig", v) for v in ("base", "cue-ignored")]
+    tool.run_batch(
+        "dead",
+        seeds,
+        specs,
+        repo=repo,
+        runner=_treatment_fails(False),  # treatment exits 1 and writes nothing; base runs for real
+        registry=registry_for(commit),
+    )
+    batch = repo / "runs" / "p2" / "dead"
+    treatments = sorted(f"s2-default.orig.cue-ignored.s{s}" for s in seeds)
+    assert len(treatments) == 20
+    for case_id in treatments:
+        assert (batch / "cases" / case_id).is_dir()
+        assert not list(
+            (batch / "cases" / case_id).iterdir()
+        )  # created empty, written to by no one
+    assert not list((batch / "manifests").glob("*cue-ignored*"))
+    comparisons = batch / "summary" / "comparisons.json"
+    from_batch = json.loads(comparisons.read_text(encoding="utf-8"))
+    paired = from_batch["s2-default.orig"]["paired_base_vs_cue-ignored"]
+    assert paired["technical"] == "FAIL" and paired["pairs_used"] == 0
+    assert sorted(paired["invalid_cases"]) == treatments
+    comparisons.unlink()
+    report = tool.run_report("dead", repo=repo)
+    assert sorted(i for i in report["invalid"] if "cue-ignored" in i) == treatments
+    assert json.loads(comparisons.read_text(encoding="utf-8")) == from_batch
 
 
 def _paired_keys(report: dict[str, Any]) -> list[str]:

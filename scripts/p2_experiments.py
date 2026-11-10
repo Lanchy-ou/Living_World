@@ -653,6 +653,10 @@ def run_batch(
     )
     batch_dir = batch_dir_of(repo, batch_id)
     result = BatchResult(batch_id)
+    # Every requested case leaves a declared trace (§6): its empty run directory, created before
+    # any CLI call. The CLI accepts an empty ``--out``; creating it writes nothing inside a run.
+    for case_id, *_ in planned:
+        (batch_dir / "cases" / case_id).mkdir(parents=True, exist_ok=True)
     for variant in {p[3].variant_id: p[3] for p in planned}.values():
         if variant.rule_params is not None:
             write_batch_file(
