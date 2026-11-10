@@ -183,7 +183,7 @@ def test_rule_policy_commits_only_accepted_plans():
             return outcome
 
     content = content_with({"ella": (2, 3)})
-    policy = RejectSecondPlan()
+    policy = RejectSecondPlan(_config())
     runtime = Runtime("ella", _config(), PROFILE, policy)
     loop = BoundaryLoop(create_engine(content, None), [runtime])
     assert runtime.export_state().policy_state["issued_intents"] == []

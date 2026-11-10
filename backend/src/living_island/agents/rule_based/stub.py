@@ -5,13 +5,20 @@ from typing import cast
 from pydantic import JsonValue
 
 from living_island.agents.policies._plans import WAIT, make_plan
-from living_island.agents.types import DecisionRequest, IssuedIntent, OkOutcome, RuleStateV0_1
+from living_island.agents.types import (
+    DecisionRequest,
+    IssuedIntent,
+    OkOutcome,
+    PolicyConfig,
+    RuleStateV0_1,
+)
 
 
 class RuleBasedPolicy:
     policy_id = "rule-based-v0"
 
-    def __init__(self, state: RuleStateV0_1 | None = None) -> None:
+    def __init__(self, config: PolicyConfig, state: RuleStateV0_1 | None = None) -> None:
+        self._config = config
         self._state = (
             state
             if state is not None

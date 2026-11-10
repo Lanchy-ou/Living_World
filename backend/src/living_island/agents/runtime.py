@@ -245,7 +245,7 @@ def create_runtime(
                 if restored_state is not None
                 else None
             )
-            policy = RuleBasedPolicy(state)
+            policy = RuleBasedPolicy(policy_config, state)
         case "scripted-v0":
             if own_script is None or own_script.actor_id != actor_id or own_records is not None:
                 raise ValueError(f"{actor_id}: scripted policy requires its own actor script")
