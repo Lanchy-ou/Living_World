@@ -9,7 +9,13 @@ from pathlib import Path
 from living_island.agents.base import ResidentRuntime
 from living_island.agents.policies.recorded import ReplayDiverged
 from living_island.agents.runtime import create_runtime
-from living_island.agents.types import DecisionRecord, OwnProfile, PolicyConfig, PolicyId
+from living_island.agents.types import (
+    DecisionRecord,
+    OwnProfile,
+    PolicyConfig,
+    PolicyId,
+    RuleParams,
+)
 from living_island.contract.save import SavePackage
 from living_island.persistence.checkpoints import write_checkpoint
 from living_island.persistence.content import retain_run_content
@@ -50,6 +56,8 @@ def _runtime_roster(
     script: LoadedScript | None,
     trace: LoadedTrace | None,
     checkpoint: SavePackage | None = None,
+    *,
+    rule_params: RuleParams | None = None,
 ) -> list[ResidentRuntime]:
     cfg = content.config
     config = (
@@ -61,6 +69,7 @@ def _runtime_roster(
             map_height=cfg.map.height,
             script_sha256=script.sha256 if script is not None else None,
             source_trace_sha256=trace.sha256 if trace is not None else None,
+            **({"rule_params": rule_params} if rule_params is not None else {}),
         )
         if policy_id is not None
         else None
@@ -183,6 +192,8 @@ def _fresh_run(
     trace: LoadedTrace | None,
     checkpoint_every: int | None,
     on_boundary_committed: BoundaryObserver | None,
+    *,
+    rule_params: RuleParams | None = None,
 ) -> RunResult:
     output = output.resolve()
     check_output(output, source=trace.path.parent.resolve() if trace is not None else None)
@@ -193,6 +204,7 @@ def _fresh_run(
             policy_id,
             script,
             trace,
+            rule_params=rule_params,
         ),
     )
     output.mkdir(parents=True, exist_ok=True)
@@ -228,20 +240,29 @@ def run(
     output: Path,
     *,
     script: LoadedScript | None = None,
+    rule_params: RuleParams | None = None,
     checkpoint_every: int | None = None,
     on_boundary_committed: BoundaryObserver | None = None,
 ) -> RunResult:
-    """Start a random run, or a scripted run when given a verified ScriptFixture."""
+    """Start a fresh random, scripted or rule-based run."""
     _validate_length(ticks, checkpoint_every)
+    if script is not None and rule_params is not None:
+        raise ValueError("script and rule_params are mutually exclusive")
+    policy_id: PolicyId = "random-v0"
+    if script is not None:
+        policy_id = "scripted-v0"
+    elif rule_params is not None:
+        policy_id = "rule-based-v0"
     return _fresh_run(
         content,
         ticks,
         output,
-        "scripted-v0" if script is not None else "random-v0",
+        policy_id,
         script,
         None,
         checkpoint_every,
         on_boundary_committed,
+        rule_params=rule_params,
     )
 
 

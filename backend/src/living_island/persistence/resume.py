@@ -163,6 +163,8 @@ class _Prefix:
     events: tuple[WorldEvent, ...]
     decisions: tuple[DecisionRecord, ...]
     root: Path
+    initial: SavePackage | None
+    has_rule_runtime: bool
 
 
 def _verify_policy_identity(path: Path, save: SavePackage, baseline: SavePackage) -> None:
@@ -179,7 +181,7 @@ def _prefix(source: Path, output: Path, save: SavePackage, seen: frozenset[Path]
         raise PersistenceError(source, "resume parent", "cycle in continuation ancestry")
     check_output(output, source=source)
     origin_path = source / ORIGIN_FILENAME
-    prior = _Prefix((), (), source)
+    prior = _Prefix((), (), source, None, False)
     from_tick = None
     if origin_path.exists():
         locator_path = source / _PARENT_FILENAME
@@ -206,6 +208,7 @@ def _prefix(source: Path, output: Path, save: SavePackage, seen: frozenset[Path]
         if initial_path.is_file():
             initial = _decode_checkpoint(initial_path, read_bytes(initial_path))
             _verify_policy_identity(initial_path, save, initial)
+            prior = _Prefix((), (), source, initial, False)
 
     event_path = source / EVENTS_FILENAME
     history = read_event_prefix(
@@ -224,7 +227,54 @@ def _prefix(source: Path, output: Path, save: SavePackage, seen: frozenset[Path]
     ):
         raise PersistenceError(event_path, "tick", "expected a post-checkpoint event")
     decisions = _decision_prefix(source / DECISIONS_FILENAME, save, prior.decisions, from_tick)
-    return _Prefix(history, decisions, prior.root)
+    has_rule_runtime = prior.has_rule_runtime or any(
+        runtime.policy_config.policy_id == "rule-based-v0"
+        for runtime in save.agent_state.runtime_states
+    )
+    return _Prefix(history, decisions, prior.root, prior.initial, has_rule_runtime)
+
+
+def _verify_rule_lineage(source: Path, prefix: _Prefix, content: WorldContent) -> None:
+    rule_lineage = prefix.has_rule_runtime or any(
+        "rule-based-v0" in (record.policy_id, record.effective_policy_id)
+        for record in prefix.decisions
+    )
+    if not rule_lineage:
+        return
+    path = prefix.root / "checkpoint-0000000000.json"
+    initial = prefix.initial
+    if initial is None:
+        raise PersistenceError(path, "rule_lineage", "missing root tick-zero checkpoint")
+    if prefix.root != source:
+        content = load_run_content(
+            prefix.root,
+            expected_config_hash=content.config_hash,
+            expected_map_hash=content.map_hash,
+        )
+    _verify_content(path, initial, content)
+    initialized = prefix.events[0].payload
+    if (
+        initial.world.tick != 0
+        or initial.decision_record_cursor != 0
+        or initial.event_cursor != sum(event.tick == 0 for event in prefix.events)
+        or not isinstance(initialized, WorldInitializedPayload)
+        or digest(encode(initial.world, path)) != initialized.initial_snapshot_hash
+    ):
+        raise PersistenceError(
+            path, "rule_lineage", "checkpoint is not the verified tick-zero root"
+        )
+
+    # _prefix already verifies identity along every hop and against this root.
+    policy_ids = {
+        runtime.actor_id: runtime.policy_config.policy_id
+        for runtime in initial.agent_state.runtime_states
+    }
+    for record in prefix.decisions:
+        expected = policy_ids[record.actor_id]
+        if expected != "recorded-v0" and expected != record.policy_id:
+            raise PersistenceError(
+                path, "policy_id", f"prefix decision for {record.actor_id} must use {expected}"
+            )
 
 
 def _locator_path(target: Path, output: Path) -> str:
@@ -260,6 +310,7 @@ def stage_resume_output(
     )
     _verify_content(checkpoint_path, save, content)
     prefix = _prefix(source, output, save, frozenset())
+    _verify_rule_lineage(source, prefix, content)
     if prior_events and prefix.events[: len(prior_events)] != prior_events:
         raise PersistenceError(source, "prior_events", "supplied prefix disagrees with ancestry")
     script, trace = _runtime_inputs(
