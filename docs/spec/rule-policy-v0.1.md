@@ -131,8 +131,10 @@ plan. The policy never checks hidden legality; world failures are handled by §5
    `addressee_id == actor_id`: upsert `{resident speaker_id}` with code `REFUSED`.
 4. For each current tree:
    - band `empty`: upsert its tile with code `OBSERVED_EMPTY`;
-   - band `few` or `many`: delete that tile's entry if its code is `OBSERVED_EMPTY` or
-     `RESOURCE_TAKEN`.
+   - band `few` or `many`: delete that tile's entry only if its code is `OBSERVED_EMPTY`.
+     A failure entry (§5), for example `RESOURCE_TAKEN` written in step 2 of this same
+     decision after same-tick regrowth (WR §5.4: settlement precedes regrowth), is **kept**
+     until its `retry_after_tick` (DV-14).
 5. Merge `P.environmental_cues` into `cue_impressions` (§7.1).
 6. Apply §4.1 commitment invalidation.
 
@@ -226,8 +228,18 @@ then follows §4.1. With `cue_use == "ignored"` the filter never applies (§6.3)
 1. Look for an `issued_intents` reference whose `intent_id` matches a `failure` feedback.
 2. If one matches, apply the table to the pair (action of the reference, failure code). The
    key to back off comes from the reference's target and the table's key column.
-3. Back-off upserts `{key, code, retry_after_tick: request.tick +
-   rule_params.failed_target_retry_ticks}`, replacing any entry for the same key.
+3. Back-off upserts the entry `{target: <key>, code, retry_after_tick: request.tick +
+   rule_params.failed_target_retry_ticks}`. The serialized field is `target` (§7).
+
+**Entry classes and precedence.** A **failure entry** has an IC §4 code written by step 2.
+A **local entry** has a policy-local code: `OBSERVED_EMPTY`, `REFUSED` or `REQUESTED`.
+- A failure entry replaces any entry with the same `target`.
+- A local entry is written only if the `target` has no entry, or has a local entry, which it
+  replaces. It never replaces a failure entry.
+- A failure entry leaves the list **only** through R0 step 1 expiry. It is never deleted early
+  and never evicted (§7.1).
+- So the P2-02 no-repeat check holds exactly: for every failure entry, no plan targets its key
+  before its `retry_after_tick`.
 
 Every row is one action. Its codes are the WR §4.2 failure codes for that action plus
 `INVALID_TARGET`; each code appears once per action. A pair not in the table has no effect.
@@ -362,11 +374,18 @@ beyond plan §1.2's list (OQ-062). The initial state is `commitment=null`, empty
   - retained through queued actions, save and restore; replaced by the next committed `ok`
     plan.
 - **`failed_targets`:**
-  - sorted by canonical key order, unique by key, at most 64 entries;
+  - sorted by canonical `target` order, unique by `target`;
   - `code` is an IC §4 failure code or `OBSERVED_EMPTY`, `REFUSED` or `REQUESTED`;
-  - when an upsert of a new key would exceed 64, the entry with the smallest
-    `retry_after_tick` is evicted first, ties by canonical key order;
-  - the cap is an assumption with a reporting duty (OQ-064).
+  - **failure entries** number at most `failed_target_retry_ticks`, by construction, and are
+    never evicted:
+    - a decision writes at most one failure entry, from its single feedback;
+    - an actor decides at most once per tick;
+    - an entry written at tick `t` is deleted at the first decision with tick ≥ `t + R`;
+    - so at most `R` live failure entries can exist;
+  - **local entries** number at most 64. When writing a new local `target` would exceed 64,
+    the local entry with the smallest `retry_after_tick` is evicted first, ties by canonical
+    `target` order. A local eviction is an approved early release (OQ-064). It never affects
+    failure entries or the P2-02 check.
 - **`cue_impressions`:**
   - sorted by `cue_id`, unique, at most **1** entry, because valid content has exactly one
     cue (F7);
@@ -383,7 +402,8 @@ beyond plan §1.2's list (OQ-062). The initial state is `commitment=null`, empty
 array orders as in §7.1, and no omitted fields. On restore, the CR-004 validator for
 `rule-based-v0` refuses (no repair, no migration):
 1. an unknown `rule_state_version`, a missing or unknown field, or a wrong type;
-2. unsorted or duplicate arrays; more than 64 failed targets; more than 1 impression;
+2. unsorted or duplicate arrays; more than `failed_target_retry_ticks` failure entries or
+   more than 64 local entries; more than 1 impression;
 3. any coordinate outside `[0,map_width) x [0,map_height)`;
 4. an `issued_intents` list that is any of:
    - longer than `max_plan_actions`;
@@ -424,7 +444,11 @@ hook, CR-004 does not cover cue capture, and recorded re-execution is unaffected
   not of every exposure. On the default content (night radius 3 ≥ detail radius 1) the loss
   case needs an upgrade without movement, which cannot occur. The S5 report states this
   scope.
-- **Test vectors:** DV-10 (loss) and DV-11 (capture) in §10.
+- **Capture rule:** a direction is captured at any decision whose packet carries it,
+  whether the move that brought the resident into near range **completed** (decision on
+  `PLAN_FINISHED` plus `NEW_SIGHT`) or was **interrupted** (decision on `ACTION_INTERRUPTED`
+  plus `NEW_SIGHT`).
+- **Test vectors:** DV-10 (loss) and DV-11a/b (capture) in §10.
 
 ## 8. Rule parameters (CR-004)
 
@@ -478,9 +502,12 @@ The hashes used below: `h("1|a|0|rule-v0:tree") mod 2 = 1` and
 | DV-07 unreachable frontier (G2-01) | Own (0,0). `E` = (0,0), (0,1) `grass`; (1,0), (1,1), (0,2) `rock`; (3,3) `grass`. Nothing else is explored. | `K = {(0,0),(0,1),(3,3)}`. The unexplored neighbors of (0,0) and (0,1) are none. (3,3) has no BFS distance, so (3,2), (4,3), (3,4) and (2,3) are not frontiers. R11 falls through → R12 `[rest]`. |
 | DV-08 shared stand dedup (G2-01) | Own (0,0). Known trees `fruit_tree` at (2,1) and (2,3); the rest is grass; trees not in view. | Stands: (2,1) gives (2,0) d2, (1,1) d2, (3,1) d4, (2,2) d4; (2,3) gives (2,2) d4, (1,3) d4, (3,3) d6, (2,4) d6. Candidates are 7 distinct tiles, with (2,2) once. Minimum d=2 → `[(2,0),(1,1)]` in (y,x) order; `h(tree) mod 2 = 1` → `[move_to (1,1)]`; commitment `{tree,(1,1),0}`. |
 | DV-09 cue filter overrides a commitment (G2-01) | Own (3,4). `E` = x 1..5, y 3..5, all grass; no spring. Commitment `{explore,(0,4),0}`. Impression `{moss,(3,3),near,east}`. | (0,4) is a frontier (d3) but lies outside x > 3, so it is dropped. Filtered frontiers: (4,2) d3, (5,2) d4, (6,3) d4, (6,4) d3, (6,5) d4, (4,6) d3, (5,6) d4. Minimum → `[(4,2),(6,4),(4,6)]`; `h(explore) mod 3 = 2` → `[move_to (4,6)]`; commitment `{explore,(4,6),0}`. |
-| DV-10 decision-only loss (G2-04) | Content variant `start_hour=5`, `day_start_hour=6`, `night_radius_tiles=0`, `cue_detail_radius_tiles=1`, Mia at (14,32), a 20-tick rest started at tick 0. Integration test in the engine. | The tick-6 packet has `moss_east_01` near/east and `NEW_SIGHT` while the rest continues (not decided). The decision at tick 20 gets a packet without the cue. Mia's committed `cue_impressions` stays `[]`, and the explore filter does not apply. **Expected loss**, asserted. |
-| DV-11 capture while moving (G2-04) | Default content, `ella` at (12,32), whose `move_to` passes within distance 1 of (15,32). | `NEW_SIGHT` interrupts the move at that boundary, and the decision sees near/east. The committed state holds `{moss_east_01, (15,32), near, "east"}`. |
+| DV-10 decision-only loss (G2-04) | Content variant of the default: `start_hour=5`, `day_start_hour=6`, **`day_end_hour=7`**, `night_radius_tiles=0`, `cue_detail_radius_tiles=1`; Mia at (14,32); Mia's tick-0 plan is a 20-tick `rest` (scripted or injected). Engine integration test. | Tick 6 (06:00, daylight): the packet has `moss_east_01` near/east and `NEW_SIGHT`; the rest continues and no decision is made. From tick 12 (07:00, night, radius 0) packets carry no cue. The decision at tick 20 gets a packet without the cue. Mia's committed `cue_impressions` stays `[]` and the explore filter does not apply. **Expected loss**, asserted. |
+| DV-11a capture, interrupted move (G2-04) | Default content, unchanged; `ella` at (12,32), tick-0 plan `[move_to (21,32)]`. | The move passes near range of (15,32). `NEW_SIGHT` interrupts it at (20,32) at tick 1. The tick-1 decision (`ACTION_INTERRUPTED`, `NEW_SIGHT`) sees near/east. Committed state holds `{moss_east_01, (15,32), near, "east"}`. |
+| DV-11b capture, completed move (G2-04) | As DV-11a with `[move_to (16,32)]`. | The move succeeds at tick 1 with the cue near/east and `NEW_SIGHT` in the packet. The tick-1 decision (`NEW_SIGHT`, `PLAN_FINISHED`) captures the same impression. |
 | DV-12 empty-domain fall-through in R6 (G2-01) | H `low` (not critical), no spring tile in `E`, no frontier. | R6a: no stands; R6b: H is not critical; R6c: no frontier → fall through. R7 (T `good`) no; R8 no trees → falls through; R9, R10 no; R11 none → R12 `[rest]`. |
 | DV-13 unmatched feedback | Tick 20, ordinal 8. Feedback `failure NO_PATH` for `a:p000007:i0`, but refs are from `a:p000006`. | No back-off; plan as without feedback. |
+| DV-14 failure then same-tick regrowth (G2-R2-01) | Tick 144, ordinal 5. Refs `a:p000004:i0 gather` → tile (3,2). Feedback `failure RESOURCE_TAKEN` for `i0`. The same packet shows `t1` at (3,2) with band `few` (regrew after settlement). | Step 2 writes `{target tile (3,2), RESOURCE_TAKEN, 180}`; step 4 keeps it (not `OBSERVED_EMPTY`). R8a excludes `t1`; with no other tree, R12 `[rest]`. The decision at tick 179 still excludes (3,2); at tick 180 the entry expires and R8a may target `t1`. |
+| DV-15 local cap never evicts a failure (G2-R2-01) | State: 64 local `OBSERVED_EMPTY` entries with retry 100..163 and one failure entry `{tile (0,7), NO_PATH, 90}`; tick 80. A new empty tree at (7,7) is observed. | The local entry with retry 100 is evicted and `{(7,7), OBSERVED_EMPTY, 116}` is written. The failure entry `(0,7)` stays. |
 
 P2-02 computes every `d` by BFS on the stated grids and asserts these exact plans and next states.

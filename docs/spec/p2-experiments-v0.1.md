@@ -175,11 +175,16 @@ Every instance cites event IDs and `(actor_id, decision_ordinal)`.
 
 - **C1 contention.**
   - Each `action_failed` event `f` with code `RESOURCE_TAKEN` (gather) or `ITEM_TAKEN`
-    (pick_up), whose intent targets `X`, gives at most one C1. `X` is a tree ID for gather and
-    a tile for pick_up.
-  - Its match is the `fruit_gathered` event with `payload.tree_id = X` (or the
-    `item_picked_up` with `payload.position = X`) in the **same tick** by a different actor,
-    with the **smallest** `seq_in_tick`.
+    (pick_up) gives at most one C1. Its contested object `X` comes from `f`'s intent:
+    - gather: `X` is the tree ID;
+    - pick_up: `X = (tile, parameters.item_type)`.
+  - Its match is the success event with the **smallest** `seq_in_tick` among events that are:
+    - in the **same tick** as `f`, with `seq_in_tick < f.seq_in_tick`;
+    - by a different actor;
+    - on the same object: a `fruit_gathered` with `payload.tree_id = X`, or an
+      `item_picked_up` with `payload.position = tile` **and** `payload.item_type = item_type`.
+  - A success on another item type at the same tile is not a match (EV-15). The winner
+    settles earlier in the shuffled completion order (WR §5.4), hence the earlier `seq`.
   - No match means no C1 for `f`. The C1 count is the number of matched `f`.
 - **A1 adaptation after failure.**
   - Take each `action_failed` event `E` of `r` whose intent has a non-null target `X` and
@@ -194,6 +199,10 @@ Every instance cites event IDs and `(actor_id, decision_ordinal)`.
     ordinal. `E` counts as **A1** iff no intent of `D` targets `X`. Targets compare by tile for
     `move_to`/`pick_up`, by tree ID for gather, and by resident for give/talk. Otherwise `E`
     counts as **repeat**.
+  - If no such `D` exists, `E` is **unresolved**: neither A1 nor repeat, and never evidence.
+    This happens when the failure is at the final tick `T` (the run stops before the next
+    decision phase, `sim/runner.py:160-167`) or `r` dies first. Unresolved failures are
+    reported as a count (EV-16, EV-17).
   - Later decisions are not examined for `E`.
 - **A2 adaptation after depletion.**
   - Take each decision record `D` of `r` at tick `t` (ordinal `o ≥ 1`) such that:
@@ -226,7 +235,15 @@ Every instance cites event IDs and `(actor_id, decision_ordinal)`.
    counts.
 2. The manifest final tick is `T = 1008`; the configured run length is `--ticks 1008`.
 3. `checkpoint-0000000000.json` and `checkpoint-0000001008.json` decode with `read_checkpoint`
-   against the retained content (`persistence/checkpoints.py:90-94`).
+   against the retained content (`persistence/checkpoints.py:90-94`). Then:
+   - **Tick-zero file:**
+     - `world.tick = 0`;
+     - `decision_record_cursor = 0`;
+     - `event_cursor` = the number of tick-0 events in `events.jsonl`;
+     - `SHA-256(canonical world)` = `world_initialized.payload.initial_snapshot_hash`. The
+       engine hashes the committed tick-zero snapshot (`world/engine.py:242-259`, OQ-042);
+       checked on baseline code with a 2-tick run, where the hashes match.
+   - **Final file:** `world.tick = T`.
 4. For the final checkpoint:
    - `SHA-256(canonical WorldState)` equals `final_world_sha256`;
    - `event_cursor` equals `event_count`;
@@ -235,12 +252,14 @@ Every instance cites event IDs and `(actor_id, decision_ordinal)`.
    matches the run:
    - `run_id`, `config_hash` and `map_hash` equal the trace manifest's;
    - `events` equals `events.jsonl` event for event, in canonical bytes;
-   - `F[T]` equals the projection of the final checkpoint world
-     (`contract/projections.py:16`) with the tick-T event count.
+   - `F[0]` equals the projection of the tick-zero checkpoint world with the tick-0 event
+     count, and `F[T]` that of the final checkpoint world with the tick-T event count
+     (`contract/projections.py:16`).
 6. Every frame passes these invariants, with limits read from `config.json`:
-   - **canteen uniqueness:** exactly one of the following holds — one alive resident has
-     non-null `canteen_servings`, or `ground_canteen` is non-null. Dead residents have null
-     servings and `fruit_count = 0`;
+   - **canteen uniqueness:** `count(alive residents with non-null canteen_servings) +
+     (1 if ground_canteen is non-null) = 1`, and every dead resident has null
+     `canteen_servings` and `fruit_count = 0`. This rejects zero locations (EV-10) and two
+     or more (EV-14);
    - **capacity:** servings in `0..canteen.capacity_servings`;
    - **trees:** every stock in `0..fruit.max_stock_per_tree`;
    - **slots:** for each alive resident, `fruit_count + (1 if holding the canteen)` ≤
@@ -285,8 +304,26 @@ its IDs cited.
   - totals, summed over residents;
   - per-resident rates over `exposure_ticks`;
   - deaths, by `holder_at_death`: whether `F[death_tick−1]` shows the canteen held.
-- **Report per pair:** the arm difference, with median, min, max and the number of pairs
-  favoring each arm.
+- **Report per pair** (OQ-069): `d = value(treatment arm) − value(base arm)`, with treatment =
+  `canteen-restricted` (S4) or `cue-ignored` (S5). Include a pair iff both arms are valid.
+  Every scalar below is defined for every valid run, so there are no missing values.
+  - Report the median, min and max of `d`.
+  - **Directional metrics only** also report the number of pairs favoring base, favoring the
+    treatment, and tied. The favorable direction is given in the table.
+  - **Descriptive metrics** report signed `d` only.
+
+| Run scalar | Definition | Direction |
+|---|---|---|
+| `deaths` | residents with `alive_at_T = false` | lower is better |
+| `all_alive` | 1 if all three are alive at `T`, else 0 | higher is better |
+| `ticks_deprived` | Σ over residents | lower is better |
+| `dedicated_water_trips` | Σ over residents | lower is better (BN §0: avoided dedicated trips) |
+| `water_only_visits` | Σ over residents | lower is better |
+| `gathers_completed` | Σ over residents | higher is better |
+| `discovered` | residents with non-null discovery | higher is better |
+| `discovery_time_capped` | Σ over residents of `first_spring_discovery_tick`, or `T+1` if null | lower is better |
+| `spring_drink_time_capped` | Σ over residents of `first_spring_drink_tick`, or `T+1` if null | lower is better |
+| `movement_ticks`, `given_count`/`_qty`, `received_count`/`_qty`, `canteen_drinks`, `canteen_fills`, `transfer_then_drink`, `hydration_cap_waste`, `slot_full_incidents`, `found_not_drunk`, `not_found` | Σ over residents (or per run) | descriptive |
 - **S4 (PD-07).** Arms `base` vs. `canteen-restricted`. Round 1 is S2 at decay 100; round 2 is
   S4 `s4-decay120`, on the same seeds, geometry, speed and policy version.
   - **Metrics:** §3.1 water-only visits, dedicated trips, movement ticks, gathers, given and
@@ -317,10 +354,12 @@ its IDs cited.
     - `post_access_dehydration`: drank at least once, and some tick of `R` has
       `hydration = min`. The spring is inexhaustible, so this is never supply shortfall;
     - `food_supply_shortfall`: drank at least once, every tick of `R` has `satiety = min` and
-      `hydration > min`, and the sum of all tree stocks is 0 at every frame `F[k]` for `k` in
-      `R`;
-    - `food_access_shortfall`: as the previous category, but some frame in `R` has a positive
-      total tree stock.
+      `hydration > min`, and the **food ledger** is 0 at every frame `F[k]` for `k` in `R`.
+      The ledger is Σ tree stocks + Σ ground fruit + Σ `fruit_count` over all residents, the
+      same terms as the WR §8.2 conservation sum without consumption;
+    - `food_access_shortfall`: as the previous category, but the food ledger is positive at
+      some frame in `R`. That includes fruit carried by another resident or lying on the
+      ground (EV-05 case C).
   - Only `food_supply_shortfall` is reported as supply shortfall.
 
 ## 6. Manifest and experiment-case identity
@@ -331,7 +370,19 @@ OQ-049 stays deferred: `run_id` comes from the scenario file. A case is identifi
 `<scenario_id>.<revision_label>.<variant_id>.s<seed>`, for example
 `s2-default.orig.base.s2195683955`
 
-- `revision_label` is exactly `orig` or `m6`, with no hash.
+- `revision_label` is exactly one of:
+  - `orig`: the content at `04fde8b`;
+  - `m6`: the M6-approved default;
+  - `cand<n>` (`n ≥ 1`): a P2-04 staged candidate.
+
+  No hash is part of the label.
+- **Staged candidates.** A candidate must be committed before it runs, under
+  `content/scenarios/<scenario_id>/`, with its own map file if the map changes; uncommitted
+  inputs are refused.
+  - **Resolver:** `git show <code_commit>:<scenario_file>`, plus the map path it names.
+  - **Identity:** `content_revision_sha256` and `map_sha256`.
+  - **Immutable copy:** the run directory's `config.json` and `map.txt` (verified by
+    `load_trace`).
 - The content hash is a separate manifest field.
 
 **Paths** (all under the ignored `runs/`, root `.gitignore:25`), with `B = runs/p2/<batch_id>`:
@@ -350,7 +401,8 @@ operator, matches `[a-z0-9-]+`, and is unique per batch.
 | `base` | `{"0.1", enabled, enabled, 2, 36}` | none |
 | `canteen-restricted` | `{"0.1", restricted, enabled, 2, 36}` | `--rule-canteen restricted` |
 | `cue-ignored` | `{"0.1", enabled, ignored, 2, 36}` | `--rule-cue ignored` |
-| `p1-random`, `p1-scripted` | none (P1 policies; `rule_params` absent) | `--policy random`; `--policy scripted --script <path>` |
+| `p1-random` | none (P1; `rule_params` absent) | policy args `--policy random` |
+| `p1-scripted` | none (P1; `rule_params` absent) | policy args `--policy scripted --script <script_file>` |
 
 - **New numeric variants:** a variant with nondefault numeric parameters gets a new ID
   `<name>-v<n>`, recorded in the P2-04 report before use.
@@ -364,6 +416,7 @@ P2CaseManifest {
   manifest_version:"0.1", case_id, batch_id,
   scenario_id, revision_label, scenario_file,        // repo-relative path of the world TOML
   content_revision_sha256,  // config hash of scenario_file as committed (its own meta.seed)
+  script_file:string|null,  // repo-relative script for p1-scripted, else null
   seed, cli_args:array<string>,                      // exact argument vector after "-m living_island"
   policy_id,                // tick-0 agent_state.runtime_states[*].policy_config.policy_id
   policy_variant_id, rule_params:RuleParams|null, script_sha256:string|null,
@@ -377,12 +430,19 @@ P2CaseManifest {
 
 `cli_args` is exactly:
 
-`run --config <scenario_file> --ticks 1008 --seed <seed> --policy <rule-based|random|scripted> <variant flags> --out <B>/cases/<case_id> --export-replay`
+`run --config <scenario_file> --ticks 1008 --seed <seed> <policy args> --out <B>/cases/<case_id> --export-replay`
 
-- The variant flags are those in the table; `--rule-params B/variants/<id>.json` is used for
-  numeric variants.
-- Re-running `cli_args` at `code_commit` must reproduce the same hashes and metric values
-  (B08).
+- **Policy args** — exactly one expansion per variant:
+  - rule variants: `--policy rule-based` followed by the variant's flags from the table, or
+    `--rule-params <B>/variants/<id>.json` for registered numeric variants;
+  - `p1-random`: `--policy random`;
+  - `p1-scripted`: `--policy scripted --script <script_file>`.
+- **Rerun (B08).** The CLI refuses a populated `--out` (`persistence/resume.py:59-66`), so a
+  rerun goes to a new batch `B' = runs/p2/<batch_id>-rerun<n>`.
+  - Its argv is `cli_args` with **only** the value after `--out` replaced by
+    `<B'>/cases/<case_id>`.
+  - Run it at `code_commit` and compare `events_sha256`, `decisions_sha256`,
+    `final_world_sha256` and every metric value.
 - P1 fixtures (P2-03 validation on P1 policies): `policy_variant_id` is `p1-random` or
   `p1-scripted` with `rule_params = null`, and `script_sha256` comes from the tick-zero
   policy config.
@@ -471,7 +531,8 @@ Decisions: `c` ordinal 1 at tick 3, `[gather t1]`; `c` ordinal 2 at tick 5,
 
 `a`'s visits:
 - They are `F[2..3]` and `F[6..8]`. The tick-2 `move_to` completion is travel.
-- Visit 1 has the drink at tick 3; its leg is tick 1, with no gather → **dedicated**.
+- Visit 1 has the drink at tick 3. With no previous visit, `p = −1`, so its leg is ticks
+  0–1, with no gather → **dedicated**.
 - Visit 2 has the drink at tick 7; its leg is ticks 4–5, with the gather at 5 → water-only,
   **not dedicated**.
 
@@ -490,13 +551,17 @@ Same conventions as above; each vector lists only what differs.
 | EV-01 arrival move only (G2-06) | `a` spring-adjacent in `F[2..3]`; the only completion in 2..3 is `move_to` at tick 2. | `water_only_visits = 0`, `dedicated_water_trips = 0` (no drink or fill). |
 | EV-02 survivor found, never drank (G2-07) | `a` discovery 4; no `water_drank`; alive at T. | `water_access = found_not_drunk` (alive); excluded from the discovery-to-drink summary; counted in the alive split. |
 | EV-03 canteen drink before discovery (G2-07) | `a` canteen drink at tick 2; discovery 5; no spring drink; dies at 7. | `first_drink_tick = 2`, `first_spring_drink_tick = null`, `water_access = found_not_drunk`; death category `found_not_drunk`. |
-| EV-04 late dehydration after a drink (G2-07) | `a` spring drink at 3; `R` = ticks 50–60 with `hydration = 0`; dies at 60. | `post_access_dehydration`, never supply shortfall. |
-| EV-05 food deaths (G2-07) | `R` ticks 300–310 with `satiety = 0` and `hydration > 0`; the tree-stock total is 0 at every frame of `R` → case A; total is 1 at `F[305]` → case B. | Case A: `food_supply_shortfall`. Case B: `food_access_shortfall`. |
+| EV-04 late dehydration after a drink (G2-07) | `T = 100`. `a`: discovery 2, spring drink at 3; `hydration = 0` for ticks 50–60; dies at 60. | `R` = ticks 50–60 → `post_access_dehydration`, never supply shortfall. |
+| EV-05 food deaths (G2-07, G2-R2-06) | `T = 400`. `a`: discovery 2, spring drink at 3; `R` = ticks 300–310 with `satiety = 0` and `hydration > 0`; dies at 310. Case A: in every `F[k]`, `k` in 300–310, all trees, ground and resident fruit are 0. Case B: as A, but one tree has stock 1 at `F[305]`. Case C: as A, but `b` carries 1 fruit throughout. | A: `food_supply_shortfall`. B: `food_access_shortfall`. C: `food_access_shortfall` (the ledger counts carried fruit). |
 | EV-06 repeated attempt (G2-08) | `c` gather `t1` fails `RESOURCE_TAKEN` at 5; record `(c,2)` at tick 5 is `[gather t1]` again; `(c,3)` at 7 is `[move_to (0,2)]`. | A1 = 0, repeat = 1 for that failure; `(c,3)` is not examined for it. |
 | EV-07 null-target failure (G2-08) | `a` spring `drink` fails `OUT_OF_REACH`. | Not an A1 candidate; A1 = 0. |
 | EV-08 two successes, one failure (G2-08) | Tick 5: `fruit_gathered` `t1` by `a` (seq 0) and by `d` (seq 3); `action_failed` `c` `RESOURCE_TAKEN` on `t1` (seq 5). | C1 = 1, matched to seq 0. |
 | EV-09 give into a full inventory (G2-06) | `a` `give` fruit to `b` fails `INVENTORY_FULL` (`target_id = b`). | `slot_full_incidents`: `b` 1, `a` 0. |
-| EV-10 canteen removed (G2-05) | In a valid 3-tick run, delete `ground_canteen` and the holder's servings from `F[1]` (schema-valid). | Technical check 6 fails (canteen uniqueness) → run invalid, although `ReplayBundle` validation and `load_trace` pass. |
+| EV-10 canteen removed (G2-05) — an isolated check-6 test, not a full gate run | In a 3-tick run that otherwise passes checks 1, 3, 4, 5 and 8 (with `T = 3`), delete `ground_canteen` and the holder's servings from `F[1]` (schema-valid). | Technical check 6 fails (canteen uniqueness) → run invalid, although `ReplayBundle` validation and `load_trace` pass. |
 | EV-11 transfer then drink (G2-06) | `tick_minutes = 10` (W = 144). Canteen given `a → b` at 10; `b` canteen drink at 154. Variant A: `b` gives it to `c` at 100, then `c` drinks at 120. | Base: counted (154 ≤ 10+144). Variant A: not counted for `G(a→b)`, because an intervening give from `b` exists; `G(b→c)` is counted (120 ≤ 244). |
 | EV-12 replay mismatch (G2-05) | Change one byte of an event payload inside `replay.json` (schema-valid). | Check 5 fails (event bytes differ from `events.jsonl`) → invalid. |
 | EV-13 frontier signature (G2-08) | `a` record at tick 3 `[move_to (4,1)]`. Index of (4,1) = 10 is absent from `a`'s `exploration_updated` indices with tick ≤ 3, and present at tick 4. | (4,1) is in `a`'s `early_frontiers`. A record at tick 4 targeting (4,1) would not be a frontier entry. |
+| EV-14 three canteen locations (G2-R2-03) — isolated check-6 test | `F[1]` shows `a` and `b` both alive with non-null `canteen_servings`, and `ground_canteen` non-null; schema-valid, conservation unaffected. | Count = 3 ≠ 1 → check 6 fails. |
+| EV-15 pick-up of a different item (G2-R2-07) | Tick 9, tile (2,1): `item_picked_up` by `a`, `item_type="fruit"` (seq 0); `action_failed` `c` `ITEM_TAKEN`, intent pick_up (2,1) `item_type="canteen"` (seq 2). | Not a C1 match, because the item types differ. C1 = 0 for this failure. |
+| EV-16 failure at the final tick (G2-R2-07) | `T = 8`; `c` gather `t1` fails `RESOURCE_TAKEN` at tick 8. | No decision of `c` at tick ≥ 8 → unresolved = 1; A1 = 0, repeat = 0. |
+| EV-17 death before the next decision (G2-R2-07) | `c` move fails `NO_PATH` at tick 6 and dies at tick 6 in the same interval. | No later record → unresolved = 1. |

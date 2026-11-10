@@ -82,5 +82,5 @@ decisions and the alternatives the owner's plan rejected.
   `agent-interface-v0.1.md` (marked `[CR-004]`) and sets this ADR to accepted.
 - P2-01 wires the ID, validator, rule parameters and CLI. P2-02 implements the rules and
   creates the S1 and S3 scenario files. P2-03 builds the batch tool and analysis.
-- The open questions OQ-054 to OQ-068 carry the assumptions for the owner's M5
+- The open questions OQ-054 to OQ-069 carry the assumptions for the owner's M5
   disposition. OQ-056 is already decided by the owner.
