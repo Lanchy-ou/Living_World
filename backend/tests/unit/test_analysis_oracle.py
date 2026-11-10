@@ -56,7 +56,7 @@ def test_worked_example_per_resident_metrics() -> None:
     assert (b.water_only_visits, b.dedicated_water_trips) == (0, 0)
     assert (c.water_only_visits, c.dedicated_water_trips) == (0, 0)
     assert (a.gathers_completed, b.gathers_completed, c.gathers_completed) == (1, 0, 0)
-    assert (a.hydration_cap_waste, b.hydration_cap_waste) == (3000, 0)
+    assert (a.hydration_cap_waste, b.hydration_cap_waste, c.hydration_cap_waste) == (3000, 0, 0)
     assert (a.water_access, b.water_access, c.water_access) == (
         "drank",
         "found_not_drunk",
@@ -293,7 +293,7 @@ def test_ev13_frontier_signature() -> None:
     assert run.signature["early_frontiers"]["a"] == [[4, 1]]
 
     later = Toy(T=8)
-    later.explored(3, "a", [10])
+    later.explored(4, "a", [10])  # the same tick as the record: not a frontier (<=, not <)
     later.decision("a", 1, 4, [move_intent(4, 1)])
     _, again = metrics_of(later)
     assert again.signature["early_frontiers"]["a"] == []

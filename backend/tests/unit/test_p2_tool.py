@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,9 @@ from living_island.contract.replay import GroundCanteenFrame, ReplayBundle
 from living_island.world.protocol import Coord
 
 TICKS = 12
+# The one test seam: experiment cases are 1008 ticks (§4 check 2). Tests run short cases, so they
+# lower the bar for the whole module; test_a_short_run_is_never_valid restores the real value.
+tool.REQUIRED_TICKS = TICKS
 SEEDS = [2195683955, 937154673]
 RANDOM = tool.CaseSpec("s2-default", "orig", "p1-random")
 SCRIPTED = tool.CaseSpec("s2-default", "orig", "p1-scripted")
@@ -126,13 +130,13 @@ def test_the_tool_writes_only_under_manifests_variants_and_summary(e2e: dict[str
 
 def test_report_is_separate_and_never_writes_into_a_run_directory(e2e: dict[str, Any]) -> None:
     before = hash_tree(e2e["dir"] / "cases")
-    summary = tool.run_report("e2e", ticks=TICKS, repo=e2e["repo"])
+    summary = tool.run_report("e2e", repo=e2e["repo"])
     assert summary == {"cases": 4, "invalid": []}
     assert hash_tree(e2e["dir"] / "cases") == before
 
 
 def test_rerun_gives_identical_hashes_and_metrics(e2e: dict[str, Any]) -> None:
-    report = tool.run_rerun("e2e", ticks=TICKS, repo=e2e["repo"], runner=inprocess)
+    report = tool.run_rerun("e2e", repo=e2e["repo"], runner=inprocess)
     assert report["rerun_batch"] == "e2e-rerun1" and report["identical"] is True
     assert all(row["identical"] and not row["mismatches"] for row in report["cases"])
     rerun_dir = e2e["repo"] / "runs" / "p2" / "e2e-rerun1"
@@ -149,7 +153,7 @@ def test_the_subprocess_runner_reproduces_the_in_process_run(small: dict[str, An
     out = "runs/p2/subprocess/cases/" + source.case_id
     result = tool.run_cli(tool.replace_out(source.cli_args, out), small["repo"])
     assert result.returncode == 0, result.output
-    again = tool.load_case(small["repo"] / out, ticks=6, cli_exit_code=0)
+    again = tool.load_case(small["repo"] / out, cli_exit_code=0)
     assert again.inputs.trace is not None
     assert again.inputs.trace.events_sha256 == source.events_sha256
     assert again.inputs.trace.final_world_sha256 == source.final_world_sha256
@@ -169,9 +173,7 @@ def test_rerun_argv_replaces_only_the_out_value(e2e: dict[str, Any]) -> None:
 def small(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     repo, commit = make_repo(tmp_path_factory.mktemp("small"))
     registry = registry_for(commit)
-    tool.run_batch(
-        "small", SEEDS[:1], [RANDOM], ticks=6, repo=repo, runner=inprocess, registry=registry
-    )
+    tool.run_batch("small", SEEDS[:1], [RANDOM], repo=repo, runner=inprocess, registry=registry)
     return {"repo": repo, "commit": commit}
 
 
@@ -182,7 +184,7 @@ def test_a_rerun_that_differs_is_reported_as_not_identical(small: dict[str, Any]
         args[position] = str(int(args[position]) + 1)
         return inprocess(args, repo)
 
-    report = tool.run_rerun("small", number=7, ticks=6, repo=small["repo"], runner=other_seed)
+    report = tool.run_rerun("small", number=7, repo=small["repo"], runner=other_seed)
     assert report["identical"] is False
     assert all("events_sha256" in row["mismatches"] for row in report["cases"])
     assert (
@@ -195,12 +197,10 @@ def test_rerun_refuses_an_existing_target_and_a_different_code_commit(
 ) -> None:
     repo = small["repo"]
     (repo / "runs" / "p2" / "small-rerun5").mkdir(parents=True)
-    assert refusal_code(lambda: tool.run_rerun("small", number=5, ticks=6, repo=repo)) == (
-        "BATCH_EXISTS"
-    )
+    assert refusal_code(lambda: tool.run_rerun("small", number=5, repo=repo)) == ("BATCH_EXISTS")
     (repo / "note.txt").write_text("code moved on\n", encoding="utf-8")
     commit_all(repo, "move HEAD")
-    assert refusal_code(lambda: tool.run_rerun("small", ticks=6, repo=repo)) == "CODE_COMMIT"
+    assert refusal_code(lambda: tool.run_rerun("small", repo=repo)) == "CODE_COMMIT"
 
 
 # ----------------------------------------------------------------------------- §6 refusals
@@ -210,7 +210,7 @@ def test_rerun_refuses_an_existing_target_and_a_different_code_commit(
 def test_batch_id_must_match_the_pattern(tmp_path: Path, batch_id: str) -> None:
     repo, commit = make_repo(tmp_path)
     call = lambda: tool.run_batch(  # noqa: E731
-        batch_id, SEEDS[:1], [RANDOM], ticks=6, repo=repo, runner=never,
+        batch_id, SEEDS[:1], [RANDOM], repo=repo, runner=never,
         registry=registry_for(commit),
     )  # fmt: skip
     assert refusal_code(call) == "BATCH_ID"
@@ -220,7 +220,7 @@ def test_batch_id_must_be_unique(tmp_path: Path) -> None:
     repo, commit = make_repo(tmp_path)
     (repo / "runs" / "p2" / "taken").mkdir(parents=True)
     call = lambda: tool.run_batch(  # noqa: E731
-        "taken", SEEDS[:1], [RANDOM], ticks=6, repo=repo, runner=never,
+        "taken", SEEDS[:1], [RANDOM], repo=repo, runner=never,
         registry=registry_for(commit),
     )  # fmt: skip
     assert refusal_code(call) == "BATCH_EXISTS"
@@ -232,7 +232,7 @@ def plan(repo: Path, registry: Any, specs: Any, **kw: Any) -> Any:
         "plan",
         SEEDS[:1],
         specs,
-        ticks=6,
+        ticks=TICKS,
         script_file=kw.pop("script_file", None),
         code_commit=tool.head_commit(repo),
         registry=registry,
@@ -353,7 +353,6 @@ def test_a_case_with_unexpected_effective_rule_params_gets_no_manifest(
         "bad-params",
         SEEDS[:1],
         [RANDOM],
-        ticks=6,
         repo=repo,
         runner=inprocess,
         registry=registry_for(commit),
@@ -399,7 +398,7 @@ def test_variant_files_are_written_for_rule_variants_only(tmp_path: Path) -> Non
 
     base = tool.CaseSpec("s2-default", "orig", "base")
     result = tool.run_batch(
-        "variants", SEEDS[:1], [base, RANDOM], ticks=6, repo=repo, runner=stop_after_planning,
+        "variants", SEEDS[:1], [base, RANDOM], repo=repo, runner=stop_after_planning,
         registry=registry_for(commit),
     )  # fmt: skip
     folder = repo / "runs" / "p2" / "variants" / "variants"
@@ -453,7 +452,7 @@ def test_candidate_labels_resolve_only_in_the_scenario_form() -> None:
 @pytest.fixture(scope="module")
 def loaded(e2e: dict[str, Any]) -> Any:
     path = e2e["dir"] / "cases" / f"s2-default.orig.p1-scripted.s{SEEDS[0]}"
-    return tool.load_case(path, ticks=TICKS, cli_exit_code=0)
+    return tool.load_case(path, cli_exit_code=0)
 
 
 def failed_checks(inputs: Any) -> tuple[int, ...]:
@@ -648,7 +647,6 @@ def test_rule_variant_manifests_on_the_rule_policy_stub(tmp_path: Path) -> None:
         "rule-variants",
         SEEDS[:1],
         specs,
-        ticks=6,
         repo=repo,
         runner=inprocess,
         registry=registry_for(commit),
@@ -682,10 +680,158 @@ def test_a_rule_case_run_with_the_wrong_switch_is_refused(tmp_path: Path) -> Non
         "wrong-switch",
         SEEDS[:1],
         [spec],
-        ticks=6,
         repo=repo,
         runner=inprocess,
         registry=registry_for(commit),
         variants=variants,
     )
     assert result.manifests == [] and "RULE_PARAMS" in result.failures[0]["refusal"]
+
+
+# ----------------------------------------------------------------------------- Gate 2 round 1
+
+
+def test_the_public_cli_has_no_ticks_option(tmp_path: Path) -> None:
+    """G2-R1-01: an experiment case is 1008 ticks; the CLI cannot ask for another length."""
+    for command in ("batch", "rerun", "report"):
+        argv = [command, "--batch-id", "x", "--ticks", "12"]
+        if command == "batch":
+            argv += ["--seeds", "1", "--case", "s2-default:orig:p1-random"]
+        with pytest.raises(SystemExit) as caught:
+            tool.main(argv)
+        assert caught.value.code == 2
+    assert tool.REQUIRED_TICKS != 1008  # the test seam is lowered for this module only
+    assert tool.build_parser().parse_args(["report", "--batch-id", "x"]).batch_id == "x"
+
+
+def test_a_short_run_is_never_reported_as_valid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """G2-R1-01: with the real 1008-tick requirement, a 12-tick case fails check 2."""
+    monkeypatch.setattr(tool, "REQUIRED_TICKS", 1008)
+    repo, commit = make_repo(tmp_path)
+    result = tool.run_batch(
+        "short",
+        SEEDS[:1],
+        [RANDOM],
+        ticks=12,
+        repo=repo,
+        runner=inprocess,
+        registry=registry_for(commit),
+    )
+    case_id = f"s2-default.orig.p1-random.s{SEEDS[0]}"
+    assert result.invalid == [case_id] and not result.ok
+    record = (repo / "runs" / "p2" / "short" / "summary" / "metrics" / f"{case_id}.json").read_text(
+        encoding="utf-8"
+    )
+    assert '"valid": false' in record
+    assert tool.run_report("short", repo=repo) == {"cases": 1, "invalid": [case_id]}
+
+
+def test_an_ignored_uncommitted_script_is_refused(tmp_path: Path) -> None:
+    """G2-R1-02: a script under an ignored path has no blob at the code commit."""
+    repo, commit = make_repo(tmp_path)
+    ignored = "runs/uncommitted.script.json"
+    (repo / "runs").mkdir(exist_ok=True)
+    (repo / ignored).write_bytes((repo / SCRIPT_FIXTURE).read_bytes())
+    assert tool.git(repo, "ls-files", "--error-unmatch", "--", ignored).returncode != 0
+    assert tool.git(repo, "status", "--porcelain", "--", ignored).stdout == b""  # status misses it
+    assert refusal_code(
+        lambda: plan(repo, registry_for(commit), [SCRIPTED], script_file=ignored)
+    ) == ("UNCOMMITTED")
+    result_call = lambda: tool.run_batch(  # noqa: E731
+        "ignored", SEEDS[:1], [SCRIPTED], script_file=ignored, repo=repo, runner=never,
+        registry=registry_for(commit),
+    )  # fmt: skip
+    assert refusal_code(result_call) == "UNCOMMITTED"
+    assert not (repo / "runs" / "p2" / "ignored").exists()
+    for odd in ("../outside.json", "/abs/script.json", "backend/../" + SCRIPT_FIXTURE):
+        call = lambda odd=odd: plan(repo, registry_for(commit), [SCRIPTED], script_file=odd)  # noqa: E731
+        assert refusal_code(call) == "UNCOMMITTED"
+
+
+def test_a_modified_or_deleted_committed_input_is_refused(tmp_path: Path) -> None:
+    repo, commit = make_repo(tmp_path)
+    script = repo / SCRIPT_FIXTURE
+    original = script.read_bytes()
+    script.write_bytes(original + b" ")
+    code = lambda: plan(repo, registry_for(commit), [SCRIPTED], script_file=SCRIPT_FIXTURE)  # noqa: E731
+    assert refusal_code(code) == "UNCOMMITTED"
+    script.unlink()
+    assert refusal_code(code) == "UNCOMMITTED"
+    script.write_bytes(original)
+    assert code()  # restored: the working file matches the committed blob again
+
+
+def _exit_one(args: Any, repo: Path) -> Any:
+    """Run the real simulation (intact artifacts), then report a nonzero exit status."""
+    done = inprocess(args, repo)
+    return tool.CliResult(1, done.output)
+
+
+def test_a_nonzero_cli_exit_is_recorded_and_used_by_report_and_rerun(tmp_path: Path) -> None:
+    """G2-R1-04: intact artifacts with exit 1 stay invalid in batch, report and rerun."""
+    repo, commit = make_repo(tmp_path)
+    registry = registry_for(commit)
+    case_id = f"s2-default.orig.p1-random.s{SEEDS[0]}"
+    result = tool.run_batch(
+        "exit1", SEEDS[:1], [RANDOM], repo=repo, runner=_exit_one, registry=registry
+    )
+    assert result.invalid == [case_id] and len(result.manifests) == 1
+    batch = repo / "runs" / "p2" / "exit1"
+    codes = json.loads((batch / "summary" / "cli-exit-codes.json").read_text(encoding="utf-8"))
+    assert codes == {case_id: 1}
+    assert not (batch / "cases" / case_id / "cli-exit-codes.json").exists()  # outside the run dir
+    assert tool.run_report("exit1", repo=repo) == {"cases": 1, "invalid": [case_id]}
+    metrics = json.loads(
+        (batch / "summary" / "metrics" / f"{case_id}.json").read_text(encoding="utf-8")
+    )
+    assert metrics["valid"] is False
+    assert [c["check"] for c in metrics["validity"] if not c["ok"]] == [1]
+    # rerun: the original is judged with its recorded exit 1, so a rerun that exits 0 differs
+    report = tool.run_rerun("exit1", repo=repo, runner=inprocess)
+    assert report["identical"] is False and "metrics" in report["cases"][0]["mismatches"]
+    same = tool.run_rerun("exit1", repo=repo, runner=_exit_one)
+    assert same["identical"] is True
+    # a missing record never becomes exit 0
+    (batch / "summary" / "cli-exit-codes.json").unlink()
+    assert tool.run_report("exit1", repo=repo) == {"cases": 1, "invalid": [case_id]}
+
+
+def test_the_round_gate_takes_the_registered_seed_set() -> None:
+    """G2-R1-03: one valid pair is not a passing S5 round; the rest of the 20 seeds are missing."""
+    from test_analysis_compare import summary
+
+    seed = tool.DEVELOPMENT_SEEDS[0]
+    base = tool.CaseSpec("s2-default", "orig", "base")
+    cue = tool.CaseSpec("s2-default", "orig", "cue-ignored")
+    report = tool.build_comparisons(
+        [(base, summary("b", seed)), (cue, summary("c", seed, access=("drank", "drank", "drank")))]
+    )
+    paired = report["s2-default.orig"]["paired_base_vs_cue-ignored"]
+    assert paired["technical"] == "FAIL" and paired["seed_list"] == "development"
+    assert paired["pairs_used"] == 1  # the descriptive summary from the valid pair
+    assert len(paired["missing_cases"]) == 2 * 19
+    assert {m["arm"] for m in paired["missing_cases"]} == {"base", "treatment"}
+    assert paired["dropped_seeds"] == sorted(set(tool.DEVELOPMENT_SEEDS) - {seed})
+    assert paired["invalid_cases"] == []
+    # all 2 x 20 valid cases -> technical PASS
+    seeds = tool.DEVELOPMENT_SEEDS
+    full = tool.build_comparisons(
+        [(base, summary(f"b{s}", s)) for s in seeds] + [(cue, summary(f"c{s}", s)) for s in seeds]
+    )
+    complete = full["s2-default.orig"]["paired_base_vs_cue-ignored"]
+    assert (complete["technical"], complete["pairs_used"], complete["missing_cases"]) == (
+        "PASS", 20, [],
+    )  # fmt: skip
+    # one invalid case among the 40 fails the round and is listed
+    broken = tool.build_comparisons(
+        [(base, summary(f"b{s}", s)) for s in seeds]
+        + [(cue, summary(f"c{s}", s, valid=s != seeds[3])) for s in seeds]
+    )
+    bad = broken["s2-default.orig"]["paired_base_vs_cue-ignored"]
+    assert bad["technical"] == "FAIL" and bad["invalid_cases"] == [f"c{seeds[3]}"]
+    assert bad["pairs_used"] == 19 and bad["dropped_seeds"] == [seeds[3]]
+    # seeds outside one registered list cannot form a passing round
+    stray = tool.build_comparisons([(base, summary("b", 7)), (cue, summary("c", 7))])
+    assert stray["s2-default.orig"]["paired_base_vs_cue-ignored"]["technical"] == "FAIL"

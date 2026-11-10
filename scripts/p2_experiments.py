@@ -21,7 +21,7 @@ import subprocess
 import sys
 import tomllib
 from collections import defaultdict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
@@ -54,7 +54,10 @@ from living_island.world.content import WorldContent, build_world_content, confi
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNS_ROOT = "runs/p2"
-DEFAULT_TICKS = 1008
+# §4 check 2 and the §6 argv: an experiment case is exactly this long. Not a CLI option; tests
+# that run short cases lower it (the only seam), so a short run is never reported as valid.
+REQUIRED_TICKS = 1008
+EXIT_CODES_FILE = "summary/cli-exit-codes.json"
 MANIFEST_VERSION = "0.1"
 WRITABLE_PARTS = ("manifests", "variants", "summary")
 
@@ -260,6 +263,21 @@ def content_at(repo: Path, revision: str, scenario_file: str) -> tuple[WorldCont
     return build_world_content(config, blob_at(repo, revision, map_path)), map_path
 
 
+def require_committed(repo: Path, code_commit: str, path: str) -> None:
+    """Refuse an input that is not a committed blob at ``code_commit`` or differs from it.
+
+    Untracked and ignored files have no blob at the commit, so a status check is not enough.
+    """
+    if posixpath.normpath(path) != path or path.startswith(("/", "../")) or "\\" in path:
+        raise Refusal("UNCOMMITTED", f"{path!r} is not a normalized repo-relative path")
+    if git(repo, "cat-file", "-e", f"{code_commit}:{path}").returncode != 0:
+        raise Refusal("UNCOMMITTED", f"{path} is not a committed file at {code_commit}")
+    if not (repo / path).is_file():
+        raise Refusal("UNCOMMITTED", f"{path} is missing from the working tree")
+    if git(repo, "diff", "--quiet", code_commit, "--", path).returncode != 0:
+        raise Refusal("UNCOMMITTED", f"{path} differs from its committed blob at {code_commit}")
+
+
 @dataclass(frozen=True)
 class VerifiedInputs:
     revision: Revision
@@ -289,10 +307,8 @@ def verify_inputs(
         raise Refusal("CONFIG_HASH", f"{file} at {code_commit} differs from the pin {pin}")
     if at_code.map_hash != at_pin.map_hash:
         raise Refusal("MAP_HASH", f"the map of {file} at {code_commit} differs from the pin {pin}")
-    watched = [file, map_path, *extra_files]
-    dirty = git_text(repo, "status", "--porcelain", "--untracked-files=all", "--", *watched)
-    if dirty:
-        raise Refusal("UNCOMMITTED", f"uncommitted inputs: {dirty}")
+    for path in (file, map_path, *extra_files):
+        require_committed(repo, code_commit, path)
     return VerifiedInputs(revision, pin, config_hash(at_pin.config), map_path)
 
 
@@ -376,7 +392,6 @@ def _limits_of(content: WorldContent) -> RunLimits:
 def load_case(
     run_dir: Path,
     *,
-    ticks: int,
     cli_exit_code: int | None,
     expected_policy_config_sha256: str | None = None,
 ) -> LoadedCase:
@@ -393,7 +408,7 @@ def load_case(
         )
     except (ValueError, OSError) as exc:
         errors["trace"] = str(exc)
-    final_tick = trace.final_tick if trace is not None else ticks
+    final_tick = trace.final_tick if trace is not None else REQUIRED_TICKS
 
     def checkpoint(tick: int, name: str) -> SavePackage | None:
         if content is None:
@@ -414,7 +429,7 @@ def load_case(
     limits = _limits_of(content) if content is not None else None
     inputs = ValidityInputs(
         cli_exit_code=cli_exit_code,
-        expected_ticks=ticks,
+        expected_ticks=REQUIRED_TICKS,
         limits=limits,
         trace=trace,
         events=events,
@@ -617,7 +632,7 @@ def run_batch(
     seeds: Sequence[int],
     specs: Sequence[CaseSpec],
     *,
-    ticks: int = DEFAULT_TICKS,
+    ticks: int | None = None,
     script_file: str | None = None,
     repo: Path = ROOT,
     runner: Runner = run_cli,
@@ -630,7 +645,7 @@ def run_batch(
         batch_id,
         seeds,
         specs,
-        ticks=ticks,
+        ticks=REQUIRED_TICKS if ticks is None else ticks,
         script_file=script_file,
         code_commit=code_commit,
         registry=registry,
@@ -647,12 +662,14 @@ def run_batch(
             )
     records: dict[str, dict[str, Any]] = {}
     summaries: list[tuple[CaseSpec, RunSummary]] = []
+    exit_codes: dict[str, int] = {}
     for case_id, seed, spec, variant, verified, cli_args in planned:
         print(f"[batch {batch_id}] {case_id}", flush=True)
         done = runner(cli_args, repo)
         write_batch_file(batch_dir, f"summary/logs/{case_id}.log", done.output)
         run_dir = batch_dir / "cases" / case_id
-        loaded = load_case(run_dir, ticks=ticks, cli_exit_code=done.returncode)
+        exit_codes[case_id] = done.returncode
+        loaded = load_case(run_dir, cli_exit_code=done.returncode)
         try:
             tick0 = loaded.inputs.tick0
             if tick0 is not None:
@@ -689,10 +706,24 @@ def run_batch(
                     ),
                 )
             )
+    write_exit_codes(batch_dir, exit_codes)
     write_summaries(batch_dir, result.manifests, records, summaries)
     if result.failures:
         write_batch_file(batch_dir, "summary/failures.json", json_text(result.failures))
     return result
+
+
+def write_exit_codes(batch_dir: Path, exit_codes: Mapping[str, int]) -> None:
+    """Record each case's real CLI exit status in batch metadata (outside the run directory)."""
+    write_batch_file(batch_dir, EXIT_CODES_FILE, json_text(dict(sorted(exit_codes.items()))))
+
+
+def read_exit_codes(batch_dir: Path) -> dict[str, int]:
+    path = batch_dir / EXIT_CODES_FILE
+    if not path.is_file():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {str(case_id): int(code) for case_id, code in data.items()}
 
 
 def canonical_bytes_text(value: Mapping[str, Any]) -> str:
@@ -747,8 +778,19 @@ def write_summaries(
         write_batch_file(batch_dir, "summary/comparisons.json", json_text(comparisons))
 
 
+def registered_seed_set(seeds: Iterable[int]) -> tuple[str, tuple[int, ...]] | None:
+    """The registered seed list that contains every given seed, if there is exactly one."""
+    observed = set(seeds)
+    found = [(n, v) for n, v in SEED_LISTS.items() if observed and observed <= set(v)]
+    return found[0] if len(found) == 1 else None
+
+
 def build_comparisons(summaries: Sequence[tuple[CaseSpec, RunSummary]]) -> dict[str, Any]:
-    """Per scenario revision: arm reports, paired reports and the pass lines that apply."""
+    """Per scenario revision: arm reports, paired reports and the pass lines that apply.
+
+    A paired round is gated on the registered seed list its seeds belong to (§4: all 2 x 20 cases
+    exist and are valid). Seeds outside one registered list cannot form a passing round.
+    """
     arms: dict[tuple[str, str], dict[str, dict[int, RunSummary]]] = defaultdict(
         lambda: defaultdict(dict)
     )
@@ -761,9 +803,18 @@ def build_comparisons(summaries: Sequence[tuple[CaseSpec, RunSummary]]) -> dict[
         }
         for treatment, scalars in (("canteen-restricted", S4_SCALARS), ("cue-ignored", S5_SCALARS)):
             if "base" in by_variant and treatment in by_variant:
-                entry[f"paired_base_vs_{treatment}"] = paired_report(
-                    by_variant["base"], by_variant[treatment], scalars
+                observed = {*by_variant["base"], *by_variant[treatment]}
+                registered = registered_seed_set(observed)
+                paired = paired_report(
+                    by_variant["base"],
+                    by_variant[treatment],
+                    scalars,
+                    expected_seeds=None if registered is None else registered[1],
                 )
+                paired["seed_list"] = None if registered is None else registered[0]
+                if registered is None:
+                    paired["technical"] = "FAIL"  # not a registered 20-seed round
+                entry[f"paired_base_vs_{treatment}"] = paired
         if "base" in by_variant:
             base_cases = list(by_variant["base"].values())
             entry["behavioral_variation_base"] = behavior_variation(base_cases)
@@ -787,17 +838,17 @@ def read_manifests(batch_dir: Path) -> list[P2CaseManifest]:
     ]
 
 
-def run_report(batch_id: str, *, ticks: int = DEFAULT_TICKS, repo: Path = ROOT) -> dict[str, Any]:
+def run_report(batch_id: str, *, repo: Path = ROOT) -> dict[str, Any]:
     """Compute metrics from existing case directories; separate from the batch command."""
     batch_dir = batch_dir_of(repo, batch_id)
     manifests = read_manifests(batch_dir)
+    exit_codes = read_exit_codes(batch_dir)  # a missing entry stays None: check 1 fails
     records: dict[str, dict[str, Any]] = {}
     summaries: list[tuple[CaseSpec, RunSummary]] = []
     for manifest in manifests:
         loaded = load_case(
             batch_dir / manifest.run_dir,
-            ticks=ticks,
-            cli_exit_code=0,
+            cli_exit_code=exit_codes.get(manifest.case_id),
             expected_policy_config_sha256=manifest.policy_config_sha256,
         )
         record = metric_record(loaded)
@@ -855,7 +906,6 @@ def run_rerun(
     batch_id: str,
     *,
     number: int | None = None,
-    ticks: int = DEFAULT_TICKS,
     repo: Path = ROOT,
     runner: Runner = run_cli,
 ) -> dict[str, Any]:
@@ -875,19 +925,23 @@ def run_rerun(
     rerun_dir = batch_dir_of(repo, rerun_id)
     if rerun_dir.exists():
         raise Refusal("BATCH_EXISTS", f"{relative_batch(rerun_id)} already exists")
+    source_exit_codes = read_exit_codes(source_dir)
+    rerun_exit_codes: dict[str, int] = {}
     rows = []
     for manifest in manifests:
         out = f"{relative_batch(rerun_id)}/cases/{manifest.case_id}"
         args = replace_out(manifest.cli_args, out)
         done = runner(args, repo)
         write_batch_file(rerun_dir, f"summary/logs/{manifest.case_id}.log", done.output)
+        rerun_exit_codes[manifest.case_id] = done.returncode
         again = load_case(
             rerun_dir / "cases" / manifest.case_id,
-            ticks=ticks,
             cli_exit_code=done.returncode,
             expected_policy_config_sha256=manifest.policy_config_sha256,
         )
-        original = load_case(source_dir / manifest.run_dir, ticks=ticks, cli_exit_code=0)
+        original = load_case(
+            source_dir / manifest.run_dir, cli_exit_code=source_exit_codes.get(manifest.case_id)
+        )
         mismatches = []
         trace, tick0, events = again.inputs.trace, again.inputs.tick0, again.inputs.events
         if trace is None or tick0 is None or events is None:
@@ -910,6 +964,7 @@ def run_rerun(
         "cases": rows,
         "identical": all(r["identical"] for r in rows),
     }
+    write_exit_codes(rerun_dir, rerun_exit_codes)
     write_batch_file(rerun_dir, "summary/rerun-report.json", json_text(report))
     return report
 
@@ -964,14 +1019,11 @@ def build_parser() -> argparse.ArgumentParser:
     batch.add_argument("--seed-list", choices=sorted(SEED_LISTS))
     batch.add_argument("--case", action="append", required=True, metavar="SCENARIO:LABEL:VARIANT")
     batch.add_argument("--script", help="repo-relative script file for p1-scripted cases")
-    batch.add_argument("--ticks", type=int, default=DEFAULT_TICKS)
     rerun = commands.add_parser("rerun", help="rerun a batch into <batch_id>-rerun<n> and compare")
     rerun.add_argument("--batch-id", required=True)
     rerun.add_argument("--n", type=int)
-    rerun.add_argument("--ticks", type=int, default=DEFAULT_TICKS)
     report = commands.add_parser("report", help="compute metrics from existing case directories")
     report.add_argument("--batch-id", required=True)
-    report.add_argument("--ticks", type=int, default=DEFAULT_TICKS)
     return parser
 
 
@@ -983,7 +1035,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.batch_id,
                 parse_seeds(args.seeds, args.seed_list),
                 [CaseSpec.parse(text) for text in args.case],
-                ticks=args.ticks,
                 script_file=args.script,
             )
             print(
@@ -996,10 +1047,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"  INVALID {case_id}", file=sys.stderr)
             return 0 if result.ok else 1
         if args.command == "rerun":
-            rerun_report = run_rerun(args.batch_id, number=args.n, ticks=args.ticks)
+            rerun_report = run_rerun(args.batch_id, number=args.n)
             print(f"rerun {rerun_report['rerun_batch']}: identical={rerun_report['identical']}")
             return 0 if rerun_report["identical"] else 1
-        summary = run_report(args.batch_id, ticks=args.ticks)
+        summary = run_report(args.batch_id)
         print(f"report {args.batch_id}: {summary['cases']} cases, invalid={summary['invalid']}")
         return 0
     except Refusal as refusal:
