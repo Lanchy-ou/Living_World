@@ -49,9 +49,10 @@ All scenarios keep the content rules of WR §1.1/§1.2 as validated by `world/co
 - one canteen with a configured owner;
 - unique IDs (CR-002).
 
-Scenario files are `content/scenarios/<scenario_id>/world.toml`. Each reuses the map file
-`content/worlds/default-island.map` through `layout_file = "../../worlds/default-island.map"`
-(relative paths are accepted, `persistence/content.py:40-49`).
+Scenario fixture files are `content/scenarios/<scenario_id>/<revision_label>.toml`, one
+file per label (§6). Each reuses the map file `content/worlds/default-island.map` through
+`layout_file = "../../worlds/default-island.map"` (relative paths are accepted,
+`persistence/content.py:40-49`). S2 uses `content/worlds/default.toml` itself.
 
 **Metadata, not treatment.** Only these fields may differ from S2 without counting as a
 changed factor:
@@ -196,9 +197,14 @@ Every instance cites event IDs and `(actor_id, decision_ordinal)`.
   - Failures of actions with a null target (`drink`, `eat`, `rest`, `sleep`, `wait`) and of
     `fill_canteen` are excluded (no `X` exists or is relevant).
   - Let `D` be the **first** decision record of `r` with `tick ≥ E.tick`, the smallest
-    ordinal. `E` counts as **A1** iff no intent of `D` targets `X`. Targets compare by tile for
-    `move_to`/`pick_up`, by tree ID for gather, and by resident for give/talk. Otherwise `E`
-    counts as **repeat**.
+    ordinal. `E`'s key is `(action of E, X)`, the RP §2 back-off key. `X` is the intent's
+    target key (RP §7.1): the tile for `move_to`/`pick_up`, the tree's tile for `gather`
+    (trees do not move, so this is the same as comparing tree IDs), and the resident for
+    `give`/`talk`.
+  - `E` counts as **A1** iff no intent of `D` matches `E`'s key under the RP §2 matching
+    rule, which is the rule the P2-02 no-repeat check uses. Otherwise `E` counts as
+    **repeat**. An intent of another action on `X` is not a repeat: after a failed `give` to
+    `b`, a `talk refuse` to `b` in `D` makes `E` an A1 (EV-18).
   - If no such `D` exists, `E` is **unresolved**: neither A1 nor repeat, and never evidence.
     This happens when the failure is at the final tick `T` (the run stops before the next
     decision phase, `sim/runner.py:160-167`) or `r` dies first. Unresolved failures are
@@ -304,26 +310,38 @@ its IDs cited.
   - totals, summed over residents;
   - per-resident rates over `exposure_ticks`;
   - deaths, by `holder_at_death`: whether `F[death_tick−1]` shows the canteen held.
-- **Report per pair** (OQ-069): `d = value(treatment arm) − value(base arm)`, with treatment =
+- **Report per pair** (OQ-069, OQ-072): `d = value(treatment arm) − value(base arm)`, with treatment =
   `canteen-restricted` (S4) or `cue-ignored` (S5). Include a pair iff both arms are valid.
   Every scalar below is defined for every valid run, so there are no missing values.
-  - Report the median, min and max of `d`.
+  - Report the median, min and max of `d`. For an even number of pairs the median is the
+    mean of the two middle values.
   - **Directional metrics only** also report the number of pairs favoring base, favoring the
     treatment, and tied. The favorable direction is given in the table.
   - **Descriptive metrics** report signed `d` only.
+  - **No valid pairs** (`pairs_used = 0`): every `median`, `min` and `max` is `null`, every
+    favoring and tied count is 0, and the access transition table below is all zeros. The
+    fields are present, never omitted. The round is technical FAIL anyway (§4).
 
 | Run scalar | Definition | Direction |
 |---|---|---|
 | `deaths` | residents with `alive_at_T = false` | lower is better |
 | `all_alive` | 1 if all three are alive at `T`, else 0 | higher is better |
 | `ticks_deprived` | Σ over residents | lower is better |
+| `ticks_deprived_water` | Σ over residents of the `_water` count (§3.1); food-only ticks are excluded | lower is better |
 | `dedicated_water_trips` | Σ over residents | lower is better (BN §0: avoided dedicated trips) |
 | `water_only_visits` | Σ over residents | lower is better |
 | `gathers_completed` | Σ over residents | higher is better |
 | `discovered` | residents with non-null discovery | higher is better |
+| `access_drank` | residents with `water_access = drank` | higher is better |
 | `discovery_time_capped` | Σ over residents of `first_spring_discovery_tick`, or `T+1` if null | lower is better |
 | `spring_drink_time_capped` | Σ over residents of `first_spring_drink_tick`, or `T+1` if null | lower is better |
-| `movement_ticks`, `given_count`/`_qty`, `received_count`/`_qty`, `canteen_drinks`, `canteen_fills`, `transfer_then_drink`, `hydration_cap_waste`, `slot_full_incidents`, `found_not_drunk`, `not_found` | Σ over residents (or per run) | descriptive |
+| `movement_ticks`, `given_count`/`_qty`, `received_count`/`_qty`, `canteen_drinks`, `canteen_fills`, `transfer_then_drink`, `hydration_cap_waste`, `slot_full_incidents`, `access_found_not_drunk`, `access_not_found` | Σ over residents (or per run); the two access scalars count residents in that `water_access` category | descriptive |
+
+**Access split.** The three access counts sum to 3 in every valid run. Besides their `d`,
+the report gives a 3×3 **transition table**: over all used pairs and the three residents
+(matched by resident ID, which the same seed and content guarantee), the number with each
+(base category, treatment category). Rows and columns are in the order `drank`,
+`found_not_drunk`, `not_found`. The table is descriptive.
 - **S4 (PD-07).** Arms `base` vs. `canteen-restricted`. Round 1 is S2 at decay 100; round 2 is
   S4 `s4-decay120`, on the same seeds, geometry, speed and policy version.
   - **Metrics:** §3.1 water-only visits, dedicated trips, movement ticks, gathers, given and
@@ -343,8 +361,10 @@ its IDs cited.
   - **Deferral:** round 2 may be deferred only with the reason and an owner OQ disposition
     before M6. The 120 result never selects the default by itself.
   - **No benefit threshold** (PD-03, OQ-061).
-- **S5:** `base` vs. `cue-ignored` on S2. Metrics: discovery, `water_access`, deaths and
-  `ticks_deprived_water`. Scope: cue directions captured at decisions only (RP §7.4).
+- **S5:** `base` vs. `cue-ignored` on S2. Compared scalars: `discovered`,
+  `discovery_time_capped`, `access_drank`, `access_found_not_drunk`, `access_not_found`, the
+  access transition table, `deaths` and `ticks_deprived_water`. Scope: cue directions
+  captured at decisions only (RP §7.4).
 - **S1/S2 death categories** (BN §5 item 5; OQ-066).
   - For each death, let `R` be the final deprived run: the maximal run of consecutive ticks
     counted in `ticks_deprived` that ends at `death_tick`.
@@ -370,19 +390,39 @@ OQ-049 stays deferred: `run_id` comes from the scenario file. A case is identifi
 `<scenario_id>.<revision_label>.<variant_id>.s<seed>`, for example
 `s2-default.orig.base.s2195683955`
 
-- `revision_label` is exactly one of:
-  - `orig`: the content at `04fde8b`;
-  - `m6`: the M6-approved default;
-  - `cand<n>` (`n ≥ 1`): a P2-04 staged candidate.
+- `revision_label` names one revision of one scenario (OQ-073). No hash is part of the label.
+  Every pair (`scenario_id`, `revision_label`) has one `scenario_file` and one **pin
+  commit**, and resolves to `git show <pin>:<scenario_file>` plus the map file it names.
 
-  No hash is part of the label.
-- **Staged candidates.** A candidate must be committed before it runs, under
-  `content/scenarios/<scenario_id>/`, with its own map file if the map changes; uncommitted
-  inputs are refused.
-  - **Resolver:** `git show <code_commit>:<scenario_file>`, plus the map path it names.
-  - **Identity:** `content_revision_sha256` and `map_sha256`.
-  - **Immutable copy:** the run directory's `config.json` and `map.txt` (verified by
-    `load_trace`).
+| Scenario | Label | `scenario_file` | Pin commit | Committed by |
+|---|---|---|---|---|
+| S2 `s2-default` | `orig` | `content/worlds/default.toml` | `04fde8b` | exists |
+| S2 `s2-default` | `m6` | `content/worlds/default.toml` | the commit named in the M6 sign-off | P2-04, after M6 |
+| S1 `s1-spring-visible` | `orig` | `content/scenarios/s1-spring-visible/orig.toml` | its only commit | P2-02 |
+| S3 `s3-regrow288` | `orig` | `content/scenarios/s3-regrow288/orig.toml` | its only commit | P2-02 |
+| S4 `s4-decay120` | `orig` | `content/scenarios/s4-decay120/orig.toml` | its only commit | P2-04, before its first S4 run |
+| any | `cand<n>`, `n ≥ 1` | `content/scenarios/<scenario_id>/cand<n>.toml` | its only commit | P2-04 |
+
+- **Meaning of `orig`:** S2 `orig` is the content at `04fde8b`. A fixture's `orig` is that
+  content with only the §1 single changed factor and the allowed metadata. `m6` exists for
+  S2 only. Case IDs for S1 and S3 therefore exist once P2-02 merges, before P2-04.
+- **Fixture immutability.** A fixture file (and a candidate's own map) is committed once and
+  never modified or deleted. A changed input gets a new label. A fixture's pin is the only
+  commit that `git log --format=%H <code_commit> -- <scenario_file>` lists; the tool refuses
+  a fixture case when that list is not exactly one commit. S2 pins are the fixed commits in
+  the table.
+- **Staged candidates (P2-04).** P2-04 commits each candidate on its own task branch, under
+  `content/scenarios/<scenario_id>/cand<n>.toml`, with `n` counting from 1 per scenario. A
+  candidate that changes the map adds `content/scenarios/<scenario_id>/cand<n>.map` and
+  names it in `layout_file`, subject to PD-04 approval. Uncommitted inputs are refused.
+  `content/worlds/default.toml` changes only after M6 (plan P2-04).
+- **Identity check.** For every case, the config hash of the file at `code_commit` must equal
+  the config hash of the resolved pin revision, and the hash of the map it names must equal
+  the pin revision's map hash.
+  Otherwise the tool refuses the case. So S2 `orig` cases cannot run after the default file
+  changes.
+- **Immutable copy:** the run directory's `config.json` and `map.txt` (verified by
+  `load_trace`).
 - The content hash is a separate manifest field.
 
 **Paths** (all under the ignored `runs/`, root `.gitignore:25`), with `B = runs/p2/<batch_id>`:
@@ -415,6 +455,7 @@ operator, matches `[a-z0-9-]+`, and is unique per batch.
 P2CaseManifest {
   manifest_version:"0.1", case_id, batch_id,
   scenario_id, revision_label, scenario_file,        // repo-relative path of the world TOML
+  pin_commit,                // the label's pin commit (§6 table)
   content_revision_sha256,  // config hash of scenario_file as committed (its own meta.seed)
   script_file:string|null,  // repo-relative script for p1-scripted, else null
   seed, cli_args:array<string>,                      // exact argument vector after "-m living_island"
@@ -565,3 +606,5 @@ Same conventions as above; each vector lists only what differs.
 | EV-15 pick-up of a different item (G2-R2-07) | Tick 9, tile (2,1): `item_picked_up` by `a`, `item_type="fruit"` (seq 0); `action_failed` `c` `ITEM_TAKEN`, intent pick_up (2,1) `item_type="canteen"` (seq 2). | Not a C1 match, because the item types differ. C1 = 0 for this failure. |
 | EV-16 failure at the final tick (G2-R2-07) | `T = 8`; `c` gather `t1` fails `RESOURCE_TAKEN` at tick 8. | No decision of `c` at tick ≥ 8 → unresolved = 1; A1 = 0, repeat = 0. |
 | EV-17 death before the next decision (G2-R2-07) | `c` move fails `NO_PATH` at tick 6 and dies at tick 6 in the same interval. | No later record → unresolved = 1. |
+| EV-18 talk after a failed give (G2-R3-01) | Tick 4: `a`'s `give` canteen×1 to `b` fails `OUT_OF_REACH` (`b` at distance 2). `a`'s first decision at tick ≥ 4 is `[talk refuse(in_reply_to=u) b]`. A second toy: the same failure, and that decision is `[talk accept b, give canteen×1 b]`. Analysis toys: A1 reads only `D`'s intents. | Toy 1: key `(give, b)`; no intent of `D` is a `give` to `b` → A1 = 1, repeat = 0. Toy 2: the `give` to `b` matches → repeat = 1, A1 = 0. |
+| EV-19 S5 access split and empty pairs (G2-R3-03) | Two seeds. Seed 1 is valid in both arms: base `water_access` (ella, ryan, mia) = (drank, drank, not_found); `cue-ignored` = (drank, not_found, not_found); `ticks_deprived_water` 0 vs. 7. Seed 2: `cue-ignored` is invalid. A second round where every pair is invalid. | Round 1: `pairs_used = 1`; `access_drank` d = −1 (favors base); `access_not_found` d = +1; `ticks_deprived_water` d = +7, favors base. Transition table: (drank→drank) 1, (drank→not_found) 1, (not_found→not_found) 1, others 0. Technical FAIL (seed 2 dropped). Round 2: `pairs_used = 0`; all `median`/`min`/`max` null; all counts 0; table all zeros. |

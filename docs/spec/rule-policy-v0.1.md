@@ -99,7 +99,19 @@ All computations use integers and canonical orders (IC §6.2). `P` is the reques
      ground canteen, all keyed by their tile;
   3. `{kind:"entity",id:string}`, ordered by ID — the held canteen, for fill only;
   4. `{kind:"resident",id:string}`, ordered by ID.
-- **Failed:** the key has an entry in `failed_targets` (§7) after R0 step 1 expiry.
+- **Back-off key** (owner decision, G2-R3-01; OQ-070): a pair `(action, target)`. `action`
+  is an `ActionType` or the policy-local kind `request`; `target` is a target key. Keys are
+  ordered by `action` (ascending code-point string), then by canonical `target` order.
+- **Matching:** an intent matches the key `(k, t)` iff one of these holds:
+  - `k` is an action type, the intent's `action_type` is `k`, and either `t` is `self` or
+    `t` equals the intent's target key (§7.1);
+  - `k = request`, and the intent is a `talk` with `speech_act="request"` whose target key
+    is `t`.
+- **Blocked:** a plan is blocked iff one of its intents matches the key of a
+  `failed_targets` entry (§7) that remains after R0 step 1 expiry.
+- **Failed for `k`:** `t` is failed for `k` iff such an entry with key `(k, t)` exists. In
+  the rules, "unfailed" means the plan the rule would emit for that candidate is not
+  blocked. §5 lists the check for each rule.
 
 ### 2.1 Selection and seeded tie-break
 
@@ -128,10 +140,12 @@ plan. The policy never checks hidden legality; world failures are handled by §5
 1. Delete `failed_targets` entries with `retry_after_tick <= request.tick`.
 2. Apply `P.last_action_feedback` per §5 (including the fill-probe outcomes, §6.1).
 3. For each `P.heard_utterances` entry with `speech_act="refuse"` and
-   `addressee_id == actor_id`: upsert `{resident speaker_id}` with code `REFUSED`.
+   `addressee_id == actor_id`: upsert the key `(request, resident speaker_id)` with code
+   `REFUSED`.
 4. For each current tree:
-   - band `empty`: upsert its tile with code `OBSERVED_EMPTY`;
-   - band `few` or `many`: delete that tile's entry only if its code is `OBSERVED_EMPTY`.
+   - band `empty`: upsert the key `(gather, tile)` with code `OBSERVED_EMPTY`;
+   - band `few` or `many`: delete the `(gather, tile)` entry only if its code is
+     `OBSERVED_EMPTY`.
      A failure entry (§5), for example `RESOURCE_TAKEN` written in step 2 of this same
      decision after same-tick regrowth (WR §5.4: settlement precedes regrowth), is **kept**
      until its `retry_after_tick` (DV-14).
@@ -143,15 +157,15 @@ plan. The policy never checks hidden legality; world failures are handled by §5
 
 | Rule | Condition | Plan, with the candidate set, score and tie domain |
 |---|---|---|
-| R1 Reply | `P.heard_utterances` holds a `request` with `addressee_id == actor_id` | Take the one with the lowest `utterance_id` (F14) and answer it per §6.2. Other requests at this boundary are not answered. |
+| R1 Reply | `P.heard_utterances` holds a `request` with `addressee_id == actor_id` | Take the one with the lowest `utterance_id` (F14) and answer it per §6.2. Other requests at this boundary are not answered. If both the accept and the refuse plan are blocked, R1 produces no plan and falls through (DV-02b). |
 | R2 Canteen drink | H at most `low`; holder; `canteen_servings > 0`; enabled; not at the spring | `[drink {source:canteen}]` |
 | R3 Spring drink | at the spring; H at most `moderate` | `[drink {source:spring}]` |
-| R4 Fill | at the spring; holder; enabled; the entity key of `canteen_id` is not failed; `canteen_capacity` is null **or** `canteen_servings < canteen_capacity` | `[fill_canteen entity(canteen_id)]` (§6.1) |
+| R4 Fill | at the spring; holder; enabled; `entity canteen_id` is not failed for `fill_canteen`; `canteen_capacity` is null **or** `canteen_servings < canteen_capacity` | `[fill_canteen entity(canteen_id)]` (§6.1) |
 | R5 Eat | `fruit_count > 0`; S at most `moderate` | `[eat]` |
 | R6 Seek water | H at most `low` | (a) Unfailed spring stands → `[move_to stand]`. Score `d(stand)`, domain `water`, commitment goal `water`. (b) Else, if H is `critical`, enabled, not holder: unfailed neighbor residents → `[talk request canteen×1]`. All score 0, domain `request`. (c) Else, explore per §4.3 with domain `water` and goal `explore`. (d) Else fall through. |
 | R7 Sleep | T at most `low` | `[sleep]` |
-| R8 Gather | `fruit_count < rule_params.fruit_carry_target`; key `self` not failed | (a) Unfailed current trees at distance exactly 1 with band `few` or `many`. Score 0 for `many`, 1 for `few`; candidate key is the tree tile; domain `gather`. Plan `[gather entity(id)]×k`, where `k = 1` for `few`, else `min(fruit_carry_target − fruit_count, max_plan_actions)`. (b) Else, unfailed tree stands that neighbor at least one unfailed known tree tile → `[move_to stand]`. Score `d`, domain `tree`, goal `tree`. (c) Else fall through. |
-| R9 Pick up canteen | enabled; not holder; key `self` not failed; a `canteen` entry is in `P.visible_entities` and its tile is not failed | Distance ≤ 1 → `[pick_up tile {item_type:canteen,quantity:1}]`. Else, if the tile is in `K` with a defined `d` → `[move_to tile]`, goal `canteen`, domain `canteen` (one candidate). Else fall through. |
+| R8 Gather | `fruit_count < rule_params.fruit_carry_target`; `self` not failed for `gather` | (a) Unfailed current trees at distance exactly 1 with band `few` or `many`. Score 0 for `many`, 1 for `few`; candidate key is the tree tile; domain `gather`. Plan `[gather entity(id)]×k`, where `k = 1` for `few`, else `min(fruit_carry_target − fruit_count, max_plan_actions)`. (b) Else, unfailed tree stands that neighbor at least one unfailed known tree tile → `[move_to stand]`. Score `d`, domain `tree`, goal `tree`. (c) Else fall through. |
+| R9 Pick up canteen | enabled; not holder; `self` not failed for `pick_up`; a `canteen` entry is in `P.visible_entities` and its tile is not failed for `pick_up` | Distance ≤ 1 → `[pick_up tile {item_type:canteen,quantity:1}]`. Else, if the tile is in `K` with a defined `d` → `[move_to tile]`, goal `canteen`, domain `canteen` (one candidate). Else fall through. |
 | R10 Deliver canteen | enabled; holder; `canteen_servings > 0`; H at least `good` | Unfailed neighbor residents with the `dehydrated` sign → `[give resident {item_type:canteen,quantity:1}]`. Score 0, domain `deliver`. None → fall through. |
 | R11 Explore | always evaluated | Explore per §4.3, domain `explore`, goal `explore`. None → fall through. |
 | R12 Idle | always | T at most `good` → `[rest]`; else `[wait]` |
@@ -169,7 +183,7 @@ R4, R9 and R10 are canteen duties.
 ## 4. Targets, scores and commitment
 
 **Shared eligibility for movement targets:**
-- the key is not failed;
+- the tile is not failed for `move_to`;
 - the target is not `P.own_position`;
 - the target has a defined score (`d` for stands and the canteen tile, frontier distance for
   frontiers).
@@ -191,7 +205,7 @@ A cue-filtered set therefore drops a committed target outside the preferred half
 
 R0 step 6 sets the commitment to null when any of these holds:
 - `P.own_position == target`;
-- the target's tile key is failed;
+- the target tile is failed for `move_to`;
 - for goal `explore`, the target is in `E`.
 
 Rules that do not move leave the commitment unchanged. There is no time-based expiry. R6c
@@ -204,9 +218,9 @@ and R11 share the goal `explore`.
   is always in sight. R8a fires at the next decision.
 - **Stock evidence:** R0 step 4 is the only source, and it uses the current packet only (plan
   §1.2: no historical tree-stock tracking).
-- **Failures:** a failed tree tile excludes that tree from R8a, and excludes it from the
-  "unfailed known tree tile" test in R8b. A stand is excluded only if its own tile key is
-  failed or it neighbors no unfailed tree.
+- **Failures:** a tree tile failed for `gather` excludes that tree from R8a, and excludes
+  it from the "unfailed known tree tile" test in R8b. A stand is excluded only if its own
+  tile is failed for `move_to` or it neighbors no unfailed tree.
 
 ### 4.3 Exploration and the cue
 
@@ -227,19 +241,25 @@ then follows §4.1. With `cue_use == "ignored"` the filter never applies (§6.3)
 `ActionFeedback` has `intent_id` and `failure_code` but no target (IC §2.4). In R0 step 2:
 1. Look for an `issued_intents` reference whose `intent_id` matches a `failure` feedback.
 2. If one matches, apply the table to the pair (action of the reference, failure code). The
-   key to back off comes from the reference's target and the table's key column.
-3. Back-off upserts the entry `{target: <key>, code, retry_after_tick: request.tick +
-   rule_params.failed_target_retry_ticks}`. The serialized field is `target` (§7).
+   back-off key is `(action of the reference, target)`, with `target` taken from the
+   reference's target and the table's key column.
+3. Back-off upserts the entry `{action, target, code, retry_after_tick: request.tick +
+   rule_params.failed_target_retry_ticks}`. The serialized fields are `action` and `target`
+   (§7).
 
 **Entry classes and precedence.** A **failure entry** has an IC §4 code written by step 2.
 A **local entry** has a policy-local code: `OBSERVED_EMPTY`, `REFUSED` or `REQUESTED`.
-- A failure entry replaces any entry with the same `target`.
-- A local entry is written only if the `target` has no entry, or has a local entry, which it
+- A failure entry replaces any entry with the same key.
+- A local entry is written only if its key has no entry, or has a local entry, which it
   replaces. It never replaces a failure entry.
 - A failure entry leaves the list **only** through R0 step 1 expiry. It is never deleted early
   and never evicted (§7.1).
-- So the P2-02 no-repeat check holds exactly: for every failure entry, no plan targets its key
-  before its `retry_after_tick`.
+- So the P2-02 no-repeat check holds exactly: for every failure entry, no plan before its
+  `retry_after_tick` contains an intent that matches its key (§2). EX §3.2 A1 uses the same
+  key and the same matching rule.
+- A failure entry blocks only its own action. After `(give, b)`, a `talk refuse` to `b` is
+  allowed (DV-02a). After `(talk, b)`, no talk to `b` is emitted, so a request from `b`
+  goes unanswered until expiry (DV-02b).
 
 Every row is one action. Its codes are the WR §4.2 failure codes for that action plus
 `INVALID_TARGET`; each code appears once per action. A pair not in the table has no effect.
@@ -255,14 +275,22 @@ Every row is one action. Its codes are the WR §4.2 failure codes for that actio
 | `drink`, `eat` | — | every code (`DEAD`, `NO_WATER`, `OUT_OF_REACH`, `NO_ITEM`, `NO_NEED`) |
 | `rest`, `sleep`, `wait` | — | `DEAD` |
 
-**A key backs off every candidate that uses it:**
-- a resident key blocks R1 accept (it refuses instead), R6b and R10 for that resident;
-- a tile key blocks every movement target and R8a/R9 target on that tile;
-- `self` blocks R8 and R9;
-- the canteen entity key blocks R4.
+**Checks per rule.** Each rule emits only unblocked plans:
 
-Queued transfers count too: a failed `give` in an R1 accept plan backs off the recipient. A
-failed `talk` discards the queued `give` (F3), and the talk failure backs off the resident.
+| Rule | Keys that block it |
+|---|---|
+| R1 accept to `X` | `(talk, X)` or `(give, X)`; under `(give, X)` alone it refuses instead |
+| R1 refuse to `X` | `(talk, X)`; R1 then produces no plan |
+| R4 | `(fill_canteen, entity canteen_id)` |
+| R6a, R6c, R8b, R9 move, R11, commitment | `(move_to, tile)` for the destination |
+| R6b to `r` | `(talk, r)` or `(request, r)` |
+| R8 | `(gather, self)` blocks the rule; `(gather, tree tile)` blocks that tree in R8a and in R8b's known-tree test |
+| R9 | `(pick_up, self)` blocks the rule; `(pick_up, tile)` blocks that canteen tile, including its move branch |
+| R10 to `r` | `(give, r)` |
+
+Queued transfers count too: a failed `give` in an R1 accept plan backs off
+`(give, recipient)`. A failed `talk` discards the queued `give` (F3), and the talk failure
+backs off `(talk, resident)`.
 
 - **`give`/`NO_ITEM`:** the giver no longer has the item. That is own state, which the next
   decision reads from `own_inventory`. It is never a recipient back-off.
@@ -276,11 +304,13 @@ failed `talk` discards the queued `give` (F3), and the talk failure backs off th
   that same boundary (F2, F3), and it belongs to the last committed plan, whose references
   are retained.
 
-**Policy-local codes** (not world codes):
-- `OBSERVED_EMPTY` (R0 step 4);
-- `REFUSED` (R0 step 3);
-- `REQUESTED`, upserted for the addressee in the next state when an R6b plan is produced. It
-  stops a repeated request before the retry tick, answered or not.
+**Policy-local codes** (not world codes), each with a fixed key:
+- `OBSERVED_EMPTY` (R0 step 4): `(gather, tree tile)`;
+- `REFUSED` (R0 step 3): `(request, resident)`;
+- `REQUESTED`: `(request, addressee)`, upserted in the next state when an R6b plan is
+  produced. It stops a repeated request before the retry tick, answered or not.
+
+A `request` key blocks only R6b to that resident (OQ-071).
 
 ## 6. Canteen (PD-03, PD-07)
 
@@ -296,8 +326,8 @@ failed `talk` discards the queued `give` (F3), and the talk failure backs off th
       single-intent plan, so its success yields `PLAN_FINISHED` and this packet (F3); fill
       sets servings to capacity (WR §3).
     - `failure ALREADY_FULL`: `canteen_capacity = canteen_servings`.
-    - `failure NO_ITEM`, `OUT_OF_REACH` or `INVALID_TARGET`: back off the canteen entity key
-      (§5). This pauses probing until the retry tick.
+    - `failure NO_ITEM`, `OUT_OF_REACH` or `INVALID_TARGET`: back off
+      `(fill_canteen, entity canteen_id)` (§5). This pauses probing until the retry tick.
   - **Bound:** each probe either fixes `canteen_capacity` or backs the canteen off. So at
     most one probe runs per `failed_target_retry_ticks` window, and none after capacity is
     known.
@@ -311,7 +341,7 @@ failed `talk` discards the queued `give` (F3), and the talk failure backs off th
     even if the resident gives the canteen away and later gets it back.
 - **Request:** a nonholder at H `critical` with no eligible spring stand asks one neighbor
   resident for the canteen (R6b). The policy cannot know who holds it (IC §2.2), so a
-  nonholder may be asked and will refuse. `REQUESTED` and `REFUSED` back off that resident.
+  nonholder may be asked and will refuse. `REQUESTED` and `REFUSED` back off requests to that resident.
 - **Proactive give:** R10, a holder with H at least `good` to a neighbor showing
   `dehydrated` (BN §0, physical water delivery).
 - **After the holder dies** the canteen lies on the corpse tile (`world/death.py:122-124`).
@@ -320,7 +350,7 @@ failed `talk` discards the queued `give` (F3), and the talk failure backs off th
 ### 6.2 Replies (R1)
 For the chosen request `u`, with `X = u.speaker_id`. **Accept** needs all of the following
 (otherwise **refuse**: `[talk refuse(in_reply_to=u.utterance_id) to X]`):
-- `X` is a neighbor resident and its resident key is not failed;
+- `X` is a neighbor resident, and `X` is failed for neither `talk` nor `give`;
 - `max_plan_actions >= 2`;
 - for a canteen request: enabled, holder, and H at least `moderate`. Plan:
   `[talk accept(in_reply_to=u.utterance_id) to X, give canteen×1 to X]`.
@@ -328,7 +358,7 @@ For the chosen request `u`, with `X = u.speaker_id`. **Accept** needs all of the
   `[talk accept, give fruit×q]`.
 
 A requester on the same tile (distance 0) is refused, because `give` needs distance exactly 1
-(F8).
+(F8). If `X` is failed for `talk`, the refuse plan is blocked too, and R1 falls through (§5).
 
 ### 6.3 Experimental switches (S4, S5)
 - **`canteen_use="restricted"` (S4):**
@@ -349,7 +379,8 @@ RuleStateV0_1 {
   rule_state_version: "0.1",
   commitment: {goal:"water"|"tree"|"canteen"|"explore", target:Coord, set_at_tick:integer}|null,
   issued_intents: array<{intent_id:string, action_type:ActionType, target:TargetKey|null}>,
-  failed_targets: array<{target:TargetKey, code:string, retry_after_tick:integer}>,
+  failed_targets: array<{action:ActionType|"request", target:TargetKey, code:string,
+                          retry_after_tick:integer}>,
   cue_impressions: array<{cue_id:string, position:Coord, detail_level:"distant"|"near",
                           direction:string|null}>,
   canteen_capacity: integer|null
@@ -374,7 +405,7 @@ beyond plan §1.2's list (OQ-062). The initial state is `commitment=null`, empty
   - retained through queued actions, save and restore; replaced by the next committed `ok`
     plan.
 - **`failed_targets`:**
-  - sorted by canonical `target` order, unique by `target`;
+  - sorted by canonical key order (§2), unique by key `(action, target)`;
   - `code` is an IC §4 failure code or `OBSERVED_EMPTY`, `REFUSED` or `REQUESTED`;
   - **failure entries** number at most `failed_target_retry_ticks`, by construction, and are
     never evicted:
@@ -382,9 +413,9 @@ beyond plan §1.2's list (OQ-062). The initial state is `commitment=null`, empty
     - an actor decides at most once per tick;
     - an entry written at tick `t` is deleted at the first decision with tick ≥ `t + R`;
     - so at most `R` live failure entries can exist;
-  - **local entries** number at most 64. When writing a new local `target` would exceed 64,
+  - **local entries** number at most 64. When writing a new local key would exceed 64,
     the local entry with the smallest `retry_after_tick` is evicted first, ties by canonical
-    `target` order. A local eviction is an approved early release (OQ-064). It never affects
+    key order. A local eviction is an approved early release (OQ-064). It never affects
     failure entries or the P2-02 check.
 - **`cue_impressions`:**
   - sorted by `cue_id`, unique, at most **1** entry, because valid content has exactly one
@@ -415,8 +446,10 @@ array orders as in §7.1, and no omitted fields. On restore, the CR-004 validato
 6. a failed target with `retry_after_tick < 1` or
    `> latest_perception_tick + rule_params.failed_target_retry_ticks`;
    `commitment.set_at_tick > latest_perception_tick` or `< 0`;
-7. a failed-target `code` outside §7.1's set, or a `self` key with a code other than
-   `INVENTORY_FULL`;
+7. a failed-target `code` outside §7.1's set, or an entry whose `(action, target kind,
+   code)` is not allowed. Allowed: a back-off cell of the §5 table (row action, key kind,
+   code), so `self` only with `gather` or `pick_up` and `INVENTORY_FULL`; `OBSERVED_EMPTY`
+   only as `(gather, tile)`; `REFUSED` and `REQUESTED` only as `(request, resident)`;
 8. a non-null `direction` with `detail_level="distant"`; a negative `canteen_capacity`.
 
 ### 7.3 Transaction
@@ -488,13 +521,14 @@ Common setup unless stated:
 - State: initial.
 - Plans are listed as action + target.
 
-The hashes used below: `h("1|a|0|rule-v0:tree") mod 2 = 1` and
-`h("1|a|0|rule-v0:explore") mod 3 = 2`.
+The hashes used below: `h("1|a|0|rule-v0:tree") mod 2 = 1`,
+`h("1|a|0|rule-v0:explore") mod 3 = 2` and `h("1|a|10|rule-v0:tree") mod 2 = 0`.
 
 | ID | Inputs (differences from the setup) | Expected |
 |---|---|---|
-| DV-01 slot capacity 1 (G2-02) | Tick 0. Holder of `canteen_01` (servings 1); `t1` `fruit_tree` at (3,2), band `many`; own position (2,2). Second decision: tick 1, ordinal 1; feedback `failure INVENTORY_FULL` for `a:p000000:i0`; same view. | Decision 1: R8a → `[gather t1, gather t1]`; refs `i0`/`i1` → tile (3,2). Decision 2: `self` backed off (`INVENTORY_FULL`, retry 37); R8 and R9 blocked; no frontier → R12 `[rest]`. |
-| DV-02 give to a backed-off resident (G2-02) | Tick 10, holder (servings 2), H `good`. State has `{resident b, OUT_OF_REACH, 40}`. `b` is a neighbor at distance 1. Heard: request canteen×1 from `b`, `u=toy:0000000010:000000`. | R1 → `[talk refuse(in_reply_to=u) b]`. No give. |
+| DV-01 slot capacity 1 (G2-02) | Tick 0. Holder of `canteen_01` (servings 1); `t1` `fruit_tree` at (3,2), band `many`; own position (2,2). Second decision: tick 1, ordinal 1; feedback `failure INVENTORY_FULL` for `a:p000000:i0`; same view. | Decision 1: R8a → `[gather t1, gather t1]`; refs `i0`/`i1` → tile (3,2). Decision 2: `(gather, self)` backed off (`INVENTORY_FULL`, retry 37); R8 is blocked; R9 does not apply (holder); no frontier → R12 `[rest]`. |
+| DV-02a give to a backed-off resident (G2-02, G2-R3-01) | Tick 10, ordinal 3, holder (servings 2), H `good`. State has `{give, resident b, OUT_OF_REACH, 40}` (from a give at distance 2 at tick 4). `b` is a neighbor at distance 1 with no signs. Heard: request canteen×1 from `b`, `u=toy:0000000010:000000`. | R1 accept is blocked by `(give, b)`; refuse is not blocked → `[talk refuse(in_reply_to=u) b]`. No give. The entry stays until 40, so R10 to `b` is blocked until then. |
+| DV-02b talk to a backed-off resident (G2-R3-01) | As DV-02a, but the entry is `{talk, resident b, OUT_OF_HEARING, 40}`. | Accept and refuse both match `(talk, b)` → R1 produces no plan. R2–R9 do not apply; R10: `b` shows no `dehydrated` sign; R11: no frontier → R12 `[rest]`. The request is unanswered. |
 | DV-03 give/NO_ITEM (G2-02) | Tick 12, ordinal 4. Refs from the last plan: `a:p000003:i0 talk→b`, `a:p000003:i1 give→b`. Feedback `failure NO_ITEM` for `i1`. Not holder now. | No failed-target entry. Rules continue: R12 `[rest]`. A later canteen request from `b` is refused because `a` is not holder. |
 | DV-04 fill probe, empty (G2-03) | At the spring: (3,2) is `spring` in `E` and `visible_tiles`; own (2,2), holder, servings 0, capacity null, H `good`. | R4 probe → `[fill_canteen entity(canteen_01)]`. Next decision: feedback success for that intent, servings 2 → `canteen_capacity = 2`; R4 no longer applies (2 < 2 false). |
 | DV-05 fill probe, partial and full (G2-03) | As DV-04 with servings 1, then with servings 2. | Servings 1: probe → success → capacity = servings after fill. Servings 2: probe → feedback `ALREADY_FULL` → `canteen_capacity = 2`, no back-off. In both cases no second probe at the spring once capacity equals servings. |
@@ -507,7 +541,7 @@ The hashes used below: `h("1|a|0|rule-v0:tree") mod 2 = 1` and
 | DV-11b capture, completed move (G2-04) | As DV-11a with `[move_to (16,32)]`. | The move succeeds at tick 1 with the cue near/east and `NEW_SIGHT` in the packet. The tick-1 decision (`NEW_SIGHT`, `PLAN_FINISHED`) captures the same impression. |
 | DV-12 empty-domain fall-through in R6 (G2-01) | H `low` (not critical), no spring tile in `E`, no frontier. | R6a: no stands; R6b: H is not critical; R6c: no frontier → fall through. R7 (T `good`) no; R8 no trees → falls through; R9, R10 no; R11 none → R12 `[rest]`. |
 | DV-13 unmatched feedback | Tick 20, ordinal 8. Feedback `failure NO_PATH` for `a:p000007:i0`, but refs are from `a:p000006`. | No back-off; plan as without feedback. |
-| DV-14 failure then same-tick regrowth (G2-R2-01) | Tick 144, ordinal 5. Refs `a:p000004:i0 gather` → tile (3,2). Feedback `failure RESOURCE_TAKEN` for `i0`. The same packet shows `t1` at (3,2) with band `few` (regrew after settlement). | Step 2 writes `{target tile (3,2), RESOURCE_TAKEN, 180}`; step 4 keeps it (not `OBSERVED_EMPTY`). R8a excludes `t1`; with no other tree, R12 `[rest]`. The decision at tick 179 still excludes (3,2); at tick 180 the entry expires and R8a may target `t1`. |
-| DV-15 local cap never evicts a failure (G2-R2-01) | State: 64 local `OBSERVED_EMPTY` entries with retry 100..163 and one failure entry `{tile (0,7), NO_PATH, 90}`; tick 80. A new empty tree at (7,7) is observed. | The local entry with retry 100 is evicted and `{(7,7), OBSERVED_EMPTY, 116}` is written. The failure entry `(0,7)` stays. |
+| DV-14 failure then same-tick regrowth (G2-R2-01) | Tick 144, ordinal 5. Refs `a:p000004:i0 gather` → tile (3,2). Feedback `failure RESOURCE_TAKEN` for `i0`. The same packet shows `t1` at (3,2) with band `few` (regrew after settlement). | Step 2 writes `{gather, tile (3,2), RESOURCE_TAKEN, 180}`; step 4 keeps it (not `OBSERVED_EMPTY`). R8a excludes `t1`; with no other tree, R12 `[rest]`. The decision at tick 179 still excludes (3,2); at tick 180 the entry expires and R8a may target `t1`. |
+| DV-15 local cap never evicts a failure (G2-R2-01, G2-R3-02) | Policy-only grid `map 9x8` (the perception is constructed, as in the common setup). Tick 80, ordinal 10; the last committed decision was at tick 79, so `latest_perception_tick = 79` and every stored deadline is ≤ 79 + 36 = 115. Own position (4,7). `E` = every tile: `fruit_tree` at every tile with y ≤ 6 and at (1,7) and (8,7); grass at (0,7) and (2,7)..(7,7). `issued_intents` empty. State: 64 local entries `{gather, tile p, OBSERVED_EMPTY, 100}` for the 63 tiles with y ≤ 6 and (1,7), in canonical order from (0,0) to (1,7); one failure entry `{move_to, tile (0,7), NO_PATH, 90}`. The packet's current trees: one, `t65` at (8,7), band `empty`. | R0 step 1 deletes nothing (100 and 90 > 80). Step 4 adds `{gather, tile (8,7), OBSERVED_EMPTY, 116}`; that is a 65th local entry, so the smallest local key among the retry-100 ties, `(gather, (0,0))`, is evicted. Next `failed_targets`: the 64 `gather` entries (1,0)..(8,6), (1,7), (8,7), then `{move_to, (0,7), NO_PATH, 90}`, which stays. Plan: R8a has no `few`/`many` tree. R8b: only (0,0) is an unfailed known tree tile; its stands are (1,0) and (0,1), both at BFS distance 10. `h("1|a|10|rule-v0:tree") mod 2 = 0` → `[move_to (1,0)]`; commitment `{tree,(1,0),80}`. |
 
 P2-02 computes every `d` by BFS on the stated grids and asserts these exact plans and next states.

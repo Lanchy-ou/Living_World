@@ -24,8 +24,10 @@ decisions and the alternatives the owner's plan rejected.
     broken by the `random-v0` hash construction with named domains. No world RNG is used.
   - A small typed `policy_state` holds the commitment, issued-intent references, failed
     targets, cue impressions and a canteen capacity learned by a bounded fill probe.
-  - Back-off uses a disjoint action-by-failure-code matrix. A backed-off key blocks every rule
-    that would target it, including reply transfers.
+  - Back-off uses a disjoint action-by-failure-code matrix. By owner decision (OQ-070) the
+    key is `(action kind, target)`: it blocks only plans with an intent of that action on
+    that target, including reply transfers. The same key is used by the P2-02 no-repeat
+    check and the A1 metric.
 - **Private-state boundary (PD-06):**
   - Inputs are the `DecisionContext`, `PolicyConfig` with `rule_params`, and the policy's own
     state.
@@ -82,5 +84,5 @@ decisions and the alternatives the owner's plan rejected.
   `agent-interface-v0.1.md` (marked `[CR-004]`) and sets this ADR to accepted.
 - P2-01 wires the ID, validator, rule parameters and CLI. P2-02 implements the rules and
   creates the S1 and S3 scenario files. P2-03 builds the batch tool and analysis.
-- The open questions OQ-054 to OQ-069 carry the assumptions for the owner's M5
-  disposition. OQ-056 is already decided by the owner.
+- The open questions OQ-054 to OQ-073 carry the assumptions for the owner's M5
+  disposition. OQ-056 and OQ-070 are already decided by the owner.
