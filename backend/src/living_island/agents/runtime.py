@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Protocol, runtime_checkable
 
 from pydantic_core import PydanticSerializationError
 
@@ -10,6 +11,7 @@ from living_island.agents.base import Policy, ResidentRuntime
 from living_island.agents.policies.random_policy import RandomPolicy
 from living_island.agents.policies.recorded import RecordedPolicy, ReplayDiverged, request_sha256
 from living_island.agents.policies.scripted import ScriptedPolicy
+from living_island.agents.rule_based import RuleBasedPolicy
 from living_island.agents.types import (
     ActorScript,
     DecisionContext,
@@ -22,6 +24,7 @@ from living_island.agents.types import (
     PersonalityProfile,
     PolicyConfig,
     ResidentRuntimeState,
+    RuleStateV0_1,
     build_intent_id,
     build_plan_id,
 )
@@ -32,6 +35,11 @@ from living_island.world.protocol import (
     Perception,
     format_delivery_id,
 )
+
+
+@runtime_checkable
+class _TransactionalPolicy(Protocol):
+    def finish_decision(self, accepted: bool) -> None: ...
 
 
 def _validate_plan(plan: ActionPlan, request: DecisionRequest, limit: int) -> ActionPlan:
@@ -188,7 +196,9 @@ class Runtime:
             raise ValueError(f"{self.actor_id}: decision record does not match the policy error")
         if outcome.status == "replayed" and record != outcome.source_record:
             raise ValueError(f"{self.actor_id}: replay must preserve the original record")
-        if isinstance(self._policy, ScriptedPolicy):
+        if isinstance(self._policy, _TransactionalPolicy):
+            self._policy.finish_decision(outcome.status == "ok")
+        elif isinstance(self._policy, ScriptedPolicy):
             self._policy.commit()
         self._ordinal += 1
         self._decided_tick = request.tick
@@ -225,6 +235,17 @@ def create_runtime(
             if own_script is not None or own_records is not None:
                 raise ValueError(f"{actor_id}: random policy takes neither a script nor records")
             policy = RandomPolicy(policy_config)
+        case "rule-based-v0":
+            if own_script is not None or own_records is not None:
+                raise ValueError(
+                    f"{actor_id}: rule-based policy takes neither a script nor records"
+                )
+            state = (
+                RuleStateV0_1.model_validate(restored_state.policy_state)
+                if restored_state is not None
+                else None
+            )
+            policy = RuleBasedPolicy(state)
         case "scripted-v0":
             if own_script is None or own_script.actor_id != actor_id or own_records is not None:
                 raise ValueError(f"{actor_id}: scripted policy requires its own actor script")
