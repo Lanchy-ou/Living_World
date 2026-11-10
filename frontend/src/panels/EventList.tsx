@@ -53,60 +53,60 @@ export function EventList({ store }: { store: ReplayStore }) {
         </label>
       </div>
       <div className="events-body">
-      {events.length === 0 ? (
-        <p>No events match.</p>
-      ) : (
-        <div>
-        <table>
-          <thead>
-            <tr>
-              <th>Tick</th>
-              <th>Seq</th>
-              <th>Type</th>
-              <th>Actor → target</th>
-              <th>Summary</th>
-              <th>Code</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((e) => {
-              const code = failureCode(e);
-              return (
-                <tr
-                  key={e.event_id}
-                  className={[
-                    e.tick === currentTick ? "current" : "",
-                    e.event_id === selectedEventId ? "selected" : "",
-                    code !== null ? "failure" : "",
-                  ].join(" ")}
-                  onClick={() => store.selectEvent(e)}
-                >
-                  <td>{e.tick}</td>
-                  <td>{e.seq_in_tick}</td>
-                  <td>{e.type}</td>
-                  <td>
-                    {e.actor_id ?? "—"} → {e.target_id ?? "—"}
-                  </td>
-                  <td>{summarize(e)}</td>
-                  <td>{code ?? ""}</td>
+        {events.length === 0 ? (
+          <p>No events match.</p>
+        ) : (
+          <div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Tick</th>
+                  <th>Seq</th>
+                  <th>Type</th>
+                  <th>Actor → target</th>
+                  <th>Summary</th>
+                  <th>Code</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {events.length > shown.length && (
-          <p className="hint">
-            Showing {shown.length} of {events.length} events around tick {currentTick}; seek or filter
-            to see others.
-          </p>
+              </thead>
+              <tbody>
+                {shown.map((e) => {
+                  const code = failureCode(e);
+                  return (
+                    <tr
+                      key={e.event_id}
+                      className={[
+                        e.tick === currentTick ? "current" : "",
+                        e.event_id === selectedEventId ? "selected" : "",
+                        code !== null ? "failure" : "",
+                      ].join(" ")}
+                      onClick={() => store.selectEvent(e)}
+                    >
+                      <td>{e.tick}</td>
+                      <td>{e.seq_in_tick}</td>
+                      <td>{e.type}</td>
+                      <td>
+                        {e.actor_id ?? "—"} → {e.target_id ?? "—"}
+                      </td>
+                      <td>{summarize(e)}</td>
+                      <td>{code ?? ""}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {events.length > shown.length && (
+              <p className="hint">
+                Showing {shown.length} of {events.length} events around tick {currentTick}; seek or filter
+                to see others.
+              </p>
+            )}
+          </div>
         )}
-        </div>
-      )}
-      {selected !== null ? (
-        <RawEvent event={selected} />
-      ) : (
-        <p className="hint">Select an event to jump to its tick and see its raw JSON.</p>
-      )}
+        {selected !== null ? (
+          <RawEvent event={selected} />
+        ) : (
+          <p className="hint">Select an event to jump to its tick and see its raw JSON.</p>
+        )}
       </div>
     </section>
   );

@@ -1,7 +1,7 @@
 // Presentation-only motion: where to draw a resident between two recorded frames, and which
-// way it faces. Everything is a pure function of recorded frames and `resident_moved` events.
-// Nothing is written back, nothing is predicted, and at progress 1 the result is exactly the
-// recorded position of the current frame.
+// way it faces. Everything is a function of an immutable bundle: recorded frames and
+// `resident_moved` events up to the current tick. Nothing is written back, nothing is
+// predicted, and at progress 1 the result is exactly the recorded position of the current frame.
 import { eventsOfFrame, frameAt } from "../replay/store.ts";
 import type { ReplayBundle } from "../replay/types.ts";
 import type { Facing } from "./assets/residentArt.ts";
@@ -32,15 +32,16 @@ function positionOf(bundle: ReplayBundle, tick: number, residentId: string): Til
  * to its position in this frame.
  *
  * The world records one `resident_moved` event per entered tile, so the path is taken from
- * those events. If they do not chain exactly from the previous recorded position to the
- * current one, no route is invented: a single adjacent step is drawn as a straight slide, and
- * anything else is drawn as a jump (a one-point path).
+ * those events when they chain exactly from the previous recorded position to the current
+ * one (this includes a recorded walk that returns to its starting tile). Otherwise no route
+ * is invented: if the two recorded tiles are adjacent the move is a straight slide between
+ * them, and in every other case it is a jump (a one-point path).
  */
 export function pathInto(bundle: ReplayBundle, tick: number, residentId: string): TilePoint[] {
   const now = positionOf(bundle, tick, residentId);
   if (now === null) return [];
   const before = tick > 0 ? positionOf(bundle, tick - 1, residentId) : null;
-  if (before === null || same(before, now)) return [now];
+  if (before === null) return [now];
   const path: TilePoint[] = [before];
   let chained = true;
   for (const e of eventsOfFrame(bundle, frameAt(bundle, tick))) {
@@ -53,6 +54,7 @@ export function pathInto(bundle: ReplayBundle, tick: number, residentId: string)
     path.push({ x: to.x, y: to.y });
   }
   if (chained && path.length > 1 && same(path[path.length - 1] as TilePoint, now)) return path;
+  if (same(before, now)) return [now];
   const adjacent = Math.max(Math.abs(now.x - before.x), Math.abs(now.y - before.y)) === 1;
   return adjacent ? [before, now] : [now];
 }
@@ -70,7 +72,9 @@ const facingCache = new WeakMap<ReplayBundle, Map<string, Facing[]>>();
 
 /**
  * Facing at rest for every tick: the direction of the last recorded step up to that tick, or
- * "down" before the resident has moved. Computed once per bundle.
+ * "down" before the resident has moved. The value for a tick depends only on frames and
+ * events up to that tick. Memoised per bundle object: a loaded bundle is never mutated, so the
+ * cache cannot change a result (a bundle edited in place would need a fresh object).
  */
 function restFacings(bundle: ReplayBundle, residentId: string): Facing[] {
   let perBundle = facingCache.get(bundle);

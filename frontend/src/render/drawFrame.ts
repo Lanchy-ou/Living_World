@@ -1,6 +1,7 @@
-// Pure Canvas painting of one scene. No hidden state, no randomness, no network: the output
-// depends only on the arguments. `buildScene` decides what goes where; this file paints it in
-// the fixed layer order of `SCENE_LAYERS`.
+// Canvas painting of one scene. No randomness and no network: for an immutable bundle the
+// output depends only on the arguments. The only module state behind it is memoisation (sprite
+// caches, and facings per bundle object), which cannot change a result. `buildScene` decides
+// what goes where; this file paints it in the fixed layer order of `SCENE_LAYERS`.
 import type { DisplayFrame, ReplayBundle } from "../replay/types.ts";
 import type { Layout } from "./camera.ts";
 import { buildScene, computeSprites } from "./scene.ts";

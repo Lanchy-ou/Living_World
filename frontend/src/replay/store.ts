@@ -77,6 +77,7 @@ type Listener = () => void;
 
 export class ReplayStore {
   private state: ReplayState = initialState();
+  private followPan: { panX: number; panY: number } | null = null;
   private readonly listeners = new Set<Listener>();
 
   getState = (): ReplayState => this.state;
@@ -99,6 +100,7 @@ export class ReplayStore {
       fileName,
       speed: this.state.speed,
     };
+    this.followPan = null;
     for (const l of this.listeners) l();
   }
 
@@ -137,9 +139,30 @@ export class ReplayStore {
     this.set({ speed });
   }
 
-  /** Selecting only changes the selection: it never moves the camera and never pauses playback. */
+  /**
+   * Selecting only changes the selection: it never moves the camera and never pauses playback.
+   * Follow is tied to the resident it was turned on for, so changing or clearing the selection
+   * turns it off and the view stays where it is.
+   */
   selectResident(id: string | null): void {
-    this.set({ selectedResidentId: id });
+    if (id === this.state.selectedResidentId) return;
+    if (this.state.camera.follow) {
+      this.set({ selectedResidentId: id, camera: this.withoutFollow(this.state.camera) });
+    } else {
+      this.set({ selectedResidentId: id });
+    }
+  }
+
+  /**
+   * Display bookkeeping from the map: the pan the follow camera is showing right now. It is
+   * not state and notifies nobody; it only lets the view stay put when follow is turned off.
+   */
+  noteFollowPan(panX: number, panY: number): void {
+    this.followPan = { panX, panY };
+  }
+
+  private withoutFollow(camera: Camera): Camera {
+    return { ...camera, ...(this.followPan ?? {}), follow: false };
   }
 
   setFilters(patch: Partial<Filters>): void {
@@ -157,6 +180,13 @@ export class ReplayStore {
   }
 
   setCamera(patch: Partial<Camera>): void {
-    this.set({ camera: { ...this.state.camera, ...patch } });
+    const current = this.state.camera;
+    // Turning follow off without giving a pan keeps the view the follow camera was showing.
+    const base =
+      current.follow && patch.follow === false && patch.panX === undefined && patch.panY === undefined
+        ? this.withoutFollow(current)
+        : current;
+    if (patch.follow === true && !current.follow) this.followPan = null;
+    this.set({ camera: { ...base, ...patch } });
   }
 }

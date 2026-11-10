@@ -33,11 +33,6 @@ export function setPixel(s: PixelSprite, x: number, y: number, rgb: Rgb): void {
   s.data[i + 3] = 255;
 }
 
-export function isOpaque(s: PixelSprite, x: number, y: number): boolean {
-  if (x < 0 || y < 0 || x >= s.width || y >= s.height) return false;
-  return s.data[(y * s.width + x) * 4 + 3] !== 0;
-}
-
 /** Builds a sprite from character rows. Throws on ragged rows or unknown characters. */
 export function spriteFromRows(rows: readonly string[], palette: Palette, name = "sprite"): PixelSprite {
   const height = rows.length;

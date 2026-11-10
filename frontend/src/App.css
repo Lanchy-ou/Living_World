@@ -188,9 +188,13 @@ select:focus-visible {
   min-width: 0;
 }
 
+/* The top bar has a fixed height and never wraps: its content changes with the frame (ground
+   fruit, canteen location), and a changing bar height would resize the map during playback. */
 .topbar {
   border-bottom: 2px solid var(--line);
-  flex-wrap: wrap;
+  height: 50px;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .bottombar {
@@ -218,13 +222,16 @@ select:focus-visible {
 
 .hud {
   display: flex;
-  flex-wrap: wrap;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .chip {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -241,6 +248,7 @@ select:focus-visible {
 
 .topbar-actions {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 10px;
   margin-left: auto;
@@ -868,7 +876,8 @@ input[type="number"] {
   }
 
   .tick-input,
-  .roster-name {
+  .roster-name,
+  .file-name {
     display: none;
   }
 }

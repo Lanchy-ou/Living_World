@@ -78,6 +78,11 @@ export function MapCanvas({ store }: { store: ReplayStore }) {
         shownBundle = b;
         shownTick = state.currentTick;
       }
+      if (tween !== null && !state.playing && tween.duration > STEP_TWEEN_MS) {
+        // Playback was paused mid-slide: finish the slide quickly instead of over a full beat.
+        const done = Math.min(1, Math.max(0, (now - tween.start) / tween.duration));
+        tween = { start: now - done * STEP_TWEEN_MS, duration: STEP_TWEEN_MS };
+      }
       let p = 1;
       if (tween !== null) {
         p = Math.min(1, Math.max(0, (now - tween.start) / tween.duration));
@@ -105,6 +110,11 @@ export function MapCanvas({ store }: { store: ReplayStore }) {
       lastKey = key;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const layout = viewLayout(b, currentTick, view, camera, selectedResidentId, p);
+      if (camera.follow && selectedResidentId !== null) {
+        // Remember where the follow camera is, so turning follow off leaves the view in place.
+        const pan = panOf(view, b.map, layout);
+        store.noteFollowPan(pan.panX, pan.panY);
+      }
       drawFrame(ctx, b, frameAt(b, currentTick), layout, view, {
         selectedResidentId,
         progress: p,

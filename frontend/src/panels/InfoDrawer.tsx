@@ -7,7 +7,6 @@ import type { DrawerTab } from "./drawerTabs.ts";
 import { EventList } from "./EventList.tsx";
 import { ResourcesPanel } from "./ResourcesPanel.tsx";
 
-
 interface Props {
   store: ReplayStore;
   tab: DrawerTab;

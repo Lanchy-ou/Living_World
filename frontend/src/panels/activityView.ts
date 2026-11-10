@@ -99,6 +99,9 @@ export function activityOf(bundle: ReplayBundle, tick: number, residentId: strin
   if (!resident.alive) return { kind: "dead", label: "Dead", emote: null, actionType: null, code: null };
 
   const events = tickEventsBy(bundle, tick, residentId);
+  // Bubble rule: a failure this tick, else the active action, else an event recorded this tick.
+  const shown = lastOf(events, (e) => e.type in EVENT_EMOTES);
+  const eventEmote = shown === undefined ? null : (EVENT_EMOTES[shown.type] as EmoteName);
   const failed = lastOf(events, (e) => e.type === "action_failed");
   if (failed !== undefined) {
     const type = String(payloadOf(failed)["action_type"]);
@@ -111,7 +114,7 @@ export function activityOf(bundle: ReplayBundle, tick: number, residentId: strin
     return {
       kind: "active",
       label: actionLabel(active.action_type),
-      emote: ACTION_EMOTES[active.action_type] ?? null,
+      emote: ACTION_EMOTES[active.action_type] ?? eventEmote,
       actionType: active.action_type,
       code: null,
     };
@@ -124,23 +127,22 @@ export function activityOf(bundle: ReplayBundle, tick: number, residentId: strin
     return {
       kind: "interrupted",
       label: `${actionLabel(type)} interrupted: ${code}`,
-      emote: null,
+      emote: eventEmote,
       actionType: type,
       code,
     };
   }
 
   const succeeded = lastOf(events, (e) => e.type === "action_succeeded");
-  const shown = lastOf(events, (e) => e.type in EVENT_EMOTES);
   if (succeeded !== undefined) {
     const type = String(payloadOf(succeeded)["action_type"]);
     return {
       kind: "finished",
       label: `${actionLabel(type)} (finished)`,
-      emote: shown === undefined ? null : (EVENT_EMOTES[shown.type] as EmoteName),
+      emote: eventEmote,
       actionType: type,
       code: null,
     };
   }
-  return none;
+  return { ...none, emote: eventEmote };
 }

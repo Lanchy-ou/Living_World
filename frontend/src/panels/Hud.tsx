@@ -29,18 +29,18 @@ export function Hud({ store }: { store: ReplayStore }) {
       </span>
       <span className="chip" title="Sum of the recorded stock of all fruit trees">
         <SpriteCanvas sprite={objectSprite(APPLE_KEY) as PixelSprite} scale={2} />
-        <strong className="num">{view.treeFruit}</strong> on {view.trees} trees
+        <strong className="num">{view.treeFruit}</strong> fruit on {view.trees} trees
       </span>
       {view.groundFruit > 0 && (
         <span className="chip" title="Sum of the recorded ground fruit piles">
           <SpriteCanvas sprite={objectSprite(APPLE_KEY) as PixelSprite} scale={2} />
-          <strong className="num">{view.groundFruit}</strong> on the ground
+          <strong className="num">{view.groundFruit}</strong> fruit on the ground
         </span>
       )}
       {view.canteens.map((c) => (
         <span className="chip" key={c.holderId ?? "ground"} title="Canteen location and recorded servings">
           <SpriteCanvas sprite={objectSprite(CANTEEN_KEY) as PixelSprite} scale={2} />
-          {c.holderId === null ? "on the ground" : `with ${letterOf(c.holderId)}`} ·{" "}
+          Canteen {c.holderId === null ? "on the ground" : `with ${letterOf(c.holderId)}`} ·{" "}
           <strong className="num">{c.servings}</strong>
         </span>
       ))}
