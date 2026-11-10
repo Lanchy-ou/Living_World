@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -131,7 +132,7 @@ def test_the_tool_writes_only_under_manifests_variants_and_summary(e2e: dict[str
 def test_report_is_separate_and_never_writes_into_a_run_directory(e2e: dict[str, Any]) -> None:
     before = hash_tree(e2e["dir"] / "cases")
     summary = tool.run_report("e2e", repo=e2e["repo"])
-    assert summary == {"cases": 4, "invalid": []}
+    assert summary == {"cases": 4, "invalid": [], "missing": []}
     assert hash_tree(e2e["dir"] / "cases") == before
 
 
@@ -404,7 +405,7 @@ def test_variant_files_are_written_for_rule_variants_only(tmp_path: Path) -> Non
     folder = repo / "runs" / "p2" / "variants" / "variants"
     assert [p.name for p in folder.iterdir()] == ["base.json"]
     assert (folder / "base.json").read_text(encoding="utf-8").startswith('{"canteen_use":"enabled"')
-    assert len(result.failures) == 2  # the stub run produced no trace: no manifest
+    assert len(result.invalid) == 2 and result.manifests == []  # exit 1: no manifest
 
 
 def test_write_scope_is_limited_to_the_three_batch_folders(tmp_path: Path) -> None:
@@ -725,7 +726,7 @@ def test_a_short_run_is_never_reported_as_valid(
         encoding="utf-8"
     )
     assert '"valid": false' in record
-    assert tool.run_report("short", repo=repo) == {"cases": 1, "invalid": [case_id]}
+    assert tool.run_report("short", repo=repo) == {"cases": 1, "invalid": [case_id], "missing": []}
 
 
 def test_an_ignored_uncommitted_script_is_refused(tmp_path: Path) -> None:
@@ -769,36 +770,62 @@ def _exit_one(args: Any, repo: Path) -> Any:
     return tool.CliResult(1, done.output)
 
 
-def test_a_nonzero_cli_exit_is_recorded_and_used_by_report_and_rerun(tmp_path: Path) -> None:
-    """G2-R1-04: intact artifacts with exit 1 stay invalid in batch, report and rerun."""
+def test_a_nonzero_cli_exit_gets_no_manifest_and_stays_invalid(tmp_path: Path) -> None:
+    """G2-R2-02: intact artifacts with exit 1 are invalid in batch, report and rerun.
+
+    The exit status is kept in no file. A manifest exists only after the CLI exits 0, so the case
+    directory without one is what report and rerun see, and no edit outside the declared inputs
+    (run artifacts, manifests, variant files) can flip the case to valid.
+    """
     repo, commit = make_repo(tmp_path)
     registry = registry_for(commit)
     case_id = f"s2-default.orig.p1-random.s{SEEDS[0]}"
     result = tool.run_batch(
         "exit1", SEEDS[:1], [RANDOM], repo=repo, runner=_exit_one, registry=registry
     )
-    assert result.invalid == [case_id] and len(result.manifests) == 1
+    assert result.invalid == [case_id] and result.manifests == [] and not result.ok
     batch = repo / "runs" / "p2" / "exit1"
-    codes = json.loads((batch / "summary" / "cli-exit-codes.json").read_text(encoding="utf-8"))
-    assert codes == {case_id: 1}
-    assert not (batch / "cases" / case_id / "cli-exit-codes.json").exists()  # outside the run dir
-    assert tool.run_report("exit1", repo=repo) == {"cases": 1, "invalid": [case_id]}
+    assert not (batch / "manifests").exists()  # no manifest for a nonzero exit
+    assert (batch / "cases" / case_id / "events.jsonl").is_file()  # the artifacts are intact
+    assert not [p for p in batch.rglob("*") if "exit" in p.name.lower()]  # no status sidecar
+    expected = {"cases": 1, "invalid": [case_id], "missing": []}
+    assert tool.run_report("exit1", repo=repo) == expected
     metrics = json.loads(
         (batch / "summary" / "metrics" / f"{case_id}.json").read_text(encoding="utf-8")
     )
     assert metrics["valid"] is False
     assert [c["check"] for c in metrics["validity"] if not c["ok"]] == [1]
-    # rerun: the original is judged with its recorded exit 1, so a rerun that exits 0 differs
-    report = tool.run_rerun("exit1", repo=repo, runner=inprocess)
-    assert report["identical"] is False and "metrics" in report["cases"][0]["mismatches"]
-    same = tool.run_rerun("exit1", repo=repo, runner=_exit_one)
-    assert same["identical"] is True
-    # a missing record never becomes exit 0
-    (batch / "summary" / "cli-exit-codes.json").unlink()
-    assert tool.run_report("exit1", repo=repo) == {"cases": 1, "invalid": [case_id]}
+    # edits outside the declared inputs cannot flip it
+    (batch / "summary" / "cli-exit-codes.json").write_text(json.dumps({case_id: 0}), "utf-8")
+    (batch / "summary" / "logs" / f"{case_id}.log").write_text("exit 0", encoding="utf-8")
+    (batch / "summary" / "metrics" / f"{case_id}.json").unlink()
+    assert tool.run_report("exit1", repo=repo) == expected
+    # rerun reports the unpublished case and is never identical; it does not rerun it
+    rerun = tool.run_rerun("exit1", repo=repo, runner=never)
+    assert rerun["identical"] is False and rerun["unpublished_cases"] == [case_id]
+    assert rerun["cases"] == []
 
 
-def test_the_round_gate_takes_the_registered_seed_set() -> None:
+def test_report_and_rerun_list_unpublished_and_missing_cases(tmp_path: Path) -> None:
+    """A case directory without a manifest is invalid; a manifest without a directory is missing."""
+    repo, commit = make_repo(tmp_path)
+    tool.run_batch(
+        "mixed", SEEDS, [RANDOM], repo=repo, runner=inprocess, registry=registry_for(commit)
+    )
+    batch = repo / "runs" / "p2" / "mixed"
+    other = f"s2-default.orig.p1-random.s{SEEDS[1]}"
+    saved = (batch / "manifests" / f"{other}.json").read_text(encoding="utf-8")
+    (batch / "manifests" / f"{other}.json").unlink()  # published, then unpublished
+    assert tool.run_report("mixed", repo=repo) == {"cases": 2, "invalid": [other], "missing": []}
+    (batch / "manifests" / f"{other}.json").write_text(saved, encoding="utf-8")  # registered ...
+    shutil.rmtree(batch / "cases" / other)  # ... with no directory
+    report = tool.run_report("mixed", repo=repo)
+    assert report["missing"] == [other] and other not in report["invalid"]
+    rerun = tool.run_rerun("mixed", repo=repo, runner=inprocess)
+    assert rerun["missing_cases"] == [other] and rerun["identical"] is False
+
+
+def test_the_round_gate_takes_the_development_seed_list() -> None:
     """G2-R1-03: one valid pair is not a passing S5 round; the rest of the 20 seeds are missing."""
     from test_analysis_compare import summary
 
@@ -809,7 +836,7 @@ def test_the_round_gate_takes_the_registered_seed_set() -> None:
         [(base, summary("b", seed)), (cue, summary("c", seed, access=("drank", "drank", "drank")))]
     )
     paired = report["s2-default.orig"]["paired_base_vs_cue-ignored"]
-    assert paired["technical"] == "FAIL" and paired["seed_list"] == "development"
+    assert paired["technical"] == "FAIL"
     assert paired["pairs_used"] == 1  # the descriptive summary from the valid pair
     assert len(paired["missing_cases"]) == 2 * 19
     assert {m["arm"] for m in paired["missing_cases"]} == {"base", "treatment"}
@@ -832,6 +859,16 @@ def test_the_round_gate_takes_the_registered_seed_set() -> None:
     bad = broken["s2-default.orig"]["paired_base_vs_cue-ignored"]
     assert bad["technical"] == "FAIL" and bad["invalid_cases"] == [f"c{seeds[3]}"]
     assert bad["pairs_used"] == 19 and bad["dropped_seeds"] == [seeds[3]]
-    # seeds outside one registered list cannot form a passing round
-    stray = tool.build_comparisons([(base, summary("b", 7)), (cue, summary("c", 7))])
-    assert stray["s2-default.orig"]["paired_base_vs_cue-ignored"]["technical"] == "FAIL"
+    # G2-R2-01: the held-out acceptance list never passes an S4/S5 gate, even when complete
+    held_out = tool.ACCEPTANCE_SEEDS
+    assert not set(held_out) & set(seeds)
+    treatments = (("cue-ignored", "S5"), ("canteen-restricted", "S4"))
+    for variant, _ in treatments:
+        spec = tool.CaseSpec("s2-default", "orig", variant)
+        done = tool.build_comparisons(
+            [(base, summary(f"b{s}", s)) for s in held_out]
+            + [(spec, summary(f"t{s}", s)) for s in held_out]
+        )
+        gate = done["s2-default.orig"][f"paired_base_vs_{variant}"]
+        assert gate["technical"] == "FAIL" and gate["pairs_used"] == 0
+        assert len(gate["missing_cases"]) == 2 * 20  # every development case is missing

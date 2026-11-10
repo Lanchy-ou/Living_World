@@ -21,7 +21,7 @@ import subprocess
 import sys
 import tomllib
 from collections import defaultdict
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
@@ -57,7 +57,6 @@ RUNS_ROOT = "runs/p2"
 # §4 check 2 and the §6 argv: an experiment case is exactly this long. Not a CLI option; tests
 # that run short cases lower it (the only seam), so a short run is never reported as valid.
 REQUIRED_TICKS = 1008
-EXIT_CODES_FILE = "summary/cli-exit-codes.json"
 MANIFEST_VERSION = "0.1"
 WRITABLE_PARTS = ("manifests", "variants", "summary")
 
@@ -662,14 +661,21 @@ def run_batch(
             )
     records: dict[str, dict[str, Any]] = {}
     summaries: list[tuple[CaseSpec, RunSummary]] = []
-    exit_codes: dict[str, int] = {}
     for case_id, seed, spec, variant, verified, cli_args in planned:
         print(f"[batch {batch_id}] {case_id}", flush=True)
         done = runner(cli_args, repo)
         write_batch_file(batch_dir, f"summary/logs/{case_id}.log", done.output)
         run_dir = batch_dir / "cases" / case_id
-        exit_codes[case_id] = done.returncode
         loaded = load_case(run_dir, cli_exit_code=done.returncode)
+        if done.returncode != 0:
+            # §0, §4 check 1: a manifest exists only after the CLI exits 0. The exit status is
+            # kept nowhere; the case directory without a manifest is what later commands see.
+            record = metric_record(loaded)
+            records[case_id] = record
+            result.invalid.append(case_id)
+            if loaded.data is not None:
+                summaries.append((spec, summarize_run_of(loaded, case_id, seed, record)))
+            continue
         try:
             tick0 = loaded.inputs.tick0
             if tick0 is not None:
@@ -697,33 +703,24 @@ def run_batch(
         if not record["valid"]:
             result.invalid.append(case_id)
         if loaded.data is not None:
-            run = compute_run(loaded.data)
-            summaries.append(
-                (
-                    spec,
-                    summarize_run(
-                        case_id, seed, bool(record["valid"]), run, record["death_categories"] or {}
-                    ),
-                )
-            )
-    write_exit_codes(batch_dir, exit_codes)
+            summaries.append((spec, summarize_run_of(loaded, case_id, seed, record)))
     write_summaries(batch_dir, result.manifests, records, summaries)
     if result.failures:
         write_batch_file(batch_dir, "summary/failures.json", json_text(result.failures))
     return result
 
 
-def write_exit_codes(batch_dir: Path, exit_codes: Mapping[str, int]) -> None:
-    """Record each case's real CLI exit status in batch metadata (outside the run directory)."""
-    write_batch_file(batch_dir, EXIT_CODES_FILE, json_text(dict(sorted(exit_codes.items()))))
-
-
-def read_exit_codes(batch_dir: Path) -> dict[str, int]:
-    path = batch_dir / EXIT_CODES_FILE
-    if not path.is_file():
-        return {}
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return {str(case_id): int(code) for case_id, code in data.items()}
+def summarize_run_of(
+    loaded: LoadedCase, case_id: str, seed: int, record: dict[str, Any]
+) -> RunSummary:
+    assert loaded.data is not None
+    return summarize_run(
+        case_id,
+        seed,
+        bool(record["valid"]),
+        compute_run(loaded.data),
+        record["death_categories"] or {},
+    )
 
 
 def canonical_bytes_text(value: Mapping[str, Any]) -> str:
@@ -778,18 +775,12 @@ def write_summaries(
         write_batch_file(batch_dir, "summary/comparisons.json", json_text(comparisons))
 
 
-def registered_seed_set(seeds: Iterable[int]) -> tuple[str, tuple[int, ...]] | None:
-    """The registered seed list that contains every given seed, if there is exactly one."""
-    observed = set(seeds)
-    found = [(n, v) for n, v in SEED_LISTS.items() if observed and observed <= set(v)]
-    return found[0] if len(found) == 1 else None
-
-
 def build_comparisons(summaries: Sequence[tuple[CaseSpec, RunSummary]]) -> dict[str, Any]:
     """Per scenario revision: arm reports, paired reports and the pass lines that apply.
 
-    A paired round is gated on the registered seed list its seeds belong to (§4: all 2 x 20 cases
-    exist and are valid). Seeds outside one registered list cannot form a passing round.
+    An S4/S5 round is gated on the development seed list only (§1, §2; §4: all 2 x 20 cases exist
+    and are valid). The acceptance list is held out for S2 m6/base in P2-05, so a complete set of
+    acceptance seeds is a technical FAIL here.
     """
     arms: dict[tuple[str, str], dict[str, dict[int, RunSummary]]] = defaultdict(
         lambda: defaultdict(dict)
@@ -803,18 +794,12 @@ def build_comparisons(summaries: Sequence[tuple[CaseSpec, RunSummary]]) -> dict[
         }
         for treatment, scalars in (("canteen-restricted", S4_SCALARS), ("cue-ignored", S5_SCALARS)):
             if "base" in by_variant and treatment in by_variant:
-                observed = {*by_variant["base"], *by_variant[treatment]}
-                registered = registered_seed_set(observed)
-                paired = paired_report(
+                entry[f"paired_base_vs_{treatment}"] = paired_report(
                     by_variant["base"],
                     by_variant[treatment],
                     scalars,
-                    expected_seeds=None if registered is None else registered[1],
+                    expected_seeds=DEVELOPMENT_SEEDS,
                 )
-                paired["seed_list"] = None if registered is None else registered[0]
-                if registered is None:
-                    paired["technical"] = "FAIL"  # not a registered 20-seed round
-                entry[f"paired_base_vs_{treatment}"] = paired
         if "base" in by_variant:
             base_cases = list(by_variant["base"].values())
             entry["behavioral_variation_base"] = behavior_variation(base_cases)
@@ -829,51 +814,70 @@ def build_comparisons(summaries: Sequence[tuple[CaseSpec, RunSummary]]) -> dict[
 
 
 def read_manifests(batch_dir: Path) -> list[P2CaseManifest]:
+    if not batch_dir.is_dir():
+        raise Refusal("NO_BATCH", f"{batch_dir} does not exist")
     folder = batch_dir / "manifests"
     if not folder.is_dir():
-        raise Refusal("NO_BATCH", f"{folder} does not exist")
+        return []
     return [
         P2CaseManifest.model_validate_json(path.read_bytes())
         for path in sorted(folder.glob("*.json"))
     ]
 
 
+def unpublished_cases(batch_dir: Path, manifests: Sequence[P2CaseManifest]) -> list[str]:
+    """Case directories without a manifest: the CLI did not exit 0 (§4 check 1), so invalid."""
+    folder = batch_dir / "cases"
+    published = {m.case_id for m in manifests}
+    if not folder.is_dir():
+        return []
+    return sorted(p.name for p in folder.iterdir() if p.is_dir() and p.name not in published)
+
+
+def missing_cases(batch_dir: Path, manifests: Sequence[P2CaseManifest]) -> list[str]:
+    """Registered (manifest) cases whose case directory does not exist."""
+    return sorted(m.case_id for m in manifests if not (batch_dir / m.run_dir).is_dir())
+
+
 def run_report(batch_id: str, *, repo: Path = ROOT) -> dict[str, Any]:
-    """Compute metrics from existing case directories; separate from the batch command."""
+    """Compute metrics from existing case directories; separate from the batch command.
+
+    Inputs are the declared artifacts and manifests only. A manifest exists only after the CLI
+    exited 0, so its cases are judged with exit status 0; a case directory without a manifest is
+    invalid, and a manifest without a case directory is missing.
+    """
     batch_dir = batch_dir_of(repo, batch_id)
     manifests = read_manifests(batch_dir)
-    exit_codes = read_exit_codes(batch_dir)  # a missing entry stays None: check 1 fails
+    unpublished = unpublished_cases(batch_dir, manifests)
+    missing = missing_cases(batch_dir, manifests)
     records: dict[str, dict[str, Any]] = {}
     summaries: list[tuple[CaseSpec, RunSummary]] = []
     for manifest in manifests:
+        if manifest.case_id in missing:
+            continue
         loaded = load_case(
             batch_dir / manifest.run_dir,
-            cli_exit_code=exit_codes.get(manifest.case_id),
+            cli_exit_code=0,
             expected_policy_config_sha256=manifest.policy_config_sha256,
         )
         record = metric_record(loaded)
         records[manifest.case_id] = record
         if loaded.data is not None:
-            run = compute_run(loaded.data)
             spec = CaseSpec(
                 manifest.scenario_id, manifest.revision_label, manifest.policy_variant_id
             )
             summaries.append(
-                (
-                    spec,
-                    summarize_run(
-                        manifest.case_id,
-                        manifest.seed,
-                        bool(record["valid"]),
-                        run,
-                        record["death_categories"] or {},
-                    ),
-                )
+                (spec, summarize_run_of(loaded, manifest.case_id, manifest.seed, record))
             )
+    for case_id in unpublished:
+        records[case_id] = metric_record(
+            load_case(batch_dir / "cases" / case_id, cli_exit_code=None)
+        )
     write_summaries(batch_dir, manifests, records, summaries)
     return {
-        "cases": len(manifests),
+        "cases": len(manifests) + len(unpublished),
         "invalid": sorted(c for c, r in records.items() if not r["valid"]),
+        "missing": missing,
     }
 
 
@@ -912,11 +916,13 @@ def run_rerun(
     """Rerun every manifest of a batch into ``<batch_id>-rerun<n>`` and compare everything."""
     source_dir = batch_dir_of(repo, batch_id)
     manifests = read_manifests(source_dir)
-    if not manifests:
-        raise Refusal("NO_BATCH", f"{relative_batch(batch_id)} has no manifests")
+    unpublished = unpublished_cases(source_dir, manifests)
+    missing = missing_cases(source_dir, manifests)
+    if not manifests and not unpublished:
+        raise Refusal("NO_BATCH", f"{relative_batch(batch_id)} has no cases")
     commits = {m.code_commit for m in manifests}
     head = head_commit(repo)
-    if commits != {head}:
+    if manifests and commits != {head}:
         raise Refusal(
             "CODE_COMMIT", f"rerun at {head}; the manifests were run at {sorted(commits)}"
         )
@@ -925,24 +931,23 @@ def run_rerun(
     rerun_dir = batch_dir_of(repo, rerun_id)
     if rerun_dir.exists():
         raise Refusal("BATCH_EXISTS", f"{relative_batch(rerun_id)} already exists")
-    source_exit_codes = read_exit_codes(source_dir)
-    rerun_exit_codes: dict[str, int] = {}
     rows = []
     for manifest in manifests:
         out = f"{relative_batch(rerun_id)}/cases/{manifest.case_id}"
         args = replace_out(manifest.cli_args, out)
         done = runner(args, repo)
         write_batch_file(rerun_dir, f"summary/logs/{manifest.case_id}.log", done.output)
-        rerun_exit_codes[manifest.case_id] = done.returncode
         again = load_case(
             rerun_dir / "cases" / manifest.case_id,
             cli_exit_code=done.returncode,
             expected_policy_config_sha256=manifest.policy_config_sha256,
         )
-        original = load_case(
-            source_dir / manifest.run_dir, cli_exit_code=source_exit_codes.get(manifest.case_id)
-        )
+        original = load_case(source_dir / manifest.run_dir, cli_exit_code=0)  # it has a manifest
         mismatches = []
+        if manifest.case_id in missing:
+            mismatches.append("the source case directory is missing")
+        if done.returncode != 0:
+            mismatches.append(f"the rerun CLI exited {done.returncode}")
         trace, tick0, events = again.inputs.trace, again.inputs.tick0, again.inputs.events
         if trace is None or tick0 is None or events is None:
             mismatches.append("the rerun did not produce a loadable trace")
@@ -962,9 +967,10 @@ def run_rerun(
         "rerun_batch": rerun_id,
         "code_commit": head,
         "cases": rows,
-        "identical": all(r["identical"] for r in rows),
+        "unpublished_cases": unpublished,  # case directory without a manifest: invalid
+        "missing_cases": missing,
+        "identical": all(r["identical"] for r in rows) and not unpublished and not missing,
     }
-    write_exit_codes(rerun_dir, rerun_exit_codes)
     write_batch_file(rerun_dir, "summary/rerun-report.json", json_text(report))
     return report
 
@@ -1051,7 +1057,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"rerun {rerun_report['rerun_batch']}: identical={rerun_report['identical']}")
             return 0 if rerun_report["identical"] else 1
         summary = run_report(args.batch_id)
-        print(f"report {args.batch_id}: {summary['cases']} cases, invalid={summary['invalid']}")
+        print(
+            f"report {args.batch_id}: {summary['cases']} cases, invalid={summary['invalid']}, "
+            f"missing={summary['missing']}"
+        )
         return 0
     except Refusal as refusal:
         print(f"refused: {refusal}", file=sys.stderr)

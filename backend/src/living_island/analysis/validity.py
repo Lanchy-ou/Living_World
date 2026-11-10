@@ -84,7 +84,7 @@ def _events_at(events: tuple[WorldEvent, ...], tick: int) -> int:
 def _check_1(inputs: ValidityInputs) -> list[str]:
     problems = _missing(inputs, "trace")
     if inputs.cli_exit_code is None:
-        problems.append("the CLI exit status was not recorded")
+        problems.append("no case manifest: it is written only after the CLI exits 0")
     elif inputs.cli_exit_code != 0:
         problems.append(f"the CLI exited {inputs.cli_exit_code}, expected 0")
     return problems
