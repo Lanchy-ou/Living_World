@@ -1,0 +1,64 @@
+{
+  "script_schema_version": "0.1",
+  "actors": [
+    {
+      "actor_id": "ella",
+      "on_exhausted": "wait",
+      "plans": [
+        [
+          {
+            "action_type": "move_to",
+            "target": {"kind": "tile", "position": {"x": 16, "y": 35}},
+            "parameters": {},
+            "reason": null
+          }
+        ],
+        [
+          {
+            "action_type": "gather",
+            "target": {"kind": "entity", "id": "fruit_01"},
+            "parameters": {},
+            "reason": null
+          }
+        ],
+        [
+          {"action_type": "eat", "target": null, "parameters": {}, "reason": null}
+        ]
+      ]
+    },
+    {
+      "actor_id": "mia",
+      "on_exhausted": "wait",
+      "plans": [
+        [
+          {"action_type": "rest", "target": null, "parameters": {}, "reason": null}
+        ],
+        [
+          {
+            "action_type": "move_to",
+            "target": {"kind": "tile", "position": {"x": 14, "y": 33}},
+            "parameters": {},
+            "reason": null
+          }
+        ]
+      ]
+    },
+    {
+      "actor_id": "ryan",
+      "on_exhausted": "wait",
+      "plans": [
+        [
+          {
+            "action_type": "drink",
+            "target": null,
+            "parameters": {"source": "canteen"},
+            "reason": null
+          }
+        ],
+        [
+          {"action_type": "wait", "target": null, "parameters": {}, "reason": null}
+        ]
+      ]
+    }
+  ]
+}

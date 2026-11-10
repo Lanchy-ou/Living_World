@@ -107,3 +107,18 @@ forbidden_modules = [
     "living_island.persistence",
     "living_island.sim",
 ]
+
+[[tool.importlinter.contracts]]
+name = "analysis is read-only: no world internals, sim, persistence or policies"
+type = "forbidden"
+source_modules = ["living_island.analysis"]
+forbidden_modules = [
+    "living_island.world",
+    "living_island.sim",
+    "living_island.persistence",
+    "living_island.memory",
+    "living_island.agents.runtime",
+    "living_island.agents.policies",
+    "living_island.agents.rule_based",
+]
+allow_indirect_imports = true
