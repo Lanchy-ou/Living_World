@@ -50,3 +50,89 @@ record the question, make the smallest reversible assumption, and flag it in you
 | OQ-051 | 2026-11-09 | P1-09 | What measured replay size or viewer load time should trigger a warning? | Keep current behavior. Record the P1 measurements and leave the threshold and warning for a later owner-approved task. | deferred |
 | OQ-052 | 2026-11-09 | P1-09 (Gate 2 R-01) | Replay export checks only the last spool frame against the final checkpoint; an edited intermediate frame is still exported. Should export verify more frames? | Keep P1 behavior: frames are projected from committed state at capture, and the A09 integration test compares every frame. Revisit verification of frames at retained checkpoint ticks in P2. | deferred (owner, 2026-11-09) |
 | OQ-053 | 2026-11-09 | P1-09 (Gate 2 R-02) | The default-world integration test takes about 129-168 s, roughly three quarters of the backend suite. Is that CI cost acceptable? | Accepted for P1. In P2 consider moving long runs to a separate (for example nightly) job, through a task that may change the CI workflow and pytest configuration. | accepted (owner, 2026-11-09) |
+| OQ-054 | 2026-11-10 | P2-00 | The rule policy needs a back-off duration for failed targets; no spec gives one. | `rule_params.failed_target_retry_ticks = 36` (6 game hours). It is a policy parameter, not a world value, and part of the policy-config identity, so a change is a separate variant tuned on development seeds only (rule-policy §8). | open (M5) |
+| OQ-055 | 2026-11-10 | P2-00 | `EnvironmentalCue.direction` is a free string (IC §2.2, `world/content.py:201`); no direction vocabulary is frozen. | The rule policy recognizes exactly `north`, `east`, `south`, `west`; any other string is stored but treated as no direction (rule-policy §7.1). | open (M5) |
+| OQ-056 | 2026-11-10 | P2-00 | Must cue impressions seen at non-decision boundaries persist, which would need an ingest hook (plan §1.2)? | No hook. A near upgrade is a NEW_SIGHT that needs movement, and `move_to` is interrupted by NEW_SIGHT, so the actor decides on that packet (rule-policy §7.4). Residual case: a config with `night_radius_tiles < cue_detail_radius_tiles`. P2-02 adds a test that every delivered near direction reaches the committed state. | open (M5) |
+| OQ-057 | 2026-11-10 | P2-00 | The plan's dedicated-water-trip clause "no completed gather, give or pick-up since the last useful non-water action" is circular as written. | The travel leg is the ticks between the end of the resident's previous spring visit (or tick 0) and the visit start. A water-only visit is dedicated iff no gather, give or pick_up completed in that leg (p2-experiments §3.1). | open (M5) |
+| OQ-058 | 2026-11-10 | P2-00 | S3 needs one declared scarcity factor and value. | `fruit.regrow_ticks = 288` (from 144), a TOML-only change that halves regrowth supply below steady demand (BN §1). No map change. | open (M5) |
+| OQ-059 | 2026-11-10 | P2-00 | S1 needs concrete spawns within initial sight of the spring. | ella (33,32), ryan (34,32), mia (35,32), grass, consecutive like the default; each sees the spring (38,30) at tick 0 (checked with `world/space.py:129`). No other change. | open (M5) |
+| OQ-060 | 2026-11-10 | P2-00 | Rule-policy run time is unmeasured, so the matrix size (7 development runs per seed) is unknown in cost. | 20 development seeds. If P2-02's measured time makes the matrix impractical, the owner may approve a shorter prefix of the registered development list through this OQ before P2-04; the acceptance list stays 20 (PD-05). | open (M5) |
+| OQ-061 | 2026-11-10 | P2-00 | BN §5 item 3 asks for a predeclared practical canteen-benefit threshold; PD-03 says a small benefit does not block P2. | No threshold; the S4 report is descriptive with the plan §1.3 confounds stated. | open (M5) |
+| OQ-062 | 2026-11-10 | P2-00 | Canteen capacity is not in Perception, so a holder cannot tell when to refill. | Add `canteen_full_seen` to rule `policy_state`: the largest serving count the resident has held, corrected by `ALREADY_FULL`. This is the one field beyond plan §1.2's list. | open (M5) |
+| OQ-063 | 2026-11-10 | P2-00 | WR §1.1 defines adjacency as distance ≤ 1 "including same-tile for item access", but the engine requires distance exactly 1 for gather, spring drink, fill and give (`world/actions.py:68`, `:84`, `:97`, `:106`) and allows 0 or 1 for pick_up (`:119`). | No world change in P2. The rule policy uses the engine's reach (exactly 1, pick_up ≤ 1). Whether WR wording or code should change is a later change request. | open (M5) |
+| CR-004 | 2026-11-10 | P2-00 | Change request (plan §7): the rule policy needs a policy ID, a `policy_state` validator, rule parameters with canonical identity, and save/restore validation. Detail in "CR-004 (proposed)" below. | Recommended: (i) add `rule-based-v0`; (ii) a typed `RuleStateV0_1` validator; (iii) optional `PolicyConfig.rule_params`, omitted from serialization when null; (iv) no ingest hook. No generated file changes. | proposed (M5) |
+
+## CR-004 (proposed, P2-00)
+
+Applies after M5 approval only, by P2-00 deliverable 5 (spec text) and P2-01 (code). Code
+references are on `04fde8b`, relative to `backend/src/living_island/`.
+
+**(i) Policy ID.** `PolicyId` is `Literal["random-v0","scripted-v0","recorded-v0"]`
+(`agents/types.py:35`, AI §2.5).
+- Option A (recommended): add `"rule-based-v0"`; `create_runtime` gains its case
+  (`agents/runtime.py:223-252`); the CLI adds `--policy rule-based` (`sim/cli.py:280`).
+- Option B: reuse an existing ID with a flag. Rejected, because policy identity would be
+  ambiguous in records.
+- Impact: `DecisionRecord.policy_id` is a free string (`agents/types.py:135`), so records are
+  unchanged.
+
+**(ii) `policy_state` validator.** `ResidentRuntimeState._policy_state` accepts only `{}` or
+scripted `{cursor}` (`agents/types.py:292-302`).
+- Option A (recommended): for `rule-based-v0`, validate `policy_state` as `RuleStateV0_1`
+  (rule-policy §7) with the cross-checks of rule-policy §7.2. These check against
+  `next_decision_ordinal`, `latest_perception_tick`, the grid bounds, `max_plan_actions` and
+  `rule_params`.
+- Option B: free JSON. Rejected; the plan requires restore validation.
+
+**(iii) Rule parameters and identity.** Rule-only settings must be saved with the policy,
+because a world config hash alone cannot identify them (plan §1.2).
+- Option A (recommended): add `PolicyConfig.rule_params: RuleParams | null`
+  (rule-policy §8), with these rules:
+  - It is required non-null iff `policy_id == "rule-based-v0"`, in the same style as
+    `_identities` (`agents/types.py:235-241`).
+  - It is **omitted from serialization when null**, as `TalkParameters` omits absent keys
+    (`world/protocol.py:261-294`). P1 `PolicyConfig` JSON, checkpoints and their bytes stay
+    identical. P1 saves lacking the key still validate, and unknown keys are still refused.
+  - `rule_params_version` is the literal `"0.1"`; unknown versions are refused.
+  - Identity is the SHA-256 of the canonical tick-zero `PolicyConfig` (IC §6.3), recorded in
+    the P2 manifest (`p2-experiments` §6).
+  - Restore keeps the existing check. `_verify_policy_identity` compares every saved
+    `PolicyConfig`, which now includes `rule_params`, with the source run's tick-zero
+    checkpoint (`persistence/resume.py:165-171`, `:204-207`).
+  - New: when any runtime is `rule-based-v0`, the tick-zero checkpoint is **required**.
+    Today the check is skipped if that file is missing (`persistence/resume.py:205`).
+  - The CLI exposes the two switches, for example `--rule-canteen restricted` and
+    `--rule-cue ignored`. Numeric parameters keep their defaults unless a variant is
+    registered.
+- Option B: a separate `policy.json` in the run directory. Rejected; it duplicates
+  `PolicyConfig` and needs a new resume check.
+- Compatibility: P1 random, scripted and recorded configs, saves and traces are unchanged,
+  and the M4 reference hashes at `6d90824` are unaffected. Events, decisions and the world
+  hash never contain `PolicyConfig`. Recorded re-execution runs as `recorded-v0` and needs no
+  rule parameters.
+
+**(iv) Ingest hook.** Not required (rule-policy §7.4, OQ-056).
+- `Runtime.ingest` and the request hash are unchanged.
+- Only P2-01's internal generalization of the commit hook changes
+  (`agents/runtime.py:191-193`, today scripted-only); it is not a frozen contract.
+
+**Generated files.** None change.
+- `gen_types.py` exports `contract.__all__ = ["SnapshotMeta"]` and the `ReplayBundle` schema
+  (`scripts/gen_types.py:28-46`, `contract/__init__.py:12-14`).
+- The generated frontend files mention policies only as `fallback_policy_id` (from
+  `agent_fallback_used`). `PolicyConfig` and `PolicyId` are not exported. P2-01 confirms
+  with `git diff --exit-code` after generation.
+
+**Spec text to apply after M5** (marked `[CR-004]`), in `agent-interface-v0.1.md`:
+- §2.2: add `rule-based-v0` to the `policy_id` examples.
+- §2.5: change `PolicyConfig.policy_id` to
+  `"random-v0"|"scripted-v0"|"recorded-v0"|"rule-based-v0"`, add
+  `rule_params: RuleParams|null` (absent when null; non-null iff rule-based), and point to
+  `rule-policy-v0.1.md` §8. Add the rule that the tick-zero checkpoint is required for
+  rule-based restore.
+- §4: add "§4.4 `RuleBasedPolicy` (`rule-based-v0`): specified in `rule-policy-v0.1.md`."
+- §6: change the `policy_state` comment to "`{}` for random/recorded; `{cursor}` for scripted;
+  `RuleStateV0_1` for rule-based (rule-policy §7)".
+
+`interface-contract-v0.1.md` needs no change: §2.4a delegates these schemas to the agent
+interface. ADR 0004 records the decision.
