@@ -303,21 +303,34 @@ export const FRUIT_TREE_OFFSET = {
   y: TILE_PX - FRUIT_TREE_HEIGHT,
 } as const;
 
-/** A small sample of one terrain for the legend: the centre of a 3x3 patch of that terrain. */
+const GROUND_TERRAINS: readonly Terrain[] = ["sea", "beach", "grass"];
+
+/**
+ * A small sample of one terrain for the legend, drawn by the same code as the map. Ground
+ * terrains (sea, beach, grass) fill the sample; every other terrain is one tile on grass.
+ */
 export function terrainSwatch(terrain: Terrain): PixelSprite {
-  const symbol = "x";
+  const ground = GROUND_TERRAINS.includes(terrain);
+  const edge = ground ? "xxx" : "ggg";
   const layer = buildTerrainLayer({
     width: 3,
     height: 3,
-    rows: [symbol.repeat(3), symbol.repeat(3), symbol.repeat(3)],
-    terrain_legend: [{ symbol, terrain }],
+    rows: [edge, ground ? "xxx" : "gxg", edge],
+    terrain_legend: [
+      { symbol: "x", terrain },
+      { symbol: "g", terrain: "grass" },
+    ],
   });
-  const size = TILE_PX + 8;
-  const out = emptySprite(size, size);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const si = ((y + TILE_PX - 6) * layer.width + x + TILE_PX - 4) * 4;
-      out.data.set(layer.data.subarray(si, si + 4), (y * size + x) * 4);
+  // Wide and tall enough for the largest decoration (the fruit tree) around the centre tile.
+  const width = FRUIT_TREE_WIDTH;
+  const height = FRUIT_TREE_HEIGHT;
+  const x0 = TILE_PX + TILE_PX / 2 - width / 2;
+  const y0 = 2 * TILE_PX - height;
+  const out = emptySprite(width, height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const si = ((y + y0) * layer.width + x + x0) * 4;
+      out.data.set(layer.data.subarray(si, si + 4), (y * width + x) * 4);
     }
   }
   return out;

@@ -3,6 +3,7 @@ import type { DragEvent } from "react";
 import { LoadControls } from "./controls/LoadControls.tsx";
 import { PlaybackBar } from "./controls/PlaybackBar.tsx";
 import { ErrorDetails } from "./debug/ErrorDetails.tsx";
+import { eventInvolvesResident, isFailureEvent } from "./panels/eventView.ts";
 import { Hud } from "./panels/Hud.tsx";
 import { DRAWER_TABS, DRAWER_TITLES } from "./panels/drawerTabs.ts";
 import type { DrawerTab } from "./panels/drawerTabs.ts";
@@ -48,8 +49,13 @@ export default function App() {
   }
 
   function showEvent(event: WorldEvent) {
-    // Make sure the event is not hidden by a filter, then select it (which seeks to its tick).
-    store.setFilters({ residentId: null, failuresOnly: false });
+    // If the current filters would hide the event, clear them; then select it (which seeks to
+    // its tick). Filters that already show the event are left as the user set them.
+    const { filters } = store.getState();
+    const hidden =
+      (filters.residentId !== null && !eventInvolvesResident(event, filters.residentId)) ||
+      (filters.failuresOnly && !isFailureEvent(event));
+    if (hidden) store.setFilters({ residentId: null, failuresOnly: false });
     store.selectEvent(event);
     setDrawer("events");
   }

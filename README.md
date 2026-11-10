@@ -48,11 +48,25 @@ directory. Use a full run as the source for `reexecute --export-replay`. Export 
 pnpm --dir frontend dev --host 127.0.0.1 --port 5177 --strictPort
 ```
 
-Open [the local viewer](http://127.0.0.1:5177/) and choose
-`runs/p1-demo/recorded/replay.json` in the replay file picker. Enter 1008 in the tick
-field or use the last-tick button. Select a resident to inspect conditions, inventory and
-current action. Use the event filters to inspect failures and select an event to jump to
-its tick.
+Open [the local viewer](http://127.0.0.1:5177/), choose **Open replay…** and pick
+`runs/p1-demo/recorded/replay.json`, or drop the file on the page. The viewer shows the island
+as pixel art drawn from the replay (design: `docs/spec/frontend-design-v0.1.md`).
+
+- Drag to pan; scroll, pinch or use the `−` / `+` buttons to zoom; **View entire island**
+  shows the whole map again.
+- Press play, or enter 1008 in the tick field, or use the last-tick button. Speeds are 1 to
+  16 ticks per second.
+- Click a resident (on the map or in the list at the top left) to open its panel with the
+  recorded action, conditions and inventory. This does not move the camera or pause playback.
+- **Events**, **Resources** and **Legend** open the detail drawer. Use the event filters to
+  inspect failures and select an event to jump to its tick and see its raw JSON.
+
+For a run in which residents survive longer, export a rule-based replay and open it the same
+way:
+
+```sh
+uv run --directory backend python -m living_island run --config ../content/worlds/default.toml --ticks 1008 --policy rule-based --out ../runs/rule-demo --export-replay
+```
 
 Run `uv run --directory backend python ../scripts/measure_p1.py` to repeat the backend
 measurements under `runs/p1-measurements/`. Pass `--out runs/<new-name>` for another sample.
