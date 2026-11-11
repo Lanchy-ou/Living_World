@@ -60,7 +60,7 @@ all of their current validation and omission behavior.
 | DecisionRecordP3 | record_schema_version = "0.2" | legacy decision identity/plan fields plus decision_id:string, context_sha256:string, projection_sha256:string or null, accepted_delta:CognitiveDelta, call_ids:string[], state_before_sha256:string, state_after_sha256:string; exact extension in decision spec |
 | SavePackageP3 | save_schema_version = "0.2" | unchanged world and pending delivery DTOs; context_record_cursor:int, dispatch_record_cursor:int, log_prefixes:LogPrefix[], run_budget:BudgetLedgerP3, live_enabled:bool; full composition in decision spec |
 | DecisionRequestP3 | request_schema_version = "0.2" | actor_id:string, tick:int, decision_ordinal:int, triggers:DecisionTrigger[], context:DecisionContextP3 |
-| P3PolicyConfig | config_schema_version = "0.2" | policy_id:"llm-v0", seed:int, max_plan_actions:int, map_width:int, map_height:int, identity_sha256:string, prompt_version:string, prompt_sha256:string, action_schema_version:string, action_schema_sha256:string, context_profile_id:string, adapter_id:string, adapter_version:string, model_id:string, provider_settings:ProviderSettings, limits:DecisionLimits, pricing:PricingPin, fallback_config:PolicyConfig (rule-based-v0), trial_registration_sha256:string |
+| P3PolicyConfig | config_schema_version = "0.2" | policy_id:"llm-v0" or "rule-based-v0", seed:int, max_plan_actions:int, map_width:int, map_height:int, identity_sha256:string, prompt_version:string, prompt_sha256:string, action_schema_version:string, action_schema_sha256:string, context_profile_id:string, adapter_id:string, adapter_version:string, model_id:string, provider_settings:ProviderSettings, limits:DecisionLimits, pricing:PricingPin, fallback_config:PolicyConfig (rule-based-v0), trial_registration_sha256:string |
 | P3PolicyPrivateState | private_schema_version = "0.1" | mode:"llm" or "fallback", fallback_state:RuleStateV0_1, last_fallback_ordinal:int or null |
 | BudgetLedgerP3 | budget_schema_version = "0.1" | coordinator-owned committed debit totals and imported recovery reservations; exact fields in decision spec |
 
@@ -68,7 +68,13 @@ DecisionRecordP3 also contains `detail_code`, `fallback_error`, `policy_private_
 and `budget_debits` with exact types in its owner. New context/dispatch/terminal-call
 rows use literal version "0.1" and separate logs. The replay execution transport is
 `recorded-p3-v0`, outside the saved primary `llm-v0` configuration; it preserves that
-configuration to compare state. This does not add either ID to the legacy PolicyId.
+configuration to compare state. This does not add either new ID to the legacy PolicyId.
+All actors in a P3 run use P3 envelopes; registered sorted unique `llm_actor_ids`
+selects primary llm-v0 actors, with primary rule-based-v0 for the others. A deliberate
+rule-only decision has status ok, matching primary/effective rule IDs, no calls,
+no error or substitution and no fallback event. Its private mode starts fallback
+and its frozen state persists continuously. This permits the one-LLM slice without
+mixing record/save versions. The all-rule P2 comparison remains a separate legacy run.
 Logs are `decisions-p3.jsonl`, `contexts-p3.jsonl`, `llm-dispatches.jsonl` and
 `llm-calls.jsonl`; `decision-trace-p3.json` and `resume-origin-p3.json` identify their
 verified lineage. Snapshot filenames retain the tick convention and dispatch by
