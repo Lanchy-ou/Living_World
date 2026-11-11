@@ -201,11 +201,23 @@ that count. This exposes loss without storing an unbounded tombstone list.
 
 ## 4. Deterministic retrieval
 
-`retrieve(state, own_perception, own_goal) -> ExperienceRecord[]` is owner-scoped.
-Wrong owner is an error, not a filter. The selector is `recent-relevant-v0`; no provider,
-random draw, wall clock, embedding, text search or inference is involved.
+The pure memory port is `retrieve(state:ExperienceState, query:RetrievalQuery)
+-> ExperienceRecord[]`. It consumes a memory-owned closed type:
 
-Build query keys only from structured fields: entity/resident/cue IDs and positions
+```text
+RetrievalQuery {
+  query_schema_version:"0.1", owner_id:string,
+  entity_ids:string[], positions:Coord[]
+}
+```
+
+IDs are unique in ascending UTF-8 order; positions are unique in `(y,x)` order.
+Wrong owner is an error, not a filter. The selector is `recent-relevant-v0`; no provider,
+random draw, wall clock, embedding, text search or inference is involved. Agents builds
+this query; memory never imports GoalState or any agents DTO. The query grants access
+only to the supplied own store, never an entity/world lookup.
+
+Agents builds query keys only from structured own fields: entity/resident/cue IDs and positions
 of currently visible/transient entities and cues; own position and held canteen ID;
 and the current goal's structured completion target, if any. A tile key is `(x,y)`;
 an ID key is its typed ID string. Do not extract IDs or locations from speech, reasons

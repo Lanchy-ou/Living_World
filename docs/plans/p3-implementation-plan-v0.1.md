@@ -46,6 +46,7 @@ all of their current validation and omission behavior.
 | Object | Version | Required fields (types); owner expands named types |
 | --- | --- | --- |
 | ExperienceRecord | enclosing store version | experience_id:string, owner_id:string, sequence:int, observed_tick:int, kind:ExperienceKind, source:SourceRef, payload:ExperiencePayload |
+| RetrievalQuery | query_schema_version = "0.1" | owner_id:string, entity_ids:string[] (sorted unique), positions:Coord[] (sorted unique by y,x); built by agents, consumed by memory |
 | ExperienceState | experience_schema_version = "0.1" | owner_id:string, last_ingested_tick:int (-1 initially), next_sequence:int, records:ExperienceRecord[], intent_refs:OwnedIntentRef[] |
 | ResidentIdentity | identity_schema_version = "0.1" | actor_id:string, display_name:string, profile_id:string, values:string[], initial_direction:string, source_sha256:string |
 | GoalProposal | enclosing delta version | text:string, completion:CompletionPredicate |
@@ -108,9 +109,11 @@ count complete committed records, never bytes or the last record index.
 | --- | --- | --- |
 | ingest_experience | own delivery, own ExperienceState | new ExperienceState; no provider, objective log or hidden state_delta |
 | advance_goal_evidence | own delivery, retained own intent refs, GoalState | GoalState with deterministic observed evidence only |
+| retrieve_experience | ExperienceState, memory-owned RetrievalQuery | ranked ExperienceRecord[]; agents derives query from own perception/goals, memory never imports GoalState |
 | assemble_context | latest own Perception, ResidentCognitiveState, explicit context profile | ContextAssembly; no IO or other actor reads |
 | render_provider_request | ContextAssembly, DecisionRequest identity/triggers, pinned prompt/action schema | exact ProviderRequest; no hidden retrieval |
-| provider.complete (external IO) | exact ProviderRequest, explicit attempt limits | ProviderResult; no state mutation |
+| provider.prepare / count_input_tokens (pure) | exact ProviderRequest / prepared WireRequest | pinned nonsecret wire bytes / proven token upper bound; no network |
+| provider.complete (external IO) | exact ProviderRequest, prepared WireRequest, explicit attempt timeout | ProviderResult; send retained wire bytes unchanged; no state mutation |
 | validate_proposal | DecisionProposal, own DecisionContextP3, policy configuration | ActionPlan plus staged CognitiveDelta, or classified rejection |
 | stage_decision / commit_decision | immutable request, staged outcome / matching committed record | atomic resident state plus ordinal, accepted delta and policy-private update |
 | export_state / restore | committed runtime / verified typed saved state | ResidentRuntimeStateP3 / runtime; refuses a half transaction |
