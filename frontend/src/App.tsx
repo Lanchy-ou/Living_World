@@ -97,24 +97,7 @@ export default function App() {
           Living Island
         </h1>
         <Hud store={store} />
-        <div className="topbar-actions">
-          {bundle !== null && (
-            <div className="detail-toggles" role="group" aria-label="Detail views">
-              {DRAWER_TABS.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  className={`text-button${drawer === t ? " active" : ""}`}
-                  aria-pressed={drawer === t}
-                  onClick={() => setDrawer(drawer === t ? null : t)}
-                >
-                  {DRAWER_TITLES[t]}
-                </button>
-              ))}
-            </div>
-          )}
-          {load}
-        </div>
+        <div className="topbar-actions">{load}</div>
       </header>
 
       <div className={`stage${drawer !== null ? " has-drawer" : ""}`}>
@@ -153,6 +136,20 @@ export default function App() {
       {bundle !== null && (
         <footer className="bottombar">
           <PlaybackBar store={store} />
+          {/* The detail views open from the bottom, so their buttons sit at the bottom right. */}
+          <div className="detail-toggles" role="group" aria-label="Detail views">
+            {DRAWER_TABS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                className={`text-button${drawer === t ? " active" : ""}`}
+                aria-pressed={drawer === t}
+                onClick={() => setDrawer(drawer === t ? null : t)}
+              >
+                {DRAWER_TITLES[t]}
+              </button>
+            ))}
+          </div>
         </footer>
       )}
     </main>

@@ -272,6 +272,21 @@ test("PF-T05: follow belongs to one resident and ends, with the view kept, when 
   // a drag gives its own pan, which wins over the remembered follow pan
   store.setCamera({ panX: 5, panY: -7, follow: false });
   assert.deepEqual([store.getState().camera.panX, store.getState().camera.panY], [5, -7]);
+
+  // if the map never reported a follow pan (nothing was painted), ending follow keeps the
+  // stored pan, and a pan remembered from an earlier follow or an earlier replay is not reused
+  follow(store, "ella");
+  store.setCamera({ follow: false });
+  store.setCamera({ panX: 11, panY: 13 });
+  store.setCamera({ follow: true });
+  store.selectResident(null);
+  assert.deepEqual(store.getState().camera, { zoom: 1.6, panX: 11, panY: 13, follow: false });
+  follow(store, "ella");
+  store.load(bundle);
+  store.selectResident("mia");
+  store.setCamera({ panX: 3, panY: 4, follow: true });
+  store.setCamera({ follow: false });
+  assert.deepEqual(store.getState().camera, { zoom: 1, panX: 3, panY: 4, follow: false });
 });
 
 test("PF-T06: a path starts at the previous recorded tile and ends at the current one", () => {

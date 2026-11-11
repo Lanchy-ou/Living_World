@@ -38,7 +38,7 @@ Warm, top-down 2D pixel art, chosen by the owner (concept image "A — Warm Pixe
 | Residents drawn at one scale | Residents and ground items are never drawn smaller than 2 screen pixels per art pixel | On the 64×64 default map one tile is about 13 px at island scale; at tile scale a resident would be unreadable. |
 | Panel always visible on the right | The resident panel opens on click and floats over the map | Opening it must not resize the map or move the camera. |
 | Health, Food, Water, Energy | Health, Satiety, Hydration, Stamina | These are the recorded field names; using them avoids a second vocabulary in a debugging tool. |
-| Zoom and "Fit" in the bottom bar | Zoom buttons and "View entire island" sit on the map, bottom left | Map controls belong to the map; the bottom bar is time only. |
+| Zoom and "Fit" in the bottom bar | Zoom buttons and "View entire island" sit on the map, bottom left | Map controls belong to the map; the bottom bar holds the time controls and the buttons of the detail views, which open from the bottom. |
 | Waterfall at the spring | A stone-ringed pool with moving glints | The spring is one tile; a pool reads at that size. |
 | Nothing shown for a death | A corpse is the resident's own sprite lying down and greyed, with a grey tag ending in "×" | The replay records corpses; they must be visible and not rely on colour. |
 
@@ -184,34 +184,38 @@ in this repository, and a row in both records in the same commit.
 ## 4. Layout and interaction
 
 ```text
-+--------------------------------------------------------------------------------+
-| Living Island | Day 3 09:40 day | Alive 3/3 | 14 on 6 trees | canteen with C·2 |
-|                                   [Events] [Resources] [Legend] [Open replay…] |
-+--------------------------------------------------------------------------------+
-| [A name]                                                   +-----------------+ |
-| [B name]                 ISLAND MAP (fills the stage)      | resident panel  | |
-| [C name]                                                   | (on selection)  | |
-|                                                            +-----------------+ |
-| [-] [+] [View entire island]                                                   |
-|  ......... details drawer (on demand): Events | Resources | Legend ..........  |
-+--------------------------------------------------------------------------------+
-| |< <| play |> >|   Tick 558 · Day 4 03:00   ====o=======   Tick [558]/1008  1× 2× 4× 8× 16× |
-+--------------------------------------------------------------------------------+
++-----------------------------------------------------------------------------------------+
+| Living Island | Day 3 09:40 day | Alive 3/3 | 14 fruit on 6 trees | Canteen with C · 2  |
+|                                                              [Open replay…] [Example]   |
++-----------------------------------------------------------------------------------------+
+| [A name]                                                          +-----------------+   |
+| [B name]                 ISLAND MAP (fills the stage)             | resident panel  |   |
+| [C name]                                                          | (on selection)  |   |
+|                                                                   +-----------------+   |
+| [-] [+] [View entire island]                                                            |
+|  ............. details drawer (on demand): Events | Resources | Legend ..............   |
++-----------------------------------------------------------------------------------------+
+| |< <| play |> >|  Tick 558 · Day 4 03:00  ===o=====  Tick [558]/1008  1× 2× 4× 8× 16×   |
+|                                                           [Events] [Resources] [Legend] |
++-----------------------------------------------------------------------------------------+
+
+(The top bar and the bottom bar are one row each; the sketch wraps them to fit the page.)
 ```
 
 | Area | Behaviour | Change from P1 §4 |
 |---|---|---|
 | Map | Fills the stage. Drag to pan; wheel, pinch, double click, `+`/`-` keys and the buttons zoom; "View entire island" (or `0`) returns to zoom 1, centred. Arrow keys pan when the map has focus. | Continuous zoom instead of ×1/×2/×4. Pan is clamped so the map always covers the centre of the view (any tile can be centred, also past a floating panel); P1 clamped to the content edges. |
-| Global status | Day, time, day or night; living residents; total fruit on trees; ground fruit (only when there is some); where each canteen is and its servings. The bar has a fixed height and does not wrap, so it never resizes the map; chips that do not fit are clipped. | New. Counts and sums of recorded values only (§5). |
+| Global status | Day, time, day or night; living residents; total fruit on trees; ground fruit (only when there is some); where each canteen is and its servings. The bar has a fixed height and does not wrap, so it never resizes the map. Its buttons keep their size; status chips that do not fit are clipped from the right (all chips show from 1280 px wide; at 1024 px the fifth chip is clipped while ground fruit is present). The file name is shown only above 1500 px wide. | New. Counts and sums of recorded values only (§5). |
 | Roster | One button per declared resident with letter, face and name; a dead resident is greyed and marked "dead". Click selects or deselects. | Replaces the resident drop-down. Gives keyboard access to selection. |
 | Resident panel | Opens when a resident, its tag, its corpse or its roster button is clicked. Shows portrait, name, ID, alive or dead, tile, move since the previous tick, status chip, recorded death tick and cause, the four conditions as bars with raw values and change, fruit, canteen, the recorded action (type, start tick, remaining ticks, intent ID) and this tick's events for the resident. | Same data as P1 §4.3 plus the status chip, the death record and the tick's events. Nobody is selected after loading (P1 selected the first resident). |
 | Selection rule | Selecting never changes the camera and never pauses playback. "Follow on the map" is a separate, opt-in checkbox in the panel and belongs to the resident it was ticked for: dragging the map, selecting another resident, closing the panel or unticking it turns follow off, and the view stays where it was. A double click on the map zooms in at that point (and, on a resident, also selects it). | Follow was already optional; the rule is now explicit and tested. |
-| Details drawer | Closed by default. Events: the P1 event table with the resident and failure filters; clicking an event seeks to its tick and shows its raw JSON. Resources: the P1 resource lists. Legend: terrain, residents, objects, bubbles. Clicking an event in the resident panel opens the drawer on that event. | The same panels as P1 §4.3–§4.4, moved from always-visible to on demand. The legend moves here. |
-| Playback bar | First, step back, play or pause, step forward, last; clock; seek slider; tick field; speeds 1, 2, 4, 8, 16 ticks per second. Space plays or pauses; Escape closes the panel, then the drawer. | Same controls and semantics as P1 §4.2; speed is a button group instead of a drop-down. |
-| Loading | "Open replay…", drag and drop anywhere, and "Example". A refused file shows the validation error over the stage; the loaded replay stays; nothing is repaired. | Unchanged behaviour; the file input is behind a button. |
+| Details drawer | Closed by default; opened and closed by the Events, Resources and Legend buttons at the right of the bottom bar. Events: the P1 event table with the resident and failure filters; clicking an event seeks to its tick and shows its raw JSON. Resources: the P1 resource lists. Legend: terrain, residents, objects, bubbles. Clicking an event in the resident panel opens the drawer on that event. | The same panels as P1 §4.3–§4.4, moved from always-visible to on demand. The legend moves here. |
+| Playback bar | First, step back, play or pause, step forward, last; clock; seek slider; tick field; speeds 1, 2, 4, 8, 16 ticks per second; then the buttons of the detail views. Space plays or pauses; Escape closes the panel, then the drawer. In a narrow window the bar drops the tick field (below 1180 px) and then the day and time beside the tick number (below 1100 px; the top bar shows them); the buttons and the slider stay. | Same controls and semantics as P1 §4.2; speed is a button group instead of a drop-down. |
+| Loading | "Open replay…", drag and drop anywhere, and "Example". A refused file shows the validation error over the stage; the loaded replay stays; nothing is repaired. | Unchanged behaviour; the file input is hidden behind the button. |
 
 The floating panel and the drawer overlay the map. They never resize it, so opening them
-never changes the camera.
+never changes the camera. The two bars have fixed heights and the page itself never scrolls,
+so the map size depends only on the window size, never on the frame.
 
 **Accessibility.** Colour is never the only cue: residents have a letter and a silhouette;
 corpses lie down and have a "×" tag; the status chip is text; night is also stated in the
@@ -282,8 +286,10 @@ outside the event table, and why anything happened. See OQ-079 to OQ-081.
   and otherwise as a jump (§3.4).
 - Results are memoised (sprites, and facings per loaded bundle). A loaded bundle is never
   mutated, so memoisation cannot change what is drawn.
-- Display state is limited to the camera, the selection, the filters, the open panel and the
-  timing of the current slide. None of it is saved or sent anywhere.
+- Display state is limited to the camera, the selection, the filters, the open panel, the
+  timing of the current slide, and the pan the follow camera last showed. The last one is kept
+  in the store outside the notified state: the map writes it while following, and it is used
+  only to keep the view in place when follow ends. None of it is saved or sent anywhere.
 
 ## 7. Change set against `p1-replay-frontend-v0.1.md`
 
@@ -326,6 +332,15 @@ outside the event table, and why anything happened. See OQ-079 to OQ-081.
 | PF-T12 | No game logic; contract untouched | Reviewer finds no rule in the frontend; `gen_types.py` leaves no diff; no file under `backend/`, `contract/` or `src/api/generated/` changes | Gate 2, `git diff` |
 | PF-T13 | Asset record | Every asset module has a row with contents, method, source and licence filled in; no third-party asset | automated, plus review |
 | PF-T14 | Real replays | A rule-based default-island replay, an S1 replay and the P1 demo replay load and play: zoom and pan, shared tiles, night, death, dropped canteen, error handling | manual, recorded in the handoff |
+| PF-T15 | Layout stability | At 1024, 1280 and 1366 px wide every button of both bars is visible and can be clicked; the bar heights and the map size do not change with the frame; the page never scrolls | manual measurement, recorded in the handoff |
+
+Limits of the automated checks:
+
+- PF-T05 calls `noteFollowPan` itself; the call from the map's paint loop is not unit-tested.
+- PF-T06 and PF-T10 build some tick slices by hand without schema validation. They show how
+  the view-models treat such ticks, not that such ticks occur in real runs.
+- PF-T11's automated half does not measure time, and the playback timer has no automated test.
+- Nothing automated covers the page layout or the pointer handlers; PF-T15 and Gate 2 do.
 
 ## 9. Known limits
 

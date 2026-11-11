@@ -30,6 +30,13 @@ body,
   margin: 0;
 }
 
+/* The app fills the window and never scrolls as a page: a page scrollbar would change the
+   size of the map. */
+html,
+body {
+  overflow: hidden;
+}
+
 h1,
 h2,
 h3,
@@ -68,15 +75,6 @@ code {
 
 .hint {
   font-size: 0.85rem;
-}
-
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 
 .sprite {
@@ -174,8 +172,10 @@ select:focus-visible {
 .app {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
   min-width: 0;
+  overflow: hidden;
 }
 
 .topbar,
@@ -189,7 +189,9 @@ select:focus-visible {
 }
 
 /* The top bar has a fixed height and never wraps: its content changes with the frame (ground
-   fruit, canteen location), and a changing bar height would resize the map during playback. */
+   fruit, canteen location), and a changing bar height would resize the map during playback.
+   The buttons on the right keep their size; when space is short the status chips are the
+   part that is clipped, from the right. */
 .topbar {
   border-bottom: 2px solid var(--line);
   height: 50px;
@@ -199,6 +201,11 @@ select:focus-visible {
 
 .bottombar {
   border-top: 2px solid var(--line);
+  overflow: hidden;
+}
+
+.brand {
+  flex: none;
 }
 
 .brand {
@@ -222,7 +229,7 @@ select:focus-visible {
 
 .hud {
   display: flex;
-  flex: 0 1 auto;
+  flex: 1 1 0;
   flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
@@ -246,13 +253,11 @@ select:focus-visible {
   background: var(--paper-3);
 }
 
-/* When space is short the file name gives way first, then the status chips are clipped. */
 .topbar-actions {
   display: flex;
-  flex: 0 100 auto;
+  flex: none;
   align-items: center;
   gap: 10px;
-  min-width: 0;
   margin-left: auto;
 }
 
@@ -263,23 +268,15 @@ select:focus-visible {
   gap: 6px;
 }
 
-.detail-toggles {
-  flex: none;
-}
-
-.load {
-  flex: 0 1 auto;
-  min-width: 0;
-}
-
+.detail-toggles,
+.load,
 .load button {
   flex: none;
 }
 
 .file-name {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 220px;
+  flex: none;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -774,9 +771,9 @@ input[type="number"] {
 
 .playback {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: 12px;
-  width: 100%;
   min-width: 0;
 }
 
@@ -892,9 +889,27 @@ input[type="number"] {
     grid-template-columns: 1fr;
   }
 
-  .tick-input,
-  .roster-name,
+  .roster-name {
+    display: none;
+  }
+}
+
+@media (max-width: 1500px) {
   .file-name {
+    display: none;
+  }
+}
+
+/* Narrow windows: the bottom bar drops the tick field (the slider and the step buttons stay)
+   and then the day and time (the top bar shows them), so its buttons always fit. */
+@media (max-width: 1180px) {
+  .tick-input {
+    display: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .clock-time {
     display: none;
   }
 }

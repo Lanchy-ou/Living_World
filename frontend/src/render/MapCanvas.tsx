@@ -69,7 +69,8 @@ export function MapCanvas({ store }: { store: ReplayStore }) {
       const b = state.bundle;
       if (b === null) return;
       if (b !== shownBundle || state.currentTick !== shownTick) {
-        // Slide only for a single step forward. Seeking and stepping back show the frame at once.
+        // Slide whenever the tick advances by exactly one (play, step forward, or a seek that
+        // lands on the next tick). Every other change shows the frame at once.
         const stepped = b === shownBundle && state.currentTick === shownTick + 1;
         tween =
           stepped && !reducedMotion

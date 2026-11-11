@@ -74,7 +74,8 @@ export function PlaybackBar({ store }: { store: ReplayStore }) {
         </button>
       </div>
       <span className="clock num" aria-label="Clock">
-        Tick {currentTick} · {clock.text}
+        Tick {currentTick}
+        <span className="clock-time"> · {clock.text}</span>
       </span>
       <input
         className="seek"

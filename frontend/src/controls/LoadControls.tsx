@@ -18,7 +18,7 @@ export function LoadControls({ onFile, onExample, fileName }: Props) {
       )}
       <input
         ref={input}
-        className="visually-hidden"
+        hidden
         type="file"
         accept=".json,application/json"
         aria-label="Replay file"
