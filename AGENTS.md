@@ -98,8 +98,9 @@ uv run --directory backend python ../scripts/gen_types.py
   fields (plan §6).
 - Every task passes Gate 1 (executor checks) and Gate 2 (independent reviewer). The project
   owner signs Gate 3 at the milestones listed in the relevant implementation plan §4.
-- At most two active workers, counting reviewers. Each task has its own branch and an
-  isolated worktree (plan §3).
+- There is no fixed limit on active workers (owner decision, 2026-11-11). Each task has
+  its own branch and an isolated worktree. Tasks running at the same time must not edit
+  the same files. A reviewer never reviews work it helped write.
 - A spec contradiction goes through the change-request steps (plan §7). Downstream agents
   never edit frozen contracts.
 - Task cards follow `docs/tasks/_template.md`.
