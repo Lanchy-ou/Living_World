@@ -211,3 +211,36 @@ records the decision.
 - OQ-056 and OQ-070 are already decided by the owner.
 
 For each choice there is one recommendation: accept the stated assumption.
+
+## P3 foundation proposal questions (2026-11-11)
+
+These entries belong to P3-00. They do not amend the existing normative contracts.
+
+| ID | Date | Raised in task | Question | Assumption made | Status |
+| --- | --- | --- | --- | --- | --- |
+| CR-005 | 2026-11-11 | P3-00 | Agent Interface section 0.2 and Interface Contract section 2.3 defer memory/retrieval to P4/P6. Should P3 now include bounded resident experience, deterministic retrieval, a current commitment and recorded cognitive updates to support the owner's extensible foundation? | Recommendation: move this minimum working slice into P3; keep long-term consolidation, forgetting, reflection, relationship/emotion rules and dreams later. This task only drafts a proposal; no contract/code changes. Exact amendments are P3-01 deliverables after scope approval. | proposed; owner scope decision required |
+| OQ-082 | 2026-11-11 | P3-00 | What are the exact experience/context bounds, ordering and overflow rules, confidence representation, call/retry/time/token limits, budget accounting and live evaluation pass lines? | No numbers assumed. P3-01 proposes a concrete bounded profile, input identities, interrupted-call treatment and evaluation plan before dependent implementation or calls. Use deterministic fake-provider fixtures first. | open; P3-01 design obligation |
+| OQ-083 | 2026-11-11 | P3-00 | How does the frozen, stateful P2 rule policy resume after periods of LLM control, retain valid own-intent references and return control without losing resident experience? | Keep shared experience separate from each policy's private state. Do not treat the rule policy as stateless or change its frozen baseline silently. P3-01 must choose and test an explicit adapter/lifecycle. | open; P3-01 design obligation |
+| OQ-084 | 2026-11-11 | P3-00 | What goal autonomy belongs in the first resident foundation? | Proposed minimum: configured long-term direction and one current commitment, with bounded model-proposed short-term goal changes. No autonomous rewriting of stable personality, no long-term goal scheduler. Exact transitions and evidence-backed completion are specified in P3-01. | proposed; resolve with CR-005 scope |
+
+### CR-005 impact, options and recommendation
+
+- Existing rule: real memory/retrieval is deferred to P4; P1/P2 context uses empty
+  recalled episodes and beliefs. The owner's new priority calls for a reusable
+  memory/environment/social foundation, but does not settle exact schemas or limits.
+- Option A (recommended): deliver a small working experience store, deterministic
+  retrieval, goal continuity and cognitive replay in P3. Keep future psychological
+  rules separate. P3-01 defines state ownership, schemas, bounds and compatibility.
+- Option B: keep memory entirely in P4 and provide only ports in P3. This reduces
+  P3 scope but leaves the central extension boundary untested with real state.
+- Affected contracts: Agent Interface phase/state/decision/fallback sections;
+  Interface Contract DecisionContext, call log and save fields; agent configuration
+  and decision-record schemas; import constraints if new memory DTOs require them.
+  Physical rules and current action/perception contracts are not changed by this proposal.
+- Compatibility requirement: existing P1/P2 serialized behavior remains explicit;
+  new state/call versions are validated, and unknown versions refused. P3-01 selects
+  the concrete compatibility or migration approach.
+- Next step after the owner's scope decision: P3-01 prepares exact normative amendments
+  and numerical choices for review and the proposed M8 sign-off. Approval of scope
+  alone does not freeze schemas or authorize unbudgeted live model experiments.
+- Implementation may not rely on this draft as a replacement for approved specs.
