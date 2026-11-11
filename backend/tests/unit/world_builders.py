@@ -19,10 +19,15 @@ from living_island.world.space import StaticMap
 from living_island.world.state import WorldState
 
 WORLDS = Path(__file__).resolve().parents[3] / "content" / "worlds"
+P1_WORLD = Path(__file__).resolve().parents[1] / "fixtures/p1_default/default.toml"
 
 
 def default_content() -> WorldContent:
     return load_world_content(WORLDS / "default.toml")
+
+
+def p1_default_content() -> WorldContent:
+    return load_world_content(P1_WORLD)
 
 
 def static_map(rows: list[str]) -> StaticMap:

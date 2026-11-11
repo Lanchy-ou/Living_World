@@ -7,7 +7,14 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 import pytest
-from world_builders import default_content, fresh_state, place, resident, tiny_content
+from world_builders import (
+    default_content,
+    fresh_state,
+    p1_default_content,
+    place,
+    resident,
+    tiny_content,
+)
 
 from living_island.world.content import WorldContent, canonical_json_bytes
 from living_island.world.perception import ground_fruit_id
@@ -109,7 +116,7 @@ def seed_receipts(
 
 
 def test_tick_zero_scan_seeds_receipts_and_creates_no_new_sight() -> None:
-    content = default_content()
+    content = p1_default_content()
     state = fresh_state(content)
     batch = run_tick(content, state, 0)
     assert [s.actor_id for s in batch.physical_samples_by_actor] == ["ella", "mia", "ryan"]
@@ -402,7 +409,7 @@ def test_merge_helpers_are_sorted_unique_and_upgrade_cue_detail() -> None:
 
 
 def test_batch_has_no_hidden_spring_exact_needs_or_remote_stock() -> None:
-    content = default_content()
+    content = p1_default_content()
     state = fresh_state(content)
     resident(state, "mia").satiety = 4321
     resident(state, "mia").hydration = 4322

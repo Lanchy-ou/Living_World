@@ -22,7 +22,7 @@ from rule_policy_builders import (
     tiles,
     tree,
 )
-from world_builders import WORLDS
+from world_builders import P1_WORLD
 
 from living_island.agents.rule_based import RuleBasedPolicy
 from living_island.agents.types import Goal, ResidentRuntimeState
@@ -269,12 +269,11 @@ def _differences(a: Any, b: Any, path: str = "") -> set[str]:
 
 
 SCENARIOS = ROOT / "content" / "scenarios"
-DEFAULT = WORLDS / "default.toml"
 
 
-def test_s1_differs_from_default_only_in_spawns_and_metadata():
+def test_s1_differs_from_original_default_only_in_spawns_and_metadata():
     s1 = SCENARIOS / "s1-spring-visible" / "orig.toml"
-    assert _differences(_raw(DEFAULT), _raw(s1)) == {
+    assert _differences(_raw(P1_WORLD), _raw(s1)) == {
         "meta.run_id",
         "map.layout_file",
         "residents[0].position[0]",
@@ -287,14 +286,14 @@ def test_s1_differs_from_default_only_in_spawns_and_metadata():
     assert [r["position"] for r in raw["residents"]] == [[33, 32], [34, 32], [35, 32]]
     assert [r["id"] for r in raw["residents"]] == ["ella", "ryan", "mia"]
     assert (raw["meta"]["world_id"], raw["meta"]["seed"]) == (
-        _raw(DEFAULT)["meta"]["world_id"],
-        _raw(DEFAULT)["meta"]["seed"],
+        _raw(P1_WORLD)["meta"]["world_id"],
+        _raw(P1_WORLD)["meta"]["seed"],
     )
 
 
-def test_s3_differs_from_default_only_in_regrowth_and_metadata():
+def test_s3_differs_from_original_default_only_in_regrowth_and_metadata():
     s3 = SCENARIOS / "s3-regrow288" / "orig.toml"
-    assert _differences(_raw(DEFAULT), _raw(s3)) == {
+    assert _differences(_raw(P1_WORLD), _raw(s3)) == {
         "meta.run_id",
         "map.layout_file",
         "fruit.regrow_ticks",
@@ -305,7 +304,7 @@ def test_s3_differs_from_default_only_in_regrowth_and_metadata():
 
 
 def test_fixtures_load_with_the_same_map_and_s1_sees_the_spring_at_tick_zero():
-    default = load_world_content(DEFAULT)
+    default = load_world_content(P1_WORLD)
     for name in ("s1-spring-visible", "s3-regrow288"):
         content = load_world_content(SCENARIOS / name / "orig.toml")
         assert content.map_hash == default.map_hash

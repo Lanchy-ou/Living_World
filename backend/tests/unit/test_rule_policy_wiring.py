@@ -8,7 +8,7 @@ from hashlib import sha256
 import pytest
 from test_engine_actions import content_with
 from test_rule_policy_state import PARAMS
-from world_builders import WORLDS
+from world_builders import P1_WORLD, WORLDS
 
 from living_island.agents.types import PolicyConfig
 from living_island.persistence._codec import PersistenceError
@@ -37,12 +37,12 @@ def _write(path, data):
     path.write_bytes(canonical_json_bytes(data))
 
 
-def _cli_run(output, *flags, ticks=0):
+def _cli_run(output, *flags, ticks=0, config=DEFAULT_WORLD):
     return main(
         [
             "run",
             "--config",
-            str(DEFAULT_WORLD),
+            str(config),
             "--ticks",
             str(ticks),
             "--out",
@@ -338,7 +338,7 @@ def test_rj8_config_must_match_retained_inputs(rule_run, tmp_path, field):
 
 def test_p1_policy_config_and_checkpoint_bytes_are_unchanged(tmp_path):
     # Baseline captured from the default four-tick random run at 8b2048e.
-    assert _cli_run(tmp_path, "--policy", "random", ticks=4) == 0
+    assert _cli_run(tmp_path, "--policy", "random", ticks=4, config=P1_WORLD) == 0
     for tick, expected in (
         (0, "8c589cf674225e1b97fbda0a4a951ecb8a7ec66b525b467525f638f94edc6372"),
         (4, "1f1993cf6215acccde72e822dbce6bd431a4273ad038b2b54578a48816e8de9b"),

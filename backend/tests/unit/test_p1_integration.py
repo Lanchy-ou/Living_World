@@ -1,8 +1,8 @@
-"""The seven-day default run through the CLI and its durable outputs."""
+"""The seven-day P1 reference run through the CLI and its durable outputs."""
 
 import json
 
-from world_builders import WORLDS
+from world_builders import P1_WORLD
 
 from living_island.contract.projections import project_frame
 from living_island.contract.replay import ReplayBundle
@@ -23,7 +23,7 @@ def test_default_1008_tick_cli_run_resume_reexecute_and_replay(tmp_path, monkeyp
     first, twin, continuation, recorded = (
         tmp_path / name for name in ("first", "twin", "continuation", "recorded")
     )
-    config_path = WORLDS / "default.toml"
+    config_path = P1_WORLD
     content = load_world_content(config_path)
     config = content.config
     static_map = StaticMap.from_content(content)

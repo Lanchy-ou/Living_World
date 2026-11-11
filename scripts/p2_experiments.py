@@ -177,10 +177,13 @@ class Revision:
         return self.pin_commit is None
 
 
-# §6 table. S2 ``m6`` is registered by P2-04 once the M6 sign-off names its commit.
+# Scenario revisions from the §6 table.
 REGISTRY: dict[tuple[str, str], Revision] = {
     ("s2-default", "orig"): Revision(
         "s2-default", "orig", "content/worlds/default.toml", "04fde8b"
+    ),
+    ("s2-default", "m6"): Revision(
+        "s2-default", "m6", "content/worlds/default.toml", "7c13d78ffd7d89006f6008c8a09f37ae97c253db"
     ),
     **{
         (sid, "orig"): Revision(sid, "orig", f"content/scenarios/{sid}/orig.toml", None)

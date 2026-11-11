@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import json
 
-from world_builders import default_content, fresh_state, place, resident, tiny_content
+from world_builders import (
+    default_content,
+    fresh_state,
+    p1_default_content,
+    place,
+    resident,
+    tiny_content,
+)
 
 from living_island.world.content import WorldContent
 from living_island.world.perception import (
@@ -231,7 +238,7 @@ def test_night_radius_applies_to_the_completed_tick() -> None:
 
 
 def test_sight_contains_no_hidden_spring_exact_needs_or_remote_stock() -> None:
-    content = default_content()
+    content = p1_default_content()
     state = fresh_state(content)
     smap = StaticMap.from_content(content)
     # Unique, recognisable values everywhere outside the observer's reach.

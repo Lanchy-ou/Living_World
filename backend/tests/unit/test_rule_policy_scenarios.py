@@ -29,7 +29,7 @@ from rule_policy_builders import (
 )
 from rule_policy_checks import no_repeat_violations
 from test_sim_runtime import ROWS, WaitPolicy
-from world_builders import WORLDS, default_content, tiny_content
+from world_builders import WORLDS, default_content, p1_default_content, tiny_content
 
 from living_island.agents.policies._plans import make_plan
 from living_island.agents.rule_based import RuleBasedPolicy
@@ -216,7 +216,7 @@ DV11 = {
 
 def run_dv11(case: dict[str, Any]):
     target = case["target"]
-    content = default_content()
+    content = p1_default_content()
     cfg = policy_config(content)
     refs = [
         IssuedIntent(
@@ -393,7 +393,7 @@ def test_give_canteen_to_a_dehydrated_neighbor():
 
 
 def test_invalid_plan_is_refused_by_the_world_and_backed_off():
-    content = default_content()
+    content = p1_default_content()
     cfg = policy_config(content)
     tree = EntityTarget(kind="entity", id="fruit_01")
     far_tree = next(t for t in content.config.world.fruit_trees if t.id == "fruit_01")

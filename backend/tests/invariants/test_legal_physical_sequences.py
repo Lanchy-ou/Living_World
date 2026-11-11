@@ -364,6 +364,8 @@ def test_no_actor_with_zero_stamina_is_ever_offered_movement_or_gathering(
 
 def test_item_2_a_journey_ends_when_stamina_is_zero_at_tick_start() -> None:
     world = fresh(needs=[NEEDS_MAX, NEEDS_MAX, 100, *FULL[3:]])
+    # Start far enough from the spring for the journey to need a second tick.
+    resident_of(world.state, "ella").position = Coord(x=12, y=32)
     stand = spring_stand(world)
     n = world.config.needs
     assert n.stamina_awake_decay_per_tick + n.stamina_move_extra_cost_per_tick == 100
