@@ -100,3 +100,12 @@ decisions and the alternatives the owner's plan rejected.
   (action-kind back-off keys).
 - **OQ-074** (Gate 2 G2-R4-01, for P2-02): accepted. Action-kind matching governs plan
   blocking only; the R8b and R9 approach exclusions are kept.
+
+## M6 configuration and P3 policy baseline
+
+- The owner approved the spawn-only S1 candidate at M6. The three residents start
+  at `(33,32)`, `(34,32)` and `(35,32)` for Ella, Ryan and Mia respectively. The
+  `s2-default:m6` content pin is `7c13d78`. See [P2-04](../tasks/p2/P2-04.md).
+- P2-05 verified 20 technically valid held-out runs, all with three residents alive at
+  tick 1,008. Its acceptance record identifies the `rule-based-v0` code and policy
+  settings for the P3 control and fallback. See [P2-05](../tasks/p2/P2-05.md).

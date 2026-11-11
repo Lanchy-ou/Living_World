@@ -13,9 +13,10 @@ intents; the frontend only displays state and sends commands.
   blocks too; notes marked "Confirmed" override the original text).
 - Specs: `docs/spec/` (`world-rules-v0.1.md`, `interface-contract-v0.1.md`,
   `balance-notes-v0.1.md`, `agent-interface-v0.1.md`, `p1-replay-frontend-v0.1.md`,
+  `rule-policy-v0.1.md`, `p2-experiments-v0.1.md`, `frontend-design-v0.1.md`,
   `open-questions.md`).
-- P1 plan: `docs/plans/p1-implementation-plan-v0.1.md` (tasks, lanes, gates, handoff
-  fields, change requests).
+- Implementation plans: `docs/plans/p1-implementation-plan-v0.1.md` and
+  `docs/plans/p2-implementation-plan-v0.1.md` (tasks, milestones and change requests).
 - Decisions: `docs/adr/`. Task briefs and handoffs: `docs/tasks/<phase>/` (e.g. `docs/tasks/p1/`).
 
 ## Source of truth order
@@ -95,8 +96,8 @@ uv run --directory backend python ../scripts/gen_types.py
 - When done, append a "Handoff" section to `docs/tasks/<phase>/<id>.md`: what changed, commands
   run and their results, deviations, open questions, **plus** the seven required
   fields (plan §6).
-- Every task passes Gate 1 (executor checks) and Gate 2 (independent reviewer). Gate 3
-  (project owner) applies only at milestones M1–M4 (plan §4).
+- Every task passes Gate 1 (executor checks) and Gate 2 (independent reviewer). The project
+  owner signs Gate 3 at the milestones listed in the relevant implementation plan §4.
 - At most two active workers, counting reviewers. Each task has its own branch and an
   isolated worktree (plan §3).
 - A spec contradiction goes through the change-request steps (plan §7). Downstream agents

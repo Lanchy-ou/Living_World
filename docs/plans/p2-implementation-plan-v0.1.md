@@ -18,6 +18,16 @@
 > authorized acceptance and merge into local `main`. P2-F0's folded deliverables, the
 > frontend design spec and ADR 0005 are accepted with the documented desktop limitations
 > and P2 treatments of OQ-079 through OQ-081. See `docs/tasks/p2/P2-F1.md` for the sign-off.
+>
+> **M6 accepted (owner, 2026-11-11):** the default scenario uses the three approved S1
+> spawn positions. `s2-default:m6` is pinned to `7c13d78`. P2-04 completed all 42 cases
+> in the owner-approved six-seed development matrix (OQ-060). See
+> [P2-04](../tasks/p2/P2-04.md) and its [experiment report](../tasks/p2/P2-04-report.md).
+>
+> **P2-05 technical acceptance:** all 20 held-out runs passed technical validation and
+> all three residents survived to tick 1,008 in all 20 runs. Checkpoint recovery,
+> recorded re-execution and independent review passed. The owner replay walkthrough and
+> M7 sign-off are pending. See [P2-05](../tasks/p2/P2-05.md).
 
 **Milestone P2, "Residents Survive":** on the default island, three rule-based residents
 survive seven game days together in most registered test seeds, using only their own
@@ -421,10 +431,10 @@ canteen. The entity and its initial slot remain. Remaining confounds and how to 
 
 ```text
 P2-00 (M5) ─ P2-01 ─ P2-02 ─┐
-          └─ P2-03 ─────────┴─ P2-F0 (MF) ─ P2-F1 ─ P2-04 (M6) ─ P2-05 (M7)
+          └─ P2-03 ─────────┴─ P2-F1 (MF) ─ P2-04 (M6) ─ P2-05 (M7)
 ```
 
-Under Amendment 2 the frontend segment is `P2-F1 (MF)`: one task, with MF at its end.
+Under Amendment 2, P2-F1 includes the design deliverables originally assigned to P2-F0.
 
 - The world lane runs P2-01 then P2-02. The side lane runs P2-03.
 - A Gate 2 review takes one of the two slots, so the side lane pauses while a world-lane
@@ -432,9 +442,9 @@ Under Amendment 2 the frontend segment is `P2-F1 (MF)`: one task, with MF at its
 - Parallel file scopes do not overlap. P2-01 owns policy wiring and the initial stub in
   `agents/rule_based/`. After it merges, P2-02 takes over that directory. P2-03 owns
   `scripts/` and its analysis module.
-- P2-F0 and P2-F1 run one at a time after P2-03 and before P2-04 (PD-08, Amendment 1).
-  They own `frontend/` (except generated files) and the design documents. If M6 changes
-  the map or numbers, the viewer needs no change, because it draws from replay data.
+- P2-F1 runs after P2-03 and before P2-04 (PD-08, Amendment 2). It owns `frontend/`
+  (except generated files) and the design documents. The viewer draws the map and values
+  from replay data.
 - P2 has no target date; measured experiment time and the required reviews determine when
   each milestone closes.
 
