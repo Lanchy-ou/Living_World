@@ -200,6 +200,7 @@ CallReservation { call_id:string,input_reserved:N,output_reserved:N,money_reserv
 DecisionBudgetPort.admit(call_id:string,input_tokens:N,output_tokens:N)
                         -> CallReservation|null
 DecisionBudgetPort.commit(decision_id:string,debits:CallDebit[]) -> None
+AttemptJournalPort.stage_context(record:ContextRecordP3) -> None
 AttemptJournalPort.before_call(context:ContextRecordP3,record:AttemptDispatch) -> None
 AttemptJournalPort.after_call(record:LLMCallRecordP3) -> None
 ```
@@ -213,9 +214,13 @@ stops the boundary. Each record's budget and runtime commits occur exactly once.
 Only sim/persistence implement global budget and durable journal ports; agents cannot
 read their storage. before_call must durably flush before returning; after_call
 retains terminal audit. No journal read/query method is exposed.
-Before the first dispatch, before_call also durably appends its full context row;
-retries verify that row's identity instead of appending another. Zero-call decisions
-append their context at boundary publication. Both are uncommitted until checkpoint.
+After preparation and before admission, stage_context durably appends exactly one
+full context row for every decision, including rule-primary and zero-call decisions.
+Calls occur in the same tick/actor order as decisions, so a later actor's dispatch
+cannot overtake an earlier actor's context. before_call verifies the already staged
+context identity and appends only the dispatch; retries never append another context.
+All such rows remain uncommitted until checkpoint publication. A failed context flush
+stops the boundary before dispatch. No separate zero-call publication path exists.
 
 Runtime instantiates the frozen fallback from fallback_config and saved private state.
 own_records is null for live/control execution and the actor's verified complete record
@@ -521,6 +526,7 @@ object without LF; manifest does not hash itself.
 | map.txt | Existing canonical map bytes |
 | p3-policy-configs.json | Canonical array of `{actor_id:string,config:P3PolicyConfig}`, sorted by actor ID |
 | identities.json | Canonical ResidentIdentity array sorted by actor ID |
+| identity-sources.json | Canonical array of cognition section 1 resolved source objects `{actor_id,display_name,profile:ProfileDocument,initial_direction}`, sorted by actor_id; verify each identity.source_sha256 against this object |
 | prompt.txt | Cognition's pinned canonical prompt-template bytes |
 | action-schema.json | Canonical cognition-owned ModelActionContract |
 | trial-registration.json | Canonical evaluation-owned registration |
@@ -638,6 +644,14 @@ Legacy world limits are unchanged; P3 text limits belong to cognition. B-03 meas
 monotonic elapsed attempt preparation/wait/validation time; wall time never enters
 deterministic state. If less than B-02 remains, use that positive remainder as attempt
 timeout; if none remains, TIMEOUT/DECISION_TIMEOUT with no further dispatch.
+Measure from entry to prepare with a monotonic clock. Immediately before final
+proposal acceptance, check elapsed time again: elapsed >= B-03 rejects even a valid
+proposal as TIMEOUT/DECISION_TIMEOUT. Its parsed proposal/raw result/debit remain in
+the attempt row, validation_error=TIMEOUT and detail_code=DECISION_TIMEOUT; no delta
+or plan from it is accepted and no retry remains. Elapsed < B-03 permits ordinary
+validation/selection. This deadline check takes precedence over the attempt's other
+validation result at that point. Fallback/commit follow without another provider call;
+B-03 bounds primary decision processing, not disk publication or rule execution.
 
 ## 9. Decision and recovery vectors
 
@@ -661,6 +675,8 @@ constructors; they introduce no physical world outcomes.
 | BD-13 | A and B need calls at one boundary | Canonical actor order; B cannot consume A's pending reservation |
 | BD-14 | Failed own give ingested; malformed model output then fallback wait | Failure experience remains; model text/wait cannot assert completed give |
 | BD-15 | Registered rule-primary actor decides | ok/effective rule, no calls/error/substitution/fallback event; private rule state advances |
+| BD-16 | Actor A has mandatory oversize, actor B calls at the same boundary | stage_context appends A then B; B dispatch follows both; context cursor counts two only at durable boundary, and A has no dispatch. |
+| BD-17 | Valid response arrives within attempt timeout; parsing/validation ends at elapsed 60,000 ms (or later) | TIMEOUT/DECISION_TIMEOUT, retained parsed proposal and debit, no accepted model delta, one fallback. At 59,999 ms the otherwise valid proposal is accepted. |
 
 Physical reach/duration/hearing/completion vectors belong to cognition/experience and
 use unchanged engine fixtures. BD-05..07 are integer arithmetic oracles, not measured

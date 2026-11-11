@@ -115,7 +115,7 @@ count complete committed records, never bytes or the last record index.
 | provider.prepare / count_input_tokens (pure) | exact ProviderRequest / prepared WireRequest | pinned nonsecret wire bytes / proven token upper bound; no network |
 | provider.complete (external IO) | exact ProviderRequest, prepared WireRequest, explicit attempt timeout | ProviderResult; send retained wire bytes unchanged; no state mutation |
 | validate_proposal | DecisionProposal, own DecisionContextP3, policy configuration | ActionPlan plus staged CognitiveDelta, or classified rejection |
-| stage_decision / commit_decision | immutable request, staged outcome / matching committed record | atomic resident state plus ordinal, accepted delta and policy-private update |
+| decide / commit_decision | DecisionRequestP3 / matching staged DecisionRecordP3 | staged record / atomic own state, ordinal and private state; coordinator commits the ledger and persistence journals context/attempts |
 | export_state / restore | committed runtime / verified typed saved state | ResidentRuntimeStateP3 / runtime; refuses a half transaction |
 
 **Ingestion:** validate consecutive delivery and actor first. Stage experience and
@@ -195,8 +195,9 @@ Existing guards remain intact: `backend/pyproject.toml:46` forbids world imports
 P3-02 adds a forbidden-import contract from memory to agents, sim, persistence,
 contract, anthropic, openai, httpx and requests, and changes the memory unmatched
 world.protocol exemption to error only after its first real import. Extend analysis's
-forbidden modules to agents.p3.runtime and agents.llm while allowing indirect DTO
-imports exactly as today. No existing guard is weakened. Network/file IO in pure
+forbidden modules to agents.p3 and agents.llm while allowing indirect DTO imports
+through contract models exactly as today. Both packages exist by the end of P3-02;
+do not name a future, absent runtime submodule in that task's import-linter config. No existing guard is weakened. Network/file IO in pure
 reducers is additionally checked by import tests (stdlib IO cannot be exhaustively
 expressed by the current contracts). Package __init__ files remain free of world imports.
 

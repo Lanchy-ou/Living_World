@@ -244,3 +244,227 @@ These entries belong to P3-00. They do not amend the existing normative contract
   and numerical choices for review and the proposed M8 sign-off. Approval of scope
   alone does not freeze schemas or authorize unbudgeted live model experiments.
 - Implementation may not rely on this draft as a replacement for approved specs.
+
+
+## P3-01 decision proposals (2026-11-12)
+
+Baseline: `9bd45082002e87172312484a53c4787020bd584d`. The existing CR-005 option A
+approval is unchanged. This section supplies the exact amendments and proposed
+resolutions for M8; it does not claim the owner has accepted schemas or numbers.
+OQ-082..084 remain pending M8, with concrete proposals in the four P3 specs and
+[decision sheet](../tasks/p3/M8-decisions.md). All new IDs follow OQ-084.
+
+| ID | Date | Raised in task | Question | Proposed disposition / recommendation | Status |
+| --- | --- | --- | --- | --- | --- |
+| OQ-085 | 2026-11-12 | P3-01 | Where do identity/personality values come from when content/characters has no profiles? | Add the three exact versioned ProfileDocument inputs in resident-cognition section 1; retain configured actor name and initial_goal, and hash the resolved source. P1/P2 do not load them. | proposed; M8 |
+| OQ-086 | 2026-11-12 | P3-01 | Can the recipient certify a named giver fulfilled a promise from its inventory change? | No. Keep Perception unchanged; use unverifiable receiving commitments. Only a successful own give verdict joined to its owned intent certifies that own giving goal. A giver receipt would need a separate CR and is not required in P3. | proposed; M8 |
+| OQ-087 | 2026-11-12 | P3-01 | Which provider/model/settings should the first live adapter use? | OpenAI Responses with pinned gpt-5.4-mini-2026-03-17, reasoning effort none, structured text output and no tools; verify availability and pricing before registering trials. Alternatives: fake-only phase or a separately reviewed provider adapter. | proposed; M8 |
+| OQ-088 | 2026-11-12 | P3-01 | How are credentials supplied without entering content, prompts, logs or Git? | Use one ignored local .env, loaded by the outer launcher; inject the secret only into the selected adapter. Reject missing/ambiguous configuration before dispatch. No cloud key provisioning, environment dump or secret in retained inputs. | proposed; M8 |
+| OQ-089 | 2026-11-12 | P3-01 | Are the product's P3 character panel and debug view included? | Include them in P3-07 using a separately versioned read-only inspection artifact, joined to unchanged replay identity. Alternative is explicit owner-approved deferral; no silent deferral. | proposed; M8 |
+| OQ-090 | 2026-11-12 | P3-01 | What happens to spend and decisions after an uncertain or partial-tail provider call? | Adopt llm-decision recovery rules: durable pre-dispatch reservation, checkpoint-owned committed prefixes, conservative unknown-usage debit and offline recovery without silent redispatch. Resume live calls only through a new explicit registered authorization. | proposed; M8 |
+
+### CR-005 exact amendments for M8 (not applied)
+
+This is the continuation of the CR-005 entry above. Current-code evidence is at the
+baseline: legacy DecisionContext and NeedBand memory fields are in
+`backend/src/living_island/agents/types.py:86`, `:100`; runtime ingestion and commit
+are at `backend/src/living_island/agents/runtime.py:96`, `:172`; save cursors and
+pre-ingestion checks are at `backend/src/living_island/contract/save.py:52`, `:98`.
+The existing fallback fact uses four reasons (`backend/src/living_island/world/facts.py:242`)
+and the existing append port allocates events (`backend/src/living_island/world/ports.py:196`).
+No world/event/Perception/action/replay field or rule is changed by this CR.
+
+**Application gate.** After outside-team Gate 2 and the owner's M8 selection, apply
+exactly the text blocks below in an owner-authorized documentation commit, mark them
+`[CR-005]`, update the four P3 spec/plan headers to the accepted status and record the
+accepted SHA in P3-02. Keep this proposed text as the decision record. Do not apply
+it during P3-01. If M8 chooses another option, revise this entry and recheck dependent
+schemas before freezing; implementers do not fill in omitted rules.
+
+#### AI-1: Agent Interface section 0.1, AG-01 row replacement
+
+```text
+| AG-01 | Versioned resident-local DecisionContext for each policy lane | P1/P2 retain their existing empty-memory DecisionContext. P3 policies receive DecisionContextP3, assembled in agents from the delivered Perception and that resident's own identity, goals and experience. No context is shared between residents. The P3 frozen-rule adapter maps only the allowed own inputs to the unchanged P2 context. |
+```
+
+#### AI-2: Agent Interface section 0.2, P3 and P4/P6 bullets replacement
+
+```text
+- **P3 [CR-005]:** LLMPolicy, bounded resident experience captured at every delivered
+  boundary, deterministic retrieval, one current short-term commitment and recorded
+  cognitive updates. Includes provider adapter, structured output, budget, timeout,
+  bounded retry, stateful rule fallback, model-call records and recorded re-execution.
+  Simulated time stays frozen while a decision is pending. The P3 character panel and
+  developer debug view consume a separate read-only inspection artifact.
+- **P4/P6:** consolidation, psychological forgetting, reflection, long-term belief and
+  relationship rules, emotions, dreams and cognitive tools. P3 names extension ports
+  and their owners only; bounded working-buffer eviction is not a forgetting model.
+```
+
+In section 0.3 replace the memory row with:
+
+```text
+| memory (small P3 foundation; richer systems later) | Resident-local bounded experience, provenance and deterministic retrieval | import agents, sim, persistence or contract; inject unobserved facts; settle actions or perform IO |
+```
+
+#### AI-3: Agent Interface section 2.1, ingestion clarification replacement
+
+Replace the opening ingestion text, from "**`ingest`** is called" through
+"in P4 also memory).", with:
+
+```text
+**`ingest`** is called once per pending packet before any decision at that boundary,
+in ascending actor_id order. It updates the runtime's private state: in P1/P2,
+the latest Perception and decision bookkeeping; in the opt-in P3 lane, experience
+ingestion and goal-evidence reduction under resident-experience-v0.1.md and
+resident-cognition-v0.1.md. P1/P2 rule cue capture remains decision-only under
+OQ-056; P3 does not reinterpret the frozen rule policy's private state.
+```
+
+Also replace the DecisionError bullet in section 2.2 with:
+
+```text
+- **`DecisionError` (legacy P1/P2):** `INVALID_CONTEXT`, `INVALID_PLAN`,
+  `SCRIPT_EXHAUSTED`, `REPLAY_DIVERGED`. P3 uses a separate DecisionErrorP3 in
+  section 2.6; it does not widen this legacy serialized enum. Policy errors are
+  never world failure_code values.
+```
+
+#### AI-4: Agent Interface new section 2.6 after section 2.5
+
+```text
+### 2.6 [CR-005] Opt-in P3 lane
+
+P1/P2 interfaces, PolicyId values, version 0.1 serialization and reference hashes
+remain unchanged. P3 uses the closed, explicitly versioned DecisionRequestP3,
+DecisionContextP3, P3PolicyConfig, ResidentRuntimeStateP3 and DecisionRecordP3
+specified by the P3 package. Their registry is p3-implementation-plan-v0.1.md
+section 1; their owning definitions, validation and ordering are normative:
+
+- resident-experience-v0.1.md owns experience, source references, retained own intents,
+  retrieval, DecisionContextP3, ProviderProjection and inclusion manifests;
+- resident-cognition-v0.1.md owns identity/prompt inputs, GoalChange/GoalState and
+  completion evidence, model-facing action descriptions and DecisionProposal;
+- llm-decision-v0.1.md owns CognitiveDelta, permitted operations, the provider port,
+  private policy state, decision transaction, call/budget records and recovery.
+
+The P3 primary policy is llm-v0 for registered llm_actor_ids and rule-based-v0 for
+other configured actors. Every actor uses P3 envelopes; deliberate rule-only decisions
+are successful rule decisions, not LLM errors or fallback substitutions. recorded-p3-v0
+is a no-call execution transport preserving recorded configuration/provenance. The new
+LLM/replay IDs do not widen the legacy PolicyId union. Unknown versions are refused without implicit migration.
+The P3 error vocabulary is INVALID_CONTEXT, INVALID_PLAN, INVALID_DELTA, PARSE_ERROR,
+TIMEOUT, BUDGET, PROVIDER_ERROR and REPLAY_DIVERGED; the last stops before commit.
+Detailed classification is owned by llm-decision-v0.1.md.
+
+Resident cognitive state is distinct from policy-private rule/LLM bookkeeping and
+from coordinator-owned spend. Ingestion and goal evidence stage and publish together;
+failed decisions cannot undo ingestion. An accepted plan and CognitiveDelta commit
+as one decision, with the matching ordinal, record, references and private-state
+changes. Cognitive updates never write world state. Only delivered own feedback
+can establish the physical completion allowed by the goal specification.
+```
+
+#### AI-5: Agent Interface section 3.3, P3 bullet replacement
+
+```text
+- **P3 [CR-005]:** Use the bounded classification, retry and stateful frozen-rule
+  adapter lifecycle in llm-decision-v0.1.md. The next eligible decision may attempt
+  the LLM only when the recorded authorization/budget permits. Valid world failures
+  are feedback, not provider errors. The existing agent_fallback_used event uses
+  only its frozen reason vocabulary, with detailed P3 failures in the decision log.
+  A typed fallback failure uses the existing wait substitute; programming exceptions
+  and replay divergence stop. No rejected attempt partially changes cognition.
+```
+
+Replace the entire section 3.4 paragraph, from "If adopted in P3" through
+"This needs its own P3 review.", with:
+
+```text
+Parallel model calls are deferred beyond P3. P3 calls and commits actors serially
+in canonical actor order. Any future parallel implementation requires a separate
+review preserving the same boundary inputs and deterministic commit order.
+```
+
+#### AI-6: Agent Interface sections 5 and 6, append scoped P3 clauses
+
+Append to section 5:
+
+```text
+**[CR-005] P3 records.** The version 0.1 shapes and files above are unchanged.
+P3 uses DecisionRecordP3 version 0.2 and the distinct context, dispatch and terminal
+call records in llm-decision-v0.1.md. That specification owns all log names, links,
+request/projection/state identities, attempt ordering, usage and committed cursors.
+Record exact inputs, available raw responses, parsed results/errors and versions;
+missing usage is unknown. Diagnostics are not unrecorded sources of simulation state.
+```
+
+Append to section 6:
+
+```text
+**[CR-005] P3 save and replay.** SavePackageP3 version 0.2 composes the unchanged
+world/pending-delivery DTOs with ResidentRuntimeStateP3 and verified P3 log prefixes.
+The sole checkpoint phase remains post-commit and pre-ingestion, including tick zero.
+llm-decision-v0.1.md owns snapshot composition, durable commit publication, partial
+tails, uncertain-call spend, continuation, version refusal and equality targets.
+Recorded re-execution applies recorded accepted cognitive deltas/plans and deterministic
+ingestion; it makes zero model, embedding, summary or reflection calls. Independent
+live runs, including live continuations, are not promised identical outcomes.
+```
+
+#### IC-1: Interface Contract section 2.3, final paragraph replacement and P3 addition
+
+Replace the paragraph beginning "This object does not imply" with:
+
+```text
+This object does not imply that world stores memory. The version 0.1 empty-memory
+context and its provisional RecalledEpisode/Belief fields remain unchanged for
+P1/P2. They are not repurposed for P3, including the old confidence_band:NeedBand.
+
+**[CR-005] P3 context.** Bounded working experience, deterministic retrieval and one
+current commitment are authorized in P3. DecisionContextP3 version 0.2 and the
+provider-only projection/inclusion manifest are defined solely by
+resident-experience-v0.1.md. The full delivered Perception remains unchanged;
+explicit provider projection is not a new Perception or extra knowledge. Confidence
+has its own proposed P3 representation, never physiological NeedBand. Goal/state
+semantics are in resident-cognition-v0.1.md; only accepted CognitiveDelta operations
+from llm-decision-v0.1.md can change decision-owned cognition. Consolidation,
+psychological forgetting, reflection, relationships, emotions and dreams stay later.
+```
+
+#### IC-2: Interface Contract section 5, append P3 format clause
+
+```text
+**[CR-005] P3 format dispatch.** SavePackage and DecisionRecord version 0.1 retain
+all legacy fields and bytes. The earlier LLMCallRecord sketch is not the P3 wire
+format. P3 instead uses SavePackageP3/DecisionRecordP3 version 0.2 and version 0.1
+P3 context/dispatch/terminal-call logs, defined by llm-decision-v0.1.md. That owner
+specifies exact types, nullability, input/attempt links, committed prefix counts,
+conservative budget reservations, interrupted calls and partial-tail recovery.
+Runtime cognitive state is stored once within its resident runtime; legacy
+placeholder arrays are not a second mutable source. Persistence alone writes the
+files. A published checkpoint identifies complete durable prefixes; an uncommitted
+provider response never becomes an accepted decision merely because bytes exist.
+ReplayBundle and section 5a are unchanged. Inspection exports for P3 are separate,
+read-only developer artifacts and must never be supplied to residents.
+```
+
+#### IC-3: Interface Contract section 6.3, append P3 equality clause
+
+```text
+**[CR-005] P3 equality.** In addition to the unchanged world/event comparison,
+recorded P3 execution verifies decision records, full-context/projection identities,
+accepted cognitive deltas, resident cognitive/private state and committed logical
+cursors under llm-decision-v0.1.md. Preserve recorded usage/accounting inputs when
+re-executing; do not derive a new choice from wall-clock latency or rerun a provider.
+Raw diagnostic timing and separate live-run responses are not equality promises.
+```
+
+#### Impact and recommendation
+
+Apply the exact amendment blocks after M8 and implement only the versioned P3 lane.
+No generated replay type changes, world rules, Perception/actions or P2 policy changes
+are authorized. Required code work is listed in P3-02..07; implementation checks must
+preserve the P1/P2 reference hashes in plan section 3.2. Refuse unsupported versions
+rather than guessing migrations. Recommendation: approve this scoped amendment and
+the decision sheet's recommended options; keep OQ-063 outside this task.
