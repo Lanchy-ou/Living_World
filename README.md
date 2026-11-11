@@ -1,15 +1,17 @@
 # Living Island
 
 Living Island runs a deterministic 2D island world. Residents propose actions through a
-policy interface, and the world validates and resolves them. The P1 CLI runs random and
-scripted policies, saves checkpoints, and re-executes recorded decisions. The offline viewer
-loads exported replays for inspection. P1 is complete: milestone M4 was signed off by the
-project owner on 2026-11-09.
+policy interface, and the world validates and resolves them. The CLI runs random, scripted
+and rule-based policies, saves checkpoints, and re-executes recorded decisions. The offline
+viewer loads exported replays for inspection. M4 signed off P1 on 2026-11-09. The M6
+configuration is the default for the P2 acceptance runs.
 
 - [Product design](docs/product/living-island-v0.1-design.md)
 - [Specifications](docs/spec/)
 - [Architecture decisions](docs/adr/)
 - [P1 integration and acceptance](docs/tasks/p1/P1-09.md)
+- [P2 comparison experiments](docs/tasks/p2/P2-04-report.md)
+- [P2 acceptance and M7 evidence](docs/tasks/p2/P2-05.md)
 - [Development checks](AGENTS.md)
 
 ## Prerequisites
@@ -22,15 +24,15 @@ uv sync --directory backend
 pnpm --dir frontend install
 ```
 
-## Run, resume and re-execute
+## P1 reference walkthrough
 
 Use new output directories when repeating the walkthrough. The first command runs the
-default world for seven game days and saves every 144 ticks. The second resumes from
+frozen P1 world for seven game days and saves every 144 ticks. The second resumes from
 tick 144 for 864 more ticks. The third re-executes the original run from tick zero using
 its recorded decisions.
 
 ```sh
-uv run --directory backend python -m living_island run --config ../content/worlds/default.toml --ticks 1008 --policy random --checkpoint-every 144 --out ../runs/p1-demo/original --export-replay
+uv run --directory backend python -m living_island run --config tests/fixtures/p1_default/default.toml --ticks 1008 --policy random --checkpoint-every 144 --out ../runs/p1-demo/original --export-replay
 uv run --directory backend python -m living_island resume --checkpoint ../runs/p1-demo/original/checkpoint-0000000144.json --source-run ../runs/p1-demo/original --ticks 864 --out ../runs/p1-demo/continuation
 uv run --directory backend python -m living_island reexecute --source-run ../runs/p1-demo/original --out ../runs/p1-demo/recorded --export-replay
 ```
@@ -68,5 +70,26 @@ way:
 uv run --directory backend python -m living_island run --config ../content/worlds/default.toml --ticks 1008 --policy rule-based --out ../runs/rule-demo --export-replay
 ```
 
-Run `uv run --directory backend python ../scripts/measure_p1.py` to repeat the backend
-measurements under `runs/p1-measurements/`. Pass `--out runs/<new-name>` for another sample.
+At the historical M4 commit `6d90824`, run
+`uv run --directory backend python ../scripts/measure_p1.py` to repeat the original
+performance measurements.
+
+## P2 acceptance and P3 baseline
+
+The full P2 acceptance batch is a separate experiment. The default backend suite includes
+a 16-tick M6 integration check for checkpoint resume and recorded re-execution.
+
+```sh
+uv run --directory backend python ../scripts/p2_experiments.py batch --batch-id p2-05-accept-all --seed-list acceptance --case s2-default:m6:base
+```
+
+Each case writes a replay to `runs/p2/<batch-id>/cases/<case-id>/replay.json`. Open the
+M7 replay listed in the task card, then use **Last tick** to inspect tick 1,008.
+[M7 evidence](docs/tasks/p2/P2-05.md)
+
+For P3 comparisons and fallback, use the frozen `rule-based-v0` baseline from
+`a22360d0ef4c39f08c887d463c7576022873c605`, with the M6 content pin
+`7c13d78ffd7d89006f6008c8a09f37ae97c253db`. The `base` parameters are version
+`0.1`, canteen enabled, cue enabled, fruit carry target 2 and failed-target retry
+36 ticks. Keep the seed, content pin and policy configuration hash in each comparison
+manifest.
