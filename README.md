@@ -5,8 +5,8 @@ policy interface, and the world validates and resolves them. The CLI runs random
 and rule-based policies, saves checkpoints, and re-executes recorded decisions. The offline
 viewer loads exported replays for inspection. M4 signed off P1 on 2026-11-09. The
 M6 configuration passed P2's technical acceptance on all 20 held-out seeds, with all
-three residents alive at tick 1,008 in every run. The owner replay walkthrough and
-M7 sign-off are pending.
+three residents alive at tick 1,008 in every run. The owner viewed the replay
+through tick 1,008 and signed off M7 on 2026-11-11. P2 is complete.
 
 - [Product design](docs/product/living-island-v0.1-design.md)
 - [Specifications](docs/spec/)

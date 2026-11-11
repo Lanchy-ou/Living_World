@@ -10,12 +10,12 @@
 | Experiment tooling | The P2-03 CLI records pinned inputs, verifies eight technical checks and derives metrics from run artifacts. [P2-03](P2-03.md) |
 | MF | The owner accepted the pixel-art viewer on the existing replay contract. [P2-F1](P2-F1.md) |
 | M6 | The owner approved the S1 spawn positions after the six-seed comparison. The P2-04 branch recorded the config and kept the frozen P1 inputs for regression. [P2-04](P2-04.md) |
-| M7 | The acceptance card records the held-out matrix, recovery and replay evidence, and the owner sign-off status. [P2-05](P2-05.md) |
+| M7 | The owner viewed the seven-day replay through tick 1,008 and signed off on 2026-11-11. [P2-05](P2-05.md) |
 
 All 20 held-out cases passed the technical and survival lines with 60 survivors.
 The sample's 95% Wilson lower limit is 83.8875%. The first seed reproduced its
 events, decisions and final world from both a living tick-144 checkpoint and
-recorded re-execution. Owner viewing and sign-off complete M7.
+recorded re-execution. The owner's M7 sign-off completes P2.
 
 ## What the experiments resolved
 

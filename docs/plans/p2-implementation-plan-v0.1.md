@@ -24,10 +24,10 @@
 > in the owner-approved six-seed development matrix (OQ-060). See
 > [P2-04](../tasks/p2/P2-04.md) and its [experiment report](../tasks/p2/P2-04-report.md).
 >
-> **P2-05 technical acceptance:** all 20 held-out runs passed technical validation and
-> all three residents survived to tick 1,008 in all 20 runs. Checkpoint recovery,
-> recorded re-execution and independent review passed. The owner replay walkthrough and
-> M7 sign-off are pending. See [P2-05](../tasks/p2/P2-05.md).
+> **M7 accepted (owner, 2026-11-11):** all 20 held-out runs passed technical validation
+> with all three residents alive at tick 1,008. Checkpoint recovery, recorded
+> re-execution and independent review passed. The owner viewed the replay through tick
+> 1,008 and signed off. P2 is complete. See [P2-05](../tasks/p2/P2-05.md).
 
 **Milestone P2, "Residents Survive":** on the default island, three rule-based residents
 survive seven game days together in most registered test seeds, using only their own

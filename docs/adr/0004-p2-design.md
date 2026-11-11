@@ -109,3 +109,4 @@ decisions and the alternatives the owner's plan rejected.
 - P2-05 verified 20 technically valid held-out runs, all with three residents alive at
   tick 1,008. Its acceptance record identifies the `rule-based-v0` code and policy
   settings for the P3 control and fallback. See [P2-05](../tasks/p2/P2-05.md).
+- The owner viewed the seven-day replay through tick 1,008 and signed M7 on 2026-11-11.
