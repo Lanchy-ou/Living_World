@@ -155,20 +155,20 @@ regrow_phase_offset_ticks = 120
 [[residents]]
 id = "ella"
 name = "艾拉"
-position = [12, 32]
+position = [33, 32]
 profile_id = "explorer"
 initial_goal = "探索岛屿并寻找可持续的生存方式"
 
 [[residents]]
 id = "ryan"
 name = "莱恩"
-position = [13, 32]
+position = [34, 32]
 profile_id = "cautious"
 initial_goal = "确保自己有稳定的水与食物储备"
 
 [[residents]]
 id = "mia"
 name = "米娅"
-position = [14, 32]
+position = [35, 32]
 profile_id = "cooperative"
 initial_goal = "帮助大家在岛上活下来"
