@@ -206,9 +206,6 @@ select:focus-visible {
 
 .brand {
   flex: none;
-}
-
-.brand {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -901,7 +898,8 @@ input[type="number"] {
 }
 
 /* Narrow windows: the bottom bar drops the tick field (the slider and the step buttons stay)
-   and then the day and time (the top bar shows them), so its buttons always fit. */
+   and then the day and time (the top bar shows them), so its buttons fit down to a window
+   about 840 px wide. Narrower windows are not supported. */
 @media (max-width: 1180px) {
   .tick-input {
     display: none;

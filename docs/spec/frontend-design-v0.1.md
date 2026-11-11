@@ -210,7 +210,7 @@ in this repository, and a row in both records in the same commit.
 | Resident panel | Opens when a resident, its tag, its corpse or its roster button is clicked. Shows portrait, name, ID, alive or dead, tile, move since the previous tick, status chip, recorded death tick and cause, the four conditions as bars with raw values and change, fruit, canteen, the recorded action (type, start tick, remaining ticks, intent ID) and this tick's events for the resident. | Same data as P1 §4.3 plus the status chip, the death record and the tick's events. Nobody is selected after loading (P1 selected the first resident). |
 | Selection rule | Selecting never changes the camera and never pauses playback. "Follow on the map" is a separate, opt-in checkbox in the panel and belongs to the resident it was ticked for: dragging the map, selecting another resident, closing the panel or unticking it turns follow off, and the view stays where it was. A double click on the map zooms in at that point (and, on a resident, also selects it). | Follow was already optional; the rule is now explicit and tested. |
 | Details drawer | Closed by default; opened and closed by the Events, Resources and Legend buttons at the right of the bottom bar. Events: the P1 event table with the resident and failure filters; clicking an event seeks to its tick and shows its raw JSON. Resources: the P1 resource lists. Legend: terrain, residents, objects, bubbles. Clicking an event in the resident panel opens the drawer on that event. | The same panels as P1 §4.3–§4.4, moved from always-visible to on demand. The legend moves here. |
-| Playback bar | First, step back, play or pause, step forward, last; clock; seek slider; tick field; speeds 1, 2, 4, 8, 16 ticks per second; then the buttons of the detail views. Space plays or pauses; Escape closes the panel, then the drawer. In a narrow window the bar drops the tick field (below 1180 px) and then the day and time beside the tick number (below 1100 px; the top bar shows them); the buttons and the slider stay. | Same controls and semantics as P1 §4.2; speed is a button group instead of a drop-down. |
+| Playback bar | First, step back, play or pause, step forward, last; clock; seek slider; tick field; speeds 1, 2, 4, 8, 16 ticks per second; then the buttons of the detail views. Space plays or pauses; Escape closes the panel, then the drawer. In a narrow window the bar drops the tick field and the last-tick number beside it (at 1180 px and narrower) and then the day and time beside the tick number (at 1100 px and narrower; the top bar shows them); the buttons and the slider stay down to a window 840 px wide. | Same controls and semantics as P1 §4.2, with one exception: at 1180 px and narrower there is no numeric tick field, so an exact tick is reached with the slider (keyboard arrows move it one tick), the step buttons or an event click. Speed is a button group instead of a drop-down. |
 | Loading | "Open replay…", drag and drop anywhere, and "Example". A refused file shows the validation error over the stage; the loaded replay stays; nothing is repaired. | Unchanged behaviour; the file input is hidden behind the button. |
 
 The floating panel and the drawer overlay the map. They never resize it, so opening them
@@ -302,7 +302,7 @@ outside the event table, and why anything happened. See OQ-079 to OQ-081.
 | §2 Replay data, validation, capture | Kept unchanged. No contract, schema or generated file changes. |
 | §3 Structure | Kept. Additions: `render/assets/`, `render/terrainLayer.ts`, `render/scene.ts`, `render/motion.ts`, `render/atlas.ts`. "Rendering reads only `currentFrame`" becomes: rendering reads frames and events up to the current tick (the previous frame and the tick's events for the slide, earlier move events for the facing, the death event for the death note); it never reads later data and still never simulates. |
 | §4.1 Map and camera | **Changed:** continuous zoom (§3.1); pan clamp (§4); residents drawn as sprites with a letter tag; trees show fruit as well as the stock number; shared-tile offsets per §3.3; legend on demand. Kept: grid from the bundle, fit formula, drag to pan, optional follow, colour never the only cue, night from the clock. |
-| §4.2 Timeline and controls | Kept, including the clock formulas and the five speeds. |
+| §4.2 Timeline and controls | Kept, including the clock formulas and the five speeds, with one exception for the owner to judge at MF: in windows 1180 px wide and narrower the numeric tick field (P1 "slider + numeric input") is not shown; the slider, the step buttons and the event click remain. At 1100 px and narrower the bottom bar shows only the tick number, and Day and HH:MM are in the top bar. |
 | §4.3 Panels | Kept data; new placement (§4). Added: status chip, death record, events of the tick. Nobody is selected after loading. |
 | §4.4 Events and debugging | Kept unchanged, inside the drawer. |
 | §5 Fixtures and edge cases | Kept. |
@@ -344,6 +344,9 @@ Limits of the automated checks:
 
 ## 9. Known limits
 
+- The smallest supported window is about 840 px wide. Below that the right-hand speed buttons
+  are covered by the detail-view buttons; the bars, the map size and scrolling stay stable.
+- At 1180 px and narrower there is no numeric tick field (§4, §7).
 - The canopy shows at most 8 fruit; the badge is exact (OQ-079).
 - Looks are assigned by list index, so a run with different residents reuses the same looks in
   order (OQ-080). Looks also repeat within a large run: letters from the 27th resident, letter

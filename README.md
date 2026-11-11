@@ -54,8 +54,8 @@ as pixel art drawn from the replay (design: `docs/spec/frontend-design-v0.1.md`)
 
 - Drag to pan; scroll, pinch or use the `−` / `+` buttons to zoom; **View entire island**
   shows the whole map again.
-- Press play, or enter 1008 in the tick field, or use the last-tick button. Speeds are 1 to
-  16 ticks per second.
+- Press play, or enter 1008 in the tick field (shown in windows wider than 1180 px), or use
+  the last-tick button. Speeds are 1 to 16 ticks per second.
 - Click a resident (on the map or in the list at the top left) to open its panel with the
   recorded action, conditions and inventory. This does not move the camera or pause playback.
 - **Events**, **Resources** and **Legend** open the detail drawer. Use the event filters to
