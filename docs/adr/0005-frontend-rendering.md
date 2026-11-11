@@ -1,7 +1,7 @@
 # ADR 0005: Frontend rendering approach
 
-- Status: proposed (implemented in P2-F1 under plan Amendment 2; becomes accepted when the
-  owner approves the viewer at MF)
+- Status: accepted (owner, MF, 2026-11-11; implemented in P2-F1 under plan Amendment 2;
+  acceptance recorded in `docs/tasks/p2/P2-F1.md`)
 - Date: 2026-11-11
 - Task: P2-F1 (spec: `docs/spec/frontend-design-v0.1.md`; plan:
   `docs/plans/p2-implementation-plan-v0.1.md`, Amendment 2)

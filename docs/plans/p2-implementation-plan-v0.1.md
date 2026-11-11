@@ -13,6 +13,11 @@
 > design spec is written alongside the code. MF moves from "before P2-F1" to the owner's
 > review of the working viewer at the end of P2-F1. Gate 1 and Gate 2 are unchanged. The
 > owner's instruction is quoted in `docs/tasks/p2/P2-F1.md`.
+>
+> **MF accepted (owner, 2026-11-11):** the owner reviewed the working P2-F1 viewer and
+> authorized acceptance and merge into local `main`. P2-F0's folded deliverables, the
+> frontend design spec and ADR 0005 are accepted with the documented desktop limitations
+> and P2 treatments of OQ-079 through OQ-081. See `docs/tasks/p2/P2-F1.md` for the sign-off.
 
 **Milestone P2, "Residents Survive":** on the default island, three rule-based residents
 survive seven game days together in most registered test seeds, using only their own

@@ -1,9 +1,9 @@
 # Living Island — Frontend Design Spec v0.1 (pixel-art replay viewer)
 
-> **Status: implemented, pending owner approval at MF.** Written alongside the code in task
+> **Status: implemented and accepted by the owner at MF (2026-11-11).** Written alongside the code in task
 > P2-F1 under plan Amendment 2 (2026-11-11), which folded the P2-F0 design task into the
-> implementation. It describes the viewer as built. The owner approves it, or asks for
-> changes, by reviewing the working viewer.
+> implementation. It describes the viewer as built and accepted after the owner's review
+> of the working viewer; see the acceptance record in `docs/tasks/p2/P2-F1.md`.
 >
 > **Relation to `p1-replay-frontend-v0.1.md`:** that file is not edited. This spec supersedes
 > its FE-04, §4.1 (camera, legend placement, resident marks) and the parts of §3 and §6 listed
