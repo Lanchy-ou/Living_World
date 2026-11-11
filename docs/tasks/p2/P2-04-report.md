@@ -77,6 +77,10 @@ The six batches took **2589.8 s** wall time.
 | S4 decay 120 | 6 | PASS | — | FAIL | 28 |
 | S5 cue | 6 | PASS | — | FAIL | 28 |
 
+The full verdict applies the tool's 20-seed requirement to the joined results. Its
+28 missing arms per round are the two arms for each of the 14 excluded seeds. Each
+raw one-seed batch summary applies the same 20-seed requirement to its own seed.
+
 ### Survival and water access
 
 Water access is spring drank / found without a spring drink / never found. Timing cells give median [min, max], then the number of observed residents. Censored residents are counted in the access split and excluded from the observed medians. Any drink includes the canteen.
