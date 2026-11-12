@@ -142,7 +142,7 @@ assembly/manifest with its own pinned algorithm; live use of the fixture ID refu
 
 | Field | Value |
 | --- | --- |
-| Independent P3-01 Gate 2 | PASS, outside-team review at 659e1212f16e3f84ab60b370d4141c85b1d15d36; see P3-01-review.md. M8 changes receive their own application review. |
+| Independent P3-01 Gate 2 | PASS, outside-team review at 659e1212f16e3f84ab60b370d4141c85b1d15d36; see P3-01-review.md. M8 application review PASS by independent m8_application_review; see M8-application.md. |
 | Owner / decision date | Project owner, 2026-11-12, explicit chat approval; subsequent DeepSeek/CNY150 instruction supersedes provider/USD selection. |
 | M8-01 | Approved: versioned P3 lane and CR-005 amendments. |
 | M8-02 | Approved: bounded experience and truthful retrieval identities. |
@@ -158,8 +158,8 @@ assembly/manifest with its own pinned algorithm; live use of the fixture ID refu
 | Superseded authorization | USD112 and OpenAI model selection revoked before any calls/spend. |
 | Price identity | CNY; peak uncached input2000000/output8000000 micro-CNY per million; source/date above. |
 | Registration/implementation identities | Not yet created; pin during P3-05/07. Six one-time approved slots only; no extra grant from a changed registration hash. |
-| CR-005 application commit | The dedicated M8 application commit; exact SHA recorded in P3-02 by the follow-up pin commit. |
-| Authorized next task | P3-02, from the recorded M8 application baseline, after independent application review. |
+| CR-005 application commit | `cc2bf87285e2728d7c433b92c265ce22bbd7e923` (reviewed application); P3-02 pins this SHA. |
+| Authorized next task | P3-02, from the recorded M8 application baseline, independent application review passed. |
 
 The CNY150 limit covers all P3 paid model calls, including failed/retried calls and
 any paid compatibility probe. It is not a target to spend, a per-run refill, or an

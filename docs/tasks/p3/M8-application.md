@@ -67,7 +67,7 @@ implementation obligations and do not block provider-independent P3-02.
 ### Required fields
 
 1. base_commit: `659e1212f16e3f84ab60b370d4141c85b1d15d36`;
-   result_commit: unknown until committed; exact application SHA is then pinned in P3-02.
+   result_commit: `cc2bf87285e2728d7c433b92c265ce22bbd7e923` (application); follow-up pin commit records it in P3-02.
 2. status: ACCEPTED (owner M8 plus independent documentation application review).
 3. scope_changed: yes; owner replaced provider/USD allocation with DeepSeek/CNY150.
 4. human_interventions: 2 after the initiating approval: API-budget clarification,
@@ -77,3 +77,9 @@ implementation obligations and do not block provider-independent P3-02.
 6. verification: document checks and independent review PASS; runtime CI, generation,
    counter certification, live calls and credentials NOT_RUN.
 7. open_questions: no unresolved M8 decision; implementation prerequisites above.
+
+### Final baseline pin
+
+The application SHA above is now recorded in P3-02 and the M8 owner record. This
+follow-up changes only task/decision metadata and start instructions. The executor
+records the final pin commit as execution base and verifies the application ancestry.
