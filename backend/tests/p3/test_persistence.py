@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 from hashlib import sha256
 from pathlib import Path
 
@@ -479,3 +480,31 @@ def test_fixture_selector_module_may_be_pinned_in_registration_inputs(tmp_path):
 
     retain_inputs(tmp_path, files, run_id=content.config.meta.run_id, source_reader=source_reader)
     assert read_inputs(tmp_path, source_reader=source_reader) == files
+
+
+def test_windows_immutable_publication_requests_write_through_rename(tmp_path, monkeypatch):
+    from living_island.persistence import p3, p3_allocation
+
+    observed = []
+
+    class Move:
+        def __call__(self, source, destination, flags):
+            observed.append(flags)
+            os.replace(source, destination)
+            return 1
+
+    class Kernel:
+        MoveFileExW = Move()
+
+    monkeypatch.setattr(p3_allocation.sys, "platform", "win32")
+    monkeypatch.setattr(p3_allocation.ctypes, "WinDLL", lambda *a, **k: Kernel(), raising=False)
+    target = tmp_path / "published.json"
+    p3._create(target, b"{}")
+    assert target.read_bytes() == b"{}"
+    assert observed == [0x1 | 0x8]  # REPLACE_EXISTING | WRITE_THROUGH.
+
+
+def test_retained_manifest_uses_the_normative_filename(tmp_path):
+    initial_checkpoint(tmp_path)
+    assert MANIFEST_NAME == "p3-inputs.json"
+    assert (tmp_path / "p3-inputs.json").is_file()

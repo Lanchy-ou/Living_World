@@ -58,11 +58,12 @@ from living_island.world.content import (
 
 from ._codec import PersistenceError, decode_model, digest, read_bytes
 from .logs import _events_from_bytes
+from .p3_allocation import _replace as _durable_replace
 
 if TYPE_CHECKING:
     from .p3_allocation import VerifiedCheckpoint
 
-MANIFEST_NAME = "input-manifest-p3.json"
+MANIFEST_NAME = "p3-inputs.json"
 ORIGIN_NAME = "resume-origin-p3.json"
 TRACE_NAME = "decision-trace-p3.json"
 SourceReader = Callable[[str, str], bytes]
@@ -91,8 +92,8 @@ def _fault(callback: Fault | None, stage: str) -> None:
 
 
 def _flush_directory(path: Path) -> None:
-    # Windows file handles are flushed before replace. POSIX additionally persists
-    # directory entries; directory file descriptors are unavailable on Windows.
+    # Published Windows pathnames use MoveFileExW with WRITE_THROUGH. POSIX also
+    # flushes directory entries; directory descriptors are unavailable on Windows.
     if os.name != "nt":
         descriptor = os.open(path, os.O_RDONLY)
         try:
@@ -122,7 +123,7 @@ def _create(path: Path, raw: bytes, *, fault: Fault | None = None, stage: str = 
             _fault(fault, f"{stage}:after_fsync")
         if path.exists():
             raise PersistenceError(path, "file", "target appeared during immutable publication")
-        os.replace(temporary, path)
+        _durable_replace(temporary, path)
         temporary = None
         _flush_directory(path.parent)
         _fault(fault, f"{stage}:after_publish")

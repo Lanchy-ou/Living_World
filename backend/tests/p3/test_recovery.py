@@ -333,7 +333,7 @@ publication = target / 'publication'
 publication.mkdir()
 for name, raw in checkpoint.inputs.items():
     (publication / name).write_bytes(raw)
-manifest = 'input-manifest-p3.json'
+manifest = 'p3-inputs.json'
 (publication / manifest).write_bytes((target / 'base' / manifest).read_bytes())
 journal = P3Journal(publication, checkpoint.save.world.run_id)
 for name, raw in checkpoint.logs.items():
