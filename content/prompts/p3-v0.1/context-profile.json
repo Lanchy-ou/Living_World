@@ -1,0 +1,6 @@
+{
+  "context_profile_schema_version": "0.1",
+  "context_profile_id": "p3-context-v0",
+  "retrieval_profile": "recent-relevant-v0",
+  "projection_profile": "p3-context-v0"
+}
