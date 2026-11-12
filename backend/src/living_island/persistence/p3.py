@@ -202,6 +202,13 @@ def validate_inputs(
     pin = decode_model(files["implementation.json"], ImplementationPin, Path("implementation.json"))
     if pin.code_commit != registration.implementation_commit:
         raise ValueError("implementation revision differs from registration")
+    registered_sources = {item.path: item.sha256 for item in registration.implementation_pins}
+    if any(
+        registered_sources.get(item.path) != item.sha256
+        for module in pin.modules
+        for item in module.files
+    ):
+        raise ValueError("implementation modules must resolve to registered source pins")
     for item in [
         *registration.implementation_pins,
         *registration.input_pins,
@@ -256,6 +263,15 @@ def validate_inputs(
             source
         ) or cfg.identity_sha256 != canonical_sha256(identity):
             raise ValueError("identity source/policy hashes differ")
+        resident = next(
+            resident for resident in config.residents if resident.id == identity.actor_id
+        )
+        if (source.display_name, source.profile.profile_id, source.initial_direction) != (
+            resident.name,
+            resident.profile_id,
+            resident.initial_goal,
+        ):
+            raise ValueError("resolved identity differs from world resident source fields")
         if (cfg.seed, cfg.map_width, cfg.map_height, cfg.max_plan_actions) != (
             config.meta.seed,
             config.map.width,
@@ -289,6 +305,12 @@ def validate_inputs(
         if shared is not None and current != shared:
             raise ValueError("all actors must share registered provider/limits/pricing pins")
         shared = current
+        if registration.purpose == "fake" and (
+            cfg.pricing.input_micro_cny_per_million_tokens
+            or cfg.pricing.output_micro_cny_per_million_tokens
+            or case.caps.micro_cny
+        ):
+            raise ValueError("fake registrations require zero prices and money caps")
     if (
         config_hash(config) != registration.world_config_sha256
         or map_hash(rows) != registration.world_map_sha256
@@ -412,6 +434,18 @@ class P3Journal:
         )
         if dispatch.call_id in {item.call_id for item in existing}:
             raise ValueError("duplicate dispatched call")
+        earlier = [item for item in existing if item.decision_id == dispatch.decision_id]
+        calls = decode_records(
+            self._raw["llm-calls.jsonl"],
+            LLMCallRecordP3,
+            self.directory / "llm-calls.jsonl",
+        )
+        if dispatch.attempt_index != len(earlier) or (
+            earlier and earlier[-1].call_id not in {call.call_id for call in calls}
+        ):
+            raise ValueError(
+                "dispatch attempts must be serial and contiguous after terminal evidence"
+            )
         self._append("llm-dispatches.jsonl", [dispatch])
 
     def after_call(self, record: LLMCallRecordP3) -> None:
@@ -426,6 +460,7 @@ class P3Journal:
             or canonical_sha256(dispatches[-1]) != record.dispatch_sha256
         ):
             raise ValueError("terminal call must join its durable dispatch")
+        _join_call(dispatches[-1], record)
         calls = decode_records(
             self._raw["llm-calls.jsonl"], LLMCallRecordP3, self.directory / "llm-calls.jsonl"
         )
@@ -492,6 +527,30 @@ def _join_context(context: ContextRecordP3, dispatch: AttemptDispatch) -> None:
         raise ValueError("context/dispatch chain differs")
 
 
+def _join_call(dispatch: AttemptDispatch, call: LLMCallRecordP3) -> None:
+    for field in (
+        "run_id",
+        "decision_id",
+        "call_id",
+        "actor_id",
+        "tick",
+        "decision_ordinal",
+        "attempt_index",
+    ):
+        if getattr(dispatch, field) != getattr(call, field):
+            raise ValueError("terminal call/dispatch metadata differs")
+    debit = call.debit
+    if (debit.input_reserved, debit.output_reserved, debit.money_reserved) != (
+        dispatch.input_reserved,
+        dispatch.output_reserved,
+        dispatch.money_reserved,
+    ) or (debit.input_reported, debit.output_reported) != (
+        call.result.token_input,
+        call.result.token_output,
+    ):
+        raise ValueError("terminal usage/debit/reservation evidence differs")
+
+
 def _validate_logs(
     save: SavePackageP3, logs: Mapping[str, bytes], origins: Sequence[ResumeOriginP3]
 ) -> None:
@@ -523,6 +582,7 @@ def _validate_logs(
             "committed call/dispatch references are missing, duplicated or out of order"
         )
     ordinals = {state.actor_id: 0 for state in save.agent_state.runtime_states}
+    policies = {state.actor_id: state.policy_config for state in save.agent_state.runtime_states}
     last: tuple[int, str] | None = None
     for context, decision in zip(contexts, decisions, strict=True):
         if (
@@ -542,6 +602,12 @@ def _validate_logs(
             context.assembly.projection_sha256,
         ):
             raise ValueError("context/decision hashes differ")
+        cfg = policies[decision.actor_id]
+        if decision.policy_id != cfg.policy_id or (
+            context.assembly.manifest.context_profile_id != cfg.context_profile_id
+            or canonical_sha256(context.request.context.identity) != cfg.identity_sha256
+        ):
+            raise ValueError("committed context/decision differs from saved policy pins")
     if ordinals != {
         state.actor_id: state.next_decision_ordinal for state in save.agent_state.runtime_states
     }:
@@ -553,6 +619,53 @@ def _validate_logs(
     debits = [debit for decision in decisions for debit in decision.budget_debits]
     for dispatch, call, entry, debit in zip(dispatches, calls, normal_entries, debits, strict=True):
         _join_context(contexts_by_id[dispatch.decision_id], dispatch)
+        _join_call(dispatch, call)
+        cfg = policies[dispatch.actor_id]
+        if (
+            dispatch.adapter_id,
+            dispatch.adapter_version,
+            dispatch.model_id,
+            dispatch.prompt_version,
+            dispatch.action_schema_version,
+            dispatch.provider_request.settings,
+        ) != (
+            cfg.adapter_id,
+            cfg.adapter_version,
+            cfg.model_id,
+            cfg.prompt_version,
+            cfg.action_schema_version,
+            cfg.provider_settings,
+        ):
+            raise ValueError("dispatch differs from retained policy provider pins")
+        price = cfg.pricing
+        expected_money_reserved = (
+            dispatch.input_reserved * price.input_micro_cny_per_million_tokens + 999999
+        ) // 1000000 + (
+            dispatch.output_reserved * price.output_micro_cny_per_million_tokens + 999999
+        ) // 1000000
+        if dispatch.money_reserved != expected_money_reserved:
+            raise ValueError("reservation money differs from registered integer pricing")
+        expected_input: int | None
+        expected_output: int | None
+        if debit.usage_unknown:
+            expected_input, expected_output = dispatch.input_reserved, dispatch.output_reserved
+        else:
+            expected_input, expected_output = debit.input_reported, debit.output_reported
+        if expected_input is None or expected_output is None:
+            raise ValueError("known usage requires both provider token counts")
+        if expected_input > dispatch.input_reserved or expected_output > dispatch.output_reserved:
+            raise ValueError("provider overrun cannot enter a normal committed checkpoint")
+        expected_money = (
+            expected_input * price.input_micro_cny_per_million_tokens + 999999
+        ) // 1000000 + (
+            expected_output * price.output_micro_cny_per_million_tokens + 999999
+        ) // 1000000
+        if (debit.input_charged, debit.output_charged, debit.money_charged) != (
+            expected_input,
+            expected_output,
+            expected_money,
+        ):
+            raise ValueError("terminal debit differs from exact registered usage accounting")
         if (
             call.dispatch_sha256 != canonical_sha256(dispatch)
             or call.debit != debit
@@ -653,6 +766,8 @@ def read_checkpoint_p3(
     directory = path.parent if source is None else source
     raw = read_bytes(path)
     save = decode_model(raw, SavePackageP3, path)
+    if path.name != f"checkpoint-{save.world.tick:010d}.json":
+        raise ValueError("checkpoint filename must identify its exact saved boundary")
     inputs = read_inputs(
         directory, expected_hash=save.input_manifest_sha256, source_reader=source_reader
     )
@@ -672,6 +787,14 @@ def read_checkpoint_p3(
         runtime.policy_config for runtime in save.agent_state.runtime_states
     ]:
         raise ValueError("saved runtime policy differs from retained policy")
+    config = decode_model(inputs["config.json"], EffectiveConfig, directory / "config.json")
+    if (
+        save.world.schema_version,
+        save.world.run_id,
+        save.world.world_id,
+        save.world.static_map_ref,
+    ) != ("0.1", config.meta.run_id, config.meta.world_id, config.map.layout_file):
+        raise ValueError("saved world identity/version differs from retained content")
     registration = decode_model(
         inputs["trial-registration.json"], TrialRegistration, directory / "trial-registration.json"
     )
@@ -908,6 +1031,19 @@ def _recovery_entries(
     if authority.prepared_head is not None or authority.status == "complete":
         raise ValueError("reconcile publication before recovery; completed authority is closed")
     tail = authority.entries[head.reservation_cursor :]
+    if not set(LOG_NAMES).issubset(artifacts):
+        raise ValueError("recovery must retain every complete physical source log artifact")
+    ancestor_counts = (
+        {prefix.name: prefix.records for prefix in checkpoint.origins[-1].log_prefixes}
+        if checkpoint.origins
+        else dict.fromkeys(LOG_NAMES, 0)
+    )
+    for name in LOG_NAMES:
+        committed = b"".join(
+            checkpoint.logs[name].splitlines(keepends=True)[ancestor_counts[name] :]
+        )
+        if not artifacts[name].startswith(committed):
+            raise ValueError("recovery artifact conflicts with committed physical source prefix")
     dispatches: dict[str, AttemptDispatch] = {}
     calls: dict[str, LLMCallRecordP3] = {}
 
@@ -936,6 +1072,18 @@ def _recovery_entries(
     known = {entry.reservation.call_id: entry for entry in authority.entries}
     if set(dispatches) - set(known) or set(calls) - set(known):
         raise ValueError("orphan dispatch/call has no authority reservation")
+    extra_dispatches = [
+        row for row in dispatches.values() if row.reservation_ordinal >= head.reservation_cursor
+    ]
+    if [row.reservation_ordinal for row in extra_dispatches] != list(
+        range(head.reservation_cursor, head.reservation_cursor + len(extra_dispatches))
+    ):
+        raise ValueError("orphan dispatch order must be the serial authority reservation prefix")
+    dispatch_raw = artifacts["llm-dispatches.jsonl"]
+    if dispatch_raw and not dispatch_raw.endswith(b"\n") and len(extra_dispatches) >= len(tail):
+        raise ValueError(
+            "partial orphan dispatch has no corresponding pending authority reservation"
+        )
     for call_id, dispatch in dispatches.items():
         entry = known[call_id]
         r = entry.reservation
@@ -962,6 +1110,7 @@ def _recovery_entries(
             dispatches[call_id]
         ):
             raise ValueError("orphan terminal call has no exact durable dispatch")
+        _join_call(dispatches[call_id], call)
     policies = _list(
         checkpoint.inputs["p3-policy-configs.json"],
         ActorPolicyConfig,
@@ -1055,7 +1204,7 @@ def write_trace_p3(
     path: Path, checkpoint: VerifiedP3Checkpoint, *, final_tick: int
 ) -> DecisionTraceP3:
     save = checkpoint.save
-    if save.world.tick != final_tick:
+    if save.world.tick != final_tick or final_tick != _registered_horizon(checkpoint):
         raise ValueError("only a successfully completed horizon can publish a trace")
     trace = DecisionTraceP3(
         trace_schema_version="0.2",
@@ -1076,6 +1225,24 @@ def write_trace_p3(
     return trace
 
 
+def _registered_horizon(checkpoint: VerifiedP3Checkpoint) -> int:
+    registration = decode_model(
+        checkpoint.inputs["trial-registration.json"],
+        TrialRegistration,
+        Path("trial-registration.json"),
+    )
+    registration_hash = canonical_sha256(registration)
+    matching = [
+        case
+        for case in registration.cases
+        if canonical_sha256({"registration_sha256": registration_hash, "case_id": case.case_id})
+        == checkpoint.save.run_budget.allocation_key
+    ]
+    if len(matching) != 1:
+        raise ValueError("trace allocation must bind one registered case")
+    return matching[0].ticks
+
+
 def load_trace_p3(
     path: Path, *, ancestors: tuple[Path, ...] = (), source_reader: SourceReader | None = None
 ) -> tuple[DecisionTraceP3, VerifiedP3Checkpoint]:
@@ -1086,6 +1253,8 @@ def load_trace_p3(
         source_reader=source_reader,
     )
     save = checkpoint.save
+    if trace.final_tick != _registered_horizon(checkpoint):
+        raise ValueError("trace does not complete the registered case horizon")
     if (
         trace.run_id,
         trace.config_hash,

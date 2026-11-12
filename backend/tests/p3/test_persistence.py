@@ -33,12 +33,12 @@ from living_island.persistence.p3 import (
     MANIFEST_NAME,
     P3Journal,
     complete_origin,
-    load_trace_p3,
     prepare_continuation,
     publish_checkpoint,
     read_checkpoint_p3,
     read_inputs,
     retain_inputs,
+    verify_later_checkpoints,
     write_trace_p3,
 )
 from living_island.world.content import map_bytes_from_rows
@@ -403,8 +403,9 @@ def test_trace_has_full_snapshot_hashes_and_refuses_incomplete_horizon(tmp_path)
     with pytest.raises(ValueError, match="horizon"):
         write_trace_p3(trace_path, verified, final_tick=1)
     assert not trace_path.exists()
-    trace = write_trace_p3(trace_path, verified, final_tick=0)
-    assert load_trace_p3(trace_path, source_reader=reader) == (trace, verified)
+    with pytest.raises(ValueError, match="horizon"):
+        write_trace_p3(trace_path, verified, final_tick=0)
+    assert not trace_path.exists()
 
 
 def test_snapshot_rejects_unknown_version_placeholders_and_cursor_forgery(tmp_path):
@@ -421,3 +422,32 @@ def test_snapshot_rejects_unknown_version_placeholders_and_cursor_forgery(tmp_pa
     with pytest.raises(ValueError):
         SavePackageP3.model_validate(data)
     assert (tmp_path / MANIFEST_NAME).read_bytes()
+
+
+def test_corrupt_later_checkpoint_is_not_silently_replaced_with_older_one(tmp_path):
+    _, reader, _ = initial_checkpoint(tmp_path)
+    (tmp_path / "checkpoint-0000000001.json").write_bytes(b'{"truncated":')
+    with pytest.raises(ValueError):
+        verify_later_checkpoints(tmp_path / "checkpoint-0000000000.json", source_reader=reader)
+
+
+def test_repeated_clean_zero_tick_continuation_uses_distinct_locators(tmp_path):
+    source = tmp_path / "source"
+    checkpoint, reader, _ = initial_checkpoint(source)
+    ancestors = (source / "checkpoint-0000000000.json",)
+    for number in range(2):
+        target = tmp_path / f"continuation-{number}"
+        origin = prepare_continuation(source, checkpoint, target)
+        journal = P3Journal(target, checkpoint.save.world.run_id, prior_raw=checkpoint.logs)
+        publish_checkpoint(
+            target / "checkpoint-0000000000.json",
+            checkpoint.save,
+            journal,
+            origins=(*checkpoint.origins, origin),
+        )
+        checkpoint = read_checkpoint_p3(
+            target / "checkpoint-0000000000.json", ancestors=ancestors, source_reader=reader
+        )
+        source = target
+        ancestors = (target / "checkpoint-0000000000.json", *ancestors)
+    assert len(checkpoint.origins) == 2

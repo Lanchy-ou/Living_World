@@ -34,7 +34,6 @@ from living_island.contract.p3_save import SavePackageP3
 from living_island.memory.experience import ingest_experience
 from living_island.memory.p3_types import build_decision_id, canonical_bytes, canonical_sha256
 from living_island.persistence.p3 import (
-    LOG_NAMES,
     ORIGIN_NAME,
     P3Journal,
     build_recovery_origin,
@@ -407,9 +406,44 @@ def test_each_staged_write_failure_cannot_publish_a_checkpoint(tmp_path, stage):
 def test_recovery_rejects_malformed_complete_tail_instead_of_silently_dropping_spend(tmp_path):
     checkpoint, _, _ = initial_checkpoint(tmp_path / "source")
     _, _, _, entry = attempt(checkpoint)
-    artifacts = {name: b"" for name in LOG_NAMES}
+    artifacts = checkpoint.logs.copy()
     artifacts["llm-dispatches.jsonl"] = b'{"unknown":"complete record"}\n'
     with pytest.raises(ValueError, match="unverifiable"):
         build_recovery_origin(
             checkpoint, authority_for(checkpoint, tmp_path / "source", [entry]), artifacts
         )
+
+
+def test_partial_dispatch_without_an_unmatched_reservation_refuses_recovery(tmp_path):
+    source = tmp_path / "source"
+    checkpoint, _, _ = initial_checkpoint(source)
+    _, dispatch, _, entry = attempt(checkpoint)
+    for entries, raw in (([], b"{"), ([entry], canonical_bytes(dispatch) + b"\n{")):
+        artifacts = {**checkpoint.logs, "llm-dispatches.jsonl": raw}
+        with pytest.raises(ValueError, match="no corresponding"):
+            build_recovery_origin(checkpoint, authority_for(checkpoint, source, entries), artifacts)
+
+
+def test_terminal_tick_usage_and_reservation_forgeries_refuse_before_logging(tmp_path):
+    checkpoint, _, _ = initial_checkpoint(tmp_path / "source")
+    context, dispatch, call, _ = attempt(checkpoint)
+    journal = P3Journal(
+        tmp_path / "tail", checkpoint.save.world.run_id, reservation_lookup=lambda _: None
+    )
+    journal.stage_context(context)
+    journal.before_call(context, dispatch)
+    with pytest.raises(ValueError, match="metadata"):
+        journal.after_call(call.model_copy(update={"tick": 1}))
+    forged = call.debit.model_copy(update={"input_reserved": 99})
+    with pytest.raises(ValueError, match="evidence"):
+        journal.after_call(call.model_copy(update={"debit": forged}))
+    assert (tmp_path / "tail" / "llm-calls.jsonl").read_bytes() == b""
+
+
+def test_recovery_evidence_cannot_replace_committed_physical_prefix(tmp_path):
+    source = tmp_path / "source"
+    checkpoint, _, _ = initial_checkpoint(source)
+    _, _, _, entry = attempt(checkpoint)
+    artifacts = {**checkpoint.logs, "events.jsonl": b""}
+    with pytest.raises(ValueError, match="committed physical"):
+        build_recovery_origin(checkpoint, authority_for(checkpoint, source, [entry]), artifacts)
