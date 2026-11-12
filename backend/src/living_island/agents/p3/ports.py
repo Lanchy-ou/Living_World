@@ -52,8 +52,17 @@ class AttemptJournalPort(Protocol):
     def after_call(self, record: LLMCallRecordP3) -> None: ...
 
 
+class InvalidFallbackPlan(ValueError):
+    """A malformed rule proposal, not an unexpected adapter failure."""
+
+
 class FallbackAdapter(Protocol):
-    """Return a staged plan/private successor; the caller alone commits either."""
+    """Return a staged plan/private successor; the caller alone commits either.
+
+    decide raises InvalidFallbackPlan only for a malformed rule proposal. The
+    caller handles that typed failure with one wait substitute and keeps the
+    entire prior private state. Other programming and IO failures propagate.
+    """
 
     def decide(
         self, request: DecisionRequestP3, state: P3PolicyPrivateState
