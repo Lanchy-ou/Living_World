@@ -8,13 +8,13 @@ import shutil
 from hashlib import sha256
 
 import pytest
-from test_persistence import retained_fixture
+from test_persistence import SOURCE, retained_fixture
 from world_builders import tiny_content
 
 from living_island.agents.p3.cognition import validate_proposal
 from living_island.agents.p3.types import DecisionProposal, ProviderResult, WireRequest
 from living_island.contract.p3_save import ActorPolicyConfig, TrialRegistration
-from living_island.memory.p3_types import canonical_bytes
+from living_island.memory.p3_types import RetrievalResult, canonical_bytes
 from living_island.persistence.p3_allocation import AllocationStore, initialize_fake
 from living_island.sim.p3 import reexecute_p3, resume_p3, run_p3
 from living_island.sim.runner import checkpoint_filename
@@ -477,3 +477,67 @@ def test_pending_offline_recovery_reopens_once_then_saved_offline_mode_persists(
         allocation_store=Sentinel(),
     )
     assert replay.checkpoint == continued.checkpoint
+
+
+class RecentOnlyFixture:
+    retrieval_profile = "recent-only-fixture-v0"
+    implementation_sha256 = sha256(SOURCE).hexdigest()
+
+    def retrieve(self, state, query):
+        records = sorted(state.records, key=lambda record: record.sequence, reverse=True)
+        return RetrievalResult(
+            ranked_experience_ids=[record.experience_id for record in records],
+            selected_records=records[:16],
+        )
+
+
+def test_alternate_strategy_records_its_actual_id_and_replays_its_own_rank(tmp_path):
+    content, files, case, store, reader, fallback = setup_case(
+        tmp_path, horizon=2, fixture_profile=True
+    )
+    selector = RecentOnlyFixture()
+    original = run_p3(
+        content,
+        files,
+        case,
+        tmp_path / "alternate",
+        allocation_store=store,
+        provider=LocalProvider(),
+        fallback=fallback,
+        source_reader=reader,
+        selector=selector,
+        selector_sha256=selector.implementation_sha256,
+        clock_ms=lambda: 0,
+    )
+    contexts = [
+        json.loads(row) for row in (original.output / "contexts-p3.jsonl").read_bytes().splitlines()
+    ]
+    assert contexts
+    for context in contexts:
+        manifest = context["assembly"]["manifest"]
+        assert manifest["retrieval_profile"] == "recent-only-fixture-v0"
+        assert manifest["context_profile_id"] == "p3-context-recent-only-fixture-v0"
+        sequences = [
+            record["sequence"] for record in context["request"]["context"]["recalled_experience"]
+        ]
+        assert sequences == sorted(sequences, reverse=True)
+    replay = reexecute_p3(
+        original.output,
+        tmp_path / "alternate-replay",
+        source_reader=reader,
+        provider=Sentinel(),
+        fallback=Sentinel(),
+        allocation_store=Sentinel(),
+        selector=RecentOnlyFixture(),
+        selector_sha256=selector.implementation_sha256,
+    )
+    assert replay.checkpoint == original.checkpoint
+    with pytest.raises(ValueError):
+        reexecute_p3(
+            original.output,
+            tmp_path / "wrong-selector",
+            source_reader=reader,
+            provider=Sentinel(),
+            fallback=Sentinel(),
+            allocation_store=Sentinel(),
+        )
