@@ -503,3 +503,15 @@ def test_total_deadline_bounds_connect_and_late_worker_cannot_send(monkeypatch):
 def test_transport_contract_violation_is_a_programming_error():
     with pytest.raises(ValueError, match="cap-plus-one"):
         mapped(b"x" * (MAX_RESPONSE_BYTES + 2))
+
+
+def test_transport_preserves_chunked_partial_and_propagates_programming_error(monkeypatch):
+    class BrokenChunk(LocalResponse):
+        def read1(self, size):
+            raise http.client.IncompleteRead(b"partial-chunk")
+
+    result = local_transport(LocalConnection(BrokenChunk(b"")), monkeypatch).exchange(b"{}", 30000)
+    assert result.body == b"partial-chunk" and result.fault == "transport_error"
+    connection = LocalConnection(None, error=ValueError("programming defect"))
+    with pytest.raises(ValueError, match="programming defect"):
+        local_transport(connection, monkeypatch).exchange(b"{}", 30000)

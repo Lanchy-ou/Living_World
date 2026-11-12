@@ -88,7 +88,7 @@ class HTTPSByteTransport:
         deadline = time.monotonic() + timeout_ms / 1000
         cancelled = Event()
         # Each byte occurs in at most one queue chunk; the worker reads cap+1 total.
-        evidence: Queue[tuple[int | None, bytes | None, bool, str | None]] = Queue()
+        evidence: Queue[tuple[int | None, bytes | None, bool, str | None] | Exception] = Queue()
         connection = self._connection(timeout_ms / 1000)
 
         def remaining() -> float:
@@ -123,7 +123,15 @@ class HTTPSByteTransport:
                         connection.sock.settimeout(remaining())
                     else:
                         remaining()
-                    chunk = response.read1(MAX_RESPONSE_BYTES + 1 - read)
+                    try:
+                        chunk = response.read1(MAX_RESPONSE_BYTES + 1 - read)
+                    except http.client.IncompleteRead as exc:
+                        # A chunked response can fail after actually reading data.
+                        # Preserve that prefix, never discard it as an absent body.
+                        if len(exc.partial) > MAX_RESPONSE_BYTES + 1 - read:
+                            raise ValueError("transport exceeded the bounded read") from None
+                        evidence.put((response.status, exc.partial, False, None))
+                        raise
                     remaining()
                     if not chunk:
                         if response.length not in (None, 0):
@@ -138,6 +146,9 @@ class HTTPSByteTransport:
             except (OSError, http.client.HTTPException):
                 # Exception messages may contain credentials or server content.
                 evidence.put((None, None, False, "transport_error"))
+            except Exception as exc:
+                # Programming defects stop the caller rather than becoming fallback.
+                evidence.put(exc)
             finally:
                 connection.close()
 
@@ -148,12 +159,15 @@ class HTTPSByteTransport:
         try:
             while True:
                 try:
-                    code, chunk, complete, fault = evidence.get(timeout=remaining())
+                    item = evidence.get(timeout=remaining())
                     remaining()
                 except (Empty, TimeoutError):
                     return TransportResponse(
                         status, bytes(retained) if retained is not None else None, False, "timeout"
                     )
+                if isinstance(item, Exception):
+                    raise item
+                code, chunk, complete, fault = item
                 if code is not None:
                     status = code
                 if chunk is not None:
