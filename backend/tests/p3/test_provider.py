@@ -515,3 +515,35 @@ def test_transport_preserves_chunked_partial_and_propagates_programming_error(mo
     connection = LocalConnection(None, error=ValueError("programming defect"))
     with pytest.raises(ValueError, match="programming defect"):
         local_transport(connection, monkeypatch).exchange(b"{}", 30000)
+
+
+@pytest.mark.parametrize("phase", ["headers", "body"])
+def test_total_deadline_bounds_headers_and_body_and_discards_late_completion(phase, monkeypatch):
+    gate = Event()
+
+    class SlowResponse(LocalResponse):
+        def read1(self, size):
+            if self.stream.tell():
+                gate.wait(2)
+            return super().read1(min(size, 8))
+
+    class SlowConnection(LocalConnection):
+        def getresponse(self):
+            if phase == "headers":
+                gate.wait(2)
+            return super().getresponse()
+
+    connection = SlowConnection(SlowResponse(COMPLETED))
+    transport = local_transport(connection, monkeypatch)
+    try:
+        raw = transport.exchange(b"{}", 100)
+        terminal = map_response(raw, latency_ms=100)
+        assert terminal.outcome == "timeout" and not terminal.response_complete
+        assert terminal.response_text is terminal.token_input is terminal.token_output is None
+        assert raw.body == (None if phase == "headers" else COMPLETED[:8])
+    finally:
+        gate.set()
+        transport._pending.join(2)
+    assert not transport._pending.is_alive()
+    assert len(connection.requests) == 1
+    assert map_response(raw, latency_ms=100) == terminal
