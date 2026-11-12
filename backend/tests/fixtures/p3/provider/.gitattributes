@@ -1,0 +1,3 @@
+# Preserve upstream evidence bytes, including the release license's CRLF endings.
+*.txt -text
+flash1017-LICENSE.txt whitespace=cr-at-eol
