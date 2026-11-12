@@ -11,7 +11,6 @@ from __future__ import annotations
 import base64
 import http.client
 import json
-import re
 import socket
 import time
 from dataclasses import dataclass
@@ -293,9 +292,13 @@ def _reject_constant(value: str) -> None:
 
 
 def _label(value: object) -> str | None:
-    if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,256}", value):
-        return value
-    return None
+    if not isinstance(value, str):
+        return None
+    try:
+        value.encode("utf-8", errors="strict")
+    except UnicodeEncodeError:
+        return None
+    return value
 
 
 def _usage(value: object) -> int | None:

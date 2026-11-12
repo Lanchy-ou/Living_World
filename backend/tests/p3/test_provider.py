@@ -307,6 +307,12 @@ def test_failed_and_unknown_response_statuses():
     assert mapped(envelope(status="in_progress")).provider_error_code == "INVALID_RESPONSE_STATUS"
 
 
+def test_provider_identifiers_preserve_scalar_text_without_invented_length_or_ascii_rules():
+    identifier = "response/居民/" + "x" * 300
+    result = mapped(envelope(id=identifier))
+    assert result.provider_request_id == identifier
+
+
 @pytest.mark.parametrize("output", [[], [{"type": "function_call"}], [{"type": "reasoning"}]])
 def test_no_tool_execution_or_reasoning_extraction(output):
     result = mapped(envelope(output=output))
