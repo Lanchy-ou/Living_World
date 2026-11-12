@@ -608,3 +608,11 @@ def test_headers_without_arriving_body_are_not_confused_with_empty_eof(monkeypat
     transport = local_transport(LocalConnection(LocalResponse(b"")), monkeypatch)
     raw = transport.exchange(b"{}", 500)
     assert raw.status == 200 and raw.body == b"" and raw.complete
+
+    class BrokenEmptyChunk(LocalResponse):
+        def read1(self, size):
+            raise http.client.IncompleteRead(b"")
+
+    transport = local_transport(LocalConnection(BrokenEmptyChunk(b"")), monkeypatch)
+    raw = transport.exchange(b"{}", 500)
+    assert raw.status == 200 and raw.body is None and raw.fault == "transport_error"

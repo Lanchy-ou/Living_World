@@ -129,7 +129,8 @@ class HTTPSByteTransport:
                         # Preserve that prefix, never discard it as an absent body.
                         if len(exc.partial) > MAX_RESPONSE_BYTES + 1 - read:
                             raise ValueError("transport exceeded the bounded read") from None
-                        evidence.put((response.status, exc.partial, False, None))
+                        if exc.partial:
+                            evidence.put((response.status, exc.partial, False, None))
                         raise
                     if not chunk:
                         if response.length not in (None, 0):
