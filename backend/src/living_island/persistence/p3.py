@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import BaseModel
 
+from living_island.agents.p3.cognition import apply_goal_change, attached_goal_id
 from living_island.agents.p3.types import (
     AllocationEntry,
     AllocationHead,
@@ -46,7 +47,13 @@ from living_island.contract.p3_save import (
     TrialRegistration,
 )
 from living_island.events import WorldEvent
-from living_island.memory.p3_types import canonical_bytes, canonical_sha256
+from living_island.memory.p3_types import (
+    AcceptedDecisionData,
+    FeedbackData,
+    OwnedIntentRef,
+    canonical_bytes,
+    canonical_sha256,
+)
 from living_island.world.content import (
     EffectiveConfig,
     check_map,
@@ -597,6 +604,8 @@ def _validate_logs(
         origin.checkpoint_tick for origin in origins if origin.recovery_mode == "offline"
     ]
     last: tuple[int, str] | None = None
+    goal_ids: dict[str, str | None] = {}
+    committed_refs: dict[str, OwnedIntentRef] = {}
     for context, decision in zip(contexts, decisions, strict=True):
         if (
             decision.run_id != save.world.run_id
@@ -609,6 +618,21 @@ def _validate_logs(
             raise ValueError("decision boundary ordering differs")
         last = key
         ordinals[decision.actor_id] += 1
+        request = context.request
+        if (
+            decision.run_id,
+            decision.actor_id,
+            decision.tick,
+            decision.decision_ordinal,
+            decision.triggers,
+        ) != (
+            context.run_id,
+            request.actor_id,
+            request.tick,
+            request.decision_ordinal,
+            request.triggers,
+        ):
+            raise ValueError("context/decision request metadata differs")
         if (decision.request_sha256, decision.context_sha256, decision.projection_sha256) != (
             canonical_sha256(context.request),
             context.assembly.context_sha256,
@@ -616,6 +640,21 @@ def _validate_logs(
         ):
             raise ValueError("context/decision hashes differ")
         cfg = policies[decision.actor_id]
+        goals = apply_goal_change(
+            request.context.goals,
+            decision.accepted_delta.goal_change,
+            actor_id=decision.actor_id,
+            tick=decision.tick,
+        )
+        goal_ids[decision.decision_id] = attached_goal_id(goals)
+        for intent in decision.plan.intents:
+            committed_refs[intent.intent_id] = OwnedIntentRef(
+                intent=intent,
+                decision_id=decision.decision_id,
+                decision_ordinal=decision.decision_ordinal,
+                committed_tick=decision.tick,
+                goal_id=goal_ids[decision.decision_id],
+            )
         if offline_ticks and decision.tick >= min(offline_ticks) and cfg.policy_id == "llm-v0":
             if (decision.error_kind, decision.detail_code, decision.call_ids) != (
                 "PROVIDER_ERROR",
@@ -729,22 +768,41 @@ def _validate_logs(
         if latest is None:
             if refs:
                 raise ValueError("runtime references require a committed decision")
-        elif [ref.intent for ref in refs] != latest.plan.intents or any(
-            (ref.decision_id, ref.decision_ordinal, ref.committed_tick)
-            != (latest.decision_id, latest.decision_ordinal, latest.tick)
-            for ref in refs
-        ):
+        elif refs != [committed_refs[intent.intent_id] for intent in latest.plan.intents]:
             raise ValueError("runtime references must preserve its exact latest committed plan")
         if latest is not None and runtime.policy_private != latest.policy_private_after:
             raise ValueError("runtime private state differs from its latest committed decision")
         for memory in runtime.cognitive_state.experience.records:
             if memory.source.run_id != save.world.run_id:
                 raise ValueError("retained experience source belongs to a foreign run")
-            if (
-                memory.source.source_kind == "decision"
-                and memory.source.decision_id not in records_by_id
-            ):
-                raise ValueError("retained experience references an uncommitted decision")
+            if memory.source.source_kind == "decision":
+                record = records_by_id.get(memory.source.decision_id)
+                data = memory.payload.data
+                if record is None or not isinstance(data, AcceptedDecisionData):
+                    raise ValueError("retained experience references an uncommitted decision")
+                if (
+                    memory.owner_id,
+                    memory.observed_tick,
+                    memory.source.decision_ordinal,
+                    data.plan,
+                    data.goal_id,
+                ) != (
+                    record.actor_id,
+                    record.tick,
+                    record.decision_ordinal,
+                    record.plan,
+                    goal_ids[record.decision_id],
+                ):
+                    raise ValueError("accepted-decision memory differs from its committed source")
+            data = memory.payload.data
+            if isinstance(data, FeedbackData) and data.owned_intent is not None:
+                if data.owned_intent != committed_refs.get(data.owned_intent.intent.intent_id):
+                    raise ValueError("feedback memory differs from its committed owned intent")
+        goal = runtime.cognitive_state.goals.current
+        if goal is not None and goal.evidence is not None:
+            ref = goal.evidence.owned_intent
+            if ref != committed_refs.get(ref.intent.intent_id):
+                raise ValueError("goal evidence differs from its committed owned intent")
     living = {resident.id for resident in save.world.residents if resident.alive}
     for plan in save.agent_state.queued_plans:
         latest = last_by_actor.get(plan.actor_id)

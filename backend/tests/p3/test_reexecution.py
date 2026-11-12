@@ -15,6 +15,7 @@ from living_island.agents.p3.cognition import validate_proposal
 from living_island.agents.p3.types import DecisionProposal, ProviderResult, WireRequest
 from living_island.contract.p3_save import ActorPolicyConfig, TrialRegistration
 from living_island.memory.p3_types import RetrievalResult, canonical_bytes
+from living_island.persistence.p3 import read_checkpoint_p3
 from living_island.persistence.p3_allocation import AllocationStore, initialize_fake
 from living_island.sim.p3 import reexecute_p3, resume_p3, run_p3
 from living_island.sim.runner import checkpoint_filename
@@ -197,6 +198,33 @@ def test_full_replay_preserves_all_five_logs_and_checkpoint_without_external_acc
             fallback=Sentinel(),
             source_reader=reader,
         )
+    for defect in ("metadata", "accepted-memory"):
+        corrupt = tmp_path / f"corrupt-{defect}"
+        shutil.copytree(original.output, corrupt)
+        snapshot = json.loads(canonical_bytes(original.checkpoint))
+        if defect == "metadata":
+            path = corrupt / "decisions-p3.jsonl"
+            records = [json.loads(row) for row in path.read_bytes().splitlines()]
+            record = next(row for row in records if row["decision_ordinal"] == 1)
+            record["triggers"] = ["URGENT_NEED"]
+            raw = b"".join(canonical_bytes(row) + b"\n" for row in records)
+            path.write_bytes(raw)
+            prefix = next(item for item in snapshot["log_prefixes"] if item["name"] == path.name)
+            prefix["sha256"] = sha256(raw).hexdigest()
+            expected = "request metadata"
+        else:
+            memory = next(
+                row
+                for state in snapshot["agent_state"]["runtime_states"]
+                for row in state["cognitive_state"]["experience"]["records"]
+                if row["kind"] == "accepted_decision"
+            )
+            memory["payload"]["data"]["plan"]["intents"][0]["reason"] = "Invented intention"
+            expected = "memory differs from its committed source"
+        checkpoint = corrupt / checkpoint_filename(original.world.tick)
+        checkpoint.write_bytes(canonical_bytes(snapshot))
+        with pytest.raises(ValueError, match=expected):
+            read_checkpoint_p3(checkpoint, source_reader=reader)
 
 
 def test_current_head_continuation_preserves_active_and_queued_intents(tmp_path):
