@@ -4,6 +4,7 @@ import base64
 import hashlib
 import http.client
 import json
+import runpy
 from io import BytesIO
 from pathlib import Path
 from queue import Queue
@@ -39,6 +40,7 @@ from living_island.memory.p3_types import canonical_bytes
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "p3" / "provider"
 COMPLETED = (FIXTURES / "completed.json").read_bytes()
+SOURCES = json.loads((FIXTURES / "counter-sources.json").read_bytes())
 
 
 def request(content="Observe the island.", **updates):
@@ -65,6 +67,265 @@ def request(content="Observe the island.", **updates):
             **updates,
         }
     )
+
+
+def production_request(content="Observe the island.", *, system="Pinned trusted instructions."):
+    req = request(content)
+    return req.model_copy(
+        update={
+            "messages": [req.messages[0].model_copy(update={"content": system}), req.messages[1]],
+            "settings": req.settings.model_copy(
+                update={
+                    "input_counter_id": provider_module.COUNTER_ID,
+                    "input_counter_version": provider_module.COUNTER_VERSION,
+                }
+            ),
+        }
+    )
+
+
+class LocalTransport:
+    def __init__(self):
+        self.sent = []
+
+    def exchange(self, body, timeout_ms):
+        self.sent.append((body, timeout_ms))
+        return TransportResponse(200, COMPLETED, True)
+
+
+@pytest.fixture(scope="module")
+def reference_renderer():
+    source = FIXTURES / "flash1017-encoding.py.txt"
+    assert hashlib.sha256(source.read_bytes()).hexdigest() == (
+        "13231c592e958fb39e2af6001dae69d90e7a36b265702b9b390236fb387599e2"
+    )
+    # Retained official pure reference, not production code or a downloaded dependency.
+    return runpy.run_path(str(source))["_encode_messages_text"]
+
+
+def assert_reference_bound(adapter, req, wire, render):
+    payload = json.loads(decode_base64(wire.body_base64))
+    system, user = payload["input"]
+    schema = payload["text"]["format"]["schema"]
+    prompt = render([dict(system, response_format=schema), user], thinking_mode="chat")
+    markers = [
+        "<｜begin▁of▁sentence｜>",
+        "<｜System｜>",
+        "<｜User｜>",
+        "<｜Assistant｜>",
+        "</think>",
+    ]
+    assert prompt == (
+        markers[0]
+        + markers[1]
+        + system["content"]
+        + "\n\n## Response Format:\n\nYou MUST strictly adhere to the following schema to reply:\n"
+        + json.dumps(schema, ensure_ascii=False)
+        + markers[2]
+        + user["content"]
+        + markers[3]
+        + markers[4]
+    )
+    # Only the five inserted markers get a one-token allowance. Literal marker
+    # text in content remains in the byte count, even when it matches a marker.
+    expected = len(prompt.encode()) - sum(len(marker.encode()) - 1 for marker in markers)
+    assert adapter.count_input_tokens(req, wire) == expected
+    return expected
+
+
+def test_production_counter_sources_are_immutable_and_match_identity():
+    assert SOURCES["model_version"] == provider_module.COUNTER_MODEL_VERSION
+    assert SOURCES["counter_id"] == provider_module.COUNTER_ID
+    assert SOURCES["counter_version"] == provider_module.COUNTER_VERSION
+    for name, source in SOURCES["sources"].items():
+        raw = (FIXTURES / name).read_bytes()
+        assert len(raw) == source["bytes"]
+        assert hashlib.sha256(raw).hexdigest() == source["sha256"]
+        assert "/main/" not in source["url"] and "/latest/" not in source["url"]
+    assert SOURCES["sources"]["flash1017-tokenizer.json"]["sha256"] == (
+        provider_module.COUNTER_TOKENIZER_SHA256
+    )
+
+
+def test_frozen_schema_has_no_python_rust_serializer_ambiguity():
+    schema = build_model_action_contract().proposal_schema
+
+    def check(value):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                check(key)
+                check(item)
+        elif isinstance(value, list):
+            for item in value:
+                check(item)
+        elif isinstance(value, str):
+            assert all(32 <= ord(char) < 127 for char in value)
+        else:
+            assert value is None or type(value) in (bool, int)
+
+    check(schema)
+
+
+def test_flash1017_tokenizer_exhaustive_nonexpansion_certificate():
+    raw = (FIXTURES / "flash1017-tokenizer.json").read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == provider_module.COUNTER_TOKENIZER_SHA256
+    tokenizer = json.loads(raw)
+    assert tokenizer["normalizer"] == {"type": "Sequence", "normalizers": []}
+    assert tokenizer["pre_tokenizer"]["type"] == "Sequence"
+    splitters = tokenizer["pre_tokenizer"]["pretokenizers"]
+    assert len(splitters) == 4
+    for split in splitters[:3]:
+        assert split["type"] == "Split" and split["behavior"] == "Isolated"
+        assert split["invert"] is False
+    assert splitters[3] == {
+        "type": "ByteLevel",
+        "add_prefix_space": False,
+        "trim_offsets": True,
+        "use_regex": False,
+    }
+    # Postprocessor add_prefix_space affects offsets only; unlike pretokenization
+    # it adds no token IDs (retained tokenizers-byte-level.rs.txt implementation).
+    assert tokenizer["post_processor"] == {
+        "type": "ByteLevel",
+        "add_prefix_space": True,
+        "trim_offsets": False,
+        "use_regex": True,
+    }
+    assert tokenizer["padding"] is tokenizer["truncation"] is None
+    model = tokenizer["model"]
+    assert {key: value for key, value in model.items() if key not in ("vocab", "merges")} == {
+        "type": "BPE",
+        "dropout": None,
+        "unk_token": None,
+        "continuing_subword_prefix": None,
+        "end_of_word_suffix": None,
+        "fuse_unk": False,
+        "byte_fallback": False,
+    }
+    # The actual ByteLevel alphabet: every byte has an initial vocabulary ID.
+    visible = list(range(33, 127)) + list(range(161, 173)) + list(range(174, 256))
+    alphabet = [chr(value) for value in visible]
+    alphabet += [chr(256 + index) for index in range(256 - len(visible))]
+    assert len(set(alphabet)) == 256
+    assert all(symbol in model["vocab"] for symbol in alphabet)
+    assert len(model["vocab"]) == 128000 and len(model["merges"]) == 127741
+    for merge in model["merges"]:
+        left, right = merge.split(" ")
+        assert left and right
+        assert all(part in model["vocab"] for part in (left, right, left + right))
+    added = tokenizer["added_tokens"]
+    assert len(added) == 1283 and all(token["content"] for token in added)
+    by_content = {token["content"]: token for token in added}
+    for text, token_id in {
+        "<｜begin▁of▁sentence｜>": 0,
+        "<｜System｜>": 128799,
+        "<｜User｜>": 128803,
+        "<｜Assistant｜>": 128804,
+        "</think>": 128822,
+    }.items():
+        token = by_content[text]
+        assert token["id"] == token_id
+        assert not token["single_word"] and not token["lstrip"] and not token["rstrip"]
+
+
+@pytest.mark.parametrize(
+    ("system", "content"),
+    [
+        ("", ""),
+        ("Trusted instructions.", "Hello."),
+        ("居民 🏝 e\u0301", '中文 العربية 日本語 "\\\n\t\x00'),
+        ("<｜System｜><think>", "<｜User｜></think><｜Assistant｜><image>text</image>"),
+        ("a" * 100, "\r\n " * 80),
+    ],
+)
+def test_production_bound_matches_official_prompt_including_schema(
+    system, content, reference_renderer
+):
+    adapter = DeepSeekResponsesAdapter()
+    req = production_request(content, system=system)
+    wire = adapter.prepare(req)
+    assert_reference_bound(adapter, req, wire, reference_renderer)
+
+
+@given(
+    system=st.text(alphabet=st.characters(blacklist_categories=("Cs",)), max_size=60),
+    content=st.text(alphabet=st.characters(blacklist_categories=("Cs",)), max_size=120),
+)
+@settings(max_examples=40)
+def test_production_bound_covers_all_unicode_bytes(system, content, reference_renderer):
+    adapter = DeepSeekResponsesAdapter()
+    req = production_request(content, system=system)
+    assert_reference_bound(adapter, req, adapter.prepare(req), reference_renderer)
+
+
+def test_production_counter_is_pure_and_preserves_counted_recorded_sent_bytes(monkeypatch):
+    transport = LocalTransport()
+    adapter = DeepSeekResponsesAdapter(transport)
+    req = production_request("a\\b\n中文")
+    wire = adapter.prepare(req)
+    original = canonical_bytes(req), canonical_bytes(wire)
+    body = decode_base64(wire.body_base64)
+
+    def no_io(*args, **kwargs):
+        pytest.fail("pure counter attempted IO")
+
+    monkeypatch.setattr("builtins.open", no_io)
+    monkeypatch.setattr(Path, "open", no_io)
+    monkeypatch.setattr(provider_module.socket, "socket", no_io)
+    count = adapter.count_input_tokens(req, wire)
+    assert adapter.count_input_tokens(req, wire) == count
+    assert 0 < count < MAX_INPUT_TOKENS
+    assert adapter.complete(req, wire, 30000).response_text is not None
+    assert transport.sent == [(body, 30000)]
+    assert original == (canonical_bytes(req), canonical_bytes(wire))
+    assert hashlib.sha256(transport.sent[0][0]).digest() == hashlib.sha256(body).digest()
+
+
+@pytest.mark.parametrize("version", ["", "wrong", "0.2", "0.1 "])
+def test_production_counter_rejects_uncertified_versions_without_dispatch(version):
+    transport = LocalTransport()
+    adapter = DeepSeekResponsesAdapter(transport)
+    req = production_request()
+    req = req.model_copy(
+        update={"settings": req.settings.model_copy(update={"input_counter_version": version})}
+    )
+    wire = adapter.prepare(req)
+    with pytest.raises(InputCounterUnavailable):
+        adapter.count_input_tokens(req, wire)
+    with pytest.raises(InputCounterUnavailable):
+        adapter.complete(req, wire, 30000)
+    assert transport.sent == []
+
+
+@pytest.mark.parametrize("over", [0, 1])
+def test_production_input_bound_admits_exact_limit_refuses_one_over(over, reference_renderer):
+    transport = LocalTransport()
+    adapter = DeepSeekResponsesAdapter(transport)
+    empty = production_request("")
+    framing = adapter.count_input_tokens(empty, adapter.prepare(empty))
+    req = production_request("x" * (MAX_INPUT_TOKENS - framing + over))
+    wire = adapter.prepare(req)
+    assert assert_reference_bound(adapter, req, wire, reference_renderer) == MAX_INPUT_TOKENS + over
+    if over:
+        with pytest.raises(ValueError, match="B-05"):
+            adapter.complete(req, wire, 30000)
+        assert transport.sent == []
+    else:
+        assert adapter.complete(req, wire, 30000).outcome == "response"
+        assert len(transport.sent) == 1
+
+
+def test_production_counter_refuses_stale_wire_and_b08_overflow():
+    transport = LocalTransport()
+    adapter = DeepSeekResponsesAdapter(transport)
+    req = production_request("")
+    wire = adapter.prepare(req)
+    changed = production_request("changed")
+    with pytest.raises(ValueError, match="mismatch"):
+        adapter.count_input_tokens(changed, wire)
+    with pytest.raises(ValueError, match="B-08"):
+        adapter.prepare(production_request("x" * MAX_REQUEST_BYTES))
+    assert transport.sent == []
 
 
 def envelope(**updates):

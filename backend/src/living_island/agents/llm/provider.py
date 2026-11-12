@@ -1,9 +1,9 @@
 """Exact, fail-closed DeepSeek Responses mapping; no resident or budget ownership.
 
-There is deliberately no certified production input counter in this version. See
-tests/fixtures/p3/provider/README.md for the proof gap. Preparing and auditing are
-pure; counting or completing a production attempt refuses before transport access.
-The offline adapter exercises the same byte transport and response mapper.
+The pure production counter bounds the pinned Flash-1017 prompt, including schema
+framing. Its tokenizer nonexpansion proof and immutable public source artifacts
+are retained in tests/fixtures/p3/provider. No tokenizer download, credential
+lookup, model call or empirical estimate participates in counting.
 """
 
 from __future__ import annotations
@@ -28,8 +28,15 @@ from living_island.agents.p3.types import (
 from living_island.memory.p3_types import canonical_bytes
 
 ADAPTER_ID = "deepseek-responses-v0"
-ADAPTER_VERSION = "0.1"
+ADAPTER_VERSION = "0.2"
 MODEL_ID = "deepseek-flash"
+COUNTER_ID = "deepseek-flash1017-byte-upper-bound"
+COUNTER_VERSION = "0.1"
+COUNTER_MODEL_VERSION = "DeepSeek-V4.1-Flash-1017"
+COUNTER_TOKENIZER_SHA256 = "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b"
+_SCHEMA_PREFIX = (
+    "\n\n## Response Format:\n\nYou MUST strictly adhere to the following schema to reply:\n"
+)
 MAX_REQUEST_BYTES = 131072
 MAX_RESPONSE_BYTES = 262144
 MAX_INPUT_TOKENS = 32768
@@ -272,7 +279,11 @@ def verified_body(request: ProviderRequest, wire: WireRequest) -> bytes:
 
 
 class DeepSeekResponsesAdapter:
-    """Production port; uncertified counters cannot be injected around the refusal."""
+    """Production port with a certified counter for the frozen Flash-1017 lane.
+
+    Registration owns revalidating the model alias and pinning this implementation;
+    the counter has no IO and cannot establish current hosted alias identity.
+    """
 
     adapter_id = ADAPTER_ID
     adapter_version = ADAPTER_VERSION
@@ -284,8 +295,27 @@ class DeepSeekResponsesAdapter:
         return prepare_request(request)
 
     def count_input_tokens(self, request: ProviderRequest, wire: WireRequest) -> int:
-        verified_body(request, wire)
-        raise InputCounterUnavailable
+        body = verified_body(request, wire)
+        if (request.settings.input_counter_id, request.settings.input_counter_version) != (
+            COUNTER_ID,
+            COUNTER_VERSION,
+        ):
+            raise InputCounterUnavailable
+        # Count the retained wire, including the schema's provider-side expansion.
+        # Flash-1017's identity normalization, byte alphabet and merge-only BPE
+        # give <= one token per UTF-8 byte. The restricted renderer adds exactly
+        # five registered framing tokens: BOS, System, User, Assistant, ThinkingEnd.
+        # Literal marker strings inside messages remain ordinary byte-counted text.
+        payload = json.loads(body)
+        schema = json.dumps(
+            payload["text"]["format"]["schema"], ensure_ascii=False, separators=(", ", ": ")
+        )
+        return (
+            5
+            + len(payload["input"][0]["content"].encode("utf-8"))
+            + len((_SCHEMA_PREFIX + schema).encode("utf-8"))
+            + len(payload["input"][1]["content"].encode("utf-8"))
+        )
 
     def complete(
         self, request: ProviderRequest, wire: WireRequest, timeout_ms: int

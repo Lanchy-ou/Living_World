@@ -1,0 +1,102 @@
+{
+  "model_version": "DeepSeek-V4.1-Flash-1017",
+  "counter_id": "deepseek-flash1017-byte-upper-bound",
+  "counter_version": "0.1",
+  "sources": {
+    "flash1017-tokenizer.json": {
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/resolve/08c8657f02291e11b6f6b63e0e16014f8e748518/tokenizer.json",
+      "sha256": "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b",
+      "bytes": 6367257
+    },
+    "recipe-dsv41.rs.txt": {
+      "url": "https://raw.githubusercontent.com/deepseek-ai/deepseek-recipe/935817c66f5d6e64838f419692545f06787e485f/deepseek-recipe-encoding/src/v4/dsv41.rs",
+      "sha256": "33f7b0e0c3dde66020a4746ffc6c35df8dd30933e653aaf9071c1beb21439a90",
+      "bytes": 17617
+    },
+    "recipe-json.rs.txt": {
+      "url": "https://raw.githubusercontent.com/deepseek-ai/deepseek-recipe/935817c66f5d6e64838f419692545f06787e485f/deepseek-recipe-core/src/json.rs",
+      "sha256": "5f870d05a986009f57fd2452f0eb7800476ca5be5a3da722263ec696a743211c",
+      "bytes": 5409
+    },
+    "recipe-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/deepseek-ai/deepseek-recipe/935817c66f5d6e64838f419692545f06787e485f/LICENSE",
+      "sha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be",
+      "bytes": 1065
+    },
+    "deepinfer-api-alignment.md.txt": {
+      "url": "https://raw.githubusercontent.com/deepseek-ai/DeepInfer/a679bb86ce36e883a98a97733492b686e5b9a08e/doc/inference_deployment_qa.md",
+      "sha256": "ef38cf9d83b0688f1586ec14066a86373d30e4fbf89061c1f4bc40d4276e3053",
+      "bytes": 34526
+    },
+    "deepinfer-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/deepseek-ai/DeepInfer/a679bb86ce36e883a98a97733492b686e5b9a08e/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "bytes": 11357
+    },
+    "tokenizers-byte-level.rs.txt": {
+      "url": "https://raw.githubusercontent.com/huggingface/tokenizers/f383101a26663708484cac0727792aad74f78234/tokenizers/src/pre_tokenizers/byte_level.rs",
+      "sha256": "f9b5a747a0ad936f0c49cff8f32bc8f166126704ab02d5af0505ad032fe6d99a",
+      "bytes": 20007
+    },
+    "tokenizers-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/huggingface/tokenizers/f383101a26663708484cac0727792aad74f78234/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "bytes": 11357
+    },
+    "flash1017-encoding.py.txt": {
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/resolve/08c8657f02291e11b6f6b63e0e16014f8e748518/encoding/encoding.py",
+      "sha256": "13231c592e958fb39e2af6001dae69d90e7a36b265702b9b390236fb387599e2",
+      "bytes": 37962
+    },
+    "flash1017-model-card.md.txt": {
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/resolve/08c8657f02291e11b6f6b63e0e16014f8e748518/README.md",
+      "sha256": "b72b796e4f4c739eca5d0ad360a7679b39118ca7eb64891f7151a527b292c42a",
+      "bytes": 5231
+    },
+    "flash1017-LICENSE.txt": {
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/resolve/08c8657f02291e11b6f6b63e0e16014f8e748518/LICENSE",
+      "sha256": "f2c6c602815669d292889e5be8c802f2ed950653b77999b1584e8e6aed25d040",
+      "bytes": 1084
+    },
+    "recipe-responses-convert.rs.txt": {
+      "url": "https://raw.githubusercontent.com/deepseek-ai/deepseek-recipe/935817c66f5d6e64838f419692545f06787e485f/deepseek-recipe/src/protocol/openai/responses/request/convert.rs",
+      "sha256": "a6a5834f4fde9ad71a58a89e63f3df208ead50de45b8918b3ceb5f500e4b4bc2",
+      "bytes": 39468
+    },
+    "recipe-responses-schema.rs.txt": {
+      "url": "https://raw.githubusercontent.com/deepseek-ai/deepseek-recipe/935817c66f5d6e64838f419692545f06787e485f/deepseek-recipe/src/protocol/openai/responses/request/schema.rs",
+      "sha256": "1999d12454c8dcc19ec7384cf629ecd88720a46661ca9457760fadb19dc419fa",
+      "bytes": 12432
+    },
+    "recipe-changelog.md.txt": {
+      "url": "https://raw.githubusercontent.com/deepseek-ai/deepseek-recipe/935817c66f5d6e64838f419692545f06787e485f/CHANGELOG.md",
+      "sha256": "ce712e66f1a4616c8faa44ae47a1084065081574f747ed7b3ea472df2a70ea7c",
+      "bytes": 15876
+    },
+    "recipe-reasoning.rs.txt": {
+      "url": "https://raw.githubusercontent.com/deepseek-ai/deepseek-recipe/935817c66f5d6e64838f419692545f06787e485f/deepseek-recipe/src/protocol/reasoning.rs",
+      "sha256": "bd2ab9a8cdbf82ecd9f77238d571de31f0105f78aa609ed5834de6e13c0f9f0a",
+      "bytes": 4591
+    },
+    "tokenizers-bpe-model.rs.txt": {
+      "url": "https://raw.githubusercontent.com/huggingface/tokenizers/f383101a26663708484cac0727792aad74f78234/tokenizers/src/models/bpe/model.rs",
+      "sha256": "f348b70dd712de21f50f244d7fea164788419904cdf52f581dc180f90e31d671",
+      "bytes": 33065
+    },
+    "tokenizers-bpe-word.rs.txt": {
+      "url": "https://raw.githubusercontent.com/huggingface/tokenizers/f383101a26663708484cac0727792aad74f78234/tokenizers/src/models/bpe/word.rs",
+      "sha256": "42a5547426082590675979ed72e03ce59a16f7cf0b57aaac6890d43ce0a79ad0",
+      "bytes": 11411
+    },
+    "tokenizers-split.rs.txt": {
+      "url": "https://raw.githubusercontent.com/huggingface/tokenizers/f383101a26663708484cac0727792aad74f78234/tokenizers/src/pre_tokenizers/split.rs",
+      "sha256": "cf6a6805a0fda58dd732fa7d4361639e27e9b5a87368860907995ba027bd58e1",
+      "bytes": 7650
+    },
+    "recipe-tokenizer.rs.txt": {
+      "url": "https://raw.githubusercontent.com/deepseek-ai/deepseek-recipe/935817c66f5d6e64838f419692545f06787e485f/deepseek-recipe-encoding/src/tokenizer.rs",
+      "sha256": "21fefc37c6689cac8357d030f1ccb2c84e37d293950797ec4a6a0bfc208b56de",
+      "bytes": 4823
+    }
+  }
+}
