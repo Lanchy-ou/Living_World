@@ -176,7 +176,8 @@ def _parse_proposal(
             raise ValueError("unknown proposal envelope")
         if body["proposal_schema_version"] != "0.1":
             raise ValueError("unknown proposal version")
-    except ValueError:
+    except (ValueError, RecursionError):
+        # Byte-bounded model output can still exceed the JSON decoder's nesting limit.
         return None, None, None, "PARSE_ERROR", "INVALID_JSON"
     try:
         actions = body["actions"]
@@ -184,13 +185,13 @@ def _parse_proposal(
             raise ValueError("invalid action count")
         for action in actions:
             canonical_bytes(P3IntentTemplate.model_validate(action))
-    except (ValueError, TypeError, UnicodeError):
+    except (ValueError, TypeError, UnicodeError, RecursionError):
         return None, None, None, "INVALID_PLAN", "INVALID_ACTION"
     proposal = None
     try:
         proposal = DecisionProposal.model_validate(body)
         plan, delta = validate_proposal(proposal, request, config)
-    except (ValueError, TypeError, UnicodeError):
+    except (ValueError, TypeError, UnicodeError, RecursionError):
         return proposal, None, None, "INVALID_DELTA", "INVALID_COGNITION"
     return proposal, plan, delta, None, None
 

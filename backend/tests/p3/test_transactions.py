@@ -313,6 +313,65 @@ def test_bd03_both_parse_failures_fallback_once_and_no_model_capture():
 
 
 @pytest.mark.parametrize(
+    "shape, expected_error, expected_detail",
+    [
+        ("array", "PARSE_ERROR", "INVALID_JSON"),
+        ("object", "PARSE_ERROR", "INVALID_JSON"),
+        ("action", "INVALID_PLAN", "INVALID_ACTION"),
+        ("cognition", "INVALID_DELTA", "INVALID_COGNITION"),
+    ],
+)
+def test_deep_model_json_retains_usage_and_retries_to_one_accepted_decision(
+    shape, expected_error, expected_detail
+):
+    if shape == "array":
+        text = "[" * 20000 + "0" + "]" * 20000
+    elif shape == "object":
+        text = '{"x":' * 20000 + "0" + "}" * 20000
+    else:
+        # These depths decode successfully, then reach the typed model validators.
+        nested = json.loads('{"x":' * 100 + "0" + "}" * 100)
+        body = json.loads(response().response_text)
+        if shape == "action":
+            body["actions"][0]["reason"] = nested
+        else:
+            body["cognitive_delta"]["goal_change"]["expected_goal_id"] = nested
+        text = json.dumps(body)
+    rejected = response(text)
+    assert 0 < rejected.observed_body_bytes < 262144
+    runtime, provider, budget, journal, fallback, _ = setup(outputs=[rejected, response()])
+    record = decide(runtime)
+    assert record.status == "ok" and record.effective_policy_id == "llm-v0"
+    assert len(provider.calls) == len(budget.reservations) == len(journal.calls) == 2
+    assert len(record.call_ids) == len(record.budget_debits) == 2 and fallback.calls == []
+    first, second = journal.calls
+    assert (first.validation_error, first.detail_code) == (expected_error, expected_detail)
+    assert first.result == rejected and first.parsed_proposal is None
+    assert (first.debit.input_reported, first.debit.output_reported) == (80, 10)
+    assert [row.debit for row in journal.calls] == record.budget_debits
+    assert second.validation_error is None and second.parsed_proposal is not None
+    runtime.commit_decision(record)
+    committed = runtime.export_state()
+    assert committed.next_decision_ordinal == 1
+    assert (
+        sum(r.kind == "accepted_decision" for r in committed.cognitive_state.experience.records)
+        == 1
+    )
+
+
+def test_exhausted_deep_json_responses_retain_both_terminal_rows_before_fallback():
+    rejected = response("[" * 20000 + "0" + "]" * 20000)
+    runtime, _, budget, journal, fallback, _ = setup(outputs=[rejected, rejected])
+    record = decide(runtime)
+    assert (record.error_kind, record.detail_code) == ("PARSE_ERROR", "INVALID_JSON")
+    assert len(budget.reservations) == len(journal.calls) == len(record.budget_debits) == 2
+    assert all(row.result == rejected for row in journal.calls)
+    assert len(fallback.calls) == 1
+    runtime.commit_decision(record)
+    assert runtime.export_state().next_decision_ordinal == 1
+
+
+@pytest.mark.parametrize(
     "counts, expected",
     [
         ((80, 10), (80, 10, 105, False)),
