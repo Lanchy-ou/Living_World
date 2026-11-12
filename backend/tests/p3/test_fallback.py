@@ -25,6 +25,7 @@ from living_island.agents.llm.fallback import (
     project_request,
     return_to_llm,
 )
+from living_island.agents.p3.ports import InvalidFallbackPlan as SharedInvalidFallbackPlan
 from living_island.agents.p3.types import (
     DecisionContextP3,
     DecisionRequestP3,
@@ -288,6 +289,7 @@ def test_rejects_nonbase_rule_configuration(rule):
 
 
 def test_malformed_rule_output_discards_staging_and_preserves_prior(monkeypatch):
+    assert InvalidFallbackPlan is SharedInvalidFallbackPlan
     finishes = []
     original = RuleBasedPolicy
 
@@ -308,18 +310,20 @@ def test_malformed_rule_output_discards_staging_and_preserves_prior(monkeypatch)
     assert finishes == [False] and canonical_bytes(prior) == before
 
 
-def test_unexpected_rule_exception_propagates_without_fallback_loop(monkeypatch):
+@pytest.mark.parametrize("error_type", [RuntimeError, ValueError, OSError])
+def test_unexpected_rule_exception_propagates_without_fallback_loop(monkeypatch, error_type):
     calls = []
 
     def broken(self, req):
         calls.append(req)
-        raise RuntimeError("programming defect")
+        raise error_type("unexpected rule failure")
 
     monkeypatch.setattr(RuleBasedPolicy, "decide", broken)
     prior = private()
     before = canonical_bytes(prior)
-    with pytest.raises(RuntimeError, match="programming defect"):
+    with pytest.raises(error_type, match="unexpected rule failure") as caught:
         FrozenRuleFallbackAdapter(config()).decide(request(), prior)
+    assert not isinstance(caught.value, SharedInvalidFallbackPlan)
     assert len(calls) == 1 and canonical_bytes(prior) == before
 
 

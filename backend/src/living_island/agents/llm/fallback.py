@@ -6,6 +6,7 @@ proposed successor; only the caller may publish the returned private state.
 
 from __future__ import annotations
 
+from living_island.agents.p3.ports import InvalidFallbackPlan
 from living_island.agents.p3.types import DecisionRequestP3, P3PolicyPrivateState
 from living_island.agents.rule_based import RuleBasedPolicy
 from living_island.agents.types import (
@@ -20,10 +21,6 @@ from living_island.agents.types import (
     build_plan_id,
 )
 from living_island.world.protocol import ActionPlan
-
-
-class InvalidFallbackPlan(ValueError):
-    """Malformed rule proposal; the caller must retain the prior private state."""
 
 
 def return_to_llm(state: P3PolicyPrivateState) -> P3PolicyPrivateState:
