@@ -8,6 +8,7 @@ from typing import Protocol, runtime_checkable
 from pydantic_core import PydanticSerializationError
 
 from living_island.agents.base import Policy, ResidentRuntime
+from living_island.agents.p3.runtime import create_p3_runtime as create_p3_runtime
 from living_island.agents.policies.random_policy import RandomPolicy
 from living_island.agents.policies.recorded import RecordedPolicy, ReplayDiverged, request_sha256
 from living_island.agents.policies.scripted import ScriptedPolicy
