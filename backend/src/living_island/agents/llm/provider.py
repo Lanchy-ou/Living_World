@@ -227,7 +227,9 @@ def prepare_request(request: ProviderRequest) -> WireRequest:
     request = ProviderRequest.model_validate(request.model_dump(mode="json"))
     if request.model_id != MODEL_ID:
         raise ValueError("unsupported pinned model; alias substitution is forbidden")
-    if request.response_schema != build_model_action_contract().proposal_schema:
+    if canonical_bytes(request.response_schema) != canonical_bytes(
+        build_model_action_contract().proposal_schema
+    ):
         raise ValueError("request must use the pinned DecisionProposal schema")
     if len(canonical_bytes(request)) > MAX_REQUEST_BYTES:
         raise ValueError("INPUT_LIMIT: canonical provider request exceeds B-08")

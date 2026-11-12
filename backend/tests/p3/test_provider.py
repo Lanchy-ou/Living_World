@@ -137,6 +137,20 @@ def test_changed_request_or_retained_wire_refused_before_send(change):
     assert not adapter.sent_bodies
 
 
+@pytest.mark.parametrize("change", ["boolean_to_integer", "integer_to_boolean"])
+def test_pinned_schema_identity_distinguishes_boolean_and_integer_scalars(change):
+    req = request()
+    schema = req.response_schema
+    if change == "boolean_to_integer":
+        schema["$defs"]["CognitiveDelta"]["additionalProperties"] = 0
+    else:
+        schema["properties"]["actions"]["minItems"] = True
+    assert schema == build_model_action_contract().proposal_schema
+    assert canonical_bytes(schema) != canonical_bytes(build_model_action_contract().proposal_schema)
+    with pytest.raises(ValueError, match="pinned DecisionProposal schema"):
+        prepare_request(req)
+
+
 def test_count_record_and_send_use_identical_retained_bytes():
     adapter: ProviderAdapter = FakeProviderAdapter([FakeReply(COMPLETED)])
     req = request("a\\b\n中文")
