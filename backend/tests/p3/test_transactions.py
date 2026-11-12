@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import base64
 import copy
+import hashlib
+import importlib
+import importlib.util
 import json
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from test_cognition import WAIT, config, goal_change, perception, proposal, request
 
 from living_island.agents.p3.cognition import validate_proposal
+from living_island.agents.p3.ports import InvalidFallbackPlan
 from living_island.agents.p3.runtime import (
     ProviderOverrun,
     ReplayDiverged,
@@ -182,6 +188,7 @@ class FakeFallback:
     def decide(self, req, state):
         self.calls.append((req, state))
         if self.error is not None:
+            state.fallback_state.cue_impressions.clear()
             raise self.error
         current = req.context.goals.current
         change = goal_change(expected=None if current is None else current.goal_id)
@@ -208,6 +215,7 @@ def setup(
     deny_after=None,
     fail=None,
     fallback_error=None,
+    fallback_adapter=None,
     restored=None,
     own_records=None,
     own_contexts=None,
@@ -223,7 +231,7 @@ def setup(
     provider = FakeProvider(outputs, timeline=timeline, clock=clock, elapsed=elapsed, count=count)
     budget = FakeBudget(cfg.pricing, timeline=timeline, deny_after=deny_after)
     journal = Journal(timeline=timeline, fail=fail)
-    fallback = FakeFallback(cfg, malformed=malformed, error=fallback_error)
+    fallback = fallback_adapter or FakeFallback(cfg, malformed=malformed, error=fallback_error)
     runtime = create_p3_runtime(
         "ella",
         cfg,
@@ -645,10 +653,215 @@ def test_unexpected_provider_exception_propagates_without_fallback():
     assert journal.calls == fallback.calls == []
 
 
-def test_fallback_exception_propagates_even_value_error():
-    runtime, *_ = setup(deny_after=0, fallback_error=ValueError("fallback bug"))
-    with pytest.raises(ValueError, match="fallback bug"):
+@pytest.mark.parametrize("error_type", [ValueError, RuntimeError, OSError])
+@pytest.mark.parametrize("policy", ["llm-v0", "rule-based-v0"])
+def test_fallback_unclassified_exception_remains_fatal(error_type, policy):
+    error = error_type("fallback bug")
+    runtime, _, _, _, fallback, _ = setup(policy=policy, deny_after=0, fallback_error=error)
+    with pytest.raises(error_type, match="fallback bug") as caught:
         decide(runtime)
+    assert caught.value is error and len(fallback.calls) == 1
+    with pytest.raises(ValueError, match="checkpoint recovery"):
+        runtime.export_state()
+
+
+def learned_runtime_state(policy, mode):
+    runtime, *_ = setup(policy=policy, deny_after=0)
+    runtime.commit_decision(decide(runtime))
+    saved = runtime.export_state().model_dump(mode="json")
+    saved["policy_private"] = {
+        "private_schema_version": "0.1",
+        "mode": mode,
+        "last_fallback_ordinal": 0,
+        "fallback_state": {
+            "rule_state_version": "0.1",
+            "commitment": {"goal": "water", "target": {"x": 2, "y": 3}, "set_at_tick": 0},
+            "issued_intents": [
+                {"intent_id": "ella:p000000:i0", "action_type": "wait", "target": None}
+            ],
+            "failed_targets": [
+                {
+                    "action": action,
+                    "target": {"kind": "tile", "position": {"x": 3, "y": 3}},
+                    "code": code,
+                    "retry_after_tick": deadline,
+                }
+                for action, code, deadline in [
+                    ("gather", "RESOURCE_TAKEN", 1),
+                    ("move_to", "NO_PATH", 11),
+                ]
+            ],
+            "cue_impressions": [
+                {
+                    "cue_id": "moss",
+                    "position": {"x": 3, "y": 3},
+                    "detail_level": "distant",
+                    "direction": None,
+                }
+            ],
+            "canteen_capacity": 7,
+        },
+    }
+    return type(runtime.export_state()).model_validate(saved)
+
+
+@pytest.mark.parametrize(
+    "policy,mode", [("llm-v0", "llm"), ("llm-v0", "fallback"), ("rule-based-v0", "fallback")]
+)
+def test_typed_fallback_failure_discards_mutations_to_the_borrowed_copy(policy, mode):
+    saved = learned_runtime_state(policy, mode)
+    runtime, _, _, _, fallback, _ = setup(
+        policy=policy, restored=saved, deny_after=0, fallback_error=InvalidFallbackPlan("bad plan")
+    )
+    before = canonical_bytes(saved.policy_private)
+    record = decide(runtime, 1)
+    assert len(fallback.calls) == 1
+    assert fallback.calls[0][1].fallback_state.cue_impressions == []
+    assert record.fallback_error == "INVALID_PLAN"
+    assert canonical_bytes(record.policy_private_after) == before
+    assert [i.action_type for i in record.plan.intents] == ["wait"]
+    runtime.commit_decision(record)
+    assert canonical_bytes(runtime.export_state().policy_private) == before
+
+
+@pytest.fixture
+def real_fallback_module():
+    """Use production when integrated, otherwise its byte-exact committed source fixture."""
+    fixture = Path(__file__).parents[1] / "fixtures/p3/recovery/fallback_adapter.py"
+    pin = json.loads(fixture.with_suffix(".json").read_text(encoding="utf-8"))
+    assert hashlib.sha256(fixture.read_bytes()).hexdigest() == pin["sha256"]
+    name = "living_island.agents.llm.fallback"
+    if importlib.util.find_spec(name) is not None:
+        module = importlib.import_module(name)
+    else:
+        spec = importlib.util.spec_from_file_location("retained_p304_fallback", fixture)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    assert module.InvalidFallbackPlan is InvalidFallbackPlan
+    return module
+
+
+@pytest.mark.parametrize(
+    "policy,mode", [("llm-v0", "llm"), ("llm-v0", "fallback"), ("rule-based-v0", "fallback")]
+)
+@pytest.mark.parametrize(
+    "defect", ["plan_id", "actor_id", "created_at_tick", "intent_id", "missing"]
+)
+def test_real_fallback_malformed_plan_commits_one_wait_and_preserves_all_private_state(
+    monkeypatch, real_fallback_module, policy, mode, defect
+):
+    module = real_fallback_module
+    calls, finishes = [], []
+
+    class MalformedPolicy(module.RuleBasedPolicy):
+        def decide(self, req):
+            calls.append(req)
+            outcome = super().decide(req)
+            plan = outcome.plan
+            if defect == "missing":
+                plan = None
+            elif defect == "intent_id":
+                intent = plan.intents[0].model_copy(update={"intent_id": "foreign:p000000:i0"})
+                plan = plan.model_copy(update={"intents": [intent]})
+            else:
+                value = req.tick + 1 if defect == "created_at_tick" else "foreign"
+                plan = plan.model_copy(update={defect: value})
+            return SimpleNamespace(plan=plan)
+
+        def finish_decision(self, accepted):
+            finishes.append(accepted)
+            return super().finish_decision(accepted)
+
+    monkeypatch.setattr(module, "RuleBasedPolicy", MalformedPolicy)
+    saved = learned_runtime_state(policy, mode)
+    adapter = module.FrozenRuleFallbackAdapter(saved.policy_config.fallback_config)
+    runtime, provider, budget, journal, _, _ = setup(
+        policy=policy, restored=saved, deny_after=0, fallback_adapter=adapter
+    )
+    before = canonical_bytes(saved.policy_private)
+    record = decide(runtime, 1)
+    assert len(calls) == 1 and finishes == [False]
+    assert provider.calls == budget.reservations == journal.calls == []
+    assert record.effective_policy_id == "sim-fallback-wait" and record.substituted
+    assert record.fallback_error == "INVALID_PLAN" and record.status == "error"
+    assert (record.error_kind, record.detail_code) == (
+        ("BUDGET", "ADMISSION_DENIED") if policy == "llm-v0" else ("INVALID_PLAN", "INVALID_ACTION")
+    )
+    assert record.plan.plan_id == "ella:p000001" and record.plan.created_at_tick == 1
+    assert len(record.plan.intents) == 1
+    intent = record.plan.intents[0]
+    assert (intent.intent_id, intent.actor_id, intent.action_type, intent.reason) == (
+        "ella:p000001:i0",
+        "ella",
+        "wait",
+        None,
+    )
+    assert record.accepted_delta.goal_change.operation == "continue"
+    assert canonical_bytes(record.policy_private_after) == before
+    runtime.commit_decision(record)
+    after = runtime.export_state()
+    assert after.next_decision_ordinal == 2
+    assert canonical_bytes(after.policy_private) == before
+    assert after.cognitive_state.goals == saved.cognitive_state.goals
+    assert sum(r.kind == "accepted_decision" for r in after.cognitive_state.experience.records) == 2
+    with pytest.raises(ValueError, match="staged decision"):
+        runtime.commit_decision(record)
+    # A recoverable malformed plan must leave the next decision usable too.
+    runtime.commit_decision(decide(runtime, 2))
+    assert runtime.export_state().next_decision_ordinal == 3
+
+
+@pytest.mark.parametrize("error_type", [ValueError, RuntimeError, OSError])
+def test_real_fallback_programming_and_io_failures_stop_runtime(
+    monkeypatch, real_fallback_module, error_type
+):
+    error = error_type("unclassified rule failure")
+    calls = []
+
+    def broken(self, req):
+        calls.append(req)
+        raise error
+
+    monkeypatch.setattr(real_fallback_module.RuleBasedPolicy, "decide", broken)
+    adapter = real_fallback_module.FrozenRuleFallbackAdapter(config(request()).fallback_config)
+    runtime, *_ = setup(deny_after=0, fallback_adapter=adapter)
+    with pytest.raises(error_type) as caught:
+        decide(runtime)
+    assert caught.value is error and len(calls) == 1
+    with pytest.raises(ValueError, match="checkpoint recovery"):
+        runtime.export_state()
+
+
+@pytest.mark.parametrize("policy", ["llm-v0", "rule-based-v0"])
+def test_real_fallback_failure_replays_without_external_access(
+    monkeypatch, real_fallback_module, policy
+):
+    module = real_fallback_module
+
+    class MalformedPolicy(module.RuleBasedPolicy):
+        def decide(self, req):
+            super().decide(req)
+            return SimpleNamespace(plan=None)
+
+    monkeypatch.setattr(module, "RuleBasedPolicy", MalformedPolicy)
+    adapter = module.FrozenRuleFallbackAdapter(config(request()).fallback_config)
+    runtime, _, budget, journal, _, _ = setup(
+        policy=policy, outputs=[response("bad"), response("bad")], fallback_adapter=adapter
+    )
+    record = decide(runtime)
+    assert record.fallback_error == "INVALID_PLAN"
+    expected_calls = 2 if policy == "llm-v0" else 0
+    assert len(record.call_ids) == len(record.budget_debits) == expected_calls
+    assert len(budget.reservations) == len(journal.calls) == expected_calls
+    runtime.commit_decision(record)
+    replay, *_ = setup(
+        policy=policy, own_records=[record], own_contexts=journal.contexts, external_sentinel=True
+    )
+    rebuilt = decide(replay)
+    assert rebuilt == record
+    replay.commit_decision(rebuilt)
+    assert replay.export_state() == runtime.export_state()
 
 
 @pytest.mark.parametrize("policy", ["llm-v0", "rule-based-v0"])

@@ -24,6 +24,7 @@ from living_island.agents.p3.ports import (
     AttemptJournalPort,
     DecisionBudgetPort,
     FallbackAdapter,
+    InvalidFallbackPlan,
     ProviderAdapter,
 )
 from living_island.agents.p3.prompts import (
@@ -540,8 +541,11 @@ class RuntimeP3:
 
     def _fallback_plan(self) -> tuple[ActionPlan, P3PolicyPrivateState, bool]:
         assert self._request is not None
-        # Adapter exceptions are programming/IO failures, not malformed policy output.
-        output = self._fallback.decide(_copy(self._request), _copy(self._state.policy_private))
+        try:
+            output = self._fallback.decide(_copy(self._request), _copy(self._state.policy_private))
+        except InvalidFallbackPlan:
+            # Only the shared malformed-output signal is a recoverable adapter failure.
+            return _wait(self._request), _copy(self._state.policy_private), True
         try:
             plan, private = output
             plan = _validate_plan(plan, self._request, self._config.max_plan_actions)
