@@ -709,8 +709,16 @@ class CaseAllocationSession:
         cursor = 0 if case.head is None else case.head.reservation_cursor
         if case.head is not None:
             result = self._verified(case.head)
-            if result is None or list(result.entries) != case.entries[:cursor]:
+            if (
+                result is None
+                or list(result.entries) != case.entries[:cursor]
+                or result.complete != (case.status == "complete")
+            ):
                 _fail("ALLOCATION_INTEGRITY", "authority head does not match verified checkpoint")
+        if case.status == "complete" and (
+            case.head is None or case.prepared_head is not None or len(case.entries) != cursor
+        ):
+            _fail("ALLOCATION_INTEGRITY", "complete case must have a final clean head")
         suffix = case.entries[cursor:]
         if case.pending_recovery_sha256 is not None:
             self._origin(case)
@@ -884,6 +892,8 @@ class CaseAllocationSession:
     ) -> None:
         if len(entries) != head.reservation_cursor or len(entries) != len(case.entries):
             _fail("ALLOCATION_INTEGRITY", "checkpoint must account for every reservation")
+        if case.head is None and (head.checkpoint_tick != 0 or entries):
+            _fail("ALLOCATION_INTEGRITY", "initial publication must be empty tick zero")
         cursor = 0 if case.head is None else case.head.reservation_cursor
         if list(entries[:cursor]) != case.entries[:cursor]:
             _fail("ALLOCATION_INTEGRITY", "checkpoint rewrites finalized entries")
@@ -913,6 +923,8 @@ class CaseAllocationSession:
         case = self._refresh()
         if case.status == "complete" or case.prepared_head is not None:
             _fail("ALLOCATION_CLOSED", "publication is already prepared or complete")
+        if self.offline_recovery and case.status != "offline_only":
+            _fail("ALLOCATION_INTEGRITY", "offline publication requires retained recovery origin")
         self._validate_candidate(case, head, entries)
         # Also reject an invalid locator before preparing an otherwise absent target.
         self._verified(head)
