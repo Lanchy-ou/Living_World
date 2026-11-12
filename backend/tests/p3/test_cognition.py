@@ -646,3 +646,68 @@ def test_feedback_reduction_refuses_mixed_or_incomplete_plan_references():
     )
     with pytest.raises(ValueError, match="latest plan"):
         advance_goal_evidence(delivery(12, missing_first), [missing_first], state, run_id="r")
+
+
+@pytest.mark.parametrize("status", ["success", "failure"])
+def test_existing_goal_evidence_cannot_cross_trusted_run_or_move_into_past(status):
+    state = new_goal()
+    ref = accepted_ref(state)
+    state = advance_goal_evidence(delivery(11, ref, status), [ref], state, run_id="r")
+    current = delivery(12, ref).model_dump(mode="json")
+    current["delivery_id"] = format_delivery_id("other-run", 12, "ella")
+    with pytest.raises(ValueError):
+        advance_goal_evidence(
+            BoundaryPerceptionDelivery.model_validate(current), [], state, run_id="other-run"
+        )
+    with pytest.raises(ValueError):
+        advance_goal_evidence(delivery(10, ref), [], state, run_id="r")
+    with pytest.raises(ValueError):
+        apply_goal_change(
+            state, goal_change(expected=state.current.goal_id), actor_id="ella", tick=10
+        )
+
+
+def test_goal_reducer_rejects_future_current_and_future_owned_refs_even_before_feedback():
+    state = new_goal()
+    ref = accepted_ref(state, tick=20)
+    with pytest.raises(ValueError):
+        advance_goal_evidence(delivery(9, ref), [], state, run_id="r")
+    with pytest.raises(ValueError):
+        advance_goal_evidence(delivery(11, ref), [ref], state, run_id="r")
+
+
+@pytest.mark.parametrize("location", ["profile_id", "target_id", "goal_target_id"])
+def test_surrogate_ids_are_rejected_by_closed_p3_models(location):
+    if location == "profile_id":
+        with pytest.raises(ValueError):
+            ProfileDocument(profile_schema_version="0.1", profile_id="\ud800", values=[])
+        return
+    action = copy.deepcopy(GIVE)
+    action["target"]["id"] = "\ud800"
+    if location == "target_id":
+        with pytest.raises(ValueError):
+            DecisionProposal.model_validate(
+                {
+                    "proposal_schema_version": "0.1",
+                    "actions": [action],
+                    "cognitive_delta": {
+                        "delta_schema_version": "0.1",
+                        "goal_change": {
+                            "operation": "continue",
+                            "expected_goal_id": None,
+                            "proposal": None,
+                        },
+                    },
+                }
+            )
+    else:
+        with pytest.raises(ValueError):
+            GoalProposal.model_validate(
+                {
+                    "text": "give",
+                    "completion": {
+                        "kind": "own_action_success",
+                        **{k: v for k, v in action.items() if k != "reason"},
+                    },
+                }
+            )

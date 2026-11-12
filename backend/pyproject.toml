@@ -68,7 +68,12 @@ name = "agents see world only via world.protocol"
 type = "forbidden"
 source_modules = ["living_island.agents"]
 forbidden_modules = ["living_island.world"]
-ignore_imports = ["living_island.agents.** -> living_island.world.protocol"]
+# Both direct and memory-mediated paths end at the same permitted pure protocol.
+# Other world paths remain forbidden, including indirect memory paths.
+ignore_imports = [
+    "living_island.agents.** -> living_island.world.protocol",
+    "living_island.memory.** -> living_island.world.protocol",
+]
 unmatched_ignore_imports_alerting = "error"
 
 [[tool.importlinter.contracts]]
@@ -76,10 +81,8 @@ name = "memory sees world only via world.protocol"
 type = "forbidden"
 source_modules = ["living_island.memory"]
 forbidden_modules = ["living_island.world"]
-# No memory module imports world.protocol yet, so this ignore is unmatched today.
-# Switch to "error" when the first memory module does.
 ignore_imports = ["living_island.memory.** -> living_island.world.protocol"]
-unmatched_ignore_imports_alerting = "none"
+unmatched_ignore_imports_alerting = "error"
 
 [[tool.importlinter.contracts]]
 name = "events is read-only: no sim, no persistence"
@@ -120,5 +123,22 @@ forbidden_modules = [
     "living_island.agents.runtime",
     "living_island.agents.policies",
     "living_island.agents.rule_based",
+    "living_island.agents.p3",
+    "living_island.agents.llm",
 ]
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "memory is pure: no agents, coordination, storage, contract or network"
+type = "forbidden"
+source_modules = ["living_island.memory"]
+forbidden_modules = [
+    "living_island.agents",
+    "living_island.sim",
+    "living_island.persistence",
+    "living_island.contract",
+    "anthropic",
+    "openai",
+    "httpx",
+    "requests",
+]

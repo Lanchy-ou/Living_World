@@ -112,8 +112,11 @@ def apply_goal_change(
         raise ValueError("tick must be a nonnegative integer")
     checked = GoalChange.model_validate(change.model_dump(mode="json"))
     current = state.current
-    if current is not None and tick < current.created_at_tick:
-        raise ValueError("a decision cannot precede its current goal")
+    if current is not None and (
+        tick < current.created_at_tick
+        or (current.evidence is not None and tick < current.evidence.observed_tick)
+    ):
+        raise ValueError("a decision cannot precede its current goal/evidence")
     expected = None if current is None else current.goal_id
     if checked.expected_goal_id != expected:
         raise ValueError("expected_goal_id does not match the current goal")
@@ -157,11 +160,25 @@ def advance_goal_evidence(
     validate_goal_state(state, actor_id=actor_id)
     if packet.delivery_id != format_delivery_id(run_id, packet.observed_tick, actor_id):
         raise ValueError("delivery belongs to another run")
+    if not run_id:
+        raise ValueError("goal evidence requires a trusted run identity")
+    current = state.current
+    if current is not None:
+        if current.created_at_tick > packet.observed_tick:
+            raise ValueError("delivery cannot precede its current goal")
+        evidence = current.evidence
+        if evidence is not None and (
+            evidence.observed_tick > packet.observed_tick
+            or evidence.delivery_id != format_delivery_id(run_id, evidence.observed_tick, actor_id)
+        ):
+            raise ValueError("existing goal evidence must belong to this run and boundary prefix")
     refs = [OwnedIntentRef.model_validate(ref.model_dump(mode="json")) for ref in owned_intents]
     if len({ref.intent.intent_id for ref in refs}) != len(refs):
         raise ValueError("owned intent references must be unique")
     for index, candidate in enumerate(refs):
         _validate_reference(candidate, actor_id=actor_id, run_id=run_id)
+        if candidate.committed_tick > packet.observed_tick:
+            raise ValueError("owned intention cannot come from a future boundary")
         first = refs[0]
         if (
             candidate.intent.plan_id != first.intent.plan_id
