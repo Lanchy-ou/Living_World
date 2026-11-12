@@ -68,7 +68,7 @@ or regenerate a golden tape after an unexplained mismatch.
 | VF-09 | Either usage count null | Both charged at full reservation, unknown_usage_count +1; nullable reported values retained. |
 | VF-10 | Reported usage exceeds reservation | Retained overrun, live execution stops, technical trial FAIL; no silent refund/zero. |
 | VF-11 | Raw body B cap and cap+1, empty body and no body | Exact cap accepted for parsing; over cap bounded prefix/output-limit, empty string distinct from null. |
-| VF-12 | Crash before dispatch flush, after flush, after result, after decision append, before/after checkpoint replacement | Recover only checkpoint-owned prefixes; uncertain dispatch refuses ordinary live resume; explicit offline recovery has zero calls and one imported debit per orphan. |
+| VF-12 | Reservation/log/checkpoint crashes plus sequential/concurrent restores, clean authorized continuation, lost authority and repeated replay | BD-18..27 exactly: same case has one durable grant, no stale/duplicate dispatch, pending reservations survive missing dispatch rows, ordinary current-head continuation requires no new approval, recorded replay never accesses authority. Existing BD-10/11 prefix/corruption rules still apply. |
 | VF-13 | Truncated committed prefix, unknown version, wrong hash, missing row | Restore/replay refuses; no repair from world, provider or newer checkpoint guess. |
 | VF-14 | Rule fallback twice, LLM success, later fallback | Private state entry/execute/return follows decision section 5; unexpired back-off preserved, no synthetic feedback. |
 | VF-15 | Malformed fallback output vs raised programming exception | Typed malformed plan gives one wait substitute; unexpected exception stops without committed partial decision. |
@@ -76,7 +76,7 @@ or regenerate a golden tape after an unexplained mismatch.
 | VF-17 | Request/accept, failed give, completed give, receiving inventory change | CG-01..12 and engine-checked cognition section 4.3; speech alone never completes transfer. |
 | VF-18 | Two conflicting stores and a non-hearing third resident | Each context contains own records only; absent speech remains absent; malicious strings create no role/tool. |
 | VF-19 | Saved active/queued plan with memory; recorded rerun with sentinel | Identical world/events/decision rows/cognitive-private state and cursors; zero provider accesses. |
-| VF-20 | Second fake adapter and second deterministic selector fixture | Existing ports suffice; no world/import-boundary change. Selector identity differs explicitly; each selector replays its own records exactly. |
+| VF-20 | Second fake adapter and second deterministic selector fixture, plus wrong/missing binding and live misuse | EX-11/12 through the existing profile-aware ports: actual strategy/config/manifest IDs agree, each source reruns its own pinned algorithm and manifest, unknown/mismatched/live-fixture bindings refuse before calls. No world/import-boundary change. |
 
 Every closed schema gets positive, unknown-field/version, nullability and foreign-ID
 cases. Each E/B/C limit gets exact-boundary and one-unit-over cases. These are test
@@ -87,11 +87,17 @@ Use the smoke seed, three LLM-primary P3 residents, no player commands and no pr
 dependency. Pin the fake counter/tape like every other fixture.
 VF-20 uses adapter fixture-a and fixture-b with identical base proposals and latency
 values 1 and 2 ms respectively: physical/cognitive state matches, diagnostic audit
-bytes differ as declared. Its alternate selector recent-only-fixture-v0 uses the same
-memory-owned RetrievalQuery port, validates owner, sorts records by descending sequence
-and takes E-03 records. EX-05 therefore returns seq7,seq6,seq5 under this fixture versus
-the baseline's seq6,seq7,seq5. It is test-only, explicitly versioned, not a production
-retrieval setting or new memory rule.
+bytes differ as declared. Its alternate selector is the experience owner's
+recent-only-fixture-v0 under context profile p3-context-recent-only-fixture-v0; that
+owner alone defines its algorithm, bindings and EX-11/12 exact oracles. Register it
+with purpose=fake and fake_fixture_id="vf-20"; retain context-profile.json and pin the
+tracked helper plus pure dependencies in input_pins and ImplementationPin.selector.
+The production implementation inventory does not include tests, so those explicit
+helper pins are required. Exercise both strategy identities with each fake adapter;
+replay each source independently with a raising provider sentinel. Compare complete
+assemblies, not only state hashes: even empty recall must retain its actual IDs.
+Only source-verified fake replay can resolve the alternate; live registrations reject
+it. The alternate stays test-only and requires no P3-06 production-code changes.
 
 World failures/deaths are allowed in the long fake run; verify technical consistency,
 not seven-day LLM survival. Existing invariant tests must remain green.
@@ -161,7 +167,7 @@ CaseReceipt {
   registration_commit:string, executed_commit:string, case_id:string,
   command:string[], status:"not_started"|"running"|"complete"|"failed",
   exit_code:integer|null, trace_sha256:Hash|null,
-  failure:string|null, run_directory:string
+  failure:string|null, run_directory:string, allocation_key:Hash|null
 }
 ```
 
@@ -189,9 +195,19 @@ legacy rule-based-v0 base PolicyConfig and all caps zero. They sort in paired-ca
 order and receive their own receipt/output directory. They never use P3 template
 expansion. aggregate_caps is the component-wise sum of case/control caps; no borrowing.
 fake_fixture_id is non-null only for fake purpose; live registrations require null.
+Every P3 case receipt has the decision spec's registration/case allocation_key,
+unchanged across continuations. Legacy ControlCase receipts have null and create no
+P3 authority. A receipt is evidence of execution, not a fresh budget grant.
 For receipts, not_started has empty command and null exit/trace/failure; running has
 the exact command and null exit/trace/failure; complete has exit0, trace hash and null
 failure; failed has non-null failure, nullable actual exit and null completed trace.
+
+Initial authorization enrolls each P3 case's allocation once using the decision spec's
+canonical authority root and key. All worktrees/output paths resolve that same
+enrollment; validate/run/resume never reconstruct missing authority from a receipt or
+checkpoint. Registering the exact same registration/case again does not issue another
+grant. Fake cases use isolated test authorities and zero money, never the live root;
+recorded replay uses retained mirrors and does not enroll even a fake authority.
 
 The driver creates a not_started receipt for every registered case before dispatch,
 then atomically records running and complete/failed status. Missing receipts are
@@ -201,6 +217,12 @@ pinned availability, request-schema compatibility, proven token counter, prices,
 .env-only secret injection and budget before calling. No secret appears in receipt,
 command, request, artifacts or exception text. Invalid/missing prerequisite gives zero
 calls. A changed price/counter/model requires a new registration approved before use.
+Retain continuation receipts as one source-verified case lineage, not additional cases
+or trials; a repeated run cannot overwrite the case receipt back to not_started.
+The final case receipt identifies the authoritative completed lineage. Reports refuse
+competing completed lineages for one allocation and never sum ancestor/suffix copies
+as separate grants. Reservation identity is (allocation_key,reservation_ordinal);
+deduplicate inherited evidence and reject conflicting entries rather than double-count.
 
 ### 3.3 CLI contract and live authorization
 
@@ -209,6 +231,8 @@ These are proposed commands to implement, not commands available in P3-01:
 ```sh
 uv run --directory backend python ../scripts/p3_trials.py validate --registration <file>
 uv run --directory backend python ../scripts/p3_trials.py run --registration <file> --case <case_id> --out <fresh-directory> --live
+uv run --directory backend python ../scripts/p3_trials.py resume --registration <file> --case <case_id> --checkpoint <file> --out <fresh-directory> --live
+uv run --directory backend python ../scripts/p3_trials.py resume --registration <file> --case <case_id> --checkpoint <file> --out <fresh-directory> --offline-recovery
 uv run --directory backend python ../scripts/p3_experiments.py validate --registration <file> --receipts <directory>
 uv run --directory backend python ../scripts/p3_experiments.py report --registration <file> --receipts <directory> --out <fresh-report-directory>
 uv run --directory backend python ../scripts/p3_experiments.py inspect --source-run <directory> --out <fresh-inspection-directory>
@@ -222,6 +246,12 @@ are a launcher concern, not a model tool. Approval of M8 selects the profile; ea
 registration needs an explicit allocation before first live dispatch. M8 may approve
 all the named allocations once; no repeated approval is required for that unchanged
 registration. A new or revised allocation requires owner disposition.
+run is first execution only; repeated run never resets an allocation. resume resolves
+the already enrolled allocation, then obeys current-head/lock/recovery rules in the
+decision spec. Ordinary authorized clean continuation asks for no further approval.
+--live and --offline-recovery are mutually exclusive; offline recovery grants no live
+spend and latches that case offline_only. Neither flag can change caps or establish a
+new authority. A new output directory is only an artifact destination.
 Recovery and recorded re-execution use the decision owner's API, not run again.
 Report records exact invocation and source hashes; never writes into source runs.
 
@@ -238,8 +268,8 @@ when their specified refusal occurs; they are not counted as successful live cas
 | PV-02 committed records | Final decision trace and tick-zero/final checkpoints validate; all decision/context/dispatch/call links and checkpoint-owned prefixes match the decision spec. |
 | PV-03 world/replay | T+1 frames, exact event equality with events.jsonl, config/map/run identity, final world equality and unchanged physical invariant checks. |
 | PV-04 cognition | Own-source/goal/intent references, ingestion cursors and every state hash validate; no foreign/private world input; all versions known. |
-| PV-05 budget | Every dispatch accounted once, nullable usage preserved, caps respected, no orphan/pending/overrun in a complete case. Unknown usage alone does not invalidate. |
-| PV-06 no-call proof | Recorded re-execution with a raising provider sentinel reproduces the decision owner's equality targets. |
+| PV-05 budget | One enrollment per registration/case; receipts and allocation mirrors agree; every dispatch/reservation counted once across the lineage, nullable usage preserved, caps respected, no orphan/pending/overrun in a complete case. BD-18..27 prove exclusion/recovery; reports are read-only. Unknown usage alone does not invalidate. |
+| PV-06 no-call proof | Recorded re-execution with raising provider and authority sentinels reproduces the decision owner's equality targets, actual pinned retrieval strategy and complete manifest; zero grant/reservation/settlement/refund operations. |
 | PV-07 inspection | Index and all shards validate; requested input/plan/goal/outcome links resolve; UI imports the artifact with unchanged replay. |
 
 For legacy matched controls PV-02 verifies the legacy trace/checkpoint/log formats,

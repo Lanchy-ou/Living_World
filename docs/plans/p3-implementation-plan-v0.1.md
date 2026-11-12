@@ -24,6 +24,7 @@ updates and commits this registry before affected work continues.
 | DecisionContextP3, provider projection, inclusion manifest | resident-experience-v0.1.md | provider adapter, evaluation |
 | CognitiveDelta and permitted operations; resident cognitive vs policy-private state; decision transaction | llm-decision-v0.1.md | runtime, cognition |
 | Snapshot composition, logs, links, cursors, interruption and compatibility | llm-decision-v0.1.md | persistence, evaluation |
+| Case allocation ownership, durable reservation, continuation exclusion and budget mirrors | llm-decision-v0.1.md | coordinator, persistence, trial launcher |
 | GoalProposal/GoalChange/GoalState transitions and evidence of completion | resident-cognition-v0.1.md | delta validator, ingestion |
 | Identity, prompt templates, action descriptions and model response | resident-cognition-v0.1.md | context, provider |
 | Evaluation metrics, fixtures, trial registration and inspection artifacts | p3-evaluation-v0.1.md | tests, analysis, frontend |
@@ -47,6 +48,10 @@ all of their current validation and omission behavior.
 | --- | --- | --- |
 | ExperienceRecord | enclosing store version | experience_id:string, owner_id:string, sequence:int, observed_tick:int, kind:ExperienceKind, source:SourceRef, payload:ExperiencePayload |
 | RetrievalQuery | query_schema_version = "0.1" | owner_id:string, entity_ids:string[] (sorted unique), positions:Coord[] (sorted unique by y,x); built by agents, consumed by memory |
+| RetrievalProfileId | versioned literal IDs | "recent-relevant-v0" or "recent-only-fixture-v0"; algorithms and fake-only restriction owned by experience |
+| RetrievalResult | enclosing profile version | ranked_experience_ids:string[] (complete retained rank), selected_records:ExperienceRecord[] (first E-03 copies); memory-owned |
+| ContextProfile | context_profile_schema_version = "0.1" | context_profile_id:string, retrieval_profile:RetrievalProfileId, projection_profile:"p3-context-v0"; exact registry owned by experience |
+| InclusionManifest | manifest_schema_version = "0.1" | actual context_profile_id:string, retrieval_profile:RetrievalProfileId, projection_profile and complete ranked inclusion/omission evidence; exact fields owned by experience |
 | ExperienceState | experience_schema_version = "0.1" | owner_id:string, last_ingested_tick:int (-1 initially), next_sequence:int, records:ExperienceRecord[], intent_refs:OwnedIntentRef[] |
 | ResidentIdentity | identity_schema_version = "0.1" | actor_id:string, display_name:string, profile_id:string, values:string[], initial_direction:string, source_sha256:string |
 | GoalProposal | enclosing delta version | text:string, completion:CompletionPredicate |
@@ -59,11 +64,13 @@ all of their current validation and omission behavior.
 | DecisionProposal | proposal_schema_version = "0.1" | actions:IntentTemplate[], cognitive_delta:CognitiveDelta |
 | ResidentRuntimeStateP3 | runtime_schema_version = "0.2" | actor_id:string, policy_config:P3PolicyConfig, next_decision_ordinal:int, latest_perception_tick:int, cognitive_state:ResidentCognitiveState, policy_private:P3PolicyPrivateState |
 | DecisionRecordP3 | record_schema_version = "0.2" | legacy decision identity/plan fields plus decision_id:string, context_sha256:string, projection_sha256:string or null, accepted_delta:CognitiveDelta, call_ids:string[], state_before_sha256:string, state_after_sha256:string; exact extension in decision spec |
-| SavePackageP3 | save_schema_version = "0.2" | unchanged world and pending delivery DTOs; context_record_cursor:int, dispatch_record_cursor:int, log_prefixes:LogPrefix[], run_budget:BudgetLedgerP3, live_enabled:bool; full composition in decision spec |
+| SavePackageP3 | save_schema_version = "0.2" | unchanged world and pending delivery DTOs; context_record_cursor:int, dispatch_record_cursor:int, log_prefixes:LogPrefix[], run_budget:BudgetLedgerP3, allocation_entries:AllocationEntry[], live_enabled:bool; full composition in decision spec |
 | DecisionRequestP3 | request_schema_version = "0.2" | actor_id:string, tick:int, decision_ordinal:int, triggers:DecisionTrigger[], context:DecisionContextP3 |
 | P3PolicyConfig | config_schema_version = "0.2" | policy_id:"llm-v0" or "rule-based-v0", seed:int, max_plan_actions:int, map_width:int, map_height:int, identity_sha256:string, prompt_version:string, prompt_sha256:string, action_schema_version:string, action_schema_sha256:string, context_profile_id:string, adapter_id:string, adapter_version:string, model_id:string, provider_settings:ProviderSettings, limits:DecisionLimits, pricing:PricingPin, fallback_config:PolicyConfig (rule-based-v0), trial_registration_sha256:string |
 | P3PolicyPrivateState | private_schema_version = "0.1" | mode:"llm" or "fallback", fallback_state:RuleStateV0_1, last_fallback_ordinal:int or null |
-| BudgetLedgerP3 | budget_schema_version = "0.1" | coordinator-owned committed debit totals and imported recovery reservations; exact fields in decision spec |
+| BudgetLedgerP3 | budget_schema_version = "0.1" | allocation_key:string, caps and committed debit totals/imported recovery debits; replay mirror only, exact fields in decision spec |
+| CaseAllocationP3 | allocation_schema_version = "0.1" | allocation_key, registration_sha256, case_id, caps, generation, status, head, prepared_head, pending_recovery_sha256, entries; closed types/lock/publication protocol owned by decision section 4.2 |
+| AllocationHead / AllocationEntry / CallReservation | enclosing authority version | checkpoint identity/entry cursor; unique ordinal/request hashes/reservation/debit; allocation_key and reservation_ordinal on reservation and AttemptDispatch; exact fields in decision spec |
 
 DecisionRecordP3 also contains `detail_code`, `fallback_error`, `policy_private_after`
 and `budget_debits` with exact types in its owner. New context/dispatch/terminal-call
@@ -80,6 +87,9 @@ Logs are `decisions-p3.jsonl`, `contexts-p3.jsonl`, `llm-dispatches.jsonl` and
 `llm-calls.jsonl`; `decision-trace-p3.json` and `resume-origin-p3.json` identify their
 verified lineage. Snapshot filenames retain the tick convention and dispatch by
 explicit save version. Legacy paths and formats remain unchanged.
+`context-profile.json` retains the selected context/retrieval/projection binding.
+Case allocation authority lives outside run outputs at its enrolled shared location;
+checkpoints carry only its historical entry/debit mirror, never reusable capacity.
 
 State is owned by the resident runtime, never by the provider. `policy_private`
 contains the LLM bookkeeping and the frozen rule policy's private state, separate
@@ -109,11 +119,13 @@ count complete committed records, never bytes or the last record index.
 | --- | --- | --- |
 | ingest_experience | own delivery, own ExperienceState | new ExperienceState; no provider, objective log or hidden state_delta |
 | advance_goal_evidence | own delivery, retained own intent refs, GoalState | GoalState with deterministic observed evidence only |
-| retrieve_experience | ExperienceState, memory-owned RetrievalQuery | ranked ExperienceRecord[]; agents derives query from own perception/goals, memory never imports GoalState |
+| retrieve | ExperienceState, memory-owned RetrievalQuery, RetrievalProfileId | memory-owned RetrievalResult with full rank IDs and selected records; agents derives query from own perception/goals, memory never imports GoalState |
 | assemble_context | latest own Perception, ResidentCognitiveState, explicit context profile | ContextAssembly; no IO or other actor reads |
 | render_provider_request | ContextAssembly, DecisionRequest identity/triggers, pinned prompt/action schema | exact ProviderRequest; no hidden retrieval |
 | provider.prepare / count_input_tokens (pure) | exact ProviderRequest / prepared WireRequest | pinned nonsecret wire bytes / proven token upper bound; no network |
 | provider.complete (external IO) | exact ProviderRequest, prepared WireRequest, explicit attempt timeout | ProviderResult; send retained wire bytes unchanged; no state mutation |
+| DecisionBudgetPort.admit (durable IO) | call ID, input/output tokens, provider-request/wire-body hashes; case lock/generation bound by coordinator | CallReservation or null; unique allocation entry persisted before dispatch, never a grant copied from a checkpoint |
+| DecisionBudgetPort.commit | decision ID and matching CallDebit[] | committed run-budget mirror; authority keeps full reservations until checkpoint finalization |
 | validate_proposal | DecisionProposal, own DecisionContextP3, policy configuration | ActionPlan plus staged CognitiveDelta, or classified rejection |
 | decide / commit_decision | DecisionRequestP3 / matching staged DecisionRecordP3 | staged record / atomic own state, ordinal and private state; coordinator commits the ledger and persistence journals context/attempts |
 | export_state / restore | committed runtime / verified typed saved state | ResidentRuntimeStateP3 / runtime; refuses a half transaction |
@@ -133,10 +145,15 @@ cannot assert goal completion. Ingestion owns observed completion.
 
 **Persistence:** checkpoint stays phase 7, pre-ingestion, including tick zero.
 World events, decisions, model attempts and P3 inspection data have distinct logs.
-The decision spec defines the only durable-prefix authority and partial-tail rules;
+The decision spec defines the simulation durable-prefix authority and partial-tail rules;
 logical runtime commit is not an atomic multi-file write. A dispatched but uncommitted
 call may have incurred spend. Recovery must not silently redispatch it. Recorded
 re-execution performs no provider, embedding, summary or reflection calls.
+Its separate case authority prevents sequential/concurrent restores from duplicating
+remaining allowance. Ordinary clean-head continuation retains the original approval;
+recorded replay reads immutable mirrors without opening or mutating that authority.
+Profile/config/manifest/selector pins must agree; replay reruns the source strategy,
+including the alternate fake-only strategy, rather than substituting a default.
 
 ### 1.4 Shared design obligations
 
@@ -161,7 +178,7 @@ character panel and debug view; neither is silently deferred. No dates are promi
 | Task | Depends on | Result | Parallel file boundary |
 | --- | --- | --- | --- |
 | [P3-02](../tasks/p3/P3-02.md) | M8 and CR-005 applied | Pure state, experience/context, goals, prompt/action schemas and adapter ports | Foundation only; lands before 03/04 |
-| [P3-03](../tasks/p3/P3-03.md) | P3-02 | Transaction, runtime/sim wiring, logs, checkpoint and recorded recovery using injected fakes | Runtime/persistence; no provider implementation |
+| [P3-03](../tasks/p3/P3-03.md) | P3-02 | Transaction, allocation authority/locks, runtime/sim wiring, logs, checkpoint and recorded recovery using injected fakes | Runtime/persistence; no provider implementation |
 | [P3-04](../tasks/p3/P3-04.md) | P3-02 | Provider adapter and frozen-rule fallback adapter; local fault tests | agents/llm implementation and dependency pins; no runtime/sim files |
 | [P3-05](../tasks/p3/P3-05.md) | P3-03 and P3-04 | Integrated one-resident slice, registration/smoke entry point, M9 evidence | Sole integration writer after both merges |
 | [P3-06](../tasks/p3/P3-06.md) | M9 | Three residents, isolation/social cases, alternate deterministic retrieval and provider fixtures | New integration fixtures/tests; no production expansion |
@@ -184,7 +201,7 @@ New DTOs are separated from the legacy types so version dispatch cannot alter ol
 | Cognitive DTOs and pure reducers | agents/p3/types.py, context.py, cognition.py, prompts.py, ports.py | own memory DTOs and world.protocol |
 | Runtime and transaction | agents/p3/runtime.py; agents/runtime.py factory dispatch | DTOs, pure reducers, injected provider/fallback ports |
 | Provider and fallback adapters | agents/llm/provider.py, fallback.py, fake.py | agents/p3 ports, unchanged rule_based; provider IO only in provider adapter |
-| Persistence | persistence/p3.py, characters.py; contract/p3_save.py | explicit runtime exports; no hidden reads into policies |
+| Persistence | persistence/p3.py, p3_allocation.py, characters.py; contract/p3_save.py | explicit runtime exports and coordinator-owned allocation IO; no hidden reads into policies |
 | Coordination | sim/p3.py plus existing CLI/runner/boundary integration | world ports and runtime ports; never duplicate world rules |
 | Evaluation | analysis/p3.py and scripts/p3_experiments.py | typed retained records, no runtime/policy execution |
 | Inspection | contract/p3_inspection.py, persistence/p3_inspection.py, frontend/src/p3/ | read-only export plus display; never resident input |

@@ -261,7 +261,7 @@ OQ-082..084 remain pending M8, with concrete proposals in the four P3 specs and
 | OQ-087 | 2026-11-12 | P3-01 | Which provider/model/settings should the first live adapter use? | OpenAI Responses with pinned gpt-5.4-mini-2026-03-17, reasoning effort none, structured text output and no tools; verify availability and pricing before registering trials. Alternatives: fake-only phase or a separately reviewed provider adapter. | proposed; M8 |
 | OQ-088 | 2026-11-12 | P3-01 | How are credentials supplied without entering content, prompts, logs or Git? | Use one ignored local .env, loaded by the outer launcher; inject the secret only into the selected adapter. Reject missing/ambiguous configuration before dispatch. No cloud key provisioning, environment dump or secret in retained inputs. | proposed; M8 |
 | OQ-089 | 2026-11-12 | P3-01 | Are the product's P3 character panel and debug view included? | Include them in P3-07 using a separately versioned read-only inspection artifact, joined to unchanged replay identity. Alternative is explicit owner-approved deferral; no silent deferral. | proposed; M8 |
-| OQ-090 | 2026-11-12 | P3-01 | What happens to spend and decisions after an uncertain or partial-tail provider call? | Adopt llm-decision recovery rules: durable pre-dispatch reservation, checkpoint-owned committed prefixes, conservative unknown-usage debit and offline recovery without silent redispatch. Resume live calls only through a new explicit registered authorization. | proposed; M8 |
+| OQ-090 | 2026-11-12 | P3-01 | What happens to spend and decisions after an uncertain or partial-tail provider call, including repeated/concurrent checkpoint restores? | Adopt llm-decision section 4.2/7: one durable allocation per registration/case, exclusive continuation ownership, pre-dispatch reservation and conservative offline recovery without silent redispatch. Ordinary clean current-head continuation reuses the original grant without renewed approval; new/changed allocations need a new authorized registration. A checkpoint or replay never recreates capacity. | proposed; M8; G2-R1-01 clarified |
 
 ### CR-005 exact amendments for M8 (not applied)
 
@@ -342,11 +342,13 @@ specified by the P3 package. Their registry is p3-implementation-plan-v0.1.md
 section 1; their owning definitions, validation and ordering are normative:
 
 - resident-experience-v0.1.md owns experience, source references, retained own intents,
-  retrieval, DecisionContextP3, ProviderProjection and inclusion manifests;
+  retrieval/profile binding, DecisionContextP3, ProviderProjection and inclusion
+  manifests recording the actual selected strategy;
 - resident-cognition-v0.1.md owns identity/prompt inputs, GoalChange/GoalState and
   completion evidence, model-facing action descriptions and DecisionProposal;
 - llm-decision-v0.1.md owns CognitiveDelta, permitted operations, the provider port,
-  private policy state, decision transaction, call/budget records and recovery.
+  private policy state, decision transaction, call/budget records, durable case
+  allocation ownership and recovery.
 
 The P3 primary policy is llm-v0 for registered llm_actor_ids and rule-based-v0 for
 other configured actors. Every actor uses P3 envelopes; deliberate rule-only decisions
@@ -407,8 +409,12 @@ world/pending-delivery DTOs with ResidentRuntimeStateP3 and verified P3 log pref
 The sole checkpoint phase remains post-commit and pre-ingestion, including tick zero.
 llm-decision-v0.1.md owns snapshot composition, durable commit publication, partial
 tails, uncertain-call spend, continuation, version refusal and equality targets.
+Its case allocation authority, separate from checkpoints, owns remaining live
+capacity across all continuations. Ordinary current-head continuation retains its
+original authorization; repeated/concurrent restores cannot duplicate that grant.
 Recorded re-execution applies recorded accepted cognitive deltas/plans and deterministic
-ingestion; it makes zero model, embedding, summary or reflection calls. Independent
+ingestion and the pinned retrieval strategy; it makes zero model, embedding, summary
+or reflection calls and never acquires or changes a live allocation. Independent
 live runs, including live continuations, are not promised identical outcomes.
 ```
 
@@ -425,7 +431,10 @@ P1/P2. They are not repurposed for P3, including the old confidence_band:NeedBan
 current commitment are authorized in P3. DecisionContextP3 version 0.2 and the
 provider-only projection/inclusion manifest are defined solely by
 resident-experience-v0.1.md. The full delivered Perception remains unchanged;
-explicit provider projection is not a new Perception or extra knowledge. Confidence
+explicit provider projection is not a new Perception or extra knowledge. Strategy
+identities are explicit: configuration, retained ContextProfile and
+manifest must identify the actual algorithm, including a source-verified fake-only
+alternative on recorded replay. Unknown or mismatched bindings are refused. Confidence
 has its own proposed P3 representation, never physiological NeedBand. Goal/state
 semantics are in resident-cognition-v0.1.md; only accepted CognitiveDelta operations
 from llm-decision-v0.1.md can change decision-owned cognition. Consolidation,
@@ -441,6 +450,9 @@ format. P3 instead uses SavePackageP3/DecisionRecordP3 version 0.2 and version 0
 P3 context/dispatch/terminal-call logs, defined by llm-decision-v0.1.md. That owner
 specifies exact types, nullability, input/attempt links, committed prefix counts,
 conservative budget reservations, interrupted calls and partial-tail recovery.
+CaseAllocationP3 owns live spending across all output directories for one registered
+case; snapshot allocation_entries/run_budget are immutable replay evidence, not an
+authority from which remaining allowance can be reissued.
 Runtime cognitive state is stored once within its resident runtime; legacy
 placeholder arrays are not a second mutable source. Persistence alone writes the
 files. A published checkpoint identifies complete durable prefixes; an uncommitted

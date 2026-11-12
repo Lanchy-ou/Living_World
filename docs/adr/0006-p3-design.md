@@ -29,6 +29,16 @@ A frozen-rule adapter supplies fallback, without changing the accepted P2 algori
 Recorded re-execution uses retained decisions and cognitive deltas, never fresh calls.
 Durable call evidence is separate from deterministic state so interruption cannot erase
 potential spend or silently reissue a call.
+One durable registration/case allocation outside run outputs owns live capacity;
+exclusive continuation ownership and a current checkpoint head prevent duplicate
+restores from spending it twice. Normal already-authorized continuation retains its
+grant. Checkpoint/replay mirrors neither create nor refund capacity. The decision
+spec owns this protocol and its crash vectors.
+
+Context profiles bind an exact retrieval algorithm to the unchanged projection
+algorithm. Manifests record the strategy actually used, and recorded execution reruns
+the retained pinned strategy, including the test-only alternative in its fake lineage.
+The experience spec owns these bindings and deterministic fixtures.
 
 The plan's extension-port table names later consolidation, forgetting, reflection,
 relationships, emotion and dreams. Their behavior is excluded from this decision.

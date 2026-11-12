@@ -106,7 +106,8 @@ goal_change rejects the whole proposal. Accepted actions and delivered evidence
 create experience through the experience specification.
 
 Runtime owns cognitive state regardless of policy. Rule fallback owns only its
-private RuleStateV0_1; adapters own no resident state. Coordinator owns run budget.
+private RuleStateV0_1; adapters own no resident state. Coordinator owns run budget;
+the case allocation authority in section 4.2 alone grants live spending capacity.
 All nested actor/owner IDs equal runtime actor; experience.last_ingested_tick equals
 latest_perception_tick. Identity is immutable and its canonical object hash equals
 identity_sha256. Owners initialize goals/experience; mode starts llm, last fallback
@@ -196,8 +197,12 @@ ResidentRuntimeP3.make_request(tick:N,triggers:DecisionTrigger[]) -> DecisionReq
 ResidentRuntimeP3.decide(request:DecisionRequestP3) -> DecisionRecordP3
 ResidentRuntimeP3.commit_decision(record:DecisionRecordP3) -> None
 ResidentRuntimeP3.export_state() -> ResidentRuntimeStateP3
-CallReservation { call_id:string,input_reserved:N,output_reserved:N,money_reserved:N }
-DecisionBudgetPort.admit(call_id:string,input_tokens:N,output_tokens:N)
+CallReservation {
+  allocation_key:Hash,reservation_ordinal:N,call_id:string,
+  input_reserved:N,output_reserved:N,money_reserved:N
+}
+DecisionBudgetPort.admit(call_id:string,input_tokens:N,output_tokens:N,
+                         provider_request_sha256:Hash,wire_body_sha256:Hash)
                         -> CallReservation|null
 DecisionBudgetPort.commit(decision_id:string,debits:CallDebit[]) -> None
 AttemptJournalPort.stage_context(record:ContextRecordP3) -> None
@@ -212,7 +217,10 @@ and calls commit_decision; runtime checks equality with its staged record. No sa
 export or tick between these operations. Both validators run before mutation; failure
 stops the boundary. Each record's budget and runtime commits occur exactly once.
 Only sim/persistence implement global budget and durable journal ports; agents cannot
-read their storage. before_call must durably flush before returning; after_call
+read their storage. The live budget port is bound to the case's held allocation lock
+and generation; it cannot be built from run_budget alone. admit durably reserves in
+that authority before returning. before_call verifies this exact reservation and
+must durably flush before returning; after_call
 retains terminal audit. No journal read/query method is exposed.
 After preparation and before admission, stage_context durably appends exactly one
 full context row for every decision, including rule-primary and zero-call decisions.
@@ -220,7 +228,9 @@ Calls occur in the same tick/actor order as decisions, so a later actor's dispat
 cannot overtake an earlier actor's context. before_call verifies the already staged
 context identity and appends only the dispatch; retries never append another context.
 All such rows remain uncommitted until checkpoint publication. A failed context flush
-stops the boundary before dispatch. No separate zero-call publication path exists.
+stops the boundary before dispatch. A reservation already persisted before a later
+flush failure is retained for recovery, never released by process rollback.
+No separate zero-call publication path exists.
 
 Runtime instantiates the frozen fallback from fallback_config and saved private state.
 own_records is null for live/control execution and the actor's verified complete record
@@ -340,7 +350,7 @@ CallDebit {
 }
 BudgetCaps { attempts:N, input_tokens:N, output_tokens:N, micro_usd:N }
 BudgetLedgerP3 {
-  budget_schema_version:"0.1", caps:BudgetCaps,
+  budget_schema_version:"0.1", allocation_key:Hash, caps:BudgetCaps,
   attempts_charged:N, input_charged:N, output_charged:N, money_charged:N,
   unknown_usage_count:N, recovery_debits:CallDebit[]
 }
@@ -348,9 +358,12 @@ BudgetLedgerP3 {
 
 Reserve `I=count_input_tokens(request,wire)`, `O=max_output_tokens` and
 `money_reserved=ceil(I*input_rate/1000000)+ceil(O*output_rate/1000000)` with integer
-arithmetic. Admit iff charged totals plus all pending reservations plus this attempt
-stay <= every cap. Zero cap admits no calls. Calls are serial in canonical actor
-order. Pending reservations consume capacity before decision commitment.
+arithmetic. Admit iff the authoritative allocation's settled/recovery charges plus
+all reserved entries plus this attempt stay <= every cap. Never use a checkpoint's
+remaining balance for admission. Compare each dimension independently: attempts=0
+admits no calls; a zero money cap permits a zero-money fake reservation. Calls are serial in
+canonical actor order. Reservations consume capacity before decision commitment and
+hold their full amounts until checkpoint finalization, even after a terminal result.
 
 If both reported counts exist and fit reservations, charge them and the same rounded
 formula. If either is unknown, charge both full reservations, usage_unknown=true;
@@ -360,7 +373,105 @@ attempt becomes one debit, including invalid retries. Committed decision debits 
 recovery_debits sum exactly to ledger totals; unknown_usage_count counts unknown debits.
 An overrun uses max(reported,reserved) in recovery accounting and invalidates the trial.
 
-### 4.2 Log schemas
+### 4.2 Durable allocation ownership and continuation
+
+One registered case has one allocation for its entire execution and continuation
+lineage. Its key is SHA-256 of the canonical object
+`{registration_sha256:Hash,case_id:string}` without LF. Caps equal that exact
+TrialCase's caps; case allocations cannot borrow from each other. Their sum stays
+within the registration aggregate. Output directories, checkpoint copies, receipts,
+process restarts and replays never create an allocation or reset its consumption.
+
+```text
+AllocationHead {
+  checkpoint_sha256:Hash, checkpoint_tick:N, input_manifest_sha256:Hash,
+  run_directory:string, reservation_cursor:N
+}
+AllocationEntry {
+  reservation:CallReservation, provider_request_sha256:Hash, wire_body_sha256:Hash,
+  state:"reserved"|"settled"|"recovery", debit:CallDebit|null,
+  terminal_call_sha256:Hash|null
+}
+CaseAllocationP3 {
+  allocation_schema_version:"0.1", allocation_key:Hash,
+  registration_sha256:Hash, case_id:string, caps:BudgetCaps, generation:N,
+  status:"ready"|"running"|"offline_only"|"complete",
+  head:AllocationHead|null, prepared_head:AllocationHead|null,
+  pending_recovery_sha256:Hash|null,
+  entries:AllocationEntry[]
+}
+```
+
+The launcher enrolls one canonical, local authority root when the allocation is
+first authorized. It is shared by all launchers/worktrees and outside all run/output
+directories. The create-once enrollment binds the registration/case key to
+`<authority_root>/allocations/<allocation_key>.json` and its persistent lock file.
+Only initial authorized enrollment may create this record (empty entries, generation
+0, status ready, null heads/pending recovery). A run/resume cannot enroll a second root, re-create a
+missing record, restore an older authority from a checkpoint, or treat a copied
+record as an independent grant. Missing/mismatched authority or enrollment refuses
+live use with ALLOCATION_UNAVAILABLE; retained artifacts remain replayable offline.
+This is a single-host authority with durable local storage, not a distributed lease.
+Moving/cloning authority storage is not an ordinary continuation and is not supported
+as a way to obtain live capacity. Store loss never permits automatic re-enrollment.
+
+Hold an OS-managed exclusive process lock on that case's persistent lock file for
+the whole live execution, including provider IO, terminal logging, checkpoint writes
+and shutdown. Do not replace/unlink the locked file. Acquisition is nonblocking:
+another holder gives ALLOCATION_BUSY and zero calls. There is no clock/TTL expiry,
+force takeover or timeout-based budget reset; process death releases the lock.
+Under the lock, validate the authority, reconcile prepared_head, then atomically
+increment generation before running. Every reservation, dispatch and publication
+checks the held lock and generation; a stale handle stops with ALLOCATION_STALE.
+These are coordinator startup/integrity errors, never resident fallback reasons.
+A persisted running status with no OS lock holder is recoverable; that status alone
+neither blocks lock reacquisition nor proves that a prior call did not happen.
+
+entries are ordered by reservation.reservation_ordinal = array index, starting at
+0, with unique call_id and matching allocation_key. reserved has null debit and
+terminal_call_sha256; settled has its exact debit and non-null terminal row hash;
+recovery has its conservative debit and the terminal hash when available. All debit
+IDs/reservation amounts match the entry. Count every entry as one consumed attempt.
+terminal_call_sha256 hashes the canonical terminal row object without LF.
+For reserved entries, use full reserved tokens/money; for settled/recovery, use the
+debit's charged values. Recovery charges are at least the full reservation. A repeated
+call_id is ALLOCATION_DUPLICATE_CALL, never an idempotent permission to send again.
+Terminal results do not refund capacity until their boundary becomes durable.
+
+On every authority load, head.reservation_cursor equals the length of its verified
+checkpoint allocation_entries, and entries up to that cursor equal the checkpoint
+mirror byte-for-byte. The remaining suffix consists of reserved entries, or the
+recovery entries named by pending_recovery_sha256. A prepared target preserves the
+entire finalized prefix and resolves only this suffix using verified terminal/origin
+evidence. A cursor beyond entries, changed prefix or inconsistent target is an
+integrity refusal, never a reason to reset or recompute allowance from a snapshot.
+A null head is allowed only before tick-zero publication, with an empty entry array.
+
+Admission atomically appends and durably flushes a reserved entry **before** the
+dispatch log can be flushed or any network IO can start. Keep it even if the later
+dispatch write fails or no response arrives. The run's decision transaction commits
+its replay ledger, not a second grant or an additional authority debit. Only section
+6's checkpoint finalization changes covered entries from reserved to settled once.
+No later correction of usage refunds a finalized charge. Rejected duplicate restores
+consume no attempts; they also receive no copy of remaining capacity.
+
+head identifies the only checkpoint eligible to continue this case, not every
+historical checkpoint with a valid hash. A clean continuation must match head exactly;
+after another continuation advances it, the old source gives ALLOCATION_STALE.
+A duplicate request while the first runs gives ALLOCATION_BUSY; after completion
+it gives ALLOCATION_CLOSED. A clean pause with no progress may reacquire the same
+head using the same entries and remaining capacity. status complete closes the case
+at its registered horizon; offline_only can transition only to complete, never back
+to live-capable ready/running, within this allocation.
+None of these transitions resets caps, entries or generation.
+
+Ordinary already-authorized continuation of the current clean head needs **no new
+owner approval**. It reuses the original grant, not its original amount. A new trial,
+changed registration/caps or additional live allocation needs a separate authorized
+registration. Crash recovery follows section 7; copied or stale checkpoints may be
+used for read-only recorded replay, which cannot acquire or modify this authority.
+
+### 4.3 Log schemas
 
 ```text
 ContextRecordP3 {
@@ -374,6 +485,7 @@ AttemptDispatch {
   request_sha256:Hash, context_sha256:Hash, projection_sha256:Hash,
   provider_request_sha256:Hash, provider_request:ProviderRequest,
   wire_request:WireRequest, wire_body_sha256:Hash,
+  allocation_key:Hash, reservation_ordinal:N,
   prompt_version:string, action_schema_version:string,
   adapter_id:string, adapter_version:string, model_id:string,
   input_reserved:N, output_reserved:N, money_reserved:N
@@ -390,7 +502,7 @@ LLMCallRecordP3 {
 Context rows are one per committed decision; assembly retains inclusion manifest.
 assembly.context must equal request.context and every corresponding hash must agree.
 provider_request is null only when preparation produced no dispatchable request.
-Before network IO, append and durably flush exact input/reservation to
+After durable authority admission and before network IO, append and durably flush exact input/reservation to
 llm-dispatches.jsonl. Flush failure means no dispatch. Each terminal call row joins
 one dispatch; parsed_proposal exists iff JSON/schema parsing succeeded, including
 later semantic rejection. Only fully valid proposals may be accepted. At durable
@@ -399,6 +511,8 @@ Attempt rows sort tick, actor ID, ordinal, attempt index; context/decision rows 
 tick, actor ID. No credentials, headers or environment values are retained.
 wire_body_sha256 hashes decoded exact outbound body bytes; verify it before sending
 and during replay audit. Retries have identical provider_request and wire body hashes.
+The allocation key/ordinal, call ID, both request hashes and reserved amounts match
+exactly one authority entry. No dispatch without this entry is valid.
 
 Incomplete tails cannot be promoted to accepted decisions. Missing terminal row
 means unknown usage. Complete orphan rows are billing evidence only. Explicit null
@@ -468,7 +582,8 @@ SavePackageP3 {
   context_record_cursor:N, dispatch_record_cursor:N,
   pending_perception_deliveries:BoundaryPerceptionDelivery[],
   canonical_config_hash:Hash, canonical_map_hash:Hash, input_manifest_sha256:Hash,
-  log_prefixes:LogPrefix[], run_budget:BudgetLedgerP3, live_enabled:boolean
+  log_prefixes:LogPrefix[], run_budget:BudgetLedgerP3,
+  allocation_entries:AllocationEntry[], live_enabled:boolean
 }
 ```
 
@@ -488,14 +603,45 @@ S1-S11 apply with P3 runtime; pending packets retained verbatim. Also validate:
 - Ledger totals match committed debits and verified recovery origins. Caps, pricing,
   identity/template/schema/context/adapter IDs match retained inputs. Verification
   and replay need no credential.
+- allocation_entries is the immutable settled/recovery prefix for this checkpoint;
+  no reserved entry is allowed. Its allocation key, order, unique call IDs and debit
+  sum equal run_budget; normal entries join dispatch/call rows, recovery entries join
+  verified origins. It is a replay mirror, never a live authority or reusable grant.
 
 Publish an atomic checkpoint every completed boundary, tick zero included. First
 durably flush complete event/decision/context/dispatch/call prefixes, then atomically
-publish checkpoint-<tick padded to 10 decimal digits>.json. Snapshot is the only
-commit authority; append success alone is not commitment. Never save a pending
-decision, unfinished reservation or dispatch without terminal row. No self hash in
+publish checkpoint-<tick padded to 10 decimal digits>.json using the protocol below.
+Snapshot is the simulation-state commit authority; the allocation owns spend even
+before a snapshot exists. Append success alone is not simulation commitment. Never
+save a pending decision or a normal dispatch without a verified terminal row.
+Authority entries may still be reserved while their finalized snapshot mirror is
+being published; the ordered protocol below completes them. No self hash in
 snapshot. Persistence uses platform durable-file APIs and tests each crash point;
 world performs no IO.
+P3 snapshot bytes are canonical UTF-8 JSON without LF; checkpoint_sha256 hashes those
+exact bytes. This rule applies only to the new P3 snapshot format.
+
+Under the held allocation lock, first derive candidate allocation_entries from the
+verified terminal rows and any imported recovery entries. Flush the candidate's log
+prefixes, compute exact snapshot bytes/hash, then durably set prepared_head to that
+hash, tick, input manifest, output locator and entry count. Only then atomically
+publish the snapshot. Finally atomically replace authority head with prepared_head,
+clear prepared_head and finalize its covered entries to the snapshot's exact prefix;
+at the registered final tick set status complete. No further dispatch or clean lock
+release precedes this finalization. For a nonfinal clean pause set status ready;
+offline_only remains offline_only until final closure; complete takes precedence at
+the horizon and the saved live_enabled remains false. Snapshot excludes authority heads, generation,
+status, pending recovery pointer and paths, so there is no self/hash cycle or
+nondeterministic replay state. Candidate settled entries are only staged evidence
+until the target checkpoint exists and verifies; preparing bytes releases no capacity.
+
+On reacquisition, a prepared target with exact valid snapshot bytes and prefixes is
+finalized once before accepting a source checkpoint. If that target is absent, clear
+prepared_head, retain the old head and every reservation, then apply section 7's tail
+rules. A present partial/corrupt target is an integrity refusal, never permission to
+fall back to an older grant. A crash after publication but before head finalization
+therefore cannot make the old checkpoint spendable again. Tick zero uses this same
+publication protocol; no provider dispatch is allowed until its head is finalized.
 
 Retained inputs have this closed schema in p3-inputs.json:
 
@@ -529,14 +675,20 @@ object without LF; manifest does not hash itself.
 | identity-sources.json | Canonical array of cognition section 1 resolved source objects `{actor_id,display_name,profile:ProfileDocument,initial_direction}`, sorted by actor_id; verify each identity.source_sha256 against this object |
 | prompt.txt | Cognition's pinned canonical prompt-template bytes |
 | action-schema.json | Canonical cognition-owned ModelActionContract |
+| context-profile.json | Canonical experience-owned ContextProfile; exact config/manifest strategy binding |
 | trial-registration.json | Canonical evaluation-owned registration |
 | implementation.json | Canonical ImplementationPin |
 
-All actors share the registration's prompt/action/adapter/counter/limit/pricing pins;
+All actors share the registration's prompt/action/context-profile/adapter/counter/limit/pricing pins;
 actor identity and primary policy membership vary. Registration is hashed before
 expanding per-actor P3PolicyConfig and must not include their full config hashes (that
 would be circular). Input manifest is assembled last. Recorded configuration's
 trial_registration_sha256 and all content hashes must agree with retained bytes.
+The selector role pins the selected strategy and pure dependencies, including tracked
+test helpers for a fake-only selector. Registration input_pins includes those helpers
+even though its production implementation inventory excludes tests. Validate the
+experience spec's profile table, actual manifest IDs and the fake-only restriction;
+matching recall bytes alone cannot establish strategy identity.
 Continuation prefixes include verified ancestors; output contains suffix logs/origin
 and byte-identical retained inputs. Source files are never modified or repaired.
 
@@ -549,8 +701,11 @@ creating output. Source/destination distinct; output fresh. Restore active progr
 queued intents, all cognitive/private state and budget. Runtime is cold until exact
 pending packet ingested; never redraw active/queued plans.
 
-If no bytes follow committed dispatch prefix, live resume may use remaining registered
-budget. Separate live continuations are not promised identical. Fake/recorded
+For live continuation, acquire the existing case authority and reconcile publication
+before validating that the source is its current head. No extra dispatch bytes is
+necessary but not sufficient: there must also be no authority entries beyond the
+checkpoint's allocation_entries. A clean head uses the authority's remaining registered
+budget with no repeated approval, even from a fresh output directory. Separate live continuations are not promised identical. Fake/recorded
 continuations must match event/decision/world/cognitive state. Legacy P1/P2 restoration
 uses its original path.
 
@@ -558,30 +713,56 @@ uses its original path.
 
 | Tail relative to chosen checkpoint | Required result |
 | --- | --- |
-| No extra dispatch bytes; partial event/decision/context tail | Preserve source, ignore tail for state, resume new output |
+| No extra dispatch bytes or authority reservations; partial event/decision/context tail | Preserve source, ignore tail for state, continue current head under the same allocation |
+| Authority reservation beyond head, even with no dispatch bytes | Ordinary live resume refuses INTERRUPTED_CALL_RECOVERY_REQUIRED; do not release or redispatch it |
 | Complete extra dispatch, with or without result | Ordinary live resume refuses INTERRUPTED_CALL_RECOVERY_REQUIRED |
 | Partial/unparseable extra dispatch or ambiguous attempt | Same refusal; never guess whether call occurred |
 | Truncation/hash error inside committed prefix or missing file | Refuse all restore/replay; never trim to manufacture validity |
 | Invalid later checkpoint after a valid earlier one | Report corruption; never silently choose the older one |
 
-No SDK idempotency assumption permits repeating a possibly billed request. Explicit
+Inspect both the authority tail and run logs while holding the lock; checkpoint-only
+inspection cannot prove zero spend. No SDK idempotency assumption permits repeating a possibly billed request. Explicit
 offline-recovery may continue through rule fallback only, with zero new provider
-calls for the whole continuation. Import orphan costs conservatively: each complete
-dispatch reserves its full input/output/money, unknown usage if result absent;
-terminal reported usage may only increase charge, never refund reservation. If one
-partial dispatch row remains, import one worst-case B-05/B-06 reservation using the
-pricing pin and call ID `<run_id>:recovery:<checkpoint_tick>:unknown`, retaining the
-source-file hash. Serial durable dispatch means at most one partial row at physical
-tail. If this bound cannot be established, offline recovery also refuses.
+calls for the whole continuation. It must start at current authority.head, just like
+live continuation; a pending recovery reopens only its recorded source checkpoint.
+Old heads are stale after either mode advances, and complete refuses either mode.
+First durably retain the pre-recovery authority
+tail, orphan run artifacts and a complete immutable ResumeOriginP3, stored by its
+canonical hash under the enrolled authority root. Then atomically latch the same
+authority offline_only, set pending_recovery_sha256 to that origin and transition
+the listed entries to recovery. On a crash, a non-null pointer resumes that exact
+origin; do not construct or import a second one. A source copy is retained in the
+new output's resume-origin-p3.json; its hash and all referenced artifacts must agree.
+Copy every referenced orphan artifact and authority-tail byte into the output's
+immutable `recovery-evidence/<sha256>.bin`, using the hash as the filename. Resolve
+orphan_artifacts by their name/hash mapping to these files (or verified retained
+ancestor copies), never by opening the authority root during replay. Duplicate
+hashes may share one exact file. Flush those files and the origin before publishing
+the first recovery checkpoint; missing or mismatched evidence refuses replay.
+Finalizing the first recovery checkpoint clears the pointer only after the imported
+entries/origin are durable. Unreferenced pre-latch evidence creates no consumption.
+Import one recovery debit per authority reservation beyond the chosen head, in
+ordinal order, charging full reserved amounts; reported usage may only increase
+charge. Missing terminal rows mean unknown usage. A missing/partial dispatch row
+still has the authority's complete reservation identity and amounts: do not invent
+another placeholder debit or lose that reservation. A dispatch with no matching
+authority entry, conflicting hashes or an unverifiable tail refuses recovery.
+Mark those same authority entries recovery once; never append another reservation
+for an import. Reopening recovery must finish/reuse this same transition and origin,
+not charge it twice. A valid prepared recovery checkpoint finalizes normally.
 
 ResumeOriginP3 is closed:
 `{origin_version:"0.2",source_run_id,checkpoint_tick,checkpoint_sha256,log_prefixes,
 source_input_manifest_sha256,recovery_mode:"complete"|"offline",
-orphan_artifacts:[{name,sha256}],recovery_debits:CallDebit[]}`.
+allocation_key:Hash,orphan_artifacts:[{name,sha256}],
+recovery_entries:AllocationEntry[],recovery_debits:CallDebit[]}`.
 Types: IDs/names are strings, tick N, hashes Hash, log_prefixes LogPrefix[]. Sort
-artifact names; bind complete source-file bytes; recovery debits use dispatch order
-then the one unknown-tail placeholder. Complete mode has empty orphan/debit arrays.
-Import once into run_budget; ancestry validation rejects repeat import. If debt
+artifact names; bind complete source-file bytes, including the retained authority-tail
+copy. recovery_entries contain the exact recovery-state entries; recovery_debits are
+their non-null debits in reservation order. Complete mode has empty orphan/entry/debit arrays.
+Import once into run_budget and its allocation_entries mirror; ancestry validation
+rejects repeat import. Repeating offline recovery against the same source may only
+finish the already recorded case transition, never establish a second live lineage. If debt
 exceeds cap, mark trial invalid while allowing physics with zero further model spend.
 
 Every offline llm-primary decision has PROVIDER_ERROR/RECOVERY_OFFLINE; interruptions
@@ -598,16 +779,23 @@ for state equality. Recompute own deliveries, experience, goal evidence, context
 identities. Require actor/tick/triggers/ordinal/version/state-before hash equality.
 Validate recorded effective plan/delta, apply accepted goal/experience changes and
 install recorded policy_private_after/debits once. Compare state-after and full
-checkpoint cognitive/private state/budget plus canonical world and event bytes.
+checkpoint cognitive/private state/budget/allocation_entries plus canonical world and event bytes.
 
-No provider.complete, count_input_tokens, new selectors or summaries. Rerun the pinned
-deterministic selector and hash-check retained exact provider request. Preserve
+No provider.complete, count_input_tokens, new selectors or summaries. Verify the
+retained ContextProfile against config/manifest and selector implementation pins;
+rerun that exact strategy (including the fake-only alternate in its fake lineage),
+packing and complete manifest, and hash-check retained exact provider request. Preserve
 source decision rows byte-for-byte including fallback provenance; copy original
 context/dispatch/call audit rows without new timings. Missing/corrupt/inconsistent
 data stops REPLAY_DIVERGED; no wait or model substitution.
+Recorded replay uses an isolated in-memory budget mirror: it reads only retained
+allocation entries/origins, never opens the authority, acquires a lock, enrolls a
+grant, reserves, settles or refunds real capacity. Replaying a checkpoint repeatedly
+or concurrently leaves real spend unchanged; replay outputs cannot become live
+continuations. Historical authority ownership/generations are not replayed operations.
 
 For an offline recovery lineage, replay reaches the source checkpoint, verifies the
-origin and then imports recovery_debits and live_enabled=false exactly once before
+origin and then imports recovery_entries/recovery_debits and live_enabled=false exactly once before
 processing its first suffix boundary. Subsequent checkpoint resumes use the saved
 ledger/live flag; they never reimport that origin. Orphan calls stay outside normal
 call/dispatch cursors and are never replayed as decisions. A fresh re-execution of a
@@ -677,6 +865,24 @@ constructors; they introduce no physical world outcomes.
 | BD-15 | Registered rule-primary actor decides | ok/effective rule, no calls/error/substitution/fallback event; private rule state advances |
 | BD-16 | Actor A has mandatory oversize, actor B calls at the same boundary | stage_context appends A then B; B dispatch follows both; context cursor counts two only at durable boundary, and A has no dispatch. |
 | BD-17 | Valid response arrives within attempt timeout; parsing/validation ends at elapsed 60,000 ms (or later) | TIMEOUT/DECISION_TIMEOUT, retained parsed proposal and debit, no accepted model delta, one fallback. At 59,999 ms the otherwise valid proposal is accepted. |
+| BD-18 | H0 is the current clean head with the allocation profile below; A resumes H0, publishes H1 after call c0 with actual (80,10), then B requests H0 | Authority has one settled entry, totals (attempts1,input80,output10,money105); B gets ALLOCATION_STALE, zero calls, no changed totals or new allocation. |
+| BD-19 | A and B concurrently request H0 | Exactly one process holds the stable case lock and may dispatch; the loser gets ALLOCATION_BUSY with zero calls/reservations. After A publishes H1 the loser cannot use H0. No TTL takeover. |
+| BD-20 | Clean pause at H1 from BD-18; resume current H1, next call reserves/reports (20,10) | No new approval or grant; same allocation key, new ordinal1, reserve/charge60, final totals (2,100,20,165). While c0 was unfinalized at H0, a second (100,20) reservation was refused because 165+165>200, even after c0 reported (80,10). |
+| BD-21 | Crash immediately before authority reservation is durable | No dispatch is permitted, no new entry; reacquire current H0 and continue using the original grant without approval. |
+| BD-22 | Reservation c0 (100,20,165) is durable; crash before dispatch log flush or after dispatch with no result | Ordinary live resume refuses in both cases, including the empty dispatch-log case. Offline recovery imports exactly one entry/debit, totals (1,100,20,165), unknown=true, no redispatch. |
+| BD-23 | c0 terminal result/debit105 is durable, but crash before its checkpoint publication | Authority still holds reserved165; offline recovery charges full165 once, reported counts remain (80,10), unknown=false. No 60-unit refund or duplicate debit. |
+| BD-24 | Candidate H1 contains settled c0/debit105; crash after checkpoint publication but before authority finalize | Valid prepared H1 automatically finalizes to head H1, totals (1,80,10,105), without approval; H0 is stale. If target is absent, retain reserved165 and require offline recovery; if present but corrupt, refuse all continuation. Preparing bytes alone never releases165. |
+| BD-25 | Crash after latching c0 recovery but before its first offline checkpoint; reopen recovery, then repeat after it publishes H1 | Reuse pending_recovery_sha256 and the same entry ordinal0; final totals remain (1,100,20,165). H0 cannot create a second continuation after H1; current H1 stays offline_only. Zero provider calls throughout. |
+| BD-26 | Two sequential or concurrent recorded re-executions of H1; authority is unavailable or locked by another process | Each replay rebuilds the identical budget/allocation mirror from retained evidence with zero provider/counter/authority accesses. External entries, generation and spend never change; replay output is not a live grant. |
+| BD-27 | Copied checkpoint or new output/root; missing authority, mismatched key, duplicate c0, or closed case | Respectively ALLOCATION_UNAVAILABLE/key validation refusal/ALLOCATION_DUPLICATE_CALL/ALLOCATION_CLOSED; zero dispatch and no cap reset. Same valid authorization never licenses another authority for this key. |
+
+BD-18..27 use one fixed registration/case, caps `(attempts=2,input_tokens=200,
+output_tokens=40,micro_usd=200)` and BD-05 rates. H0/H1 stand for exact verified
+checkpoint identities, not mutable filenames. c0 reserves 165 and known usage charges
+105; the smaller second call charges 60. These tiny fake-only caps are test inputs,
+not new M8 live limits. These allocation-port unit vectors supply reservation amounts
+directly; full decision fixtures retain B-06 max_output_tokens=2048. Test real OS lock contention with two local processes plus
+injected durable-write crash points; do not substitute an in-memory mutex proof.
 
 Physical reach/duration/hearing/completion vectors belong to cognition/experience and
 use unchanged engine fixtures. BD-05..07 are integer arithmetic oracles, not measured
@@ -684,8 +890,9 @@ provider costs. All vectors are proposed tests, not claims that P3 is implemente
 
 ## 10. Implementation verification
 
-P3-03 proves atomic runtime/debit/cursor commitment, all durable-dispatch/log/checkpoint
-crash points, cold restore and unknown-version refusal using fakes. P3-04 proves exact
+P3-03 proves atomic runtime/debit/cursor commitment, allocation enrollment/lock/head
+ownership, all reservation/log/checkpoint crash points, BD-18..27, cold restore and
+unknown-version refusal using fakes. P3-04 proves exact
 request capture, deadline handling, no SDK retries, counter bounds, response cap and
 fallback lifecycle without changing the rule tree. P3-07 proves recorded execution,
 compatibility hashes and reports storage cost. Use AGENTS.md checks and meaningful

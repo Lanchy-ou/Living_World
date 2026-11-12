@@ -24,10 +24,10 @@ implementation. Recommendations are proposals, not new world rules.
 | ID | Choice and options | One recommendation | Blocks |
 | --- | --- | --- | --- |
 | M8-01 | Versioned P3 lane vs extending legacy types in place | Approve the separate P3 0.2 context/request/runtime/decision/save lane, 0.1 nested cognitive/log schemas and exact CR-005 amendments; preserve P1/P2 bytes and refuse unknown versions. | All implementation |
-| M8-02 | Working memory/confidence: bounded typed samples vs ports only or psychological scoring | Approve E profile and delivered/null vs interpretation/unassessed confidence. Keep consolidation/forgetting/reflection/relationships/emotions/dreams at named later ports only. | P3-02; OQ-082 |
+| M8-02 | Working memory/confidence: bounded typed samples vs ports only or psychological scoring | Approve E profile and delivered/null vs interpretation/unassessed confidence, with exact context/strategy/manifest bindings and pinned deterministic replay. Keep the alternate recent-only strategy fake-only; later cognitive systems remain named ports only. | P3-02/06; OQ-082; G2-R1-02 |
 | M8-03 | Identity/goals: explicit profiles and one commitment vs infer personality or autonomous long-term scheduling | Approve the three exact profile value lists, immutable identity and configured direction; one continue/revise/abandon commitment with own-feedback completion and unverifiable receiving goals. | P3-02; OQ-084/085/086 |
 | M8-04 | Fallback: frozen rule adapter with explicit inactive/return state vs reset all knowledge or rewrite the rule algorithm | Approve the llm-decision lifecycle, retaining shared experience and permitted learned rule state, with no retroactive LLM-action learning in frozen rule state. | P3-03/04; OQ-083 |
-| M8-05 | Recovery: durable reservation and checkpoint prefixes vs automatic repeat of uncertain calls | Approve conservative unknown-usage debit and offline recovery; no silent redispatch. Fresh live authorization is a new registration. | P3-03; OQ-090 |
+| M8-05 | Recovery: one persistent case allocation with exclusive continuation ownership vs treating each restored snapshot as a new grant | Approve the decision spec's enrolled authority, durable reservations, current-head/lock protocol and conservative offline recovery. Normal authorized clean continuation needs no renewed approval; repeated/concurrent restores and replay cannot replenish capacity. New/changed allocations need a new authorized registration. | P3-03/05; OQ-090; G2-R1-01 |
 | M8-06 | Provider/model: recommended pinned OpenAI adapter vs fake-only phase or another reviewed provider | Choose OpenAI Responses and gpt-5.4-mini-2026-03-17, reasoning effort none, structured text, no tools/background/stream or retained conversation. Pin adapter, schema, input-counter and pricing before live registration. Schema compatibility and a certified pure token counter are implementation prerequisites; neither is claimed verified by this document. | P3-04/live trials; OQ-087 |
 | M8-07 | Credentials: ignored local .env vs external secret service/deferred live calls | Choose .env only, loaded by the outer launcher and injected only into the provider client; retain no secret in profiles, registrations, prompts, logs or Git. No credentials are needed for fake/recorded tests. | Live calls; OQ-088 |
 | M8-08 | Limits: approve all proposed E/C/B rows below vs a revised versioned profile | Approve the listed values as one measured initial profile; publish actual high-water/overflow/failure measurements before proposing revisions. | P3-02/03/04; OQ-082 |
@@ -121,14 +121,21 @@ are unchanged references, not additional P3 limits.
   belongs to P3-01. M8 approval is followed by implementation gates before any trial.
 - No approved budget is transferred between trials, reused automatically for reruns
   or silently replenished after interruption. A missing/unknown amount is not zero.
+  The same approved case may continue normally against its one remaining allocation
+  without asking the owner again; a copied checkpoint supplies no spending authority.
+  G2-R1-01/02 add ownership and identity precision, not new numerical limits or spend.
 
 ## 4. Evidence the owner receives at later gates
 
 M9: one-LLM fake/smoke trace with linked inputs, goals, actual feedback, fallback,
 unknown-usage behavior, living restore and no-call recorded re-execution.
+Include BD-18..27 sequential/concurrent/crash ownership proofs, including ordinary
+continuation without renewed approval and replay with zero authority access.
 M10: three-resident semantic fixtures, registered live results including all failures,
 matched P2 descriptive comparison, inspection UI, compatibility hashes, full CI and
 one-page retrospective. Gate 2 is independent of each implementation's authors.
+VF-20 must retain both real selector IDs and reproduce each source's EX-11/12
+assembly/manifest with its own pinned algorithm; live use of the fixture ID refuses.
 
 ## 5. Owner record
 
