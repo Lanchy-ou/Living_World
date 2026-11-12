@@ -115,7 +115,7 @@ class HTTPSByteTransport:
                 response = connection.getresponse()
                 # Headers are never retained. Encodings other than identity are
                 # not decoded and cannot expand beyond the raw-byte read bound.
-                evidence.put((response.status, b"", False, None))
+                evidence.put((response.status, None, False, None))
                 read = 0
                 while read <= MAX_RESPONSE_BYTES:
                     if connection.sock is not None:
@@ -131,14 +131,15 @@ class HTTPSByteTransport:
                             raise ValueError("transport exceeded the bounded read") from None
                         evidence.put((response.status, exc.partial, False, None))
                         raise
-                    remaining()
                     if not chunk:
                         if response.length not in (None, 0):
                             raise http.client.IncompleteRead(b"")
-                        evidence.put((response.status, None, True, None))
+                        remaining()
+                        evidence.put((response.status, b"", True, None))
                         return
                     read += len(chunk)
                     evidence.put((response.status, chunk, False, None))
+                    remaining()
                 evidence.put((response.status, None, False, "overflow"))
             except TimeoutError:
                 evidence.put((None, None, False, "timeout"))
@@ -155,24 +156,48 @@ class HTTPSByteTransport:
         self._pending.start()
         status: int | None = None
         retained: bytearray | None = None
+
+        def capture(
+            item: tuple[int | None, bytes | None, bool, str | None] | Exception,
+        ) -> tuple[int | None, bytes | None, bool, str | None]:
+            nonlocal status, retained
+            if isinstance(item, Exception):
+                raise item
+            code, chunk, _, _ = item
+            if code is not None:
+                status = code
+            if chunk is not None:
+                if retained is None:
+                    retained = bytearray()
+                retained.extend(chunk)
+            return item
+
+        def timed_out() -> TransportResponse:
+            cancelled.set()
+            # Freeze all evidence already received, including a chunk queued just
+            # before the deadline. Never promote a queued success after timeout.
+            # Anything published after this snapshot is late, audit-only evidence
+            # and cannot modify this returned terminal value.
+            while True:
+                try:
+                    capture(evidence.get_nowait())
+                except Empty:
+                    break
+            return TransportResponse(
+                status, bytes(retained) if retained is not None else None, False, "timeout"
+            )
+
         try:
             while True:
                 try:
                     item = evidence.get(timeout=remaining())
-                    remaining()
                 except (Empty, TimeoutError):
-                    return TransportResponse(
-                        status, bytes(retained) if retained is not None else None, False, "timeout"
-                    )
-                if isinstance(item, Exception):
-                    raise item
-                code, chunk, complete, fault = item
-                if code is not None:
-                    status = code
-                if chunk is not None:
-                    if retained is None:
-                        retained = bytearray()
-                    retained.extend(chunk)
+                    return timed_out()
+                _, _, complete, fault = capture(item)
+                try:
+                    remaining()
+                except TimeoutError:
+                    return timed_out()
                 raw = bytes(retained) if retained is not None else None
                 if complete or fault == "overflow":
                     return TransportResponse(status, raw, complete)

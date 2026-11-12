@@ -6,12 +6,14 @@ import http.client
 import json
 from io import BytesIO
 from pathlib import Path
+from queue import Queue
 from threading import Event
 
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from living_island.agents.llm import provider as provider_module
 from living_island.agents.llm.fake import (
     COUNTER_ID,
     COUNTER_VERSION,
@@ -553,3 +555,56 @@ def test_total_deadline_bounds_headers_and_body_and_discards_late_completion(pha
     assert not transport._pending.is_alive()
     assert len(connection.requests) == 1
     assert map_response(raw, latency_ms=100) == terminal
+
+
+def test_timeout_snapshot_retains_bytes_read_before_worker_deadline_check(monkeypatch):
+    clock = [0.0]
+
+    class DeadlineResponse(LocalResponse):
+        def read1(self, size):
+            chunk = super().read1(size)
+            clock[0] = 1.0
+            return chunk
+
+    monkeypatch.setattr(provider_module.time, "monotonic", lambda: clock[0])
+    transport = local_transport(LocalConnection(DeadlineResponse(b"partial")), monkeypatch)
+    raw = transport.exchange(b"{}", 500)
+    transport._pending.join(2)
+    assert raw.body == b"partial" and raw.fault == "timeout"
+    result = map_response(raw, latency_ms=500)
+    assert result.observed_body_bytes == 7
+    assert result.response_text is None and not result.response_complete
+
+
+def test_timeout_snapshot_retains_a_chunk_already_taken_from_queue(monkeypatch):
+    clock = [0.0]
+
+    class DeadlineQueue(Queue):
+        def get(self, block=True, timeout=None):
+            item = super().get(block=block, timeout=timeout)
+            if isinstance(item, tuple) and item[1] == b"queued":
+                clock[0] = 1.0
+            return item
+
+    monkeypatch.setattr(provider_module.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(provider_module, "Queue", DeadlineQueue)
+    transport = local_transport(LocalConnection(LocalResponse(b"queued")), monkeypatch)
+    raw = transport.exchange(b"{}", 500)
+    transport._pending.join(2)
+    assert raw.body == b"queued" and raw.fault == "timeout"
+    result = map_response(raw, latency_ms=500)
+    assert result.observed_body_bytes == 6
+    assert result.response_text is None and not result.response_complete
+
+
+def test_headers_without_arriving_body_are_not_confused_with_empty_eof(monkeypatch):
+    class StalledBody(LocalResponse):
+        def read1(self, size):
+            raise TimeoutError
+
+    transport = local_transport(LocalConnection(StalledBody(b"")), monkeypatch)
+    raw = transport.exchange(b"{}", 500)
+    assert raw.status == 200 and raw.body is None and raw.fault == "timeout"
+    transport = local_transport(LocalConnection(LocalResponse(b"")), monkeypatch)
+    raw = transport.exchange(b"{}", 500)
+    assert raw.status == 200 and raw.body == b"" and raw.complete
