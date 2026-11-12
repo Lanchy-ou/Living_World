@@ -6,6 +6,7 @@ import hashlib
 import json
 import time
 from collections.abc import Callable, Sequence
+from functools import partial
 from typing import Literal
 
 from pydantic import BaseModel
@@ -25,7 +26,11 @@ from living_island.agents.p3.ports import (
     FallbackAdapter,
     ProviderAdapter,
 )
-from living_island.agents.p3.prompts import RESIDENT_TEMPLATE, render_provider_request
+from living_island.agents.p3.prompts import (
+    RESIDENT_TEMPLATE,
+    build_model_action_contract,
+    render_provider_request,
+)
 from living_island.agents.p3.types import (
     CONTEXT_PROFILES,
     AttemptDispatch,
@@ -240,7 +245,7 @@ class RuntimeP3:
         restored_state: ResidentRuntimeStateP3 | None = None,
         *,
         live_enabled: bool,
-        provider: ProviderAdapter,
+        provider: ProviderAdapter | None,
         budget: DecisionBudgetPort,
         attempts: AttemptJournalPort,
         fallback: FallbackAdapter,
@@ -259,6 +264,20 @@ class RuntimeP3:
             raise ValueError("actor identity/config mismatch")
         if type(live_enabled) is not bool or (run_id is not None and not run_id):
             raise ValueError("invalid live mode or run identity")
+        if (
+            type(template) is not bytes
+            or template != RESIDENT_TEMPLATE
+            or config.prompt_sha256 != hashlib.sha256(template).hexdigest()
+            or config.action_schema_sha256 != canonical_sha256(build_model_action_contract())
+        ):
+            raise ValueError("template/action contract pin mismatch")
+        if (
+            provider is None
+            and live_enabled
+            and config.policy_id == "llm-v0"
+            and own_records is None
+        ):
+            raise ValueError("eligible live LLM runtime requires an injected provider")
         self._config, self._run_id = config, run_id
         self._provider, self._budget, self._attempts, self._fallback = (
             provider,
@@ -452,6 +471,17 @@ class RuntimeP3:
             raise ValueError("monotonic clock moved backwards")
         return self._config.limits.decision_timeout_ms - elapsed
 
+    def _durable[T](self, operation: Callable[[], T]) -> T:
+        """B-03 excludes port persistence time, while preserving call/validation time."""
+        started = self._now()
+        try:
+            return operation()
+        finally:
+            elapsed = self._now() - started
+            if elapsed < 0:
+                raise ValueError("monotonic clock moved backwards during persistence")
+            self._started += elapsed
+
     def decide(self, request: DecisionRequestP3) -> DecisionRecordP3:
         if (
             self._failed
@@ -549,6 +579,7 @@ class RuntimeP3:
                 error, detail = "INVALID_CONTEXT", "MANDATORY_OVERSIZE"
             else:
                 assert provider_request is not None
+                assert self._provider is not None
                 wire = _copy(self._provider.prepare(_copy(provider_request)))
                 body = decode_base64(wire.body_base64)
                 decoded = json.loads(
@@ -579,7 +610,8 @@ class RuntimeP3:
             assembly=assembly,
             provider_request=provider_request,
         )
-        self._attempts.stage_context(_copy(context))
+        staged_context = _copy(context)
+        self._durable(partial(self._attempts.stage_context, staged_context))
         plan: ActionPlan | None = None
         delta: CognitiveDelta | None = None
         private = _copy(self._state.policy_private)
@@ -592,6 +624,7 @@ class RuntimeP3:
                 and assembly.projection_sha256 is not None
             )
             request_hash = canonical_sha256(provider_request)
+            assert self._provider is not None
             wire_hash = hashlib.sha256(decode_base64(wire.body_base64)).hexdigest()
             for index in range(config.limits.max_attempts):
                 remaining = self._remaining()
@@ -599,8 +632,15 @@ class RuntimeP3:
                     error, detail = "TIMEOUT", "DECISION_TIMEOUT"
                     break
                 call_id = build_call_id(decision_id, index)
-                reservation = self._budget.admit(
-                    call_id, input_tokens, config.limits.max_output_tokens, request_hash, wire_hash
+                reservation = self._durable(
+                    partial(
+                        self._budget.admit,
+                        call_id,
+                        input_tokens,
+                        config.limits.max_output_tokens,
+                        request_hash,
+                        wire_hash,
+                    )
                 )
                 if reservation is None:
                     error, detail = "BUDGET", "ADMISSION_DENIED"
@@ -645,7 +685,14 @@ class RuntimeP3:
                     output_reserved=reservation.output_reserved,
                     money_reserved=reservation.money_reserved,
                 )
-                self._attempts.before_call(_copy(context), _copy(dispatch))
+                staged_context, staged_dispatch = _copy(context), _copy(dispatch)
+                self._durable(partial(self._attempts.before_call, staged_context, staged_dispatch))
+                remaining = self._remaining()
+                if remaining <= 0:
+                    # Admission is durable; this orphan requires recovery, never a fresh grant.
+                    raise TimeoutError(
+                        "deadline expired after durable admission; recovery required"
+                    )
                 result = _copy(
                     self._provider.complete(
                         _copy(provider_request),
@@ -675,7 +722,8 @@ class RuntimeP3:
                     detail_code=detail,
                     debit=debit,
                 )
-                self._attempts.after_call(_copy(terminal))
+                staged_terminal = _copy(terminal)
+                self._durable(partial(self._attempts.after_call, staged_terminal))
                 call_ids.append(call_id)
                 debits.append(debit)
                 if (result.token_input or 0) > reservation.input_reserved or (
@@ -756,10 +804,45 @@ class RuntimeP3:
         if context.provider_request is not None:
             if context.provider_request != self._prepare():
                 raise ReplayDiverged("retained provider request mismatch")
-        elif record.call_ids:
+        elif record.call_ids or (
+            record.policy_id == "llm-v0"
+            and self._assembly.error is None
+            and record.detail_code != "INPUT_LIMIT"
+        ):
             raise ReplayDiverged("dispatched decision lacks provider request")
         try:
             plan = _validate_plan(record.plan, self._request, self._config.max_plan_actions)
+            prior = self._state.policy_private
+            private = record.policy_private_after
+            if record.effective_policy_id == "sim-fallback-wait" and private != prior:
+                raise ValueError("malformed fallback must preserve entire prior private state")
+            if (
+                record.effective_policy_id == "rule-based-v0"
+                and private.last_fallback_ordinal != ordinal
+            ):
+                raise ValueError("recorded rule lifecycle cursor mismatch")
+            if record.effective_policy_id == "llm-v0":
+                if (private.fallback_state, private.last_fallback_ordinal) != (
+                    prior.fallback_state,
+                    prior.last_fallback_ordinal,
+                ):
+                    raise ValueError("LLM success cannot mutate frozen fallback state")
+                proposal = DecisionProposal(
+                    proposal_schema_version="0.1",
+                    actions=[
+                        P3IntentTemplate(
+                            action_type=i.action_type,
+                            target=i.target,
+                            parameters=i.parameters,
+                            reason=i.reason,
+                        )
+                        for i in plan.intents
+                    ],
+                    cognitive_delta=record.accepted_delta,
+                )
+                verified_plan, _ = validate_proposal(proposal, self._request, self._config)
+                if verified_plan != plan:
+                    raise ValueError("recorded model plan does not validate")
             successor = self._stage_state(plan, record.accepted_delta, record.policy_private_after)
         except ValueError as exc:
             raise ReplayDiverged("recorded plan/delta/private state is invalid") from exc
@@ -801,7 +884,7 @@ def create_p3_runtime(
     restored_state: ResidentRuntimeStateP3 | None = None,
     *,
     live_enabled: bool,
-    provider: ProviderAdapter,
+    provider: ProviderAdapter | None,
     budget: DecisionBudgetPort,
     attempts: AttemptJournalPort,
     fallback: FallbackAdapter,

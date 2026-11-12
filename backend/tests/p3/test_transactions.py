@@ -759,3 +759,178 @@ def test_unicode_action_invalidity_precedes_cognitive_invalidity():
     bad = response(json.dumps(body))
     runtime, *_ = setup(outputs=[bad, bad])
     assert decide(runtime).error_kind == "INVALID_PLAN"
+
+
+def test_disk_publication_is_excluded_from_primary_decision_deadline():
+    clock = Clock()
+    runtime, provider, budget, journal, _, _ = setup(
+        outputs=[response("bad"), response()], clock=clock, elapsed=[10000, 10000]
+    )
+
+    def delayed(method):
+        def call(*args):
+            clock.value += 100000
+            return method(*args)
+
+        return call
+
+    budget.admit = delayed(budget.admit)
+    journal.stage_context = delayed(journal.stage_context)
+    journal.before_call = delayed(journal.before_call)
+    journal.after_call = delayed(journal.after_call)
+    record = decide(runtime)
+    assert record.status == "ok" and clock.value > 60000
+    assert [c[2] for c in provider.calls] == [30000, 30000]
+
+
+def test_factory_supports_absent_provider_only_when_no_live_call_is_eligible():
+    req = request()
+    cfg = config(req)
+    kwargs = dict(
+        live_enabled=True,
+        provider=None,
+        budget=Sentinel(),
+        attempts=Sentinel(),
+        fallback=Sentinel(),
+        run_id="runtime-test",
+        purpose="fake",
+    )
+    with pytest.raises(ValueError, match="requires an injected provider"):
+        create_p3_runtime("ella", cfg, req.context.identity, **kwargs)
+    create_p3_runtime("ella", cfg, req.context.identity, **{**kwargs, "live_enabled": False})
+    create_p3_runtime("ella", cfg, req.context.identity, **kwargs, own_records=[], own_contexts=[])
+    control = cfg.model_copy(update={"policy_id": "rule-based-v0"})
+    create_p3_runtime("ella", control, req.context.identity, **kwargs)
+
+
+@pytest.mark.parametrize("field", ["prompt_sha256", "action_schema_sha256"])
+def test_factory_rejects_bad_contract_pins_even_for_rule_primary(field):
+    cfg = config(request()).model_copy(update={field: "0" * 64})
+    with pytest.raises(ValueError, match="pin mismatch"):
+        setup(cfg=cfg, policy="rule-based-v0")
+
+
+@pytest.mark.parametrize("mode", ["llm", "wait", "rule"])
+def test_replay_rejects_illegal_private_successor_even_before_state_hash(mode):
+    opts = (
+        {"malformed": True, "deny_after": 0}
+        if mode == "wait"
+        else {"deny_after": 0}
+        if mode == "rule"
+        else {}
+    )
+    runtime, _, _, journal, _, _ = setup(**opts)
+    record = decide(runtime)
+    private = record.policy_private_after
+    if mode == "rule":
+        changed = private.model_copy(update={"last_fallback_ordinal": None})
+    else:
+        changed = private.model_copy(
+            update={
+                "fallback_state": private.fallback_state.model_copy(update={"canteen_capacity": 2})
+            }
+        )
+    record = record.model_copy(update={"policy_private_after": changed})
+    replay, *_ = setup(own_records=[record], own_contexts=journal.contexts, external_sentinel=True)
+    with pytest.raises(ReplayDiverged, match="plan/delta/private"):
+        decide(replay)
+
+
+def test_replay_rejects_missing_provider_request_for_zero_call_budget_failure():
+    runtime, _, _, journal, _, _ = setup(deny_after=0)
+    record = decide(runtime)
+    context = journal.contexts[0].model_copy(update={"provider_request": None})
+    replay, *_ = setup(own_records=[record], own_contexts=[context], external_sentinel=True)
+    with pytest.raises(ReplayDiverged, match="lacks provider request"):
+        decide(replay)
+
+
+def test_runtime_preserves_real_alternate_selector_identity_and_replays_its_order():
+    from living_island.memory.p3_types import RetrievalResult
+
+    class RecentOnlyFixture:
+        retrieval_profile = "recent-only-fixture-v0"
+        implementation_sha256 = "f" * 64
+
+        def retrieve(self, state, query):
+            ranked = sorted(state.records, key=lambda record: -record.sequence)
+            return RetrievalResult(
+                ranked_experience_ids=[r.experience_id for r in ranked],
+                selected_records=ranked[:16],
+            )
+
+    req = request()
+    cfg = config(req).model_copy(update={"context_profile_id": "p3-context-recent-only-fixture-v0"})
+    journal = Journal()
+    kwargs = dict(
+        live_enabled=True,
+        provider=FakeProvider(outputs=[response(), response()]),
+        budget=FakeBudget(cfg.pricing),
+        attempts=journal,
+        fallback=FakeFallback(cfg),
+        run_id="runtime-test",
+        selector=RecentOnlyFixture(),
+        selector_sha256="f" * 64,
+        clock_ms=Clock(),
+    )
+    with pytest.raises(ValueError, match="fixture selectors"):
+        create_p3_runtime("ella", cfg, req.context.identity, **kwargs)
+    runtime = create_p3_runtime("ella", cfg, req.context.identity, **kwargs, purpose="fake")
+    records = []
+    for tick in range(2):
+        record = decide(runtime, tick)
+        runtime.commit_decision(record)
+        records.append(record)
+    for context in journal.contexts:
+        assert context.assembly.manifest.retrieval_profile == "recent-only-fixture-v0"
+        recalled = context.assembly.context.recalled_experience
+        assert [r.sequence for r in recalled] == sorted(
+            [r.sequence for r in recalled], reverse=True
+        )
+    replay = create_p3_runtime(
+        "ella",
+        cfg,
+        req.context.identity,
+        **{
+            **kwargs,
+            "provider": Sentinel(),
+            "budget": Sentinel(),
+            "attempts": Sentinel(),
+            "fallback": Sentinel(),
+            "selector": RecentOnlyFixture(),
+        },
+        purpose="recorded-fake",
+        own_records=records,
+        own_contexts=journal.contexts,
+    )
+    for tick, record in enumerate(records):
+        rebuilt = decide(replay, tick)
+        assert rebuilt == record
+        replay.commit_decision(rebuilt)
+    assert replay.export_state() == runtime.export_state()
+
+
+@pytest.mark.parametrize("size, calls", [(131072, 1), (131073, 0)])
+def test_exact_wire_byte_admission_boundary(size, calls):
+    runtime, provider, budget, journal, _, _ = setup()
+    raw = canonical_bytes({"pad": "x" * (size - len(canonical_bytes({"pad": ""})))})
+    assert len(raw) == size
+
+    def prepare(_request):
+        return WireRequest(
+            wire_schema_version="0.1",
+            method="POST",
+            origin="https://api.deepseek.com",
+            path="/responses",
+            content_type="application/json",
+            body_base64=base64.b64encode(raw).decode(),
+        )
+
+    provider.prepare = prepare
+    record = decide(runtime)
+    assert len(provider.calls) == len(budget.reservations) == calls
+    assert len(journal.contexts) == 1
+    if calls:
+        assert record.status == "ok"
+    else:
+        assert record.detail_code == "INPUT_LIMIT"
