@@ -187,5 +187,8 @@ local resend. Tests use local fake connections, not external sockets.
 
 The frozen port carries no call ID, allocation, replay mode or ledger handle.
 Duplicate-call exclusion, denied allocation, recorded-mode provider omission,
-locks and retry scheduling remain P3-03 responsibilities. No shared interface
-change, dependency change, budget authority or P3-05 integration is introduced.
+locks and retry scheduling remain P3-03 responsibilities. The only shared-port
+change is the owner's `InvalidFallbackPlan` contract, imported as an explicitly
+approved dependency so the fallback adapter and coordinator use the same type.
+No other shared-interface change, package dependency, budget authority or P3-05
+integration is introduced.
