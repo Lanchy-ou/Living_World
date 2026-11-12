@@ -451,3 +451,31 @@ def test_repeated_clean_zero_tick_continuation_uses_distinct_locators(tmp_path):
         source = target
         ancestors = (target / "checkpoint-0000000000.json", *ancestors)
     assert len(checkpoint.origins) == 2
+
+
+def test_fixture_selector_module_may_be_pinned_in_registration_inputs(tmp_path):
+    content = tiny_content(["~~~~~~~", "~.SC..~", "~.MF..~", "~~~~~~~"], {"ella": (1, 1)})
+    files, reader = retained_fixture(content, fixture_profile=True)
+    registration = json.loads(files["trial-registration.json"])
+    selector = {
+        "path": "backend/tests/p3/fixture_selector.py",
+        "sha256": sha256(SOURCE).hexdigest(),
+    }
+    registration["input_pins"] = [selector]
+    files["trial-registration.json"] = canonical_bytes(registration)
+    policies = json.loads(files["p3-policy-configs.json"])
+    for policy in policies:
+        policy["config"]["trial_registration_sha256"] = canonical_sha256(registration)
+    files["p3-policy-configs.json"] = canonical_bytes(policies)
+    implementation = json.loads(files["implementation.json"])
+    implementation["modules"][-1]["files"] = [selector]
+    files["implementation.json"] = canonical_bytes(implementation)
+
+    def source_reader(commit, path):
+        if path == selector["path"]:
+            assert commit == COMMIT
+            return SOURCE
+        return reader(commit, path)
+
+    retain_inputs(tmp_path, files, run_id=content.config.meta.run_id, source_reader=source_reader)
+    assert read_inputs(tmp_path, source_reader=source_reader) == files

@@ -202,7 +202,16 @@ def validate_inputs(
     pin = decode_model(files["implementation.json"], ImplementationPin, Path("implementation.json"))
     if pin.code_commit != registration.implementation_commit:
         raise ValueError("implementation revision differs from registration")
-    registered_sources = {item.path: item.sha256 for item in registration.implementation_pins}
+    registered_sources: dict[str, str] = {}
+    for registered_pin in [*registration.implementation_pins, *registration.input_pins]:
+        if (
+            registered_pin.path in registered_sources
+            and registered_sources[registered_pin.path] != registered_pin.sha256
+        ):
+            raise ValueError(
+                "registration inventories assign conflicting hashes to one source path"
+            )
+        registered_sources[registered_pin.path] = registered_pin.sha256
     if any(
         registered_sources.get(item.path) != item.sha256
         for module in pin.modules
@@ -583,6 +592,9 @@ def _validate_logs(
         )
     ordinals = {state.actor_id: 0 for state in save.agent_state.runtime_states}
     policies = {state.actor_id: state.policy_config for state in save.agent_state.runtime_states}
+    offline_ticks = [
+        origin.checkpoint_tick for origin in origins if origin.recovery_mode == "offline"
+    ]
     last: tuple[int, str] | None = None
     for context, decision in zip(contexts, decisions, strict=True):
         if (
@@ -603,6 +615,15 @@ def _validate_logs(
         ):
             raise ValueError("context/decision hashes differ")
         cfg = policies[decision.actor_id]
+        if offline_ticks and decision.tick >= min(offline_ticks) and cfg.policy_id == "llm-v0":
+            if (decision.error_kind, decision.detail_code, decision.call_ids) != (
+                "PROVIDER_ERROR",
+                "RECOVERY_OFFLINE",
+                [],
+            ):
+                raise ValueError(
+                    "offline recovery LLM decisions must be call-free recovery fallbacks"
+                )
         if decision.policy_id != cfg.policy_id or (
             context.assembly.manifest.context_profile_id != cfg.context_profile_id
             or canonical_sha256(context.request.context.identity) != cfg.identity_sha256
@@ -699,6 +720,51 @@ def _validate_logs(
         raise ValueError("checkpoint recovery mirror differs from verified origin ancestry")
     if any(origin.recovery_mode == "offline" for origin in origins) and save.live_enabled:
         raise ValueError("offline recovery cannot re-enable live calls")
+    records_by_id = {record.decision_id: record for record in decisions}
+    last_by_actor = {record.actor_id: record for record in decisions}
+    for runtime in save.agent_state.runtime_states:
+        latest = last_by_actor.get(runtime.actor_id)
+        refs = runtime.cognitive_state.experience.intent_refs
+        if latest is None:
+            if refs:
+                raise ValueError("runtime references require a committed decision")
+        elif [ref.intent for ref in refs] != latest.plan.intents or any(
+            (ref.decision_id, ref.decision_ordinal, ref.committed_tick)
+            != (latest.decision_id, latest.decision_ordinal, latest.tick)
+            for ref in refs
+        ):
+            raise ValueError("runtime references must preserve its exact latest committed plan")
+        if latest is not None and runtime.policy_private != latest.policy_private_after:
+            raise ValueError("runtime private state differs from its latest committed decision")
+        for memory in runtime.cognitive_state.experience.records:
+            if memory.source.run_id != save.world.run_id:
+                raise ValueError("retained experience source belongs to a foreign run")
+            if (
+                memory.source.source_kind == "decision"
+                and memory.source.decision_id not in records_by_id
+            ):
+                raise ValueError("retained experience references an uncommitted decision")
+    living = {resident.id for resident in save.world.residents if resident.alive}
+    for plan in save.agent_state.queued_plans:
+        latest = last_by_actor.get(plan.actor_id)
+        if (
+            plan.actor_id not in living
+            or latest is None
+            or (
+                plan.plan_id != latest.plan.plan_id
+                or plan.created_at_tick != latest.plan.created_at_tick
+                or plan.intents != latest.plan.intents[-len(plan.intents) :]
+            )
+        ):
+            raise ValueError(
+                "queued intents must preserve a living resident's committed plan suffix"
+            )
+    for action in save.world.active_actions:
+        latest = last_by_actor.get(action.intent.actor_id)
+        if latest is None or action.intent not in latest.plan.intents:
+            raise ValueError("active intent must resolve to its owner's latest committed plan")
+    if any(entry.actor_id not in living for entry in save.agent_state.deferred_decision_triggers):
+        raise ValueError("deferred decision triggers must belong to living residents")
     for resident in save.world.residents:
         runtime = next(
             state for state in save.agent_state.runtime_states if state.actor_id == resident.id
