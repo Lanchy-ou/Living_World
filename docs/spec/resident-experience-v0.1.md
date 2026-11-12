@@ -1,9 +1,11 @@
 # Resident experience and context v0.1
 
-> Proposed normative P3 specification for M8, 2026-11-12. CR-005 option A approves
-> the scope, not these schemas or limits. P1/P2 remain unchanged until the explicit
-> amendment process. All current-code citations below are at baseline
-> `9bd45082002e87172312484a53c4787020bd584d`.
+> **Accepted at M8, 2026-11-12.** The owner approved the P3 package and CR-005
+> amendments, with DeepSeek and an aggregate CNY150 API ceiling superseding the
+> earlier provider/USD proposal. See [M8 decision record](../tasks/p3/M8-decisions.md).
+> Normative design; implementation and live verification remain separate tasks.
+
+Current-code citation baseline: `9bd45082002e87172312484a53c4787020bd584d`.
 
 This specification owns experience, provenance, intent-reference retention, retrieval,
 `DecisionContextP3`, `ProviderProjection` and inclusion manifests. The
@@ -12,7 +14,7 @@ owns cross-part names. [Cognition](resident-cognition-v0.1.md) owns identity and
 meaning; [decisions](llm-decision-v0.1.md) owns transactions, logs and recovery. A rule
 in those owners is referenced, not redefined here.
 
-## 1. Existing facts and proposed boundary
+## 1. Existing facts and accepted boundary
 
 | Existing behavior at baseline | Evidence |
 | --- | --- |
@@ -24,7 +26,7 @@ in those owners is referenced, not redefined here.
 | Legacy episode/belief confidence currently shares the physiological NeedBand type. Its values are physiological labels. | `backend/src/living_island/agents/types.py:86`, `backend/src/living_island/agents/types.py:94`, `backend/src/living_island/world/protocol.py:132` |
 | Memory currently has no world.protocol import; its import-linter exception is deliberately unmatched. | `backend/pyproject.toml:75` |
 
-**Proposed P3:** ingestion creates a bounded resident-local working buffer at every
+**Accepted P3:** ingestion creates a bounded resident-local working buffer at every
 own living boundary. It is not objective history or a second map. Memory has no IO
 and no imports from agents, sim, persistence or contract; agents maps these memory
 DTOs into cognition and context. Imports from world are only world.protocol in
@@ -430,7 +432,7 @@ are named only in [plan section 2.2](../plans/p3-implementation-plan-v0.1.md#22-
 The additional future `ConfidenceAssessment` port is defined in section 2 here. None
 has a P3 invocation or psychological update rule.
 
-## 7. Proposed limits for M8
+## 7. Approved limits (M8)
 
 | ID | Value and unit | Rationale | Measurement before changing it |
 | --- | --- | --- | --- |
@@ -442,13 +444,13 @@ has a P3 invocation or psychological update rule.
 
 The unchanged `max_plan_actions` bounds current intent refs; this is inherited world
 configuration, not a second P3 numerical limit. No retention age, numerical confidence
-or provider token estimate is introduced here. All E limits are proposed together;
+or provider token estimate is introduced here. All E limits were approved together at M8;
 implementers cannot pick replacements. Any change is a versioned profile selected
 before evaluation and listed in the M8 decision sheet.
 
 ## 8. Exact decision vectors
 
-These are typed-input unit vectors for the proposed memory/context behavior, not
+These are typed-input unit vectors for the accepted memory/context behavior, not
 full physical simulations unless an engine oracle is cited below. They do not assert
 that separate live provider calls return equal outputs.
 

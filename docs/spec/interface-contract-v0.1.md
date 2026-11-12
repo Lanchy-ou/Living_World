@@ -16,6 +16,9 @@
 
 **Conventions:** JSON-shaped field lists below are normative **field descriptions, not Python/TypeScript code**. Types use `string`, `integer`, `boolean`, `null`, `array<T>` and `object{...}`; optional fields are marked `?`. Physical values must be integers.
 
+> **[CR-005] M8 approved and applied, 2026-11-12.** P3 context, format dispatch
+> and equality clauses are normative; legacy DTOs and ReplayBundle remain unchanged.
+
 ## 1. DTO boundaries and identity
 
 - `WorldState` is authoritative and backend-private; no frontend or model receives it wholesale.
@@ -158,7 +161,22 @@ DecisionContext {
 }
 ```
 
-This object does **not** imply that world stores the memory fields. Agent-layer retrieval, partial forgetting, relationship scores and dream integration are scoped to P4/P6.
+This object does not imply that world stores memory. The version 0.1 empty-memory
+context and its provisional RecalledEpisode/Belief fields remain unchanged for
+P1/P2. They are not repurposed for P3, including the old confidence_band:NeedBand.
+
+**[CR-005] P3 context.** Bounded working experience, deterministic retrieval and one
+current commitment are authorized in P3. DecisionContextP3 version 0.2 and the
+provider-only projection/inclusion manifest are defined solely by
+resident-experience-v0.1.md. The full delivered Perception remains unchanged;
+explicit provider projection is not a new Perception or extra knowledge. Strategy
+identities are explicit: configuration, retained ContextProfile and
+manifest must identify the actual algorithm, including a source-verified fake-only
+alternative on recorded replay. Unknown or mismatched bindings are refused. Confidence
+has its own proposed P3 representation, never physiological NeedBand. Goal/state
+semantics are in resident-cognition-v0.1.md; only accepted CognitiveDelta operations
+from llm-decision-v0.1.md can change decision-owned cognition. Consolidation,
+psychological forgetting, reflection, relationships, emotions and dreams stay later.
 
 ### 2.4 `ActionPlan`, `ActionIntent`, `ActionResult`
 
@@ -370,6 +388,22 @@ directory only post-checkpoint events and decisions plus `resume-origin.json`
 `{source_run_id, checkpoint_tick, checkpoint_sha256, event_cursor, decision_record_cursor}`;
 it never modifies the source run (agent-interface §6).
 
+**[CR-005] P3 format dispatch.** SavePackage and DecisionRecord version 0.1 retain
+all legacy fields and bytes. The earlier LLMCallRecord sketch is not the P3 wire
+format. P3 instead uses SavePackageP3/DecisionRecordP3 version 0.2 and version 0.1
+P3 context/dispatch/terminal-call logs, defined by llm-decision-v0.1.md. That owner
+specifies exact types, nullability, input/attempt links, committed prefix counts,
+conservative budget reservations, interrupted calls and partial-tail recovery.
+CaseAllocationP3 owns live spending across all output directories for one registered
+case; snapshot allocation_entries/run_budget are immutable replay evidence, not an
+authority from which remaining allowance can be reissued.
+Runtime cognitive state is stored once within its resident runtime; legacy
+placeholder arrays are not a second mutable source. Persistence alone writes the
+files. A published checkpoint identifies complete durable prefixes; an uncommitted
+provider response never becomes an accepted decision merely because bytes exist.
+ReplayBundle and section 5a are unchanged. Inspection exports for P3 are separate,
+read-only developer artifacts and must never be supplied to residents.
+
 ### 5a. [A2] Replay bundle (browser-facing, read-only)
 
 `ReplayBundle` is one UTF-8 JSON file, `runs/<run_id>/replay.json`, exported by `persistence` after a run. It is separate from the save format (`SavePackage` snapshot plus event JSONL) and the two are never mixed. Its models are canonical in `contract/replay.py` (`ReplayBundle`, `DisplayFrame` and their parts; they reuse the canonical `WorldEvent` and public vocabularies and never import `WorldState` or `Perception`). Every replay model rejects unknown fields; all physical numbers are integers; labels and IDs are strings and `alive` is a boolean.
@@ -430,6 +464,13 @@ Authoritative snapshot and WorldEvent JSONL use **UTF-8 without BOM, LF line end
 **“Byte-identical replay” means:** given an identical completed-tick save package, canonical effective config and map, exact persisted `resolution_rng` state, identical ordered player commands, and **recorded** LLM decisions (no fresh calls), re-execution produces (1) an identical canonical authoritative `WorldState` snapshot at every compared checkpoint and (2) identical bytes for the corresponding objective `WorldEvent` JSONL segment. It does **not** mean identical web UI pixels, logging timestamps, provider latency, token-use diagnostics, or raw response streaming boundaries. The recorded LLM `parsed_plan`, not an unrecorded fresh model call, supplies each decision.
 
 Config identity is SHA-256 of the canonical parsed typed TOML configuration (object keys sorted, arrays in declaration order); map identity is SHA-256 of the canonical UTF-8 `map.width`×`map.height` map bytes including final LF. The run ID is configured and stable. If the replay starts after a saved event cursor, compare only the segment after that cursor, not the entire historical file.
+
+**[CR-005] P3 equality.** In addition to the unchanged world/event comparison,
+recorded P3 execution verifies decision records, full-context/projection identities,
+accepted cognitive deltas, resident cognitive/private state and committed logical
+cursors under llm-decision-v0.1.md. Preserve recorded usage/accounting inputs when
+re-executing; do not derive a new choice from wall-clock latency or rerun a provider.
+Raw diagnostic timing and separate live-run responses are not equality promises.
 
 ## 7. Clarifications required before implementation freeze
 

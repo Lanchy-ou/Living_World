@@ -11,13 +11,16 @@ clarifications are listed in §8; they are not approved or effective until amend
 lands in P1-01a. In particular, using DecisionContext in P1 requires explicitly amending
 the current prohibition in Interface Contract §2.3.
 
+> **[CR-005] M8 approved and applied, 2026-11-12.** P3 clauses below are normative;
+> their versioned lane preserves the P1/P2 contract. See [M8 record](../tasks/p3/M8-decisions.md).
+
 ## 0. Decisions and phase boundaries
 
 ### 0.1 Confirmed direction
 
 | ID | Decision | Engineering meaning |
 |---|---|---|
-| AG-01 | One `DecisionContext` shape for every policy | Built in `agents` from `Perception` plus the resident's own private state. A policy may ignore fields it does not use. |
+| AG-01 | Versioned resident-local DecisionContext for each policy lane | P1/P2 retain their existing empty-memory DecisionContext. P3 policies receive DecisionContextP3, assembled in agents from the delivered Perception and that resident's own identity, goals and experience. No context is shared between residents. The P3 frozen-rule adapter maps only the allowed own inputs to the unchanged P2 context. |
 | AG-02 | One decision returns an `ActionPlan` of 1..`agents.max_plan_actions` world actions (default 5) | `move_to` counts as one intent however many tiles and ticks it takes. |
 | AG-03 | Replanning is event-driven | Without triggers the runtime keeps executing its queued plan (World Rules §4.4). |
 | AG-04 | On LLM failure a rule-based policy takes over temporarily | The fallback uses the same resident's context only. It is logged (`agent_fallback_used`). Real fallback arrives in P2/P3. |
@@ -28,9 +31,15 @@ the current prohibition in Interface Contract §2.3.
   `RecordedPolicy`; plan validation and queuing; perception ingestion; decision records; save and
   restore of runtime state.
 - **P2:** `RuleBasedPolicy` on the same interface, surviving without hidden map knowledge.
-- **P3:** `LLMPolicy`: adapter, structured output, budget, timeout, bounded retry, rule-based
-  fallback, model-call recording and replay. Simulated time stays frozen while waiting.
-- **P4/P6:** real memory, beliefs, relationships, reflection, dreams, and cognitive tools.
+- **P3 [CR-005]:** LLMPolicy, bounded resident experience captured at every delivered
+  boundary, deterministic retrieval, one current short-term commitment and recorded
+  cognitive updates. Includes provider adapter, structured output, budget, timeout,
+  bounded retry, stateful rule fallback, model-call records and recorded re-execution.
+  Simulated time stays frozen while a decision is pending. The P3 character panel and
+  developer debug view consume a separate read-only inspection artifact.
+- **P4/P6:** consolidation, psychological forgetting, reflection, long-term belief and
+  relationship rules, emotions, dreams and cognitive tools. P3 names extension ports
+  and their owners only; bounded working-buffer eviction is not a forgetting model.
 - **Deferred, not to be built early:** MCP, parallel model calls, agent-to-agent protocols,
   general plan interpreters or plugin frameworks.
 
@@ -41,7 +50,7 @@ the current prohibition in Interface Contract §2.3.
 | `world` | `WorldState`, action legality and settlement, `Perception`, `BoundaryPerceptionDelivery`, canonical physical fact models and event ID allocation | import any other `living_island` subpackage, including `contract`/`events`; trust model claims |
 | `agents` | `ResidentRuntime`, policies, `DecisionContext` assembly, plan **structure** validation, decision records | write `WorldState`; read another resident's private state or the full map |
 | `sim` | boundary phases, delivery, decision scheduling, plan queues, starting intents in `world`, checkpoints | change resources, positions or conditions except through `world` |
-| `memory` (P4) | the resident's subjective memories and interpretations | inject unobserved facts; settle actions |
+| memory (small P3 foundation; richer systems later) | Resident-local bounded experience, provenance and deterministic retrieval | import agents, sim, persistence or contract; inject unobserved facts; settle actions or perform IO |
 | `persistence` | loading content/scripts/recordings and reading/writing snapshots and JSONL | compute rules; produce facts |
 | `events` | re-exports of canonical fact models and read-only projections | allocate IDs independently; import `sim`/`persistence` |
 
@@ -85,9 +94,12 @@ ResidentRuntime {
 }
 ```
 
-- **`ingest`** is called once per pending packet, before any decision at that boundary, in
-  ascending `actor_id` order. It updates the runtime's private state (in P1 only the latest
-  `Perception` and the decision bookkeeping; in P4 also memory). After it returns, `sim`
+**`ingest`** is called once per pending packet before any decision at that boundary,
+in ascending actor_id order. It updates the runtime's private state: in P1/P2,
+the latest Perception and decision bookkeeping; in the opt-in P3 lane, experience
+ingestion and goal-evidence reduction under resident-experience-v0.1.md and
+resident-cognition-v0.1.md. P1/P2 rule cue capture remains decision-only under
+OQ-056; P3 does not reinterpret the frozen rule policy's private state. After it returns, `sim`
   advances `delivered_perception_ticks` for that actor (Interface Contract §5), then removes
   the pending packet. Validate actor ID, delivery ID and strictly consecutive observed ticks;
   a duplicate, gap or mismatched packet stops the run. It must not fail
@@ -135,9 +147,10 @@ DecisionOutcome =
   passed as an ordered array. Only the first request for each actor at tick zero has
   `triggers = []`; later requests need one or more deferred triggers. No new trigger
   code is introduced.
-- **`DecisionError`:** `INVALID_CONTEXT`, `INVALID_PLAN`, `SCRIPT_EXHAUSTED`, `REPLAY_DIVERGED`;
-  P3 adds `TIMEOUT`, `PARSE_ERROR`, `BUDGET`, `PROVIDER_ERROR`. These are policy errors, never
-  world `failure_code`s.
+- **`DecisionError` (legacy P1/P2):** `INVALID_CONTEXT`, `INVALID_PLAN`,
+  `SCRIPT_EXHAUSTED`, `REPLAY_DIVERGED`. P3 uses a separate DecisionErrorP3 in
+  section 2.6; it does not widen this legacy serialized enum. Policy errors are
+  never world failure_code values.
 - **IDs are deterministic:** `plan_id = "<actor_id>:p<decision_ordinal, minimum 6 digits>"`
   and `intent_id = "<plan_id>:i<zero-based decimal index>"`. Use unbounded integer formatting,
   not truncation; index is below the configured plan limit. Shared pure builders in
@@ -207,6 +220,39 @@ an ancestor checkpoint, or a `rule-based-v0` record in the verified decision pre
 restore rules and rejections RJ-1 to RJ-8 of CR-004 (`open-questions.md`, "CR-004")
 apply. Without `rule_lineage`, restore is unchanged.
 
+### 2.6 [CR-005] Opt-in P3 lane
+
+P1/P2 interfaces, PolicyId values, version 0.1 serialization and reference hashes
+remain unchanged. P3 uses the closed, explicitly versioned DecisionRequestP3,
+DecisionContextP3, P3PolicyConfig, ResidentRuntimeStateP3 and DecisionRecordP3
+specified by the P3 package. Their registry is p3-implementation-plan-v0.1.md
+section 1; their owning definitions, validation and ordering are normative:
+
+- resident-experience-v0.1.md owns experience, source references, retained own intents,
+  retrieval/profile binding, DecisionContextP3, ProviderProjection and inclusion
+  manifests recording the actual selected strategy;
+- resident-cognition-v0.1.md owns identity/prompt inputs, GoalChange/GoalState and
+  completion evidence, model-facing action descriptions and DecisionProposal;
+- llm-decision-v0.1.md owns CognitiveDelta, permitted operations, the provider port,
+  private policy state, decision transaction, call/budget records, durable case
+  allocation ownership and recovery.
+
+The P3 primary policy is llm-v0 for registered llm_actor_ids and rule-based-v0 for
+other configured actors. Every actor uses P3 envelopes; deliberate rule-only decisions
+are successful rule decisions, not LLM errors or fallback substitutions. recorded-p3-v0
+is a no-call execution transport preserving recorded configuration/provenance. The new
+LLM/replay IDs do not widen the legacy PolicyId union. Unknown versions are refused without implicit migration.
+The P3 error vocabulary is INVALID_CONTEXT, INVALID_PLAN, INVALID_DELTA, PARSE_ERROR,
+TIMEOUT, BUDGET, PROVIDER_ERROR and REPLAY_DIVERGED; the last stops before commit.
+Detailed classification is owned by llm-decision-v0.1.md.
+
+Resident cognitive state is distinct from policy-private rule/LLM bookkeeping and
+from coordinator-owned spend. Ingestion and goal evidence stage and publish together;
+failed decisions cannot undo ingestion. An accepted plan and CognitiveDelta commit
+as one decision, with the matching ordinal, record, references and private-state
+changes. Cognitive updates never write world state. Only delivered own feedback
+can establish the physical completion allowed by the goal specification.
+
 ## 3. Plans
 
 ### 3.1 Validation (two layers)
@@ -242,16 +288,19 @@ apply. Without `rule_lineage`, restore is unchanged.
   wait substitute. Unexpected exceptions stop the run rather than being hidden as policy errors.
   P1 policy faults are recorded in DecisionRecord only; do not invent an
   `agent_fallback_used` world-event reason outside the frozen catalog.
-- **P3:** classify the error, retry within the P3 limit, then use the rule-based policy for that
-  decision and record `agent_fallback_used`. The next eligible decision tries the LLM again. If
-  the fallback also fails, use the `wait` substitute.
+- **P3 [CR-005]:** Use the bounded classification, retry and stateful frozen-rule
+  adapter lifecycle in llm-decision-v0.1.md. The next eligible decision may attempt
+  the LLM only when the recorded authorization/budget permits. Valid world failures
+  are feedback, not provider errors. The existing agent_fallback_used event uses
+  only its frozen reason vocabulary, with detailed P3 failures in the decision log.
+  A typed fallback failure uses the existing wait substitute; programming exceptions
+  and replay divergence stop. No rejected attempt partially changes cognition.
 
 ### 3.4 Parallel model calls (future, not P1)
 
-If adopted in P3: every waiting actor's request is built from the same committed boundary. Calls
-may run concurrently, but plans are accepted and queued in ascending `actor_id` order. World
-settlement stays single-threaded. Response order must never change simulation order. This needs
-its own P3 review.
+Parallel model calls are deferred beyond P3. P3 calls and commits actors serially
+in canonical actor order. Any future parallel implementation requires a separate
+review preserving the same boundary inputs and deterministic commit order.
 
 ## 4. P1 policies
 
@@ -406,6 +455,13 @@ Decision records are buffered in boundary actor order, then flushed at commit. P
 decisions do not become checkpoints. `decisions.jsonl` is distinct from P3's future model
 call log; do not repurpose llm_record_cursor as its cursor. P1 preserves llm_call_id=null.
 
+**[CR-005] P3 records.** The version 0.1 shapes and files above are unchanged.
+P3 uses DecisionRecordP3 version 0.2 and the distinct context, dispatch and terminal
+call records in llm-decision-v0.1.md. That specification owns all log names, links,
+request/projection/state identities, attempt ordering, usage and committed cursors.
+Record exact inputs, available raw responses, parsed results/errors and versions;
+missing usage is unknown. Diagnostics are not unrecorded sources of simulation state.
+
 ## 6. Save and restore
 
 The `SavePackage.agent_state` (Interface Contract §5) gains one entry per resident:
@@ -450,6 +506,19 @@ ResidentRuntimeState {
   The completion manifest is written only after a successful run. CLI source/output paths
   must resolve to distinct directories, and output must not already contain run artifacts.
 - Version mismatch is refused, with no migration (v0.1 policy).
+
+**[CR-005] P3 save and replay.** SavePackageP3 version 0.2 composes the unchanged
+world/pending-delivery DTOs with ResidentRuntimeStateP3 and verified P3 log prefixes.
+The sole checkpoint phase remains post-commit and pre-ingestion, including tick zero.
+llm-decision-v0.1.md owns snapshot composition, durable commit publication, partial
+tails, uncertain-call spend, continuation, version refusal and equality targets.
+Its case allocation authority, separate from checkpoints, owns remaining live
+capacity across all continuations. Ordinary current-head continuation retains its
+original authorization; repeated/concurrent restores cannot duplicate that grant.
+Recorded re-execution applies recorded accepted cognitive deltas/plans and deterministic
+ingestion and the pinned retrieval strategy; it makes zero model, embedding, summary
+or reflection calls and never acquires or changes a live allocation. Independent
+live runs, including live continuations, are not promised identical outcomes.
 
 ## 7. P1 acceptance tests
 

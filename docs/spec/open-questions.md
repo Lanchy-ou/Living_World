@@ -219,9 +219,9 @@ These entries belong to P3-00. They do not amend the existing normative contract
 | ID | Date | Raised in task | Question | Assumption made | Status |
 | --- | --- | --- | --- | --- | --- |
 | CR-005 | 2026-11-11 | P3-00 | Agent Interface section 0.2 and Interface Contract section 2.3 defer memory/retrieval to P4/P6. Should P3 now include bounded resident experience, deterministic retrieval, a current commitment and recorded cognitive updates to support the owner's extensible foundation? | Recommendation: move this minimum working slice into P3; keep long-term consolidation, forgetting, reflection, relationship/emotion rules and dreams later. This task only drafts a proposal; no contract/code changes. Exact amendments are P3-01 deliverables after scope approval. | approved (owner, 2026-11-11): option A |
-| OQ-082 | 2026-11-11 | P3-00 | What are the exact experience/context bounds, ordering and overflow rules, confidence representation, call/retry/time/token limits, budget accounting and live evaluation pass lines? | No numbers assumed. P3-01 proposes a concrete bounded profile, input identities, interrupted-call treatment and evaluation plan before dependent implementation or calls. Use deterministic fake-provider fixtures first. | open; P3-01 design obligation |
-| OQ-083 | 2026-11-11 | P3-00 | How does the frozen, stateful P2 rule policy resume after periods of LLM control, retain valid own-intent references and return control without losing resident experience? | Keep shared experience separate from each policy's private state. Do not treat the rule policy as stateless or change its frozen baseline silently. P3-01 must choose and test an explicit adapter/lifecycle. | open; P3-01 design obligation |
-| OQ-084 | 2026-11-11 | P3-00 | What goal autonomy belongs in the first resident foundation? | Proposed minimum: configured long-term direction and one current commitment, with bounded model-proposed short-term goal changes. No autonomous rewriting of stable personality, no long-term goal scheduler. Exact transitions and evidence-backed completion are specified in P3-01. | proposed; resolve with CR-005 scope |
+| OQ-082 | 2026-11-11 | P3-00 | What are the exact experience/context bounds, ordering and overflow rules, confidence representation, call/retry/time/token limits, budget accounting and live evaluation pass lines? | No numbers assumed. P3-01 proposes a concrete bounded profile, input identities, interrupted-call treatment and evaluation plan before dependent implementation or calls. Use deterministic fake-provider fixtures first. | resolved; M8 approved 2026-11-12 |
+| OQ-083 | 2026-11-11 | P3-00 | How does the frozen, stateful P2 rule policy resume after periods of LLM control, retain valid own-intent references and return control without losing resident experience? | Keep shared experience separate from each policy's private state. Do not treat the rule policy as stateless or change its frozen baseline silently. P3-01 must choose and test an explicit adapter/lifecycle. | resolved; M8 approved 2026-11-12 |
+| OQ-084 | 2026-11-11 | P3-00 | What goal autonomy belongs in the first resident foundation? | Proposed minimum: configured long-term direction and one current commitment, with bounded model-proposed short-term goal changes. No autonomous rewriting of stable personality, no long-term goal scheduler. Exact transitions and evidence-backed completion are specified in P3-01. | resolved; M8 approved 2026-11-12 |
 
 ### CR-005 impact, options and recommendation
 
@@ -249,21 +249,23 @@ These entries belong to P3-00. They do not amend the existing normative contract
 ## P3-01 decision proposals (2026-11-12)
 
 Baseline: `9bd45082002e87172312484a53c4787020bd584d`. The existing CR-005 option A
-approval is unchanged. This section supplies the exact amendments and proposed
-resolutions for M8; it does not claim the owner has accepted schemas or numbers.
-OQ-082..084 remain pending M8, with concrete proposals in the four P3 specs and
+scope approval is unchanged. The owner approved the exact amendments and resolutions
+at M8 on 2026-11-12, then replaced the provider/budget with DeepSeek/CNY150.
+OQ-082..084 are resolved by the four accepted P3 specifications and
 [decision sheet](../tasks/p3/M8-decisions.md). All new IDs follow OQ-084.
 
 | ID | Date | Raised in task | Question | Proposed disposition / recommendation | Status |
 | --- | --- | --- | --- | --- | --- |
-| OQ-085 | 2026-11-12 | P3-01 | Where do identity/personality values come from when content/characters has no profiles? | Add the three exact versioned ProfileDocument inputs in resident-cognition section 1; retain configured actor name and initial_goal, and hash the resolved source. P1/P2 do not load them. | proposed; M8 |
-| OQ-086 | 2026-11-12 | P3-01 | Can the recipient certify a named giver fulfilled a promise from its inventory change? | No. Keep Perception unchanged; use unverifiable receiving commitments. Only a successful own give verdict joined to its owned intent certifies that own giving goal. A giver receipt would need a separate CR and is not required in P3. | proposed; M8 |
-| OQ-087 | 2026-11-12 | P3-01 | Which provider/model/settings should the first live adapter use? | OpenAI Responses with pinned gpt-5.4-mini-2026-03-17, reasoning effort none, structured text output and no tools; verify availability and pricing before registering trials. Alternatives: fake-only phase or a separately reviewed provider adapter. | proposed; M8 |
-| OQ-088 | 2026-11-12 | P3-01 | How are credentials supplied without entering content, prompts, logs or Git? | Use one ignored local .env, loaded by the outer launcher; inject the secret only into the selected adapter. Reject missing/ambiguous configuration before dispatch. No cloud key provisioning, environment dump or secret in retained inputs. | proposed; M8 |
-| OQ-089 | 2026-11-12 | P3-01 | Are the product's P3 character panel and debug view included? | Include them in P3-07 using a separately versioned read-only inspection artifact, joined to unchanged replay identity. Alternative is explicit owner-approved deferral; no silent deferral. | proposed; M8 |
-| OQ-090 | 2026-11-12 | P3-01 | What happens to spend and decisions after an uncertain or partial-tail provider call, including repeated/concurrent checkpoint restores? | Adopt llm-decision section 4.2/7: one durable allocation per registration/case, exclusive continuation ownership, pre-dispatch reservation and conservative offline recovery without silent redispatch. Ordinary clean current-head continuation reuses the original grant without renewed approval; new/changed allocations need a new authorized registration. A checkpoint or replay never recreates capacity. | proposed; M8; G2-R1-01 clarified |
+| OQ-085 | 2026-11-12 | P3-01 | Where do identity/personality values come from when content/characters has no profiles? | Add the three exact versioned ProfileDocument inputs in resident-cognition section 1; retain configured actor name and initial_goal, and hash the resolved source. P1/P2 do not load them. | resolved; M8 approved 2026-11-12 |
+| OQ-086 | 2026-11-12 | P3-01 | Can the recipient certify a named giver fulfilled a promise from its inventory change? | No. Keep Perception unchanged; use unverifiable receiving commitments. Only a successful own give verdict joined to its owned intent certifies that own giving goal. A giver receipt would need a separate CR and is not required in P3. | resolved; M8 approved 2026-11-12 |
+| OQ-087 | 2026-11-12 | P3-01 | Which provider/model/settings should the first live adapter use? | DeepSeek Responses with deepseek-flash, reasoning effort none, structured JSON and no tools. Preserve alias/version evidence; verify availability, mapping and peak CNY pricing before live registration. Owner ceiling CNY150 supersedes USD112; see M8 record. | resolved; M8 approved 2026-11-12 |
+| OQ-088 | 2026-11-12 | P3-01 | How are credentials supplied without entering content, prompts, logs or Git? | Use one ignored local .env, loaded by the outer launcher; inject the secret only into the selected adapter. Reject missing/ambiguous configuration before dispatch. No cloud key provisioning, environment dump or secret in retained inputs. | resolved; M8 approved 2026-11-12 |
+| OQ-089 | 2026-11-12 | P3-01 | Are the product's P3 character panel and debug view included? | Include them in P3-07 using a separately versioned read-only inspection artifact, joined to unchanged replay identity. Alternative is explicit owner-approved deferral; no silent deferral. | resolved; M8 approved 2026-11-12 |
+| OQ-090 | 2026-11-12 | P3-01 | What happens to spend and decisions after an uncertain or partial-tail provider call, including repeated/concurrent checkpoint restores? | Adopt llm-decision section 4.2/7: one durable allocation per registration/case, exclusive continuation ownership, pre-dispatch reservation and conservative offline recovery without silent redispatch. Ordinary clean current-head continuation reuses the original grant without renewed approval; new/changed allocations need a new authorized registration. A checkpoint or replay never recreates capacity. | resolved; M8 approved 2026-11-12; G2-R1-01 clarified |
 
-### CR-005 exact amendments for M8 (not applied)
+<a id="cr-005-exact-amendments-for-m8-not-applied"></a>
+
+### CR-005 exact amendments for M8 (applied 2026-11-12)
 
 This is the continuation of the CR-005 entry above. Current-code evidence is at the
 baseline: legacy DecisionContext and NeedBand memory fields are in
@@ -274,7 +276,12 @@ The existing fallback fact uses four reasons (`backend/src/living_island/world/f
 and the existing append port allocates events (`backend/src/living_island/world/ports.py:196`).
 No world/event/Perception/action/replay field or rule is changed by this CR.
 
-**Application gate.** After outside-team Gate 2 and the owner's M8 selection, apply
+**Application status.** Applied in the owner-authorized M8 documentation freeze
+after Gate 2 PASS at 659e1212 and owner approval on 2026-11-12. The exact blocks
+below are retained as the approved change record; see M8-decisions.md and P3-02.md
+for the application SHA and superseding DeepSeek/CNY150 allocation.
+
+**Historical application gate.** After outside-team Gate 2 and the owner's M8 selection, apply
 exactly the text blocks below in an owner-authorized documentation commit, mark them
 `[CR-005]`, update the four P3 spec/plan headers to the accepted status and record the
 accepted SHA in P3-02. Keep this proposed text as the decision record. Do not apply

@@ -1,13 +1,14 @@
 # Resident cognition specification v0.1
 
-> Proposed for M8, 2026-11-12. This specification defines the P3 lane only. Scope
-> approval of CR-005 does not freeze these choices. No world rule, Perception,
-> action or replay contract is amended here.
+> **Accepted at M8, 2026-11-12.** The owner approved the P3 package and CR-005
+> amendments, with DeepSeek and an aggregate CNY150 API ceiling superseding the
+> earlier provider/USD proposal. See [M8 decision record](../tasks/p3/M8-decisions.md).
+> Normative design; implementation and live verification remain separate tasks.
 
 Baseline for every current-code citation below:
 `9bd45082002e87172312484a53c4787020bd584d`. Paths are repository-relative;
 `path:line` identifies that baseline, not a future implementation. Unlabelled rules
-below are **proposed**. Shared names/versions are registered in the
+below are **normative**. Shared names/versions are registered in the
 [P3 plan](../plans/p3-implementation-plan-v0.1.md#1-shared-interface-skeleton).
 [CognitiveDelta and transactions](llm-decision-v0.1.md) own which updates can be
 accepted; this document owns identity, prompts, goal semantics and model output.
@@ -16,7 +17,7 @@ selection, provider projection and confidence. Do not duplicate those algorithms
 
 ## 1. Identity and personality inputs
 
-### 1.1 Existing sources and proposed loading
+### 1.1 Existing sources and approved loading
 
 | Existing fact | Baseline evidence |
 | --- | --- |
@@ -24,7 +25,7 @@ selection, provider projection and confidence. Do not duplicate those algorithms
 | Sim passes only profile_id and initial_goal into OwnProfile. Runtime currently constructs values=[] and the configured initial goal with ID initial and priority 0. | `backend/src/living_island/sim/runner.py:92`; `backend/src/living_island/agents/types.py:280`; `backend/src/living_island/agents/runtime.py:129` |
 | content/characters/ has only the empty tracked placeholder; no existing personality documents can be loaded. | `content/characters/.gitkeep` (zero lines; baseline tree inventory) |
 
-Proposed resolution of OQ-085: P3 introduces `content/characters/explorer.json`, `cautious.json` and
+Approved resolution of OQ-085: P3 introduces `content/characters/explorer.json`, `cautious.json` and
 `cooperative.json`, loaded by persistence through explicit run-manifest locators.
 Do not derive arbitrary filesystem paths from model output or profile IDs. A locator
 is not identity. The startup loader parses the closed `ProfileDocument`, selects by
@@ -58,7 +59,7 @@ Model decisions cannot edit any ResidentIdentity field. The long-term direction 
 an orientation, not an automatically completed goal, scheduler or survival rule.
 No claim is made that these values produce a measured psychological personality.
 
-The proposed initial profile values are exactly the following, in listed order:
+The approved initial profile values are exactly the following, in listed order:
 
 | profile_id | values |
 | --- | --- |
@@ -193,7 +194,7 @@ Perception change request; OQ-086 recommends keeping this boundary unchanged for
 
 ### 3.1 Trusted template and data rendering
 
-Proposed template path: `content/prompts/p3-v0.1/resident.txt`; prompt_version is
+Approved template path: `content/prompts/p3-v0.1/resident.txt`; prompt_version is
 `p3-resident/0.1`. UTF-8 without BOM, LF, final LF required. The exact template is:
 
 ```text
@@ -242,14 +243,14 @@ requires the retained versions, never whichever file is currently on disk.
 Existing ACTION_TYPES/ACTION_SHAPES and parameter validators are canonical
 (`backend/src/living_island/world/protocol.py:44`, `:248`, `:261`, `:296`, `:312`).
 Existing IntentTemplate uses action_type, target, parameters and required nullable
-reason (`backend/src/living_island/agents/types.py:285`). Proposed schema generation
+reason (`backend/src/living_island/agents/types.py:285`). Approved schema generation
 imports those DTOs through world.protocol, then adds P3-only response/goal wrappers
 and authored-text limits. It never modifies the protocol DTOs. CI compares the action
 vocabulary, target-kind matrix, parameter fields, speech-act optional-key rules and
 nullability to the canonical models and fails on drift. Unknown action values fail
 structural validation; world legality is checked later by the unchanged engine.
 
-| action_type | target / parameters (existing) | Exact proposed description |
+| action_type | target / parameters (existing) | Exact approved description |
 | --- | --- | --- |
 | move_to | tile / {} | Propose travel to a tile; the world determines path, progress and interruptions. |
 | gather | entity / {} | Propose gathering fruit from an observed tree; stock, reach and room are checked by the world. |
@@ -319,7 +320,7 @@ do not receive their own HeardUtterance, and sleeping listeners receive none
 | Own successful give feedback with exact retained intent | Completes a matching own-give goal only. No recipient sentiment or subsequent use is inferred. |
 | Own inventory change without own give feedback | Observation of inventory, with donor/reason unknown. No attribution to a promise. |
 
-### 4.2 Decision vectors (normative proposed oracles)
+### 4.2 Decision vectors (normative oracles)
 
 Use actor ella, run r, decision ordinal 7 at tick 10, initial current=null and
 next_goal_sequence=0. Action targets/parameters below use canonical DTO objects.
@@ -363,7 +364,7 @@ Existing regression tests independently cover agreement-without-transfer and
 successful transfers (`backend/tests/unit/test_engine_dialogue.py:15`;
 `backend/tests/unit/test_engine_actions.py:155`).
 
-## 5. Proposed limits and measurements
+## 5. Approved limits and measurements
 
 Lengths count Unicode scalar values after JSON decoding, without trimming or Unicode
 normalization; surrogates are invalid. Over-limit startup content fails startup;
@@ -372,7 +373,7 @@ not rewritten or rejected by these authored-output limits; experience/context
 bounds and oversized-input behavior belong to their owner. Bounds below do not
 alter the frozen world DTOs or old policy behavior.
 
-| ID | Proposed value and unit | Rationale | Measurement before M9 |
+| ID | Approved value and unit | Rationale | Measurement before M9 |
 | --- | --- | --- | --- |
 | C-01 | 1 current commitment per resident | Minimal continuity without a scheduler | Maximum live current count; sequence/replace/abandon fixtures. |
 | C-02 | 1..240 scalar values per goal text | Inspectable short-term intent | Histogram and rejection count, including exact 240/241 boundaries. |
@@ -382,7 +383,7 @@ alter the frozen world DTOs or old policy behavior.
 | C-06 | 0..500 scalar values for proposed talk text | Bound authored speech while keeping ordinary dialogue useful | Length/rejection rate and 500/501 boundary fixture. |
 | C-07 | 8,192 UTF-8 bytes of trusted template file | Bound static prompt separately from dynamic context | Byte count/hash checked at startup; combined request measured by B limits. |
 
-Each row is an M8 choice; recommendation is the stated value. schema versions,
+Each row was approved at M8 with the stated value. schema versions,
 operation enums and literal template text are contract identities, not tunable
 budgets. Existing plan, quantity, timing, hearing and dialogue limits remain sourced
 from their frozen owners. A content/profile limit change requires a new registered

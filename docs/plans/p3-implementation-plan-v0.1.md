@@ -1,8 +1,9 @@
 # Living Island - P3 implementation plan v0.1
 
-> Proposed for M8, 2026-11-12. CR-005 option A approves scope only. This package
-> becomes normative after independent Gate 2, owner M8 decisions and the explicit
-> CR-005 amendment application. Existing contracts remain effective until then.
+> **Accepted at M8, 2026-11-12.** Independent P3-01 Gate 2 passed at `659e1212`.
+> The owner approved the package and CR-005 amendments; the later DeepSeek/CNY150
+> instruction supersedes the earlier provider/USD proposal. See the M8 decision sheet.
+> CR-005 is applied in the M8 documentation freeze, before P3-02 starts.
 
 Baseline: `9bd45082002e87172312484a53c4787020bd584d` (origin/main after fetch).
 P3-00 is an ancestor; CR-005 is approved (owner, 2026-11-11), option A.
@@ -160,8 +161,7 @@ including the alternate fake-only strategy, rather than substituting a default.
 Each owner publishes a compact limits table with ID, proposed value, unit, rationale
 and measurement. Prefix IDs `E-` (experience/context), `B-` (decision/provider), `C-`
 (cognition), `V-` (evaluation). The lead includes every ID in the M8 sheet. Existing
-world limits are references, never new P3 numbers. All choices remain proposed until
-M8. New OQs start at OQ-085 and only the lead edits the register.
+world limits are references, never new P3 numbers. All choices are frozen by the M8 decision record; changes require a CR. New OQs start at OQ-085 and only the lead edits the register.
 
 Do not expose unavailable source files as current facts. Read actual content paths.
 Do not add physical completion evidence that the delivered DTO cannot supply. Engine-
@@ -289,10 +289,9 @@ single-seed hashes are not universal constants for every run.
 
 ## 4. Milestones and gates
 
-M8: owner freezes this package and CR-005 exact amendments after outside-team Gate 2.
+M8: approved by the owner on 2026-11-12; the documentation freeze applies CR-005 after outside-team Gate 2.
 M9: owner inspects the one-resident slice. M10: owner accepts the three-resident
-foundation, evaluation, character/debug view and retrospective. These milestones
-are proposed. Gate 1 and independent Gate 2 apply to every implementation task.
+foundation, evaluation, character/debug view and retrospective. M8 is complete when its application and review are recorded; M9/M10 remain pending. Gate 1 and independent Gate 2 apply to every implementation task.
 
 ## 5. Task cards
 

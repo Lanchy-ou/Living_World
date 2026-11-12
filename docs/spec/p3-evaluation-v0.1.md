@@ -1,10 +1,12 @@
 # Living Island - P3 evaluation and inspection specification v0.1
 
-> Proposed for M8, 2026-11-12. These trials, caps and pass lines are proposals;
-> P3-01 performs no provider calls. M8 chooses them before implementation/live use.
+> **Accepted at M8, 2026-11-12.** The owner approved the P3 package and CR-005
+> amendments, with DeepSeek and an aggregate CNY150 API ceiling superseding the
+> earlier provider/USD proposal. See [M8 decision record](../tasks/p3/M8-decisions.md).
+> Normative design; implementation and live verification remain separate tasks.
 
 Baseline for every current-code citation: `9bd45082002e87172312484a53c4787020bd584d`.
-Unqualified behavior below is **proposed**. This document owns fixture coverage,
+Unqualified behavior below is **normative**. This document owns fixture coverage,
 trial registration, P3 metrics and the separate inspection artifact. It references,
 without redefining, [experience/context](resident-experience-v0.1.md),
 [cognition/evidence](resident-cognition-v0.1.md) and
@@ -314,7 +316,7 @@ null with `missing_sources` and technical FAIL; never infer it from a different 
 | rejection_share | #A with validation_error in PARSE_ERROR, INVALID_PLAN, INVALID_DELTA / #A. Provider/timeout errors separately counted by error enum; raw JSON parse failure is included. |
 | retry_share | #L with call_ids length>1 / #L. Zero-call budget/context decisions remain in #L. |
 | unknown_usage_share | #A debit.usage_unknown / #A; reported input/output totals each null if any corresponding reported count is null. Also report known subtotal and missing count. |
-| charged_tokens / cost_ceiling_micro_usd | Sum committed CallDebit input_charged/output_charged/money_charged plus separately labelled recovery_debits. This is conservative ledger accounting, never an invoice or zero for unknown usage. |
+| charged_tokens / cost_ceiling_micro_cny | Sum committed CallDebit input_charged/output_charged/money_charged plus separately labelled recovery_debits. This is conservative ledger accounting, never an invoice or zero for unknown usage. |
 | latency_ms | On A results with non-null latency: count, min, max, median and p95; sorted nearest-rank p95 at ceil(0.95*n), even median exact half-sum. n=0 gives null summaries; report missing_latency_count. |
 | context_oversize_share | #L detail_code=MANDATORY_OVERSIZE / #L; INPUT_LIMIT counted separately. |
 | retrieval_inclusion_share | Across L manifests, sum experiences with projected=true / sum retrieved=true; denominator0 gives null. Report evicted_record_count and omitted reasons per manifest, never sum cumulative eviction counters across decisions. |
@@ -443,29 +445,52 @@ against source shards; switch to a boundary without decision; test stale cursor/
 missing/wrong-run shard, HTML-looking speech, zero calls and unknown usage. Gate 2
 checks the real rendered panel/debug view before M10, not only schema tests.
 
-## 7. Proposed limits and M8 recommendations
+## 7. Approved limits (M8)
 
 Each row recommends the stated profile. These are admission/inspection/acceptance
 values, not world rules. All call/token/money caps apply independently per live case.
 Budget units and accounting semantics belong solely to the decision spec.
 
-| ID | Proposed value and unit | Rationale | Measurement / decision evidence |
+| ID | Approved value and unit | Rationale | Measurement / decision evidence |
 | --- | --- | --- | --- |
-| V-01 | Smoke: 1 seed, T=24 ticks, 1 LLM actor; caps attempts48,input1572864 tokens,output98304 tokens,money2000000 microUSD ($2) | Exercise one integration before broad spending; covers 2 attempts per eligible boundary | Actual calls/usage/latency and accepted share in M9 smoke. |
-| V-02 | Development: 2 seeds, T=48 ticks, 3 LLM actors; per-case caps attempts288,input9437184 tokens,output589824 tokens,money10000000 microUSD ($10) | Small tuning set, separate from acceptance | Each case measures reservations, actual usage, fallback and mandatory size; total allocation $20. |
-| V-03 | Acceptance: 3 fresh seeds, T=144 ticks, 3 LLM actors; per-case caps attempts864,input28311552 tokens,output1769472 tokens,money30000000 microUSD ($30) | One-day pilot with matched controls, not a seven-day survival claim | Three complete valid pairs, raw per-seed metrics and total allocation $90. |
+| V-01 | Smoke: 1 seed, T=24 ticks, 1 LLM actor; caps attempts48,input1572864 tokens,output98304 tokens,money5000000 micro-CNY (CNY5) | Exercise one integration before broad spending; money admission may bind before the attempt cap | Actual calls/usage/latency and accepted share in M9 smoke. |
+| V-02 | Development: 2 seeds, T=48 ticks, 3 LLM actors; per-case caps attempts288,input9437184 tokens,output589824 tokens,money20000000 micro-CNY (CNY20) | Small tuning set, separate from acceptance | Each case measures reservations, actual usage, fallback and mandatory size; total allocation CNY40. |
+| V-03 | Acceptance: 3 fresh seeds, T=144 ticks, 3 LLM actors; per-case caps attempts864,input28311552 tokens,output1769472 tokens,money35000000 micro-CNY (CNY35) | One-day pilot with matched controls, not a seven-day survival claim | Three complete valid pairs, raw per-seed metrics and total allocation CNY105. |
 | V-04 | Long fake proof: 1 smoke-seed run, T=1008 ticks, 3 P3 actors; fake caps attempts6048,input198180864 tokens,output12386304 tokens,money0; 0 real provider calls | Exercise seven-day artifact/cursor/overflow recovery without paid model variability | Explicit offline run, source/recorded hashes and sentinel count0. |
 | V-05 | Every registered LLM actor in each smoke and acceptance case: llm_accepted_share>=4/5; wait_count0; evidence/privacy violations0; all 3 pairs technically valid | Prevent acceptance of a mostly-rule substitute while keeping behavior quality descriptive | Exact per-actor integer comparison 5*accepted>=4*L, L>0; invalid/missing case fails. |
 | V-06 | 2,097,152 canonical UTF-8 bytes per inspection shard | Bound one UI parsing unit while retaining complete request/attempt data | Export sizes; exact limit/limit+1 fixture; report largest shard and actual UI import behavior. |
 | V-07 | 8 retained experience records per boundary/actor inspection sample | Compact recent history; full selected recall stays in decision shard | Exact sequence selection and source comparison, count0/8/more-than8 fixtures. |
 
-V-01..03 aggregate ceiling is $112 with no automatic reuse. At the recommended M8
-uncached price pin, a maximum-size B attempt reserves 33,792 microUSD: $1.622016,
-$9.732096 and $29.196288 for the respective full attempt caps, each below its case
-money ceiling. Prices are inputs to verify, not guaranteed future invoices. B timing
-bounds imply at most 26.8 hours of provider waiting across the entire maximum-call
-profile; this is arithmetic worst case, not a measured duration or extra timeout.
-No extra provider retry is authorized by a report command or by incomplete usage.
-Alternative M8 choice is fake-only acceptance with live evidence explicitly deferred;
-it does not count as passing the live operational gate. Recommendation: the stated
-bounded pilot plus fake matrix, including character/debug inspection.
+V-01..03 aggregate ceiling is CNY150: CNY5 + 2*CNY20 + 3*CNY35.
+The owner replaced the earlier USD112 authorization on 2026-11-12. No earlier USD
+allocation remains spendable. The approved peak uncached price pin gives a maximum
+B attempt reservation of 81920 micro-CNY (CNY0.081920). Full attempt maxima would
+cost CNY3.932160 / CNY23.592960 / CNY70.778880 per smoke/development/acceptance
+case. Thus money can bind before the token/attempt caps; these are independent
+ceilings, not a guarantee of completing every maximal-size call. Budget refusal
+uses the specified fallback and remains visible in the unchanged V-05 pass lines.
+Do not shorten trials, lower pass thresholds, borrow another case's allocation or
+replenish a failed run to manufacture acceptance. Report incomplete/failed evidence.
+Peak uncached rates are reserved even off-peak or with cache hits. Usage settlement
+uses that same conservative pin; discounts do not expand the authorization.
+No paid probes outside the six allocations are authorized. Any charged integration
+probe consumes its designated case's allocation and attempt count, and remains in
+its evidence. P3-02/03/04 use offline fixtures only. An additional or revised trial
+needs an explicit new owner disposition; a new registration hash alone grants no
+money. The original six approved slots may each be enrolled once across all registration
+revisions. The launcher records their single enrollment in the shared authorization
+record before creating case authorities, under an exclusive process lock, with total
+slot caps <=150000000 micro-CNY. Slots are keyed by the exact purpose/seed pairs in section 3.1, with the
+corresponding approved case caps. Persist the slot-to-registration/case-key binding
+before creating its empty case authority, under the same enrollment lock. A crash
+before that first creation may finish the same initialization only when the durable
+binding still says initializing and proves no case authority has been issued; mark
+it issued durably before releasing the lock or allowing tick-zero publication.
+An existing valid record is finalized/reused, never overwritten. After issued, a
+missing authority refuses instead of re-creating capacity. Repeated enrollment for
+a consumed slot or a different registration binding refuses. Missing/corrupt pilot
+approval storage refuses all live enrollment. Fake/replay modes cannot acquire or
+mutate this live approval record.
+Prices/model availability and a proven input counter are live preflight requirements;
+changed pins never silently authorize extra spend. No live calls were made by this
+M8 documentation task.

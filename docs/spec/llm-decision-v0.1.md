@@ -1,11 +1,12 @@
 # Living Island - LLM decision and recovery specification v0.1
 
-> Proposed for M8; 2026-11-12. CR-005 option A approves phase scope, not these
-> schemas or limits. Effective only after M8 and explicit contract amendments.
-> Documentation only; no adapter or provider is invoked.
+> **Accepted at M8, 2026-11-12.** The owner approved the P3 package and CR-005
+> amendments, with DeepSeek and an aggregate CNY150 API ceiling superseding the
+> earlier provider/USD proposal. See [M8 decision record](../tasks/p3/M8-decisions.md).
+> Normative design; implementation and live verification remain separate tasks.
 
 Baseline for current-code citations: `9bd45082002e87172312484a53c4787020bd584d`.
-All unqualified rules are **proposed P3 behavior**. The
+All unqualified rules are **accepted P3 behavior**. The
 [registry](../plans/p3-implementation-plan-v0.1.md#1-shared-interface-skeleton)
 fixes cross-part names. [Experience](resident-experience-v0.1.md) owns context,
 projection, ingestion and retention; [cognition](resident-cognition-v0.1.md) owns
@@ -79,7 +80,7 @@ P3PolicyConfig {
   pricing:PricingPin, fallback_config:PolicyConfig, trial_registration_sha256:Hash
 }
 ProviderSettings {
-  api:"responses", reasoning_effort:"none", store:false,
+  api:"deepseek-responses", reasoning_effort:"none", store:false,
   tools:[], background:false, stream:false,
   input_counter_id:string, input_counter_version:string
 }
@@ -90,8 +91,8 @@ DecisionLimits {
   max_request_bytes:131072, max_response_bytes:262144
 }
 PricingPin {
-  currency:"USD", date:string (YYYY-MM-DD), source_url:string,
-  input_micro_usd_per_million_tokens:N, output_micro_usd_per_million_tokens:N
+  currency:"CNY", date:string (YYYY-MM-DD), source_url:string,
+  input_micro_cny_per_million_tokens:N, output_micro_cny_per_million_tokens:N
 }
 DecisionRequestP3 {
   request_schema_version:"0.2", actor_id:string, tick:N,
@@ -119,9 +120,20 @@ Config seed, plan limit and dimensions match effective retained world config.
 fallback_config is the legacy rule-based-v0 config with base parameters, matching
 seed/plan limit/dimensions and null script/trace hashes. P3 config hash covers every
 field, pricing and limits included; restore checks against retained registration.
-No mutable config path changes it. M8 chooses provider/model, pricing and credentials.
-The concrete initial adapter is the recommended Responses adapter; another provider
+No mutable config path changes it. M8 selects DeepSeek, CNY accounting and local credentials.
+The initial adapter is deepseek-responses-v0 with model_id=deepseek-flash and reasoning_effort=none; another provider
 requires an explicit new adapter/config version, not untyped settings.
+
+The API model ID is an alias, not an immutable dated snapshot. Retain the official
+model-version evidence (currently DeepSeek-V4.1-Flash-1017), retrieval date and hash
+as an input pin at registration. Do not invent a dated API model ID or claim live
+model immutability. Before each live run/continuation verify that published version
+and prices still match; detected drift stops dispatch until a reviewed new pin is
+registered. Recorded replay relies on exact retained outputs and never calls the alias.
+PricingPin uses peak uncached CNY rates: input 2000000 and output 8000000 micro-CNY
+per million tokens. No exchange rate, cache or off-peak discount creates extra capacity.
+All money fields, including reservation/debit/ledger totals, use integer micro-CNY
+(1000000 = CNY1); unknown or mixed currency is refused.
 
 ### 2.2 Provider port
 
@@ -133,8 +145,8 @@ ProviderRequest {
   settings:ProviderSettings, max_output_tokens:2048
 }
 WireRequest {
-  wire_schema_version:"0.1", method:"POST", origin:"https://api.openai.com",
-  path:"/v1/responses", content_type:"application/json", body_base64:string
+  wire_schema_version:"0.1", method:"POST", origin:"https://api.deepseek.com",
+  path:"/responses", content_type:"application/json", body_base64:string
 }
 ProviderResult {
   provider_result_version:"0.1",
@@ -163,7 +175,14 @@ prepare is pure and produces exact nonsecret outbound body bytes. Both canonical
 ProviderRequest and decoded wire body must fit B-08; body is canonical UTF-8 JSON.
 The pinned adapter mapping must preserve messages/schema/settings exactly; complete
 verifies the prepared hash and sends body bytes unchanged. No SDK body rewriting or
-hidden defaults. Authentication is added only as a header and never retained; all
+hidden defaults. The DeepSeek wire body sets model, the exact system/user input,
+reasoning.effort=none, max_output_tokens=2048, stream=false, tools=[], tool_choice=none
+and text.format={type:"json_schema",name:"resident_decision",schema:<pinned schema>}.
+ProviderSettings.store/background=false are semantic guarantees of this stateless
+synchronous lane; omit unsupported store/background fields from the wire body.
+No previous_response_id, conversation, search, image, file or other tool input is sent.
+P3-04 must verify schema and response/usage mapping with pinned fixtures; API format
+compatibility alone does not establish exact adapter correctness. Authentication is added only as a header and never retained; all
 other headers are fixed by wire.content_type. Attempt IDs/time never enter the body.
 Count the same prepared wire request; do not regenerate it between counting/logging
 and sending. Changing the mapping changes adapter_version and implementation pin.
@@ -336,7 +355,7 @@ inventing new timings.
 ### 4.1 Admission ledger
 
 Live trials supply explicit evaluation-registered attempt, input-token, output-token
-and integer micro-USD caps before startup. No unlimited/default live trial. Fake
+and integer micro-CNY caps before startup. No unlimited/default live trial. Fake
 fixtures register deterministic caps and zero prices. Pin conservative uncached
 rates; ignore cache discounts for admission. This is an admission cap, not a guarantee
 about a provider invoice. Usage exceeding its reservation is a provider contract
@@ -348,7 +367,7 @@ CallDebit {
   input_reported:N|null, output_reported:N|null,
   input_charged:N, output_charged:N, money_charged:N, usage_unknown:boolean
 }
-BudgetCaps { attempts:N, input_tokens:N, output_tokens:N, micro_usd:N }
+BudgetCaps { attempts:N, input_tokens:N, output_tokens:N, micro_cny:N }
 BudgetLedgerP3 {
   budget_schema_version:"0.1", allocation_key:Hash, caps:BudgetCaps,
   attempts_charged:N, input_charged:N, output_charged:N, money_charged:N,
@@ -537,7 +556,7 @@ memory is disguised as current perception; no hidden world or synthetic history.
 Refresh is staged and published only upon acceptance. No rule entries gain facts from
 LLM output or shared experience; no unexpired failure deadline is shortened. Frozen
 rule learning stays decision-only: during LLM control, experience captures all own
-packets but rule private state does not. M8 must approve this explicit tradeoff; it
+packets but rule private state does not. M8 approved this explicit tradeoff; it
 avoids retrospective fake perceptions and preserves P2 behavior. Shared OwnedIntentRef
 is independent of rule issued_intents, resolves own delayed feedback before replacement
 and embeds resolved history. Clearing private refs cannot erase ingested evidence.
@@ -810,11 +829,11 @@ Hash canonical objects (without LF), log prefix bytes (with LF). No completion t
 for interrupted runs. ReplayBundle stays 0.1 unchanged. Separate evaluation/debug
 artifact is never resident input.
 
-## 8. Proposed limits for M8
+## 8. Approved limits (M8)
 
-Every row needs approval. Measurement does not silently change a bound.
+Every row was approved at M8. Measurement does not silently change a bound.
 
-| ID | Proposed value / unit | Rationale | Measurement / review |
+| ID | Approved value / unit | Rationale | Measurement / review |
 | --- | --- | --- | --- |
 | B-01 | 2 dispatched attempts per decision | One retry, finite cognition | Histogram; third-dispatch refusal |
 | B-02 | 30,000 ms per attempt | Bound stalled synchronous world | Injected deadlines; p50/p95/max latency |
@@ -852,7 +871,7 @@ constructors; they introduce no physical world outcomes.
 | BD-02 | Valid wait but wrong expected goal ID on a0; valid a1 | INVALID_DELTA first, no partial mutation; two debits; only a1 committed |
 | BD-03 | Both attempts malformed JSON | PARSE_ERROR/INVALID_JSON; one rule execution; continue delta; call_ids a0,a1 and llm_call_id a1; one fallback event |
 | BD-04 | Mandatory projection oversized | Zero dispatch/call/debits; context row; INVALID_CONTEXT/MANDATORY_OVERSIZE; one fallback |
-| BD-05 | I=100,O=20; rates 750000 input/4500000 output micro-USD per million; actual=(80,10) | Reserve 75+90=165 micro-USD; charge 60+45=105; unknown=false |
+| BD-05 | I=100,O=20; rates 750000 input/4500000 output micro-CNY per million; actual=(80,10) | Reserve 75+90=165 micro-CNY; charge 60+45=105; unknown=false |
 | BD-06 | Same reservation; reported=(80,null) | Charge tokens=(100,20), money=165, unknown=true; preserve reported null |
 | BD-07 | Money cap=200, charged=40, next reservation=165 | Refuse 205>200; zero attempt; BUDGET/ADMISSION_DENIED |
 | BD-08 | Failure expires tick 36; fallback reentry tick 35 after LLM | Clear private commitment/issued refs; keep failure to 36; shared refs/evidence remain |
@@ -877,7 +896,7 @@ constructors; they introduce no physical world outcomes.
 | BD-27 | Copied checkpoint or new output/root; missing authority, mismatched key, duplicate c0, or closed case | Respectively ALLOCATION_UNAVAILABLE/key validation refusal/ALLOCATION_DUPLICATE_CALL/ALLOCATION_CLOSED; zero dispatch and no cap reset. Same valid authorization never licenses another authority for this key. |
 
 BD-18..27 use one fixed registration/case, caps `(attempts=2,input_tokens=200,
-output_tokens=40,micro_usd=200)` and BD-05 rates. H0/H1 stand for exact verified
+output_tokens=40,micro_cny=200)` and BD-05 rates. H0/H1 stand for exact verified
 checkpoint identities, not mutable filenames. c0 reserves 165 and known usage charges
 105; the smaller second call charges 60. These tiny fake-only caps are test inputs,
 not new M8 live limits. These allocation-port unit vectors supply reservation amounts

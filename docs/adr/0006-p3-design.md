@@ -1,10 +1,11 @@
 # ADR 0006: P3 resident-agent foundation
 
-- Status: **Proposed** (M8 pending).
+- Status: **Accepted** (owner M8, 2026-11-12).
 - Date: 2026-11-12.
 - Baseline: `9bd45082002e87172312484a53c4787020bd584d`.
 - Scope authority: CR-005 option A, owner-approved 2026-11-11. Exact amendments
-  and limits remain proposals, not an implementation authorization before M8.
+  and limits approved at M8 on 2026-11-12, with DeepSeek and CNY150 replacing
+  the earlier provider/USD proposal; see the M8 decision record.
 
 ## Context
 
@@ -17,7 +18,7 @@ and physiological NeedBand is used in provisional memory DTOs
 (`backend/src/living_island/agents/types.py:90`, `:97`). Those fields cannot silently
 become a new interpretation of the frozen legacy schema.
 
-## Proposed decision
+## Decision
 
 Adopt the [shared interfaces and implementation plan](../plans/p3-implementation-plan-v0.1.md)
 and four single-owner specifications linked by the [M8 decision sheet](../tasks/p3/M8-decisions.md).
@@ -57,5 +58,5 @@ inspection artifact; ReplayBundle remains unchanged.
 Bounded capacity eviction is a storage rule, not a psychological forgetting model.
 Missing provider usage stays unknown; a registered ceiling controls further dispatch,
 not an assertion of the provider's final invoice. Fresh live runs can differ even
-with identical seed/configuration. M8 chooses the profile and live-trial authorization;
+with identical seed/configuration. M8 records the approved profile and CNY150 live-trial ceiling;
 Gate 2 is outside this authoring team. No acceptance or owner signature is implied here.
