@@ -309,13 +309,21 @@ uv run --directory backend python ../scripts/p3_trials.py resume --registration 
 uv run --directory backend python ../scripts/p3_trials.py replay --source-run ../runs/p3/p3-smoke-r1/continued --ancestor ../runs/p3/p3-smoke-r1/first/checkpoint-0000000008.json --out ../runs/p3/p3-smoke-r1/recorded
 ```
 
-No live authority has been initialized, no live slot enrolled, and no API spend
-incurred at this documentation checkpoint. Initialization/enrollment results and
-the actual remaining grant will be added before dispatch. The completed report
-separates reported usage, conservative ledger charges, unknown usage and provider
-invoice evidence. It never labels a conservative ceiling as a confirmed invoice.
-Deliberate rule choices are excluded from the LLM acceptance denominator;
-fallback and wait shares remain visible.
+Registration commit: `761d68d0d18773049ac34b93bc7639e66af8f6a4`.
+No-dispatch validation, once-only live initialization and smoke enrollment each
+exited 0. The persisted slot is issued to allocation
+`239430e613050272e0a06e85f0660475ae1165c183ee0a78de4eb2fda842bdf1`.
+The actual pre-dispatch remaining allowance is 48 attempts, 1572864 input tokens,
+98304 output tokens and 5000000 micro-CNY. The other five bindings remain null;
+the six caps sum to 150000000 micro-CNY. The retained check is
+`runs/p305-live-enrollment-20261113.json`. Zero paid calls have occurred at this
+pre-dispatch commit. The launcher will refresh metadata and remaining capacity
+again before credential injection.
+
+The report separates reported usage, conservative ledger charges, unknown usage
+and provider invoice evidence. It never labels a conservative ceiling as a
+confirmed invoice. Deliberate rule choices are excluded from the LLM acceptance
+denominator; fallback and wait shares remain visible.
 
 ## Upstream follow-up P305-U1
 
