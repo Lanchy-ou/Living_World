@@ -828,3 +828,97 @@ original authority, registration, failure and replay bytes remain retained.
 No real authorization, enrollment, credential read or API call was performed
 in CR-007 implementation. The proposed replacement remains pending owner
 approval. M9 remains pending owner disposition.
+
+## CR-007 authorized replacement result (2026-11-13)
+
+The owner approved the exact replacement registration and bounded live
+execution. `authorize-replacement` and `enroll` each exited 0 with zero
+dispatches and the same allocation key
+`91170f39b60ba3979d53a27fe8bd2fe95dc8142fbcf9d3e91984948fc6a46b78`.
+The original approval and allocation bytes and the original trial's
+registration, failed receipts and replay were preserved.
+
+The registration is `p3-smoke-u3-r1` schema 0.1 revision 1, SHA-256
+`7e63f9d2fe41330f262e409bf942186aedbbfd5d829d65e54c5e580bb161081e`,
+committed at `e6c13e0869c8a72c2a8631124d74f5b201c20922`. The execution
+used implementation `4a66f9b9054546b79bd42d84d103485af373db51` with
+matching active source at receipt HEAD
+`44c890905865cd94bdc32dfbf9236774468162a8`. Both live invocations ran the
+launcher public preflight and retained the observations in the case receipt
+lineage. [DeepSeek model and pricing](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)
+and [Responses API](https://api-docs.deepseek.com/api/create-response/).
+
+The first live invocation exited 0 at tick 1. DeepSeek returned two normal
+completed envelopes. Ella's first output failed local JSON parsing
+(`PARSE_ERROR / INVALID_JSON`); the retry passed and was used. Neither
+attempt returned a provider or schema rejection. The user-authorized clean
+continuation used the same allocation and exited 0 at tick 24. The receipt
+is complete and generation 2 is settled.
+
+| Measurement | Observed value |
+| --- | --- |
+| Ella accepted / rule fallback / wait | 1/22 (4.55%) / 21/22 (95.45%) / 0/22 |
+| Deliberate rule decisions | Mia 21, Ryan 22, excluded from Ella's denominator |
+| Dispatched / provider errors / local parse-plan-delta rejections | 2 / 0 / 1 |
+| Retry decisions / unknown usage | 1/22 / 0/2 |
+| Reported and charged input / output | 29124 / 357 tokens |
+| Charged per attempt | 30300 and 30804 micro-CNY |
+| Total replacement charge | 61104 micro-CNY (CNY0.061104) at the pinned peak rates |
+| Latency | min 1622, median 1770, p95/max 1918 ms, both known |
+| Original charge plus replacement | 970864 micro-CNY (CNY0.970864) |
+| Remaining project budget | 149029136 micro-CNY (CNY149.029136) under the CNY150 ceiling |
+| Invoice | Unknown for both trials |
+| Replacement V-05 | FAIL (`5 * 1 < 4 * 22`) |
+
+The final receipt, registered inputs, trace and tick-zero/final checkpoints
+validate. The authority and checkpoint contain the same two settled entries,
+with no orphan, recovery, pending or overrun, and all approved caps respected.
+The display replay has 25 frames and exactly the 575 committed events. Its
+final frame matches the final world projection. All retained context
+identities and recalled experience owners match their own actor, and no
+evidence/privacy violation was observed. Ella's one model-authored goal
+remained attempted through the final boundary.
+
+The 21 fallback decisions were `INVALID_CONTEXT / INPUT_LIMIT` before any
+dispatch. An offline recount of all 21 retained contexts produced token
+bounds of 34915–41672 against 32768. Canonical request/wire high water was
+62765/62650 bytes, below the 131072-byte limit. The counter uses the full
+UTF-8 byte bound for the live user spans containing fullwidth punctuation.
+These are certified upper bounds. The provider never tokenized the blocked
+requests for this case. See [P305-U4](P305-U4.md) for the upstream evidence.
+The hosted provider accepted schema 0.2 on the two requests it received.
+Original V-05 remains FAIL and the replacement V-05 also fails. M9 awaits
+owner disposition.
+
+Local ignored evidence is under `runs/p3/p3-smoke-u3-r1` in the replacement
+worktree, with shared receipts in the repository root's
+`runs/p3/p3-smoke-u3-r1/receipts`. The executor retained `live-metrics.json`,
+`input-limit-recount.json` and `before-replay-sha256.json`. Input recount
+SHA-256 is `18eed0bf23b9ef3f9016548d32fb8efb440c4b7bf2c219886c0323f5d1206148`.
+
+### Recorded replay and independent Gate 2
+
+The recorded replay command used the completed continuation, the retained
+tick-1 ancestor, and a fresh `recorded` directory. It exited 0 at tick 24
+with `external_calls=0` under raising provider, fallback and allocation
+sentinels. Each of the five logs matched in both source/replay segments.
+The final checkpoint, trace and display replay matched byte-for-byte.
+The trace and display replay SHA-256 digests are
+`6735f60eccf132d53b348c9890370c973a7c04c0fa78bdf8a58a2b655662d763` and
+`c147506dbad7a4789a8f09cc9d08cd1847b7176703a8043a1e78edc92133fff7`.
+The final checkpoint SHA-256 is
+`0f2f9fb4ac1f0b431c7d06c697a1298a6fc10fc9e870bb5557148796c4f8b121`.
+The complete receipt SHA-256 is
+`b052b39344162bab5d0fe054c8ed5887df11518ad34dd75c946be277520c28f6`.
+
+All 88 replacement pre-replay source, receipt and authority hashes match.
+The original 97 pre-replay and 11 pre-finalization hashes and both original
+failure receipt copies match. `replay-audit.json` SHA-256 is
+`e91ae47bb55be6507b82d77450c45a7a6df51aedfd71c3085aaf4250b205998f`.
+
+Nonauthor reviewer `p305_gate2` independently loaded the final committed
+trace, compared all 13 source/replayed output pairs, rehashed the three
+snapshots and validated all 21 counter reproductions. Technical live
+execution, linked accounting, artifact preservation and strict replay
+PASS. Gate 2 for replacement acceptance is NEEDS_UPSTREAM_REWORK due to
+P305-U4 and the resulting V-05 FAIL. No further paid run was made.
