@@ -1102,18 +1102,29 @@ def export_p3_replay(
     events = decode_records(final.logs["events.jsonl"], WorldEvent, source / "events.jsonl")
     event_counts = Counter(event.tick for event in events)
     final_lines = {name: raw.splitlines(keepends=True) for name, raw in final.logs.items()}
-    segments: list[tuple[Path, int, int]] = []
-    start = 0
-    for origin in final.origins:
+    # Resolve the same nearest-first chain as checkpoint verification. A clean
+    # zero-tick continuation may have identical checkpoint bytes at several
+    # locators; its hash alone cannot identify the directory owning older frames.
+    remaining = list(ancestors)
+    current = source / checkpoint_filename(trace.final_tick)
+    lineage: list[tuple[Path, int]] = []
+    for origin in reversed(final.origins):
         matches = [
             path
-            for path in ancestors
-            if sha256(path.read_bytes()).hexdigest() == origin.checkpoint_sha256
+            for path in remaining
+            if path.resolve() != current.resolve()
+            and sha256(path.read_bytes()).hexdigest() == origin.checkpoint_sha256
         ]
         if not matches:
             raise ValueError("P3 replay export requires each verified origin locator")
-        segments.append((matches[0].parent, start, origin.checkpoint_tick))
-        start = origin.checkpoint_tick
+        current = matches[0]
+        remaining = [path for path in remaining if path != current]
+        lineage.append((current.parent, origin.checkpoint_tick))
+    segments: list[tuple[Path, int, int]] = []
+    start = 0
+    for directory, tick in reversed(lineage):
+        segments.append((directory, start, tick))
+        start = tick
     segments.append((source, start, trace.final_tick))
     frames = []
     event_cursor = 0
