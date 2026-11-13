@@ -1,0 +1,1 @@
+{"error":{"message":"Invalid json schema: \"^[^\\\\uD800-\\\\uDFFF]*$\" is not a \"regex\" (request_id: 5c541e13-fdb9-4eda-9506-bcddee6e5f2c)","type":"invalid_request_error","param":null,"code":"invalid_request_error"}}
