@@ -1,0 +1,15 @@
+{
+  "source_commit": "522762f81ef83d8ad51a52a9d021e13134810422",
+  "source_decision_id": "default_island_seed20261108_run01:d:ella:000000",
+  "seed": 1292387875,
+  "context_sha256": "46a48feff0e2bea945ee06ab014fbfaf9022683d970917f5cf27a1329bcd6914",
+  "projection_sha256": "41531b7a8b1d8d883abbc5b4c8f7597315df1a1190f29246644c56a1d7ad76e8",
+  "provider_request_sha256": "7b0035e30904747d5be81ad5a1ee017db2fae277f2f4c8813f10dceed48575b3",
+  "wire_body_sha256": "17113cf3943ec59fe8a77ee89486acf5bafe459cd4ef2d876cd9aab606433433",
+  "original_byte_bound": 45161,
+  "prefix_bound": 30246,
+  "system_utf8_bytes": 15286,
+  "user_utf8_bytes": 15691,
+  "available_ella_contexts": 1,
+  "api_calls": 0
+}

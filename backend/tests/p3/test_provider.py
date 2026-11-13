@@ -4,7 +4,10 @@ import base64
 import hashlib
 import http.client
 import json
+import re
 import runpy
+import unicodedata
+import zlib
 from io import BytesIO
 from pathlib import Path
 from queue import Queue
@@ -128,9 +131,245 @@ def assert_reference_bound(adapter, req, wire, render):
     )
     # Only the five inserted markers get a one-token allowance. Literal marker
     # text in content remains in the byte count, even when it matches a marker.
-    expected = len(prompt.encode()) - sum(len(marker.encode()) - 1 for marker in markers)
-    assert adapter.count_input_tokens(req, wire) == expected
-    return expected
+    byte_bound = len(prompt.encode()) - sum(len(marker.encode()) - 1 for marker in markers)
+    result = adapter.count_input_tokens(req, wire)
+    assert 5 <= result <= byte_bound
+    return result
+
+
+@pytest.fixture(scope="module")
+def tokenizer():
+    return json.loads((FIXTURES / "flash1017-tokenizer.json").read_bytes())
+
+
+def byte_alphabet():
+    visible = list(range(33, 127)) + list(range(161, 173)) + list(range(174, 256))
+    missing = [value for value in range(256) if value not in visible]
+    return dict(
+        [(chr(value), value) for value in visible]
+        + [(chr(256 + index), value) for index, value in enumerate(missing)]
+    )
+
+
+@pytest.fixture(scope="module")
+def all_merges(tokenizer):
+    alphabet = byte_alphabet()
+    return {
+        tuple(bytes(alphabet[char] for char in side) for side in merge.split(" ")): rank
+        for rank, merge in enumerate(tokenizer["model"]["merges"])
+    }
+
+
+def oracle_parts(text, tokenizer):
+    # Independently derive the ASCII regex from the retained artifact. Captured
+    # re.split delimiters implement Isolated without using production iterators.
+    assert text.isascii()
+    source = tokenizer["pre_tokenizer"]["pretokenizers"][2]["pattern"]["Regex"]
+    pattern = (
+        source.replace(r"\p{L}", "A-Za-z")
+        .replace(r"\p{M}", "")
+        .replace(r"\p{P}\p{S}", r"\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e")
+    )
+    return [
+        part
+        for segment in re.split(r"([0-9]{1,3})", text, flags=re.ASCII)
+        for part in re.split("(" + pattern + ")", segment, flags=re.ASCII)
+        if part
+    ]
+
+
+def oracle_bpe(word, merges, cutoff=None):
+    # Slow, independent reference: rescan all pairs after each merge. Production
+    # uses a linked list/heap, so stale-neighbor and tie errors cannot be shared.
+    symbols = [bytes((value,)) for value in word.encode("ascii")]
+    while True:
+        choices = [
+            (rank, index)
+            for index in range(len(symbols) - 1)
+            if (rank := merges.get((symbols[index], symbols[index + 1]))) is not None
+            and (cutoff is None or rank < cutoff)
+        ]
+        if not choices:
+            return len(symbols)
+        _, index = min(choices)
+        symbols[index : index + 2] = [symbols[index] + symbols[index + 1]]
+
+
+def oracle_bound(text, tokenizer, merges, cutoff=4096):
+    if not text.isascii():
+        return len(text.encode("utf-8"))
+    return sum(oracle_bpe(part, merges, cutoff) for part in oracle_parts(text, tokenizer))
+
+
+def test_ascii_prefix_certificate_matches_complete_model(tokenizer, all_merges):
+    vocab = tokenizer["model"]["vocab"]
+    assert len(vocab) == len(set(vocab.values()))
+    assert len(all_merges) == len(tokenizer["model"]["merges"])
+    expected = {
+        pair: rank
+        for pair, rank in all_merges.items()
+        if rank < 4096 and all(side.isascii() for side in pair)
+    }
+    assert provider_module._MERGE_PREFIX_SIZE == 4096
+    assert len(expected) == 2472
+    assert max(len(left) + len(right) for left, right in expected) == 32
+    assert provider_module._ASCII_MERGES == expected
+    raw = zlib.decompress(base64.b85decode(provider_module._ASCII_MERGE_DATA))
+    assert hashlib.sha256(raw).hexdigest() == SOURCES["ascii_merge_prefix"]["certificate_sha256"]
+    assert raw == b"".join(
+        f"{rank} {left.hex()} {right.hex()}\n".encode("ascii")
+        for (left, right), rank in expected.items()
+    )
+
+
+def test_ascii_property_classes_and_exhaustive_pair_splits(tokenizer):
+    chars = [chr(value) for value in range(128)]
+    assert {c for c in chars if unicodedata.category(c).startswith("L")} == set(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    )
+    assert not any(unicodedata.category(c).startswith("M") for c in chars)
+    assert {c for c in chars if unicodedata.category(c).startswith("N")} == set("0123456789")
+    assert {c for c in chars if unicodedata.category(c)[0] in "PS"} == {
+        c
+        for c in chars
+        if 33 <= ord(c) <= 47 or 58 <= ord(c) <= 64 or 91 <= ord(c) <= 96 or 123 <= ord(c) <= 126
+    }
+    assert {c for c in chars if re.fullmatch(r"\s", c, re.ASCII)} == set(" \t\r\n\v\f")
+    for left in chars:
+        for right in chars:
+            text = left + right
+            assert list(provider_module._ascii_parts(text)) == oracle_parts(text, tokenizer)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["a12345b", "1234567", "\x1c\x1d\x1e\x1f \t\r\n\x00", ' "alpha"_beta\\gamma', "  \n\n\t x"],
+)
+def test_ascii_split_control_digit_and_punctuation_boundaries(text, tokenizer, all_merges):
+    assert list(provider_module._ascii_parts(text)) == oracle_parts(text, tokenizer)
+    assert provider_module._plain_token_bound(text) == oracle_bound(text, tokenizer, all_merges)
+
+
+@given(text=st.text(alphabet=st.characters(min_codepoint=0, max_codepoint=127), max_size=100))
+@settings(max_examples=100)
+def test_heap_prefix_matches_independent_bpe_and_bounds_full_model(text, tokenizer, all_merges):
+    partial = oracle_bound(text, tokenizer, all_merges)
+    exact = oracle_bound(text, tokenizer, all_merges, cutoff=None)
+    assert exact <= partial <= len(text)
+    assert provider_module._plain_token_bound(text) == partial
+
+
+@pytest.mark.parametrize("text", ["a" * 200, "abab" * 50, "the" * 80, " " * 100, '\\"' * 40])
+def test_overlapping_ties_and_stale_heap_entries(text, all_merges):
+    assert provider_module._ascii_word_bound(text) == oracle_bpe(text, all_merges, cutoff=4096)
+
+
+@pytest.mark.parametrize("text", ["a" * 1000 + "é", "中文", "e\u0301", "🏝\nASCII"])
+def test_nonascii_complete_span_keeps_original_byte_bound(text):
+    assert provider_module._plain_token_bound(text) == len(text.encode("utf-8"))
+
+
+def test_long_word_uses_linear_number_of_heap_operations(monkeypatch):
+    pushed = popped = initial = 0
+    original_push, original_pop, original_heapify = (
+        provider_module.heappush,
+        provider_module.heappop,
+        provider_module.heapify,
+    )
+
+    def push(queue, item):
+        nonlocal pushed
+        pushed += 1
+        original_push(queue, item)
+
+    def pop(queue):
+        nonlocal popped
+        popped += 1
+        return original_pop(queue)
+
+    def initialize(queue):
+        nonlocal initial
+        initial += len(queue)
+        original_heapify(queue)
+
+    monkeypatch.setattr(provider_module, "heappush", push)
+    monkeypatch.setattr(provider_module, "heappop", pop)
+    monkeypatch.setattr(provider_module, "heapify", initialize)
+    text = "the" * (MAX_REQUEST_BYTES // 3)
+    size = len(text)
+    assert 0 < provider_module._plain_token_bound(text) < size
+    assert initial > 0 and popped > 0
+    assert initial <= size - 1 and pushed <= 2 * (size - 1)
+    assert popped == initial + pushed <= 3 * (size - 1)
+
+
+def test_p305_u2_actual_first_request_admits_unchanged_wire(tokenizer, all_merges):
+    original = ProviderRequest.model_validate_json(
+        (FIXTURES / "p305-u2-first-request.json").read_bytes()
+    )
+    evidence = json.loads((FIXTURES / "p305-u2-first-request-evidence.json").read_bytes())
+    assert (
+        hashlib.sha256(canonical_bytes(original)).hexdigest() == evidence["provider_request_sha256"]
+    )
+    req = original.model_copy(
+        update={
+            "settings": original.settings.model_copy(
+                update={"input_counter_version": provider_module.COUNTER_VERSION}
+            )
+        }
+    )
+    transport = LocalTransport()
+    adapter = DeepSeekResponsesAdapter(transport)
+    wire = adapter.prepare(req)
+    assert adapter.prepare(original) == wire
+    body = verified_body(req, wire)
+    assert hashlib.sha256(body).hexdigest() == evidence["wire_body_sha256"]
+    payload = json.loads(body)
+    span = (
+        payload["input"][0]["content"]
+        + provider_module._SCHEMA_PREFIX
+        + json.dumps(payload["text"]["format"]["schema"], ensure_ascii=False)
+    )
+    user = payload["input"][1]["content"]
+    assert span.isascii() and not user.isascii()
+    assert 5 + len(span.encode()) + len(user.encode()) == 45161
+    assert oracle_bound(span, tokenizer, all_merges) == 14550
+    assert adapter.count_input_tokens(req, wire) == evidence["prefix_bound"] == 30246
+    assert adapter.complete(req, wire, 30000).response_text is not None
+    assert transport.sent == [(body, 30000)]
+
+
+@pytest.mark.parametrize("extra", [2522, 2523])
+def test_p305_u2_nonascii_growth_limit_remains_fail_closed(extra):
+    original = ProviderRequest.model_validate_json(
+        (FIXTURES / "p305-u2-first-request.json").read_bytes()
+    )
+    # Synthetic text growth tests the provider limit, not a later retained context.
+    req = original.model_copy(
+        update={
+            "messages": [
+                original.messages[0],
+                original.messages[1].model_copy(
+                    update={"content": original.messages[1].content + "x" * extra}
+                ),
+            ],
+            "settings": original.settings.model_copy(
+                update={"input_counter_version": provider_module.COUNTER_VERSION}
+            ),
+        }
+    )
+    transport = LocalTransport()
+    adapter = DeepSeekResponsesAdapter(transport)
+    wire = adapter.prepare(req)
+    bound = adapter.count_input_tokens(req, wire)
+    assert bound == 30246 + extra
+    if bound > MAX_INPUT_TOKENS:
+        with pytest.raises(ValueError, match="B-05"):
+            adapter.complete(req, wire, 30000)
+        assert transport.sent == []
+    else:
+        assert adapter.complete(req, wire, 30000).outcome == "response"
+        assert len(transport.sent) == 1
 
 
 def test_production_counter_sources_are_immutable_and_match_identity():
@@ -281,7 +520,7 @@ def test_production_counter_is_pure_and_preserves_counted_recorded_sent_bytes(mo
     assert hashlib.sha256(transport.sent[0][0]).digest() == hashlib.sha256(body).digest()
 
 
-@pytest.mark.parametrize("version", ["", "wrong", "0.2", "0.1 "])
+@pytest.mark.parametrize("version", ["", "wrong", "0.1", "0.2 "])
 def test_production_counter_rejects_uncertified_versions_without_dispatch(version):
     transport = LocalTransport()
     adapter = DeepSeekResponsesAdapter(transport)
@@ -303,7 +542,8 @@ def test_production_input_bound_admits_exact_limit_refuses_one_over(over, refere
     adapter = DeepSeekResponsesAdapter(transport)
     empty = production_request("")
     framing = adapter.count_input_tokens(empty, adapter.prepare(empty))
-    req = production_request("x" * (MAX_INPUT_TOKENS - framing + over))
+    # Non-ASCII makes the complete user span retain its proven byte bound.
+    req = production_request("é" + "x" * (MAX_INPUT_TOKENS - framing - 2 + over))
     wire = adapter.prepare(req)
     assert assert_reference_bound(adapter, req, wire, reference_renderer) == MAX_INPUT_TOKENS + over
     if over:
@@ -516,6 +756,25 @@ def test_positive_maps_only_proposal_and_total_usage():
     assert result.raw_response == COMPLETED.decode()
     assert decode_base64(result.raw_body_base64) == COMPLETED
     assert result.outcome == "response" and result.response_complete
+
+
+@pytest.mark.parametrize("model", ["deepseek-pro", "unregistered-model", "", None, 1, False])
+def test_explicit_wrong_response_model_rejects_proposal_but_retains_usage_and_raw_body(model):
+    raw = envelope(model=model)
+    result = mapped(raw)
+    assert result.outcome == "provider_error" and result.response_text is None
+    assert result.provider_error_code == "RESPONSE_MODEL_MISMATCH"
+    assert result.token_input == 7 and result.token_output == 11
+    assert decode_base64(result.raw_body_base64) == raw
+
+
+def test_absent_model_echo_does_not_claim_hosted_version_verification():
+    data = json.loads(COMPLETED)
+    del data["model"]
+    result = mapped(canonical_bytes(data))
+    assert result.response_text is not None
+    # Neither a missing echo nor the expected alias attests the hosted snapshot.
+    assert "model" not in result.model_fields_set
 
 
 @pytest.mark.parametrize(

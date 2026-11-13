@@ -1,7 +1,8 @@
 # P3-04 provider evidence and offline counter proof
 
-Checked 2026-11-12. JSON fixtures are synthetic protocol vectors, not captured paid
-responses. No credentials or API calls were used.
+Checked 2026-11-13. Response JSON fixtures are synthetic protocol vectors, not
+captured paid responses. The P305-U2 request fixture is derived from its supplied
+offline context reproduction. No credentials or model API calls were used.
 
 ## Frozen mapping
 
@@ -30,10 +31,10 @@ added. The retained raw response distinguishes absent, empty and invalid UTF-8.
 
 ## Production counter and scope
 
-`deepseek-flash1017-byte-upper-bound/0.1` is a pure conservative token counter for
+`deepseek-flash1017-byte-upper-bound/0.2` is a pure conservative token counter for
 the frozen two-message, text-only, nonthinking, no-tool Responses lane. Adapter
-version is `0.2`. It decodes the already verified retained wire bytes and computes
-the bound below; it does not read these files, load a tokenizer, consult a service,
+version is `0.3`. It decodes the already verified retained wire bytes and computes
+the rank-prefix bound below; it does not read these files, load a tokenizer, consult a service,
 or count the transport JSON as if it were model text. Unknown counter identities
 and versions still raise `INPUT_COUNTER_UNAVAILABLE` before transport access.
 No arbitrary counter callback or certification flag is accepted. Complete also
@@ -103,7 +104,12 @@ There is no EOS or history. The exact schema prefix is the following Python stri
 [JSON formatting](recipe-json.rs.txt) uses unescaped Unicode and `, ` / `: `
 separators, matching `json.dumps(schema, ensure_ascii=False)` for the frozen schema.
 The schema has only ASCII strings and integer numeric values; no float/escape
-formatting difference is involved. Object key order does not affect byte length.
+formatting difference is involved. Object key order does not affect byte length,
+but **does affect BPE merges** in counter 0.2. The counter uses the parsed schema
+from the canonical retained wire, whose object keys are already sorted, including
+nested keys. Both order-preserving parsing and sorted-map parsing in the provider
+retain that order; conversion passes this original schema to the renderer.
+Counting insertion-ordered `request.response_schema` instead would be incorrect.
 The exact-release [Python reference](flash1017-encoding.py.txt) independently
 renders the same complete string in the fixture tests, including empty messages,
 escaped controls, multilingual text, literal framing spellings and long inputs.
@@ -141,7 +147,8 @@ bytes. This follows from the complete retained tokenizer, not sample ratios:
    tokens; even generic added-token matching could only replace a nonempty span
    with one ID. All 1,283 registered strings are verified nonempty.
 
-Thus, writing `utf8(x)` for the byte length of text `x`, the complete input bound is:
+Thus, writing `utf8(x)` for the byte length of text `x`, counter 0.1's complete
+input bound was:
 
 ```text
 U = 5 + utf8(system_content) + utf8(schema_prefix + spaced_schema_json)
@@ -161,8 +168,123 @@ Tests check the artifact premises exhaustively, compare full framing against the
 independent retained reference, exercise generated Unicode and injection-like
 strings, require exact retained/count/record/send byte identity, forbid counter
 file/network IO, and verify B-05 at 32,768 and 32,769 plus B-08 overflow. The bound
-can conservatively reject requests that a precise tokenizer would admit; that is
-intentional. No paid observations or network token-count endpoint validate it.
+can conservatively reject requests that a precise tokenizer would admit. P305-U2
+exposed an avoidable such rejection, addressed by the stronger bound below. No
+paid observations or network token-count endpoint validate either bound.
+
+### Counter 0.2: certified BPE prefix for complete ASCII spans
+
+Let `P(s)` be the token count after executing only the first 4,096 ranked BPE rules
+on each exact pretokenized part of an ASCII span `s`. Define:
+
+```text
+F(s) = P(s) if every character in s is ASCII, otherwise utf8(s)
+U_0.2 = 5 + F(system_content + schema_prefix + spaced_schema_json)
+          + F(user_content)
+actual input tokens <= U_0.2 <= U_0.1
+```
+
+The combined system/schema is **one** ordinary span. Splitting it artificially and
+independently applying BPE is not a general upper-bound argument: a boundary can
+change the sequence of merge priorities. The actual USER structural token provides
+the independent boundary before user content. Non-ASCII spans use the entire-span
+byte proof; they are not heuristically partitioned around Unicode characters.
+
+For ASCII spans the exact tokenizer pretokenizer specializes as follows:
+
+1. `\p{N}{1,3}` isolates `[0-9]{1,3}`, preserving each unmatched gap.
+2. The CJK/Japanese splitter matches no ASCII character.
+3. In the final regex, `\p{L}` is `A-Za-z`, `\p{M}` is empty, and `\p{P}` union
+   `\p{S}` is the 32 printable ASCII punctuation/symbol characters. All other
+   alternatives, greediness and ordering are unchanged. The regex runs separately
+   inside each part from step 1; all matches and unmatched gaps remain separate.
+4. `re.ASCII` gives `\s = [\t\n\v\f\r ]`, matching the ASCII restriction of
+   [Oniguruma's documented Unicode whitespace](oniguruma-regex.txt). Python's
+   default Unicode `\s` additionally includes U+001C through U+001F and is **not**
+   used. The retained [tokenizers regex wrapper](tokenizers-onig.rs.txt) documents
+   the match/unmatched partition behavior.
+
+The complete artifact certificate establishes that all vocabulary IDs and merge
+pairs are unique. Consequently their spelling-derived ranks are the actual
+ID-pair ranks, with no later duplicate overwriting an earlier rule. Of ranks
+`[0,4096)`, exactly 2,472 pairs contain only ASCII bytes and are reachable from
+ASCII initial symbols. The other 1,624 cannot become reachable: merging only
+concatenates bytes. The embedded certificate retains every reachable pair and its
+original rank, including gaps. It is a mechanically compressed table, not trained
+or inferred data; its decompressed SHA-256 is
+`c312cab30044f3f4150b2cb28f03e1c0300903d7a2363cad2e7553d9c95aa4bf`.
+Tests regenerate all entries from the full pinned tokenizer and require equality.
+No fixture or external package is loaded by production counting.
+
+Each production step chooses the currently available minimum `(rank, original
+left position)`, exactly as the retained BPE `merge_all` implementation. The left
+position survives a merge; removed symbols and stale heap entries are ignored.
+Neighbors are reconsidered immediately, so this is not a single ascending-rank
+sweep. Until no retained pair is available, full BPE makes the same choices: every
+omitted rule has a higher rank or is unreachable. The computed symbols therefore
+form an exact prefix of full BPE execution. Subsequent higher-rank merges may
+expose earlier ranks, but every step in that unexecuted continuation reduces the
+number of symbols. Stopping is thus conservative for every input, not just the
+regression case. Choosing 4,096 controls precision and local cost, not a safety
+margin that depends on empirical token ratios.
+
+The linked-list/heap implementation performs at most `n-1` merges. Its initial
+heap has at most `n-1` entries and every merge enqueues at most two candidates:
+at most `3(n-1)` pops, O(n log n) time and O(n) storage. A B-08-sized repetitive
+word regression checks this operation bound without a machine-dependent timing
+threshold. The certificate's longest merged symbol is 32 bytes, so concatenation
+and dictionary-key hashing also have a fixed bound. Small randomized ASCII strings and overlapping/repeated words are
+compared against an independent minimum-pair-rescan oracle, including all model
+ranks to establish `exact <= prefix <= bytes`. Every ASCII character pair is
+checked for identical source-derived splits, alongside digit and control cases.
+
+### P305-U2 request regression and remaining admission limit
+
+[The request fixture](p305-u2-first-request.json) is rendered from the supplied
+offline Ella context using the unchanged production template/action contract.
+[Provenance and hashes](p305-u2-first-request-evidence.json) pin the source main
+commit, context/projection, decision, seed and exact prepared body. This is an
+adapter-input fixture, not a copied run log or a model response.
+
+| First Ella request, seed 1292387875 | Counter 0.1 | Counter 0.2 |
+| --- | ---: | ---: |
+| Combined system/schema | 29,465 | 14,550 |
+| Non-ASCII user message | 15,691 | 15,691 |
+| Structural IDs | 5 | 5 |
+| Complete bound | 45,161 | **30,246** |
+
+B-05 remains 32,768. The exact same outbound request body is admitted and sent
+once to a local fake transport in the regression. Only counter metadata changes
+from 0.1 to 0.2; body SHA-256 stays
+`17113cf3943ec59fe8a77ee89486acf5bafe459cd4ef2d876cd9aab606433433`.
+The preliminary 30,209 calculation used insertion-ordered schema JSON and is
+superseded by the exact-wire value above.
+
+For this fixed trusted system/schema, a non-ASCII user span may contain at most
+18,213 UTF-8 bytes under this bound (2,522 more than the first request). Larger
+spans still refuse honestly; a precise full tokenizer might admit them. The
+supplied reproduction has three tick-zero contexts (Ella/Mia/Ryan), only one of
+which is Ella. It has **no later Ella context**, so these results do not establish
+that every future 24-tick smoke decision will be admitted. P3-05 must assess later
+retained requests offline and repin adapter 0.3/counter 0.2 before any smoke.
+There is no truncation, context/schema/DTO change or relaxation of B-05/B-08.
+
+### Response model evidence
+
+A completed envelope with an explicit `model` other than the requested
+`deepseek-flash` is rejected as `provider_error/RESPONSE_MODEL_MISMATCH`; proposal
+text is withheld while raw bytes and reported usage remain available for audit.
+No guessed dated alias or additional accepted model spelling is introduced.
+Incomplete/error responses retain their existing rejection classifications.
+
+An expected alias echo, or an absent echo, cannot attest hosted model weights.
+An absent echo does not add a model/version claim to the frozen ProviderResult.
+The official Responses reference describes this field as a model identifier,
+not an immutable snapshot certificate. The registration owner's official
+alias/version/pricing check and retained evidence remain necessary. A server that
+silently changes weights while echoing the same alias is outside what this pure
+counter or the existing result DTO can establish; no new DTO field or authority
+is added to pretend otherwise.
 
 ## Offline counter: exact finite proof
 
