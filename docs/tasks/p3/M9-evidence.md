@@ -1,7 +1,7 @@
 # M9 evidence: one-resident P3 integration
 
-Status: IN_PROGRESS. This sheet prepares owner review; it does not declare M9
-accepted. P3-07 inspection export/UI remains pending and is not claimed as PV-07 PASS.
+Status: READY_FOR_REVIEW. Full task/M9 acceptance is blocked by P305-U3; this
+sheet preserves the failed live case and prepares owner review, not acceptance. P3-07 inspection export/UI remains pending and is not claimed as PV-07 PASS.
 
 ## Authority and scope
 
@@ -98,14 +98,14 @@ actual initial request measurement is 23082 input tokens, 2048 reserved output
 tokens and 62548 micro-CNY. Its complete retained-tape recount and wire equality
 also pass. Review worktree and diff checks are clean.
 
-This is a code disposition, not final M9 or task acceptance. The review explicitly
-requires the integrated task/full executor checks, committed 24-tick fake launcher
-proof, current metadata/remaining-grant checks and actual smoke evidence. Final
-independent Gate 2 will review those results before owner M9 review.
+This was a pre-live code disposition, not final M9 or task acceptance. It required
+the integrated task/full executor checks, committed 24-tick fake launcher proof,
+current metadata/remaining-grant checks and actual smoke evidence. Those results
+and the later independent findings/disposition are recorded below.
 
 ## Offline integration and tests
 
-The exact integrated task command exited 0:
+The original trial-source integrated task command exited 0:
 
 ```sh
 uv run --directory backend pytest tests/p3/test_one_resident.py tests/p3/test_trial_registration.py --basetemp ../runs/p305-integrated-task-20261113 --junitxml ../runs/p305-integrated-task-20261113.xml
@@ -166,7 +166,7 @@ intents. The principal island trial retains the actual frozen rule policies.
 
 ## Integrated executor checks
 
-The full executor command exited 0:
+The original trial-source full executor command exited 0:
 
 ```sh
 uv run --directory backend pytest --basetemp ../runs/p305-final-full-20261113 --junitxml ../runs/p305-final-full-20261113.xml
@@ -187,8 +187,45 @@ subset also passed in this run. The following final-code checks exited 0:
 | `pnpm --dir frontend build` | PASS |
 | `uv run --directory backend python ../scripts/gen_types.py` | PASS |
 | `git diff --exit-code -- frontend/src/api/generated` | PASS; unchanged |
-| Local Markdown file links | PASS; 38 across 5 changed documents, plus upstream handoff anchor |
+| Local Markdown file links | PASS; 39 across 5 changed documents, plus upstream handoff anchor |
 | `git diff --check` / committed working-tree diff | PASS at this checkpoint |
+
+### Corrected-source final executor checks
+
+The final corrected implementation is
+`de5a12ecc117fa0e20a2f7360af217a3d8887002`, byte-identical across backend, scripts,
+content and frontend to the isolated frozen full-suite candidate
+`ab4a3f6a08ea36880d56851332f19bbe85642f09`. The author and integration lead checked
+that equality, and the independent reviewer repeated it. The same uv-created
+CPython 3.13.5 virtual environment and unchanged lock file were used; PYTHONPATH
+selects the candidate's source before the editable root package. No source was
+changed during the suite.
+
+Exact final command, from the isolated candidate's `backend` directory, with
+`PYTHONPATH=D:/Codex/.codex/worktrees/p3-05-launcher/Living_World/backend/src`:
+
+```text
+D:/Codex/.codex/worktrees/p3-05-integration/Living_World/backend/.venv/Scripts/python.exe -m pytest -q --basetemp D:/Codex/.codex/worktrees/p3-05-launcher/test-temp-backend-offline-final-20261113-01 --junitxml=D:/Codex/.codex/worktrees/p3-05-launcher/Living_World/runs/p3/verification/backend-ab4a3f6.xml
+```
+
+Exit 0: **1594 passed, 3 existing skips in 2309.47 seconds (38:29)**. JUnit records
+1597 cases, 0 errors, 0 failures, 3 skips and time2309.407 seconds. Its SHA-256 is
+`90959b116290a0665fb3f32bf93071e5b073e0a5a8c4969d3cb13d27e4ff4e02`.
+The integration lead and independent reviewer each parsed the final file. The
+final task subset is **51 PASS: 15 slice + 36 launcher**, no skipped task case.
+The added full-horizon regression also passed in the author's and reviewer's
+separate three-case runs. This final suite supersedes the original 50/1593 counts
+for corrected-source verification; original registered trial artifacts retain
+their historical source and execution identities.
+
+The three skips are unchanged opt-in `P2_RULE_RUNS` development checks, not missing
+P3-05 cases. Root final Ruff, format, Mypy (88 sources), import contracts (8),
+frontend lint/typecheck/build and type generation each exited 0 after integration.
+Generated files remain unchanged. Final CLI `--help` also exited 0 without keys.
+Original P1/P2 reference evidence remains exact; the final source diff leaves all
+world/rule/legacy/contract/frontend/dependency bytes unchanged. Local file-link
+validation covers 39 links across the five changed Markdown files, with no broken
+links; the upstream handoff anchor is also valid. Diff checks pass.
 
 ## Frozen compatibility evidence
 
@@ -332,7 +369,7 @@ denominator; fallback and wait shares remain visible.
 
 The first invocation exited 0 at its registered pause boundary, tick 8. Its
 14 attempts all returned HTTP_400 / PROVIDER_REJECTED with missing usage. The
-retained structured error identifies `^[^\\uD800-\\uDFFF]*$` as an invalid regex
+retained structured error identifies `^[^\uD800-\uDFFF]*$` as an invalid regex
 in the JSON Schema. No successful provider proposal was received: all seven Ella decisions in the
 live prefix used the typed rule fallback. The exact response/request remains in the ignored run artifacts; no credential is retained.
 
@@ -385,20 +422,21 @@ provider's `__class__` attribute and raises its sentinel. This is a metadata
 completion error, not a new API call. It occurs after trace/allocation completion
 and before final receipt/export publication.
 
-The original execution retains its registered source. The launcher author is
-preparing a narrow isolated fix and full-horizon CLI regression; the sentinel
-will not be weakened. If the expected completion error occurs, preserve its
-receipt/history and use the already-tested metadata-only finalizer under the
+The original execution retained its registered source. The launcher author
+prepared a narrow isolated fix and full-horizon CLI regression without weakening
+the sentinel. The completion error occurred as predicted; its receipt/history
+was preserved and the already-tested metadata-only finalizer was used under the
 original source, without a new grant, generation, call or settlement:
 
 ```sh
 uv run --directory backend python ../scripts/p3_trials.py finalize --registration ../content/experiments/p3/development/p3-smoke-r1.json --case p3-smoke-r1.s1292387875 --ancestor ../runs/p3/p3-smoke-r1/first/checkpoint-0000000008.json
 ```
 
-Snapshot replay immutability only after this legitimate finalization; retain the
-failed invocation history. The source fix will be integrated only after original
-artifact recovery/replay, then checked and independently reviewed. This local
-fix cannot repair the separately failed hosted schema or authorize another smoke.
+Replay immutability was snapshotted after this legitimate finalization, retaining
+the failed invocation history. The source fix was independently reviewed and
+integrated only after original artifact recovery/replay completed; its final
+executor result is recorded separately. This local fix does not repair the
+separately failed hosted schema or authorize another smoke.
 
 ### Finalized recovery and recorded replay audit
 
@@ -474,8 +512,9 @@ The regression checks exit 0, complete receipt/trace/export, no provider/network
 credential accesses, unchanged charges/entries/caps and unchanged source artifacts.
 
 All backend, scripts, content and frontend bytes at the integrated candidate
-match the independently tested author candidate. Its full backend suite is running;
-final integrated Ruff/format/Mypy/import/frontend/type-generation checks pass.
+match the independently tested author candidate. Its full backend suite passed
+1594/3 skips, including 51 task cases; final integrated Ruff/format/Mypy/import/
+frontend/type-generation checks also pass. Exact commands and proof are above.
 The original worktree remained frozen until recovery/replay completed; the final
 suite's isolated candidate worktree remains frozen throughout. The implementation and input pins inside both historical registrations
 remain unchanged. For original run/validation/finalization reproduction, use the
@@ -542,8 +581,11 @@ still checks current official version/pricing evidence. No paid probe was used.
 
 ## M9 disposition
 
-The mandatory live V-05 gate failed. M9 is not ready for acceptance. Final
-independent review of the retained offline failure lineage is pending. A future
+The mandatory live V-05 gate failed. M9 is not ready for acceptance. Independent
+review of the retained offline failure lineage passed, and the owned completion
+finding is closed. The corrected-source full suite and all executor checks pass.
+Independent Gate 2's acceptance disposition is NEEDS_UPSTREAM_REWORK because of
+U3; the final evidence-commit review is being recorded before publication. A future
 smoke needs a centrally approved schema correction and explicit replacement-trial
 disposition; the consumed slot cannot be reset or silently reused. No main merge
 or P3-06 start is authorized by this task.
