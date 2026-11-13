@@ -781,3 +781,43 @@ if known, and technical validity. V-05 requires `L > 0` and
 violations. Mia and Ryan's deliberate rule decisions are excluded. Preserve the
 original failure and label the replacement result independently. M9 disposition
 belongs to the owner.
+
+## CR-007 replacement approval candidate (2026-11-13)
+
+The owner approved the implementation and independent offline review of the
+linked authorization. The [CR-007 task card](P305-R1.md) records its scope and
+verification. The separate `task/P305-R1-replacement-authority` branch pins the
+reviewed implementation `4a66f9b9054546b79bd42d84d103485af373db51`.
+
+The proposed immutable
+[replacement registration](../../../content/experiments/p3/development/p3-smoke-u3-r1.json)
+is schema 0.1, revision 1, case `p3-smoke-u3-r1.s1292387875`, and has canonical
+SHA-256 `7e63f9d2fe41330f262e409bf942186aedbbfd5d829d65e54c5e580bb161081e`.
+This registration supersedes the earlier budget draft for owner approval.
+It binds 94 implementation pins, 13 input pins, the same 24-tick world and
+Ella-only LLM assignment, and the reviewed 0.2 action contract. The allocation
+key will be `91170f39b60ba3979d53a27fe8bd2fe95dc8142fbcf9d3e91984948fc6a46b78`
+if issued. Pure preflight measures 24106 input tokens, 2048 output tokens and
+64596 micro-CNY for the initial reservation.
+
+The hard admission caps remain 34 attempts, 1114112 input tokens, 69632
+output tokens and 2785280 micro-CNY. The original completed smoke retains
+909760 micro-CNY in conservative debits. The maximum combined admission
+exposure is 3695040 micro-CNY across 48 attempts. The total ceiling remains
+150000000 micro-CNY, with 149090240 currently unspent, or 146304960 after
+the proposed replacement cap. The original invoice and replacement metrics
+are pending. Original V-05 remains FAIL.
+
+After explicit approval of these pins and caps, use `authorize-replacement`
+with the exact registration hash above and original allocation SHA-256
+`1b11dbc07b5a6494842931a02312b0d680b8af76d773b58b2c91f14c9684cefb`.
+The command records the link and its independent guard beside the pilot
+approval. Then enroll the exact registration, run with the existing
+credential injection and fresh public preflight, and pause at tick 1.
+Inspect the first decision and both possible attempt outcomes before any
+live continuation. Use fresh replacement receipt and output paths. The
+original authority, registration, failure and replay bytes remain retained.
+
+No real authorization, enrollment, credential read or API call was performed
+in CR-007 implementation. The proposed replacement remains pending owner
+approval. M9 remains pending owner disposition.
