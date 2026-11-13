@@ -789,6 +789,13 @@ linked authorization. The [CR-007 task card](P305-R1.md) records its scope and
 verification. The separate `task/P305-R1-replacement-authority` branch pins the
 reviewed implementation `4a66f9b9054546b79bd42d84d103485af373db51`.
 
+Gate 1 passed 1649 tests with three existing skips. Ruff, Mypy, imports,
+frontend checks and unchanged generated types passed. All eight fresh P1/P2
+reference hashes match. The separate 24-tick fake run and zero-call replay
+matched every log, final checkpoint and trace. Independent Gate 2 passed
+28 replacement cases and 54 existing allocation cases and checked the
+unchanged historical evidence. See the [handoff](P305-R1.md#handoff).
+
 The proposed immutable
 [replacement registration](../../../content/experiments/p3/development/p3-smoke-u3-r1.json)
 is schema 0.1, revision 1, case `p3-smoke-u3-r1.s1292387875`, and has canonical
