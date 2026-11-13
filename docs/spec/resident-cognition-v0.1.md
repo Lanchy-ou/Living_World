@@ -210,13 +210,35 @@ Use short action reasons only when useful; do not provide hidden reasoning or a 
 ```
 
 `ModelActionContract` is the canonical JSON
-`{action_schema_version:"p3-actions/0.1", descriptions:[...], proposal_schema:{...}}`.
+`{action_schema_version:"p3-actions/0.2", descriptions:[...], proposal_schema:{...}}`
+for new executions under **[CR-006, owner-approved 2026-11-13]**. Version 0.1
+remains the immutable identity of existing pinned executions; it is not renamed.
 The descriptions array follows ACTION_TYPES order, with each entry
 `{action_type,description}` using section 3.2's exact description cell. The schema is
 the local JSON Schema 2020-12 for DecisionProposal, including GoalChange and existing
 IntentTemplate shapes. No map coordinates, actors or default-content values are
 hardcoded into this static contract. Do not expose Python, filesystem, network,
 reflection or tool-execution functions to residents.
+
+**[CR-006] Unicode-compatible schema revision.** Version 0.2 replaces the emitted
+free-text scalar exclusion pattern `^[^\uD800-\uDFFF]*$` with the all-ASCII
+pattern `^(?:[\u0000-\uD7FF\uE000-\uFFFF]|[^\u0000-\uFFFF])*$`. It preserves
+the accepted Unicode scalar-value language, existing minLength/maxLength bounds,
+proposal DTOs and local scalar/length validators. Template bytes, action description
+order/text, action semantics and world rules do not change. Schema and complete
+ModelActionContract hashes change and must be pinned as new identities; the adapter
+still transmits the schema unchanged. Exhaustive scalar and whole-string fixtures
+(including supplementary characters, surrogates, controls/newlines and bounds)
+must establish equivalence before accepting the implementation. Offline engine
+acceptance does not certify hosted provider acceptance.
+
+Existing 0.1 registration, retained request, checkpoint and recorded-run bytes
+remain unchanged. Their recovery/replay uses their exact original pinned source;
+no implicit migration, reinterpretation or new provider call is permitted. The new
+implementation may reject 0.1 rather than execute it under 0.2. Any implementation
+supporting both must dispatch explicitly by the registered schema version and
+preserve each version's exact schema/hash; accepting a version label alone is not
+sufficient. Unknown or mixed version/hash combinations must fail closed.
 
 Render exactly two ordered messages:
 

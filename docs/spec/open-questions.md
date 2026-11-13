@@ -3,6 +3,36 @@
 Add an entry whenever the spec is missing or ambiguous. Do not invent rules or numbers:
 record the question, make the smallest reversible assumption, and flag it in your handoff.
 
+## CR-006: P305-U3 Unicode schema compatibility (approved 2026-11-13)
+
+Current rule: cognition pins `p3-actions/0.1`; the provider must send its schema
+unchanged. The first registered live smoke rejected the schema's surrogate-range
+regex. P3-04 cannot repair the shared schema by rewriting its outgoing wire.
+
+Owner disposition: explicitly approved the central U3 offline repair scope on
+2026-11-13. P3-02 owns `p3-actions/0.2`, using the proposed all-ASCII scalar regex
+while preserving proposal DTOs, Unicode/length semantics and existing actions.
+Apply the marked amendments in resident-cognition and llm-decision. P3-04 then
+verifies exact request/counter mapping against the reviewed dependency.
+
+Options considered: (1) equivalent shared-schema version, (2) adapter-local rewrite,
+(3) remove provider constraints. Adopt option 1; options 2/3 would hide schema
+identity changes or weaken the agreed contract. Scope includes the necessary
+version/pin fixtures and independent review, not unrelated fixes such as P305-U1.
+
+Compatibility: original 0.1 artifacts and registrations stay immutable and replay
+under exact original source pins. New 0.2 code may fail closed on old versions;
+no silent conversion or mixed-version heuristic is allowed. World, P1/P2 and
+resident behavior rules remain unchanged. Full-string and exhaustive scalar tests
+are prerequisites; offline compatibility is not a successful hosted trial.
+
+Authorization excludes main publication, new live trials, allocation changes and
+additional budget. P305-U3 remains open until the approved offline repair and
+independent review complete; M9 still needs a separately authorized successful
+replacement trial. See [U3 record](../tasks/p3/P305-U3.md).
+
+## Question register
+
 | ID | Date | Raised in task | Question | Assumption made | Status |
 |---|---|---|---|---|---|
 | OQ-001 | 2026-11-08 | P0-01 | The product doc names a module `interface` (player interaction, saving, observation, debugging) but the P0-01 structure has no such package; its responsibilities are spread over `sim`, `persistence` and `contract`. Is a separate `interface`/API package wanted later (FastAPI)? | None; no `interface` package created. | open |

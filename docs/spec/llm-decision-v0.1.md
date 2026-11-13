@@ -162,6 +162,15 @@ ProviderAdapter.complete(request:ProviderRequest,wire:WireRequest,
                          timeout_ms:integer) -> ProviderResult
 ```
 
+**[CR-006, owner-approved 2026-11-13]** Cognition owns the versioned action schema.
+For `p3-actions/0.2`, retain and count the newly generated exact request/schema
+bytes; do not reuse 0.1 schema, wire hashes or reservation estimates. The adapter
+must not rewrite the schema to obtain provider compatibility. Old 0.1 execution
+and recovery remain bound to their original source/registration/schema pins;
+offline migration is not authorized by CR-006. A new schema dependency requires
+offline exact-wire/counter regression and independent review before integration.
+CR-006 authorizes no new live registration, replacement trial or budget grant.
+
 Cognition owns exact two-message rendering and action_schema_sha256 (descriptions
 plus proposal schema); prompt_sha256 hashes the template bytes. Retain messages,
 schema, settings and adapter version. Counter is pure, pinned and counts all charged
