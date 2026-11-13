@@ -776,6 +776,10 @@ class AllocationStore:
                     self._bound_case(record.binding)
                 return key
 
+            if not u4 and (
+                (self.root / _U4_RECORD).exists() or self._replacement_guard(_U4_RECORD).exists()
+            ):
+                _fail("ALLOCATION_INTEGRITY", "successor exists without its predecessor guard")
             existing = {s.binding.allocation_key for s in pilot.slots if s.binding is not None}
             existing.add(previous.allocation_key)
             if any(

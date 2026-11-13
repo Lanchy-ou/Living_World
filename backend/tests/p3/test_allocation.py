@@ -1245,6 +1245,8 @@ def test_u4_replacement_refuses_changed_predecessor(u4_history, change):
         else:
             data["generation"] += 1
         path.write_bytes(canonical_bytes(data))
+        if path == previous:
+            previous_digest = hashlib.sha256(previous.read_bytes()).hexdigest()
     with pytest.raises(AllocationError):
         store.authorize_replacement_smoke(U4_REGISTRATION_SHA, previous_digest, u4=True)
     assert not (store.root / "smoke-u4-replacement.json").exists()
@@ -1257,6 +1259,23 @@ def test_u4_issued_case_still_requires_intact_predecessor(u4_history):
     previous.with_suffix(".lock").unlink()
     assert_code("ALLOCATION_UNAVAILABLE", lambda: store._read_case(key))
     assert_code("ALLOCATION_UNAVAILABLE", lambda: enroll_u4(store))
+
+
+def test_u4_binding_prevents_predecessor_reissue_after_joint_loss(u4_history):
+    store, previous = u4_history
+    authorize_u4(store, previous)
+    for path in (
+        previous,
+        previous.with_suffix(".lock"),
+        store.root / "smoke-replacement.json",
+        store._replacement_guard(),
+    ):
+        path.unlink()
+    original = store._path(allocation_key(ORIGINAL_SMOKE_SHA, ORIGINAL_SMOKE_CASE))
+    assert_code(
+        "ALLOCATION_INTEGRITY",
+        lambda: authorize_replacement(store, original, "f" * 64),
+    )
 
 
 def test_u4_replacement_guard_survives_loss_of_new_case_and_primary(u4_history):
