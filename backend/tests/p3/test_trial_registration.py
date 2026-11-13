@@ -886,6 +886,111 @@ def test_short_registered_launcher_completes_trace_export_and_receipt(
     assert result.checkpoint.run_budget.money_charged == 0
 
 
+def test_cli_offline_recovery_completes_registered_horizon_without_external_access(
+    repository, tmp_path, monkeypatch, capsys
+):
+    """Complete the registered two-tick fake horizon through the real launcher CLI."""
+    monkeypatch.setattr(launcher, "build_registration", short_fake_builder(launcher))
+    registration, path, authority, key = fake_enrollment(repository, tmp_path)
+    case = registration.cases[0].case_id
+    directory = repository / "runs/p3" / registration.registration_id
+    provider, transport = fake_provider()
+    first = launcher.run_registration(
+        repository,
+        path,
+        case,
+        directory / "first",
+        fake_authority=authority,
+        provider=provider,
+        ticks=1,
+    )
+    assert first.checkpoint.run_budget.attempts_charged > 0
+    original_calls = len(transport.bodies)
+    original_budget = first.checkpoint.run_budget
+    original_case = launcher.CaseAllocationP3.model_validate_json(
+        (authority / "allocations" / f"{key}.json").read_bytes()
+    )
+    original_files = {p: p.read_bytes() for p in first.output.rglob("*") if p.is_file()}
+    accesses = []
+    sentinel_guard = launcher.NoExternalAccess.__getattribute__
+
+    def record_access(instance, name):
+        accesses.append(name)
+        return sentinel_guard(instance, name)
+
+    monkeypatch.setattr(launcher.NoExternalAccess, "__getattribute__", record_access)
+
+    def external_access(*args, **kwargs):
+        raise AssertionError("offline recovery attempted credentials, preflight or transport")
+
+    for name in (
+        "_credential",
+        "current_preflight",
+        "HTTPSByteTransport",
+        "DeepSeekResponsesAdapter",
+    ):
+        monkeypatch.setattr(launcher, name, external_access)
+    monkeypatch.setattr(transport, "exchange", external_access)
+    results = []
+    resume = launcher.resume_p3
+
+    def capture_result(*args, **kwargs):
+        result = resume(*args, **kwargs)
+        results.append(result)
+        return result
+
+    monkeypatch.setattr(launcher, "resume_p3", capture_result)
+    output = directory / "offline-complete"
+    code = launcher.main(
+        [
+            "--repository",
+            str(repository),
+            "resume",
+            "--registration",
+            str(path),
+            "--case",
+            case,
+            "--checkpoint",
+            str(first.output / "checkpoint-0000000001.json"),
+            "--out",
+            str(output),
+            "--offline-recovery",
+            "--fake-authority",
+            str(authority),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code == 0, (captured.err, accesses)
+    assert len(results) == 1
+    result = results[0]
+    assert result.trace is not None and result.world.tick == registration.cases[0].ticks == 2
+    assert not result.checkpoint.live_enabled
+    assert result.checkpoint.run_budget == original_budget
+    assert result.checkpoint.llm_record_cursor == first.checkpoint.llm_record_cursor
+    assert result.checkpoint.dispatch_record_cursor == first.checkpoint.dispatch_record_cursor
+    assert accesses == [] and len(transport.bodies) == original_calls
+    assert "tick=2 complete=True charged_micro_cny=0" in captured.out
+    assert captured.err == ""
+    receipt = launcher.CaseReceipt.model_validate_json(
+        (launcher._receipt_directory(repository, registration) / f"{case}.json").read_bytes()
+    )
+    assert receipt.status == "complete" and receipt.exit_code == 0
+    assert receipt.run_directory == str(output.resolve()) and receipt.allocation_key == key
+    assert "--offline-recovery" in receipt.command
+    assert (
+        receipt.trace_sha256 == sha256((output / "decision-trace-p3.json").read_bytes()).hexdigest()
+    )
+    assert len(json.loads((output / "replay.json").read_bytes())["frames"]) == 3
+    completed_case = launcher.CaseAllocationP3.model_validate_json(
+        (authority / "allocations" / f"{key}.json").read_bytes()
+    )
+    assert completed_case.status == "complete"
+    assert completed_case.entries == original_case.entries
+    assert completed_case.caps == original_case.caps
+    assert len(list((authority / "allocations").glob("*.json"))) == 1
+    assert {p: p.read_bytes() for p in original_files} == original_files
+
+
 @pytest.mark.parametrize("interrupted_resume", [False, True])
 def test_real_prepared_final_crash_reconciles_without_generation_or_new_reservation(
     repository, tmp_path, monkeypatch, interrupted_resume

@@ -1250,7 +1250,9 @@ def run_registration(
                     ticks=ticks,
                     offline_recovery=offline_recovery,
                 )
-            if result.trace is not None and isinstance(provider, TapeProvider):
+            # isinstance may probe the instance's __class__; offline ports reject
+            # every attribute access. Inspect only its concrete Python type here.
+            if result.trace is not None and issubclass(type(provider), TapeProvider):
                 provider.assert_consumed()
             if result.trace is not None:
                 from living_island.sim.p3 import export_p3_replay
