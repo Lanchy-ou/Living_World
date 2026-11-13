@@ -1,7 +1,7 @@
 {
   "model_version": "DeepSeek-V4.1-Flash-1017",
   "counter_id": "deepseek-flash1017-byte-upper-bound",
-  "counter_version": "0.1",
+  "counter_version": "0.2",
   "sources": {
     "flash1017-tokenizer.json": {
       "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/resolve/08c8657f02291e11b6f6b63e0e16014f8e748518/tokenizer.json",
@@ -97,6 +97,27 @@
       "url": "https://raw.githubusercontent.com/deepseek-ai/deepseek-recipe/935817c66f5d6e64838f419692545f06787e485f/deepseek-recipe-encoding/src/tokenizer.rs",
       "sha256": "21fefc37c6689cac8357d030f1ccb2c84e37d293950797ec4a6a0bfc208b56de",
       "bytes": 4823
+    },
+    "tokenizers-onig.rs.txt": {
+      "url": "https://raw.githubusercontent.com/huggingface/tokenizers/f383101a26663708484cac0727792aad74f78234/tokenizers/src/utils/onig.rs",
+      "sha256": "f6f58fb3fcf2dfbee2e8edc9b763247443fa102aea185481ff591f7d52c5256e",
+      "bytes": 1149
+    },
+    "oniguruma-regex.txt": {
+      "url": "https://raw.githubusercontent.com/kkos/oniguruma/f95747b462de672b6f8dbdeb478245ddf061ca53/doc/RE",
+      "sha256": "fb0b26fde703cbf62d09e8521d50878266fd312449291a384a4e5ff89cc9d156",
+      "bytes": 19519
+    },
+    "oniguruma-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/kkos/oniguruma/f95747b462de672b6f8dbdeb478245ddf061ca53/COPYING",
+      "sha256": "70ba5469ea0bab6e18a32d7009068f996503168d27be57747e08da34337ff26f",
+      "bytes": 1340
     }
+  },
+  "ascii_merge_prefix": {
+    "ranks": 4096,
+    "reachable_pairs": 2472,
+    "certificate_format": "ASCII lines: rank left_hex right_hex, LF terminated",
+    "certificate_sha256": "c312cab30044f3f4150b2cb28f03e1c0300903d7a2363cad2e7553d9c95aa4bf"
   }
 }
