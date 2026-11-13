@@ -451,8 +451,9 @@ not erased by publishing the completed receipt.
 The completed receipt retains original offline execution commit
 `61d57dff18945398fa2ad5f16bfd4b0ce471a3c1` and its exact invocation. Receipt SHA-256:
 `8da11781d524b4056cb045b8f3c795029ea2d5cc6e89681b6635fb0f2058a025`.
-The original live invocation was executed at the separately preserved pre-dispatch
-commit; finalization did not relabel it as a successful hosted-model trial.
+The original live invocation was executed at pre-dispatch commit
+`1658d5947dd7138579dc56136f85fb1e246d2426`; finalization did not relabel it as a
+successful hosted-model trial.
 
 Recorded reexecution then exited 0, tick 24, external calls 0. All five verified
 full-lineage logs, final checkpoint, trace and replay.json are byte-identical.
@@ -579,13 +580,43 @@ separately. The counter remains conservative for other Unicode and may refuse
 other long inputs. An alias echo does not attest hosted weights, so live startup
 still checks current official version/pricing evidence. No paid probe was used.
 
+## Final independent Gate 2 record
+
+Reviewer: `p305_gate2`, a nonauthor working read-only in its isolated worktree.
+Reviewed evidence/handoff commit:
+`8d67d31b2742c0f08366c70ffd98d47bf430371b`.
+Corrected implementation: `de5a12ecc117fa0e20a2f7360af217a3d8887002`, identical
+to tested candidate `ab4a3f6a08ea36880d56851332f19bbe85642f09`.
+Disposition, 2026-11-13: **NEEDS_UPSTREAM_REWORK**. This is not an overall PASS,
+full task acceptance or M9 acceptance.
+
+One **P1 blocker, P305-U3**, remains: the hosted validator rejects the schema
+pattern emitted by frozen `agents/p3/prompts.py:101`. All 14 live requests returned
+HTTP_400, so Ella's live acceptance is 0/7 and the complete recovered lineage is
+0/23 (`5*0 < 4*23`). The owner-coordinated schema repair and explicit replacement-
+trial/allocation disposition are required before any new paid trial.
+
+The reviewer found no remaining P3-05-owned implementation blocker. It independently
+confirmed the corrected source equality; final JUnit1594 PASS/3 existing skips and
+all 51 task cases PASS; complete five-log/checkpoint/trace/replay equality; 25 frames
+and 595 events; all 97 pre-replay and 11 pre-finalization authority hashes unchanged;
+and preservation of the original failure receipt in both history locations.
+All earlier owned exporter, launcher and slice findings are closed. Final documents
+were checked for truthful separation of historical trial source, corrected source,
+passing offline checks and failed live acceptance. Review used no credential or
+external calls and authored no implementation, tests or repository documentation.
+
+Keep task status **READY_FOR_REVIEW** for owner/upstream disposition. The final
+publication commit adds this review record only; it does not change the reviewed
+implementation, registrations, artifacts, limits or acceptance threshold.
+
 ## M9 disposition
 
 The mandatory live V-05 gate failed. M9 is not ready for acceptance. Independent
 review of the retained offline failure lineage passed, and the owned completion
 finding is closed. The corrected-source full suite and all executor checks pass.
-Independent Gate 2's acceptance disposition is NEEDS_UPSTREAM_REWORK because of
-U3; the final evidence-commit review is being recorded before publication. A future
+Independent Gate 2's final acceptance disposition is NEEDS_UPSTREAM_REWORK because
+of U3, as recorded above. A future
 smoke needs a centrally approved schema correction and explicit replacement-trial
 disposition; the consumed slot cannot be reset or silently reused. No main merge
 or P3-06 start is authorized by this task.
