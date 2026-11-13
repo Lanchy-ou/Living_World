@@ -32,10 +32,10 @@ from living_island.agents.p3.types import (
 from living_island.memory.p3_types import canonical_bytes
 
 ADAPTER_ID = "deepseek-responses-v0"
-ADAPTER_VERSION = "0.3"
+ADAPTER_VERSION = "0.4"
 MODEL_ID = "deepseek-flash"
 COUNTER_ID = "deepseek-flash1017-byte-upper-bound"
-COUNTER_VERSION = "0.2"
+COUNTER_VERSION = "0.3"
 COUNTER_MODEL_VERSION = "DeepSeek-V4.1-Flash-1017"
 COUNTER_TOKENIZER_SHA256 = "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b"
 _SCHEMA_PREFIX = (
@@ -43,6 +43,7 @@ _SCHEMA_PREFIX = (
 )
 _MERGE_PREFIX_SIZE = 4096
 _ASCII_DIGITS = re.compile(r"[0-9]{1,3}")
+_BASIC_HAN = re.compile(r"[\u4e00-\u9fa5]+")
 # Exact ASCII restriction of the pinned tokenizer's final Split regex. In
 # particular, re.ASCII excludes U+001C..001F from Python's default whitespace.
 _ASCII_SPLIT = re.compile(
@@ -354,10 +355,25 @@ def _ascii_word_bound(word: str) -> int:
 
 
 def _plain_token_bound(text: str) -> int:
-    """Tighten only complete ASCII spans; all other spans keep the byte proof."""
-    if not text.isascii():
+    """Use only proven tokenizer boundaries; unsupported spans keep byte bounds."""
+    if text.isascii():
+        return sum(_ascii_word_bound(part) for part in _ascii_parts(text))
+    if any(not (char.isascii() or "\u4e00" <= char <= "\u9fa5") for char in text):
         return len(text.encode("utf-8"))
-    return sum(_ascii_word_bound(part) for part in _ascii_parts(text))
+    # The pinned N property has no basic Han code points. In this entire-span
+    # domain, stage 1 is therefore exactly ASCII digits. Follow the tokenizer's
+    # original order: numeric Split, then its real Han Split, then final Split.
+    # Han parts retain the byte bound regardless of any further splitting/BPE.
+    total = 0
+    for numeric_part in _isolated_parts(text, _ASCII_DIGITS):
+        for part in _isolated_parts(numeric_part, _BASIC_HAN):
+            if part.isascii():
+                total += sum(
+                    _ascii_word_bound(word) for word in _isolated_parts(part, _ASCII_SPLIT)
+                )
+            else:
+                total += len(part.encode("utf-8"))
+    return total
 
 
 class DeepSeekResponsesAdapter:
@@ -385,7 +401,8 @@ class DeepSeekResponsesAdapter:
             raise InputCounterUnavailable
         # Count the retained wire, including the schema's provider-side expansion.
         # Stop ASCII BPE after a certified rank prefix; subsequent merges can
-        # only reduce the count. Non-ASCII spans retain the original byte bound.
+        # only reduce the count. Real Han partitions and unsupported whole spans
+        # retain the original byte bound; no arbitrary text boundary is added.
         # System and schema form ONE ordinary span: an artificial split could
         # change merge priorities. Only structural markers separate spans.
         payload = json.loads(body)

@@ -31,9 +31,9 @@ added. The retained raw response distinguishes absent, empty and invalid UTF-8.
 
 ## Production counter and scope
 
-`deepseek-flash1017-byte-upper-bound/0.2` is a pure conservative token counter for
+`deepseek-flash1017-byte-upper-bound/0.3` is a pure conservative token counter for
 the frozen two-message, text-only, nonthinking, no-tool Responses lane. Adapter
-version is `0.3`. It decodes the already verified retained wire bytes and computes
+version is `0.4`. It decodes the already verified retained wire bytes and computes
 the rank-prefix bound below; it does not read these files, load a tokenizer, consult a service,
 or count the transport JSON as if it were model text. Unknown counter identities
 and versions still raise `INPUT_COUNTER_UNAVAILABLE` before transport access.
@@ -172,7 +172,7 @@ can conservatively reject requests that a precise tokenizer would admit. P305-U2
 exposed an avoidable such rejection, addressed by the stronger bound below. No
 paid observations or network token-count endpoint validate either bound.
 
-### Counter 0.2: certified BPE prefix for complete ASCII spans
+### Counter 0.2 foundation: certified BPE prefix for complete ASCII spans
 
 Let `P(s)` be the token count after executing only the first 4,096 ranked BPE rules
 on each exact pretokenized part of an ASCII span `s`. Define:
@@ -238,7 +238,7 @@ compared against an independent minimum-pair-rescan oracle, including all model
 ranks to establish `exact <= prefix <= bytes`. Every ASCII character pair is
 checked for identical source-derived splits, alongside digit and control cases.
 
-### P305-U2 request regression and remaining admission limit
+### P305-U2 initial request regression (superseded by the full tape)
 
 [The request fixture](p305-u2-first-request.json) is rendered from the supplied
 offline Ella context using the unchanged production template/action contract.
@@ -262,12 +262,87 @@ superseded by the exact-wire value above.
 
 For this fixed trusted system/schema, a non-ASCII user span may contain at most
 18,213 UTF-8 bytes under this bound (2,522 more than the first request). Larger
-spans still refuse honestly; a precise full tokenizer might admit them. The
-supplied reproduction has three tick-zero contexts (Ella/Mia/Ryan), only one of
-which is Ella. It has **no later Ella context**, so these results do not establish
-that every future 24-tick smoke decision will be admitted. P3-05 must assess later
-retained requests offline and repin adapter 0.3/counter 0.2 before any smoke.
-There is no truncation, context/schema/DTO change or relaxation of B-05/B-08.
+spans still refuse honestly; a precise full tokenizer might admit them. The first
+supplied reproduction had three tick-zero contexts (Ella/Mia/Ryan), only one of
+which was Ella. Its first-request fix did **not** establish later admission.
+P3-05 subsequently supplied a closed 24-request tape; 22 requests exceeded this
+0.2 threshold. U2 therefore remained open until the following refinement.
+
+### Counter 0.3: use the tokenizer's existing basic-Han boundaries
+
+The supported whole-span domain is ASCII union U+4E00 through U+9FA5, not a list of
+characters seen in one profile. Any code point outside this domain triggers the
+original byte bound for the **entire** ordinary span. This includes adjacent
+ideograph ranges, combining marks, fullwidth digits, Kana, punctuation such as
+U+3002, accented Latin letters and emoji. No unknown category is guessed.
+
+The retained [Oniguruma number-property table](oniguruma-unicode-properties.c.txt)
+defines `CR_N` with 144 ranges. Tests establish that none intersects the entire
+basic-Han domain and that its ASCII intersection is exactly digits 0 through 9.
+The exact tokenizer's second Split contains the whole basic-Han range. Thus,
+within the supported domain, the first two pretokenizers are reproduced exactly:
+
+1. Isolate ASCII digit groups of one through three, preserving all gaps.
+2. Inside each part, isolate basic-Han runs, again preserving all gaps.
+3. Each remaining ASCII part receives the exact ASCII specialization of the final
+   Split and the certified rank-prefix BPE already proved above.
+4. Each Han part receives its full UTF-8 byte bound. Any further subdivision by
+   the last Split and subsequent BPE cannot increase that byte bound.
+
+The implementation follows this original order. It never inserts an artificial
+BPE boundary: the Han boundaries already exist in the real second pretokenizer.
+There can therefore be no cross-part BPE merge that invalidates the sum of the
+component upper bounds. On pure ASCII inputs the second Split is still a no-op.
+Consequently, for every supported ordinary span `s`, the sum over these parts is
+a proven token upper bound; outside that domain the previous byte proof applies.
+The outer five structural IDs and combined system/schema span remain unchanged.
+
+No tokenizer dependency, runtime artifact read, Unicode normalization, request
+rewriting or profile-specific dispatch rule is added. The same 2,472 embedded
+ASCII pairs and source/model pins are used. Counter version becomes 0.3 and
+adapter version 0.4; earlier counter versions are explicitly refused so their
+different admission behavior is not silently substituted.
+
+Tests verify all 20,902 supported Han code points against the real second Split,
+the full numeric-property range exclusion, both Han endpoints and adjacent
+unsupported code points, long digit runs beside Han, and generated mixed text.
+An independent oracle uses captured regex splits from the source artifact and
+rescans current minimum BPE pairs. It shares no production heap/iterator code.
+The previous complete-ASCII and unsupported-span tests remain in force.
+
+### Complete 24-request smoke admission evidence
+
+[The compressed request fixture](p305-u2-smoke-requests.json.gz) contains only the
+24 original expected request/wire pairs and expected bounds, derived from the
+P3-05-owned closed offline tape. It does not copy response scripts, run logs or
+integration implementation. [Its provenance](p305-u2-smoke-evidence.json) pins
+source commit `c40ae94d17aa35ed6942f0214ef0093941820790`, original tape SHA-256
+`68acba21ebed8b1b9c10edd458c7cc1f3f056e37b32db160adfd0d383889722f`, and both
+compressed and decompressed fixture hashes.
+
+All 24 complete request bodies remain byte-for-byte equal to their retained wire
+envelopes after replacing only the non-wire fake-counter metadata with production
+counter 0.3. Each is independently counted and sent once to a local fake transport.
+The bounds by ordinal 0 through 23 are:
+
+```text
+23082, 24129, 25113, 26093, 27073, 27561,
+27537, 27505, 27376, 27344, 27217, 27187,
+27059, 27028, 26899, 26770, 26772, 26773,
+26774, 26775, 26777, 26782, 26785, 26788
+```
+
+Every bound is below unchanged B-05 (32,768); maximum is 27,561 at ordinal 5. The
+first user span is now bounded by 8,527, plus 14,550 system/schema and five framing
+IDs, totaling 23,082. The largest retained user text is 24,545 UTF-8 bytes. No
+required experience, goal, prompt, schema or DTO content is removed. The original
+first-request wire hash above remains unchanged.
+
+This closes admission for the supplied realistic closed tape, not every possible
+future model-generated string. Unsupported Unicode still takes the whole-span
+byte bound and can conservatively exceed B-05; its refusal is tested at the exact
+limit and one byte over. P3-05 must repin adapter 0.4/counter 0.3 and implementation
+hash before any registered smoke. No actual smoke or provider call occurred here.
 
 ### Response model evidence
 

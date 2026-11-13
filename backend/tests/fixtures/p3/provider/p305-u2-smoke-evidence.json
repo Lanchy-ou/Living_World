@@ -1,0 +1,12 @@
+{
+  "source_commit": "c40ae94d17aa35ed6942f0214ef0093941820790",
+  "source_path": "backend/tests/fixtures/p3/one_resident/slice_smoke_tape.json",
+  "source_sha256": "68acba21ebed8b1b9c10edd458c7cc1f3f056e37b32db160adfd0d383889722f",
+  "derived_requests_sha256": "973d50498e3f829047181085c9d81bbba9120875e57ddd82f5ed2624fa676da8",
+  "fixture_gzip_sha256": "3b7b7729789484c50ce3409d5f2fe175a5b15f0510cf60795bdc77f6ef0438fe",
+  "request_count": 24,
+  "counter_version": "0.3",
+  "min_bound": 23082,
+  "max_bound": 27561,
+  "api_calls": 0
+}

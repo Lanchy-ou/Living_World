@@ -1,6 +1,7 @@
 """Offline wire, bounds, response mapping and one-shot transport acceptance vectors."""
 
 import base64
+import gzip
 import hashlib
 import http.client
 import json
@@ -201,6 +202,71 @@ def oracle_bound(text, tokenizer, merges, cutoff=4096):
     return sum(oracle_bpe(part, merges, cutoff) for part in oracle_parts(text, tokenizer))
 
 
+def oracle_supported_bound(text, tokenizer, merges):
+    if any(not (char.isascii() or "\u4e00" <= char <= "\u9fa5") for char in text):
+        return len(text.encode("utf-8"))
+    han_pattern = tokenizer["pre_tokenizer"]["pretokenizers"][1]["pattern"]["Regex"]
+    return sum(
+        oracle_bound(part, tokenizer, merges)
+        for numeric in re.split(r"([0-9]{1,3})", text, flags=re.ASCII)
+        for part in re.split("(" + han_pattern + ")", numeric)
+        if part
+    )
+
+
+def test_pinned_number_property_and_han_domain_are_disjoint(tokenizer):
+    source = (FIXTURES / "oniguruma-unicode-properties.c.txt").read_text(encoding="utf-8")
+    match = re.search(r"CR_N\[\] = \{ (\d+),(.*?)\};", source, re.DOTALL)
+    assert match is not None
+    numbers = [int(value, 16) for value in re.findall(r"0x[0-9a-f]+", match[2])]
+    ranges = list(zip(numbers[::2], numbers[1::2], strict=True))
+    assert len(ranges) == int(match[1]) == 144
+    assert all(high < 0x4E00 or low > 0x9FA5 for low, high in ranges)
+    assert {value for value in range(128) if any(a <= value <= b for a, b in ranges)} == set(
+        range(ord("0"), ord("9") + 1)
+    )
+    han_pattern = tokenizer["pre_tokenizer"]["pretokenizers"][1]["pattern"]["Regex"]
+    assert all(re.fullmatch(han_pattern, chr(value)) for value in range(0x4E00, 0x9FA6))
+
+
+@pytest.mark.parametrize(
+    "char", ["\u4dff", "\u4e00", "\u9fa5", "\u9fa6", "１", "é", "\u0301", "ア", "。", "🏝"]
+)
+def test_han_scope_endpoints_and_unsupported_unicode_are_fail_closed(char, tokenizer, all_merges):
+    text = "the " * 10 + char + " the" * 10
+    bound = provider_module._plain_token_bound(text)
+    assert bound == oracle_supported_bound(text, tokenizer, all_merges)
+    if "\u4e00" <= char <= "\u9fa5":
+        assert bound < len(text.encode("utf-8"))
+    else:
+        assert bound == len(text.encode("utf-8"))
+
+
+@given(
+    text=st.text(
+        alphabet=st.one_of(
+            st.characters(min_codepoint=0, max_codepoint=127),
+            st.characters(min_codepoint=0x4E00, max_codepoint=0x9FA5),
+        ),
+        max_size=150,
+    )
+)
+@settings(max_examples=80)
+def test_supported_han_segments_match_independent_source_order(text, tokenizer, all_merges):
+    assert provider_module._plain_token_bound(text) == oracle_supported_bound(
+        text, tokenizer, all_merges
+    )
+
+
+@pytest.mark.parametrize(
+    "text", ["1234一56789", "一123456789龥", "the一the", "abc一二三def", "\x1c一\x00 1234\n"]
+)
+def test_real_han_and_digit_boundaries_do_not_merge_across_parts(text, tokenizer, all_merges):
+    assert provider_module._plain_token_bound(text) == oracle_supported_bound(
+        text, tokenizer, all_merges
+    )
+
+
 def test_ascii_prefix_certificate_matches_complete_model(tokenizer, all_merges):
     vocab = tokenizer["model"]["vocab"]
     assert len(vocab) == len(set(vocab.values()))
@@ -334,13 +400,14 @@ def test_p305_u2_actual_first_request_admits_unchanged_wire(tokenizer, all_merge
     assert span.isascii() and not user.isascii()
     assert 5 + len(span.encode()) + len(user.encode()) == 45161
     assert oracle_bound(span, tokenizer, all_merges) == 14550
-    assert adapter.count_input_tokens(req, wire) == evidence["prefix_bound"] == 30246
+    assert oracle_supported_bound(user, tokenizer, all_merges) == 8527
+    assert adapter.count_input_tokens(req, wire) == evidence["prefix_bound"] == 23082
     assert adapter.complete(req, wire, 30000).response_text is not None
     assert transport.sent == [(body, 30000)]
 
 
-@pytest.mark.parametrize("extra", [2522, 2523])
-def test_p305_u2_nonascii_growth_limit_remains_fail_closed(extra):
+@pytest.mark.parametrize("extra", [2520, 2521])
+def test_p305_u2_unsupported_unicode_growth_limit_remains_fail_closed(extra):
     original = ProviderRequest.model_validate_json(
         (FIXTURES / "p305-u2-first-request.json").read_bytes()
     )
@@ -350,7 +417,7 @@ def test_p305_u2_nonascii_growth_limit_remains_fail_closed(extra):
             "messages": [
                 original.messages[0],
                 original.messages[1].model_copy(
-                    update={"content": original.messages[1].content + "x" * extra}
+                    update={"content": original.messages[1].content + "é" + "x" * extra}
                 ),
             ],
             "settings": original.settings.model_copy(
@@ -362,7 +429,7 @@ def test_p305_u2_nonascii_growth_limit_remains_fail_closed(extra):
     adapter = DeepSeekResponsesAdapter(transport)
     wire = adapter.prepare(req)
     bound = adapter.count_input_tokens(req, wire)
-    assert bound == 30246 + extra
+    assert bound == 30248 + extra
     if bound > MAX_INPUT_TOKENS:
         with pytest.raises(ValueError, match="B-05"):
             adapter.complete(req, wire, 30000)
@@ -370,6 +437,60 @@ def test_p305_u2_nonascii_growth_limit_remains_fail_closed(extra):
     else:
         assert adapter.complete(req, wire, 30000).outcome == "response"
         assert len(transport.sent) == 1
+
+
+@pytest.fixture(scope="module")
+def smoke_requests():
+    raw = (FIXTURES / "p305-u2-smoke-requests.json.gz").read_bytes()
+    evidence = json.loads((FIXTURES / "p305-u2-smoke-evidence.json").read_bytes())
+    assert hashlib.sha256(raw).hexdigest() == evidence["fixture_gzip_sha256"]
+    decoded = gzip.decompress(raw)
+    assert hashlib.sha256(decoded).hexdigest() == evidence["derived_requests_sha256"]
+    data = json.loads(decoded)
+    assert len(data) == evidence["request_count"] == 24
+    assert evidence["counter_version"] == provider_module.COUNTER_VERSION
+    assert min(case["expected_bound"] for case in data) == 23082
+    assert max(case["expected_bound"] for case in data) == 27561
+    return data
+
+
+@pytest.mark.parametrize("ordinal", range(24))
+def test_p305_u2_all_retained_smoke_requests_admit_exact_wire(
+    ordinal, smoke_requests, tokenizer, all_merges
+):
+    case = smoke_requests[ordinal]
+    assert case["actor_id"] == "ella" and case["decision_ordinal"] == ordinal
+    original = ProviderRequest.model_validate(case["expected_request"])
+    req = original.model_copy(
+        update={
+            "settings": original.settings.model_copy(
+                update={
+                    "input_counter_id": provider_module.COUNTER_ID,
+                    "input_counter_version": provider_module.COUNTER_VERSION,
+                }
+            )
+        }
+    )
+    transport = LocalTransport()
+    adapter = DeepSeekResponsesAdapter(transport)
+    wire = adapter.prepare(req)
+    assert wire.model_dump(mode="json") == case["expected_wire"]
+    assert adapter.prepare(original) == wire
+    payload = json.loads(verified_body(req, wire))
+    system = (
+        payload["input"][0]["content"]
+        + provider_module._SCHEMA_PREFIX
+        + json.dumps(payload["text"]["format"]["schema"], ensure_ascii=False)
+    )
+    expected = (
+        5
+        + oracle_supported_bound(system, tokenizer, all_merges)
+        + oracle_supported_bound(payload["input"][1]["content"], tokenizer, all_merges)
+    )
+    assert adapter.count_input_tokens(req, wire) == case["expected_bound"] == expected
+    assert expected <= MAX_INPUT_TOKENS
+    assert adapter.complete(req, wire, 30000).outcome == "response"
+    assert transport.sent == [(decode_base64(wire.body_base64), 30000)]
 
 
 def test_production_counter_sources_are_immutable_and_match_identity():
@@ -520,7 +641,7 @@ def test_production_counter_is_pure_and_preserves_counted_recorded_sent_bytes(mo
     assert hashlib.sha256(transport.sent[0][0]).digest() == hashlib.sha256(body).digest()
 
 
-@pytest.mark.parametrize("version", ["", "wrong", "0.1", "0.2 "])
+@pytest.mark.parametrize("version", ["", "wrong", "0.1", "0.2", "0.3 "])
 def test_production_counter_rejects_uncertified_versions_without_dispatch(version):
     transport = LocalTransport()
     adapter = DeepSeekResponsesAdapter(transport)

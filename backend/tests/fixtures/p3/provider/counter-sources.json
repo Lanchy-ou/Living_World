@@ -1,7 +1,7 @@
 {
   "model_version": "DeepSeek-V4.1-Flash-1017",
   "counter_id": "deepseek-flash1017-byte-upper-bound",
-  "counter_version": "0.2",
+  "counter_version": "0.3",
   "sources": {
     "flash1017-tokenizer.json": {
       "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/resolve/08c8657f02291e11b6f6b63e0e16014f8e748518/tokenizer.json",
@@ -112,6 +112,11 @@
       "url": "https://raw.githubusercontent.com/kkos/oniguruma/f95747b462de672b6f8dbdeb478245ddf061ca53/COPYING",
       "sha256": "70ba5469ea0bab6e18a32d7009068f996503168d27be57747e08da34337ff26f",
       "bytes": 1340
+    },
+    "oniguruma-unicode-properties.c.txt": {
+      "url": "https://raw.githubusercontent.com/kkos/oniguruma/f95747b462de672b6f8dbdeb478245ddf061ca53/src/unicode_property_data.c",
+      "sha256": "683c9bb9bbab0cc7315ef46d6e4718cf482e2d8cf339ae693b62aea9e2da847f",
+      "bytes": 712528
     }
   },
   "ascii_merge_prefix": {
@@ -119,5 +124,11 @@
     "reachable_pairs": 2472,
     "certificate_format": "ASCII lines: rank left_hex right_hex, LF terminated",
     "certificate_sha256": "c312cab30044f3f4150b2cb28f03e1c0300903d7a2363cad2e7553d9c95aa4bf"
+  },
+  "han_partition_scope": {
+    "first_codepoint": "U+4E00",
+    "last_codepoint": "U+9FA5",
+    "number_property": "CR_N",
+    "number_property_source": "oniguruma-unicode-properties.c.txt"
   }
 }
