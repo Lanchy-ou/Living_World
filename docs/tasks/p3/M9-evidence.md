@@ -272,8 +272,10 @@ This fake authority does not enroll any M8 live slot.
 
 ## Registered live command and results
 
-The smoke is prepared but NOT_RUN at this checkpoint. Offline full-suite and
-all plan executor checks have passed. Its immutable registration is
+The authorized live prefix completed at tick 8, but its provider requests all
+failed. The original planned live continuation is cancelled because the retained
+schema is rejected by the endpoint. All offline executor checks passed before
+this trial. This case cannot meet the V-05 acceptance threshold. Its immutable registration is
 [development/p3-smoke-r1.json](../../../content/experiments/p3/development/p3-smoke-r1.json),
 canonical/file SHA-256
 `dcb337f07601f6c1b1abe9fd0a61f410a713a6caf26bcc7e4e7cf0d25e65ca5f`.
@@ -324,6 +326,31 @@ The report separates reported usage, conservative ledger charges, unknown usage
 and provider invoice evidence. It never labels a conservative ceiling as a
 confirmed invoice. Deliberate rule choices are excluded from the LLM acceptance
 denominator; fallback and wait shares remain visible.
+
+### Live failure and bounded offline continuation
+
+The first invocation exited 0 at its registered pause boundary, tick 8. Its
+14 attempts all returned HTTP_400 / PROVIDER_REJECTED with missing usage. The
+retained structured error identifies `^[^\\uD800-\\uDFFF]*$` as an invalid regex
+in the JSON Schema. No successful provider proposal was received. The exact
+response/request remains in the ignored run artifacts; no credential is retained.
+
+The checkpoint ledger charges 909760 micro-CNY conservatively, not a confirmed
+invoice. No missing usage is counted as zero. P305-U3 is returned to the P3-04
+adapter owner for an offline compatibility fix and independent review. Frozen
+contracts and the already-enrolled registration are not modified. No new slot,
+refill or paid retry outside this failed case is authorized or performed.
+
+The originally planned live `resume` above WILL NOT RUN. The following replacement
+is recorded before execution: finish the registered horizon using the explicit
+no-provider offline recovery mode, then replay that complete failure lineage.
+This preserves the failed live prefix and demonstrates recovery; it cannot turn
+the failed live trial into a V-05 pass or an M9 acceptance result.
+
+```sh
+uv run --directory backend python ../scripts/p3_trials.py resume --registration ../content/experiments/p3/development/p3-smoke-r1.json --case p3-smoke-r1.s1292387875 --checkpoint ../runs/p3/p3-smoke-r1/first/checkpoint-0000000008.json --out ../runs/p3/p3-smoke-r1/continued --offline-recovery
+uv run --directory backend python ../scripts/p3_trials.py replay --source-run ../runs/p3/p3-smoke-r1/continued --ancestor ../runs/p3/p3-smoke-r1/first/checkpoint-0000000008.json --out ../runs/p3/p3-smoke-r1/recorded
+```
 
 ## Upstream follow-up P305-U1
 
