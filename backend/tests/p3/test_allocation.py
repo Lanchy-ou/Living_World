@@ -21,6 +21,8 @@ from living_island.agents.p3.types import (
 )
 from living_island.memory.p3_types import canonical_bytes
 from living_island.persistence.p3_allocation import (
+    REPLACEMENT_SMOKE_CAPS,
+    REPLACEMENT_SMOKE_CASE,
     AllocationError,
     AllocationStore,
     CaseAllocationSession,
@@ -816,3 +818,223 @@ def test_lost_or_corrupt_pilot_record_never_reenrolls(tmp_path):
         "ALLOCATION_UNAVAILABLE",
         lambda: AllocationStore(copied, mode="live", approval_path=approval),
     )
+
+
+# Independent historical identities and charges for the CR-007 fixture.
+ORIGINAL_SMOKE_SHA = "dcb337f07601f6c1b1abe9fd0a61f410a713a6caf26bcc7e4e7cf0d25e65ca5f"
+ORIGINAL_SMOKE_CASE = "p3-smoke-r1.s1292387875"
+REPLACEMENT_SHA = "a" * 64
+
+
+def completed_original_smoke(root, approval):
+    """Create a fixture pilot and publish the original ledger through real sessions."""
+    initialize_pilot(approval, root)
+    store = AllocationStore(root, mode="live", approval_path=approval)
+    key = store.enroll_live("smoke", 1292387875, ORIGINAL_SMOKE_SHA, ORIGINAL_SMOKE_CASE, SMOKE)
+    fixture = Harness.__new__(Harness)
+    fixture.run = root.parent / "original-run"
+    with store.open_case(key, LIVE_PRICE, None, fixture.verify) as session:
+        fixture.publish(session, 0, [])
+        entries = []
+        for index in range(14):
+            call = f"test:d:ella:{index:06d}:a0"
+            inputs = 24299 if index < 13 else 24305
+            reservation = session.admit(call, inputs, 2048, REQUEST, WIRE)
+            assert reservation is not None
+            debit = CallDebit(
+                call_id=call,
+                input_reserved=inputs,
+                output_reserved=2048,
+                money_reserved=reserved_money(LIVE_PRICE, inputs, 2048),
+                input_reported=None,
+                output_reported=None,
+                input_charged=inputs,
+                output_charged=2048,
+                money_charged=reserved_money(LIVE_PRICE, inputs, 2048),
+                usage_unknown=True,
+            )
+            session.commit(call.rsplit(":a", 1)[0], [debit])
+            entries.append(
+                session.snapshot()
+                .entries[-1]
+                .model_copy(
+                    update={"state": "settled", "debit": debit, "terminal_call_sha256": TERMINAL}
+                )
+            )
+        fixture.publish(session, 24, entries, complete=True)
+    return store, root / "allocations" / f"{key}.json"
+
+
+@pytest.fixture
+def completed_smoke(tmp_path):
+    return completed_original_smoke(tmp_path / "authority", tmp_path / "approval.json")
+
+
+def authorize_replacement(store, original, digest):
+    return store.authorize_replacement_smoke(
+        digest, hashlib.sha256(original.read_bytes()).hexdigest()
+    )
+
+
+def test_replacement_requires_explicit_binding_and_keeps_original_bytes(completed_smoke):
+    store, original = completed_smoke
+    approval = store.approval_path
+    before = {p: p.read_bytes() for p in (approval, original)}
+    key = allocation_key(REPLACEMENT_SHA, REPLACEMENT_SMOKE_CASE)
+    case_path = store.root / "allocations" / f"{key}.json"
+    args = REPLACEMENT_SHA, REPLACEMENT_SMOKE_CASE, REPLACEMENT_SMOKE_CAPS
+    assert_code("ALLOCATION_UNAVAILABLE", lambda: store.enroll_replacement_smoke(*args))
+    assert_code(
+        "ALLOCATION_UNAVAILABLE",
+        lambda: store.enroll_live(
+            "smoke", 1292387875, REPLACEMENT_SHA, REPLACEMENT_SMOKE_CASE, SMOKE
+        ),
+    )
+    assert_code(
+        "ALLOCATION_INTEGRITY", lambda: store.authorize_replacement_smoke(REPLACEMENT_SHA, "b" * 64)
+    )
+    assert authorize_replacement(store, original, REPLACEMENT_SHA) == key
+    assert not case_path.exists()
+    assert_code("ALLOCATION_UNAVAILABLE", lambda: store._read_case(key))
+    assert_code(
+        "ALLOCATION_ALREADY_ENROLLED", lambda: authorize_replacement(store, original, "b" * 64)
+    )
+    assert_code(
+        "ALLOCATION_ALREADY_ENROLLED",
+        lambda: store.enroll_replacement_smoke(REPLACEMENT_SHA, REPLACEMENT_SMOKE_CASE, SMOKE),
+    )
+    assert store.enroll_replacement_smoke(*args) == key
+    assert store.enroll_replacement_smoke(*args) == key
+    assert authorize_replacement(store, original, REPLACEMENT_SHA) == key
+    assert {p: p.read_bytes() for p in before} == before
+    assert store._read_case(key).caps == REPLACEMENT_SMOKE_CAPS
+    with store.open_case(key, LIVE_PRICE, None, lambda head: None):
+        pass
+    assert_code("ALLOCATION_ALREADY_ENROLLED", lambda: store.enroll_replacement_smoke(*args))
+    case_path.unlink()
+    assert_code("ALLOCATION_UNAVAILABLE", lambda: store.enroll_replacement_smoke(*args))
+    assert_code(
+        "ALLOCATION_UNAVAILABLE", lambda: authorize_replacement(store, original, REPLACEMENT_SHA)
+    )
+    assert not case_path.exists()
+
+
+@pytest.mark.parametrize("loss", ["authorization", "old allocation", "corruption", "old mutation"])
+def test_replacement_refuses_lost_or_modified_authority(completed_smoke, loss):
+    store, original = completed_smoke
+    key = authorize_replacement(store, original, REPLACEMENT_SHA)
+    store.enroll_replacement_smoke(REPLACEMENT_SHA, REPLACEMENT_SMOKE_CASE, REPLACEMENT_SMOKE_CAPS)
+    record = store.root / "smoke-replacement.json"
+    if loss == "authorization":
+        record.unlink()
+    elif loss == "old allocation":
+        original.unlink()
+    elif loss == "corruption":
+        record.write_bytes(b"bad JSON")
+    else:
+        raw = json.loads(original.read_bytes())
+        raw["generation"] += 1
+        original.write_bytes(canonical_bytes(raw))
+    assert_code(
+        "ALLOCATION_UNAVAILABLE"
+        if loss in {"authorization", "old allocation"}
+        else "ALLOCATION_INTEGRITY",
+        lambda: store._read_case(key),
+    )
+    with pytest.raises(AllocationError):
+        store.authorize_replacement_smoke("b" * 64, "c" * 64)
+
+
+def test_replacement_refuses_incomplete_or_unapproved_original(completed_smoke):
+    store, original = completed_smoke
+    raw = json.loads(original.read_bytes())
+    raw["status"] = "running"
+    original.write_bytes(canonical_bytes(raw))
+    assert_code(
+        "ALLOCATION_INTEGRITY", lambda: authorize_replacement(store, original, REPLACEMENT_SHA)
+    )
+    raw["status"] = "complete"
+    raw["entries"][-1]["debit"]["money_charged"] += 1
+    original.write_bytes(canonical_bytes(raw))
+    assert_code(
+        "ALLOCATION_INTEGRITY", lambda: authorize_replacement(store, original, REPLACEMENT_SHA)
+    )
+    assert not (store.root / "smoke-replacement.json").exists()
+
+
+_REPLACEMENT_CHILD_STORE = (
+    "s=AllocationStore(base/'authority',mode='live',approval_path=base/'approval.json',"
+    "fault=fault)\n"
+    "original=base/'authority'/'allocations'/(allocation_key(ORIGINAL_SMOKE_SHA,"
+    "ORIGINAL_SMOKE_CASE)+'.json')\n"
+)
+_REPLACEMENT_CHILD_ENROLL = (
+    "s.enroll_replacement_smoke(REPLACEMENT_SHA,REPLACEMENT_SMOKE_CASE,REPLACEMENT_SMOKE_CAPS)\n"
+)
+
+
+@pytest.mark.parametrize("operation", ["replacement_bind", "case_initialize", "replacement_issue"])
+@pytest.mark.parametrize("phase", ["before_write", "after_flush", "after_replace"])
+def test_replacement_crash_retry_at_every_durable_stage(
+    tmp_path, completed_smoke, operation, phase
+):
+    store, original = completed_smoke
+    old_bytes = original.read_bytes()
+    approval_bytes = store.approval_path.read_bytes()
+    if operation == "replacement_bind":
+        action = "authorize_replacement(s, original, REPLACEMENT_SHA)\n"
+    else:
+        authorize_replacement(store, original, REPLACEMENT_SHA)
+        action = _REPLACEMENT_CHILD_ENROLL
+    process = child(
+        tmp_path,
+        "def fault(stage):\n if stage == sys.argv[3]: os._exit(73)\n"
+        + _REPLACEMENT_CHILD_STORE
+        + action,
+        f"{operation}:{phase}",
+    )
+    finish(process, 73)
+    key = authorize_replacement(store, original, REPLACEMENT_SHA)
+    assert (
+        store.enroll_replacement_smoke(
+            REPLACEMENT_SHA, REPLACEMENT_SMOKE_CASE, REPLACEMENT_SMOKE_CAPS
+        )
+        == key
+    )
+    assert store._read_case(key).generation == 0
+    assert len(list((store.root / "allocations").glob("*.json"))) == 2
+    assert original.read_bytes() == old_bytes
+    assert store.approval_path.read_bytes() == approval_bytes
+
+
+def test_replacement_competing_processes_share_the_enrollment_lock(tmp_path, completed_smoke):
+    store, original = completed_smoke
+    first = child(
+        tmp_path,
+        "def fault(stage):\n if stage == 'replacement_bind:after_replace':\n"
+        "  print('HELD',flush=True)\n  sys.stdin.readline()\n"
+        + _REPLACEMENT_CHILD_STORE
+        + "authorize_replacement(s, original, REPLACEMENT_SHA)\n",
+    )
+    try:
+        assert first.stdout.readline().strip() == "HELD"
+        second = child(
+            tmp_path,
+            "fault=None\n"
+            + _REPLACEMENT_CHILD_STORE
+            + "try:\n authorize_replacement(s, original, 'b'*64)\n"
+            "except AllocationError as e:\n print(e.code)\n",
+        )
+        assert finish(second) == "ALLOCATION_BUSY"
+        first.stdin.write("continue\n")
+        first.stdin.flush()
+        finish(first)
+        key = store.enroll_replacement_smoke(
+            REPLACEMENT_SHA, REPLACEMENT_SMOKE_CASE, REPLACEMENT_SMOKE_CAPS
+        )
+        assert store._read_case(key).status == "ready"
+        assert len(list((store.root / "allocations").glob("*.json"))) == 2
+    finally:
+        if first.poll() is None:
+            first.kill()
+            first.communicate(timeout=30)

@@ -12,6 +12,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from test_allocation import completed_original_smoke
 
 from living_island.agents.llm.provider import DeepSeekResponsesAdapter, TransportResponse
 from living_island.memory.p3_types import canonical_bytes, canonical_sha256
@@ -393,6 +394,90 @@ def test_enrollment_crash_after_binding_recovers_same_slot_once(repository, monk
     assert len(bound) == 1 and bound[0]["allocation_key"] == key
     assert bound[0]["state"] == "issued"
     assert len(list((root / "allocations").glob("*.json"))) == 1
+
+
+def test_replacement_launcher_requires_explicit_committed_authorization(repository, monkeypatch):
+    name = "p3-smoke-u3-r1"
+    registration, path = register(repository, purpose="smoke", name=name, committed=False)
+    case = registration.cases[0]
+    assert (case.case_id, case.seed, case.ticks, case.llm_actor_ids) == (
+        "p3-smoke-u3-r1.s1292387875",
+        1292387875,
+        24,
+        ["ella"],
+    )
+    assert registration.aggregate_caps.model_dump() == {
+        "attempts": 34,
+        "input_tokens": 1114112,
+        "output_tokens": 69632,
+        "micro_cny": 2785280,
+    }
+    assert launcher.validate_registration(repository, path) == registration
+    root, approval = launcher.live_locations(repository)
+    store, original = completed_original_smoke(root, approval)
+    old_hash = sha256(original.read_bytes()).hexdigest()
+    locator = launcher.common_directory(repository) / "living-island-p3-enrollment.json"
+    locator.write_bytes(
+        canonical_bytes(
+            {
+                "authority_root": str(root),
+                "approval_path": str(approval),
+                "ceiling_micro_cny": 150000000,
+            }
+        )
+    )
+    digest = canonical_sha256(registration)
+    auth_args = {"registration_sha256": digest, "original_allocation_sha256": old_hash}
+
+    def forbid(*args, **kwargs):
+        raise AssertionError("unexpected external preflight, credential or transport access")
+
+    for name in ("_credential", "current_preflight", "HTTPSByteTransport"):
+        monkeypatch.setattr(launcher, name, forbid)
+    with pytest.raises(ValueError, match="REGISTRATION_MUST_BE_COMMITTED"):
+        launcher.authorize_replacement_registration(repository, path, **auth_args)
+    commit(repository, path.relative_to(repository).as_posix())
+    with pytest.raises(ValueError, match="REPLACEMENT_APPROVAL_HASH_MISMATCH"):
+        launcher.authorize_replacement_registration(
+            repository, path, **{**auth_args, "registration_sha256": "f" * 64}
+        )
+    with pytest.raises(AllocationError, match="ALLOCATION_UNAVAILABLE"):
+        launcher.enroll_registration(repository, path)
+    assert not (root / "smoke-replacement.json").exists()
+
+    pilot_bytes = approval.read_bytes()
+    assert (
+        launcher.main(
+            [
+                "--repository",
+                str(repository),
+                "authorize-replacement",
+                "--registration",
+                str(path),
+                "--registration-sha256",
+                digest,
+                "--original-allocation-sha256",
+                old_hash,
+            ]
+        )
+        == 0
+    )
+    key = launcher.allocation_key(digest, case.case_id)
+    assert launcher.enroll_registration(repository, path) == [key]
+    assert launcher.enroll_registration(repository, path) == [key]
+    assert store._read_case(key).caps == case.caps
+    assert launcher._remaining(store, key) == case.caps.model_dump()
+    assert approval.read_bytes() == pilot_bytes
+    assert sha256(original.read_bytes()).hexdigest() == old_hash
+
+    # The replacement case file and receipt alone cannot reach live preflight.
+    (root / "smoke-replacement.json").unlink()
+    with pytest.raises(AllocationError, match="ALLOCATION_UNAVAILABLE"):
+        launcher.run_registration(
+            repository, path, case.case_id, repository / "replacement", live=True, ticks=1
+        )
+    assert store._path(key).exists()
+    assert not (repository / "replacement").exists()
 
 
 def test_real_second_process_cannot_take_receipt_lock(tmp_path):

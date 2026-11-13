@@ -39,6 +39,22 @@ from living_island.world.protocol import Sha256Hex
 
 Fault = Callable[[str], None]
 
+REPLACEMENT_SMOKE_ID = "p3-smoke-u3-r1"
+REPLACEMENT_SMOKE_SEED = 1292387875
+REPLACEMENT_SMOKE_CASE = f"{REPLACEMENT_SMOKE_ID}.s{REPLACEMENT_SMOKE_SEED}"
+REPLACEMENT_SMOKE_CAPS = BudgetCaps(
+    attempts=34, input_tokens=1114112, output_tokens=69632, micro_cny=2785280
+)
+_ORIGINAL_SMOKE_CASE = "p3-smoke-r1.s1292387875"
+_ORIGINAL_SMOKE_REGISTRATION = "dcb337f07601f6c1b1abe9fd0a61f410a713a6caf26bcc7e4e7cf0d25e65ca5f"
+_ORIGINAL_SMOKE_CHARGED = {
+    "attempts": 14,
+    "input_tokens": 340192,
+    "output_tokens": 28672,
+    "micro_cny": 909760,
+}
+_REPLACEMENT_RECORD = "smoke-replacement.json"
+
 
 class AllocationError(ValueError):
     """Stable machine-readable refusal without exposing external data."""
@@ -294,6 +310,14 @@ class _Pilot(P3Model):
         return self
 
 
+class _ReplacementSmoke(P3Model):
+    replacement_version: Literal["0.1"]
+    authority_root: str
+    original_allocation_key: Sha256Hex
+    original_allocation_sha256: Sha256Hex
+    binding: _Binding
+
+
 class _FakeEnrollments(P3Model):
     enrollment_version: Literal["0.1"]
     authority_root: str
@@ -433,18 +457,26 @@ class AllocationStore:
         return self.root / "allocations" / (key + ".json")
 
     def _binding(self, key: str) -> _Binding:
+        pilot = self._pilot() if self.mode == "live" else None
         candidates = (
-            [s.binding for s in self._pilot().slots if s.binding is not None]
-            if self.mode == "live"
+            [s.binding for s in pilot.slots if s.binding is not None]
+            if pilot is not None
             else self._fake().bindings
         )
         matches = [b for b in candidates if b.allocation_key == key and b.state == "issued"]
-        if len(matches) != 1:
-            _fail("ALLOCATION_UNAVAILABLE", "case has not been issued")
-        return matches[0]
+        if matches:
+            return matches[0]
+        if pilot is not None:
+            replacement = self._replacement(pilot)
+            if replacement.binding.allocation_key == key and replacement.binding.state == "issued":
+                return replacement.binding
+        _fail("ALLOCATION_UNAVAILABLE", "case has not been issued")
 
     def _read_case(self, key: str) -> CaseAllocationP3:
-        binding = self._binding(key)
+        return self._bound_case(self._binding(key))
+
+    def _bound_case(self, binding: _Binding) -> CaseAllocationP3:
+        key = binding.allocation_key
         case = _read(self._path(key), CaseAllocationP3)
         if (case.allocation_key, case.registration_sha256, case.case_id, case.caps) != (
             key,
@@ -483,6 +515,8 @@ class AllocationStore:
         self, purpose: str, seed: int, registration_sha256: str, case_id: str, caps: BudgetCaps
     ) -> str:
         self._pilot()
+        if case_id == REPLACEMENT_SMOKE_CASE:
+            _fail("ALLOCATION_UNAVAILABLE", "replacement requires linked authorization")
         key = allocation_key(registration_sha256, case_id)
         wanted = _Binding(
             registration_sha256=registration_sha256,
@@ -525,6 +559,136 @@ class AllocationStore:
                 canonical_bytes(_Pilot.model_validate(raw)),
                 self.fault,
                 "slot_issue",
+            )
+            return key
+
+    def _original_smoke(self, pilot: _Pilot) -> CaseAllocationP3:
+        slot = next(s for s in pilot.slots if s.purpose == "smoke")
+        binding = slot.binding
+        if (
+            binding is None
+            or binding.state != "issued"
+            or binding.case_id != _ORIGINAL_SMOKE_CASE
+            or binding.registration_sha256 != _ORIGINAL_SMOKE_REGISTRATION
+        ):
+            _fail("ALLOCATION_UNAVAILABLE", "original smoke binding unavailable")
+        case = self._bound_case(binding)
+        if (
+            case.status != "complete"
+            or case.head is None
+            or case.head.checkpoint_tick != 24
+            or case.head.reservation_cursor != len(case.entries)
+            or case.prepared_head is not None
+            or case.pending_recovery_sha256 is not None
+        ):
+            _fail("ALLOCATION_INTEGRITY", "original smoke must be settled and complete")
+        ledger = ledger_from_entries(case.allocation_key, case.caps, case.entries)
+        charged = {
+            "attempts": ledger.attempts_charged,
+            "input_tokens": ledger.input_charged,
+            "output_tokens": ledger.output_charged,
+            "micro_cny": ledger.money_charged,
+        }
+        if charged != _ORIGINAL_SMOKE_CHARGED or any(
+            used + getattr(REPLACEMENT_SMOKE_CAPS, field) > getattr(case.caps, field)
+            for field, used in charged.items()
+        ):
+            _fail("ALLOCATION_INTEGRITY", "replacement exceeds or disagrees with approved envelope")
+        return case
+
+    def _replacement(self, pilot: _Pilot) -> _ReplacementSmoke:
+        record = _read(self.root / _REPLACEMENT_RECORD, _ReplacementSmoke)
+        original = self._original_smoke(pilot)
+        binding = record.binding
+        if (
+            record.authority_root != _locator(self.root)
+            or record.original_allocation_key != original.allocation_key
+            or record.original_allocation_sha256 != canonical_sha256(original)
+            or binding.case_id != REPLACEMENT_SMOKE_CASE
+            or binding.registration_sha256 == original.registration_sha256
+            or binding.caps != REPLACEMENT_SMOKE_CAPS
+            or any(
+                slot.binding is not None and slot.binding.allocation_key == binding.allocation_key
+                for slot in pilot.slots
+            )
+        ):
+            _fail("ALLOCATION_INTEGRITY", "replacement authorization mismatch")
+        return record
+
+    def authorize_replacement_smoke(
+        self, registration_sha256: str, original_allocation_sha256: str
+    ) -> str:
+        """Bind an explicitly approved registration before its separate enrollment."""
+        with _ProcessLock(self.root / "enrollment.lock"):
+            pilot = self._pilot()
+            original = self._original_smoke(pilot)
+            if canonical_sha256(original) != original_allocation_sha256:
+                _fail("ALLOCATION_INTEGRITY", "approved original allocation hash differs")
+            if registration_sha256 == original.registration_sha256:
+                _fail("ALLOCATION_INTEGRITY", "replacement must have a distinct registration")
+            key = allocation_key(registration_sha256, REPLACEMENT_SMOKE_CASE)
+            path = self.root / _REPLACEMENT_RECORD
+            if path.exists():
+                record = self._replacement(pilot)
+                if record.binding.allocation_key != key:
+                    _fail("ALLOCATION_ALREADY_ENROLLED", "replacement already bound")
+                if record.binding.state == "issued":
+                    self._bound_case(record.binding)
+                return key
+
+            existing = {s.binding.allocation_key for s in pilot.slots if s.binding is not None}
+            if any(
+                file.stem not in existing
+                for file in self._path(key).parent.iterdir()
+                if file.suffix in {".json", ".lock"}
+            ):
+                _fail("ALLOCATION_INTEGRITY", "allocation exists without an authorization")
+            binding = _Binding(
+                registration_sha256=registration_sha256,
+                case_id=REPLACEMENT_SMOKE_CASE,
+                allocation_key=key,
+                caps=REPLACEMENT_SMOKE_CAPS,
+                state="initializing",
+            )
+            record = _ReplacementSmoke(
+                replacement_version="0.1",
+                authority_root=_locator(self.root),
+                original_allocation_key=original.allocation_key,
+                original_allocation_sha256=original_allocation_sha256,
+                binding=binding,
+            )
+            _atomic_write(path, canonical_bytes(record), self.fault, "replacement_bind")
+            return key
+
+    def enroll_replacement_smoke(
+        self, registration_sha256: str, case_id: str, caps: BudgetCaps
+    ) -> str:
+        """Issue only the exact bound replacement, once, under the existing lock."""
+        with _ProcessLock(self.root / "enrollment.lock"):
+            record = self._replacement(self._pilot())
+            binding = record.binding
+            if (binding.registration_sha256, binding.case_id, binding.caps) != (
+                registration_sha256,
+                case_id,
+                caps,
+            ):
+                _fail("ALLOCATION_ALREADY_ENROLLED", "replacement binding differs")
+            key = binding.allocation_key
+            if binding.state == "issued":
+                case = self._bound_case(binding)
+                if case.generation or case.head is not None or case.entries:
+                    _fail("ALLOCATION_ALREADY_ENROLLED", "replacement already consumed")
+                return key
+
+            self._initial_case(binding)
+            issued = record.model_copy(
+                update={"binding": binding.model_copy(update={"state": "issued"})}
+            )
+            _atomic_write(
+                self.root / _REPLACEMENT_RECORD,
+                canonical_bytes(issued),
+                self.fault,
+                "replacement_issue",
             )
             return key
 

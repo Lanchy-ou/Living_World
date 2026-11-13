@@ -77,6 +77,8 @@ from living_island.persistence.p3 import (
     write_trace_p3,
 )
 from living_island.persistence.p3_allocation import (
+    REPLACEMENT_SMOKE_CAPS,
+    REPLACEMENT_SMOKE_ID,
     AllocationError,
     AllocationStore,
     VerifiedCheckpoint,
@@ -415,6 +417,8 @@ def build_registration(
     """Build the approved one-Ella slice; this task does not open later trial arms."""
     if purpose not in {"smoke", "fake"}:
         raise ValueError("P3-05 supports smoke and isolated fake registrations only")
+    if registration_id == REPLACEMENT_SMOKE_ID and purpose != "smoke":
+        raise ValueError("REPLACEMENT_SMOKE_REQUIRES_SMOKE_PURPOSE")
     commit = git(repository, "rev-parse", implementation_commit).decode().strip()
     content = _world(repository, SMOKE_SEED)
     identities, _ = _identities(repository, commit, content)
@@ -523,6 +527,8 @@ def build_registration(
             }
         )
     caps = SMOKE_CAPS if purpose == "smoke" else SMOKE_CAPS.model_copy(update={"micro_cny": 0})
+    if registration_id == REPLACEMENT_SMOKE_ID:
+        caps = REPLACEMENT_SMOKE_CAPS
     return TrialRegistration.model_validate(
         dict(
             registration_schema_version="0.1",
@@ -612,7 +618,12 @@ def build_case_inputs(
 
 def validate_registration(repository: Path, registration_path: Path) -> TrialRegistration:
     """No provider, credential or allocation access; enforce complete source identity."""
-    registration = TrialRegistration.model_validate_json(registration_path.read_bytes())
+    data = registration_path.read_bytes()
+    registration = TrialRegistration.model_validate_json(data)
+    if registration.registration_id == REPLACEMENT_SMOKE_ID and data != canonical_bytes(
+        registration
+    ):
+        raise ValueError("REPLACEMENT_REGISTRATION_MUST_BE_CANONICAL")
     tapes = [
         p.path
         for p in registration.input_pins
@@ -878,6 +889,21 @@ def _receipt_directory(repository: Path, registration: TrialRegistration) -> Pat
     )
 
 
+def authorize_replacement_registration(
+    repository: Path, path: Path, *, registration_sha256: str, original_allocation_sha256: str
+) -> str:
+    """Explicit owner-approved setup only. Enrollment and dispatch are separate."""
+    registration = validate_registration(repository, path)
+    if registration.purpose != "smoke" or registration.registration_id != REPLACEMENT_SMOKE_ID:
+        raise ValueError("REPLACEMENT_SMOKE_REGISTRATION_REQUIRED")
+    if canonical_sha256(registration) != registration_sha256:
+        raise ValueError("REPLACEMENT_APPROVAL_HASH_MISMATCH")
+    _registration_commit(repository, path)
+    return _live_store(repository).authorize_replacement_smoke(
+        registration_sha256, original_allocation_sha256
+    )
+
+
 def enroll_registration(
     repository: Path, path: Path, *, fake_authority: Path | None = None
 ) -> list[str]:
@@ -895,17 +921,15 @@ def enroll_registration(
     with _persistent_lock(receipts / "receipt.lock"):
         keys = []
         for case in registration.cases:
-            key = (
-                store.enroll_fake(canonical_sha256(registration), case.case_id, case.caps)
-                if registration.purpose == "fake"
-                else store.enroll_live(
-                    registration.purpose,
-                    case.seed,
-                    canonical_sha256(registration),
-                    case.case_id,
-                    case.caps,
+            digest = canonical_sha256(registration)
+            if registration.purpose == "fake":
+                key = store.enroll_fake(digest, case.case_id, case.caps)
+            elif registration.registration_id == REPLACEMENT_SMOKE_ID:
+                key = store.enroll_replacement_smoke(digest, case.case_id, case.caps)
+            else:
+                key = store.enroll_live(
+                    registration.purpose, case.seed, digest, case.case_id, case.caps
                 )
-            )
             keys.append(key)
             receipt_path = receipts / f"{case.case_id}.json"
             expected = CaseReceipt(
@@ -954,10 +978,8 @@ def _credential(path: Path) -> str:
 
 
 def _remaining(store: AllocationStore, key: str) -> dict[str, int]:
-    case = CaseAllocationP3.model_validate_json(
-        (store.root / "allocations" / f"{key}.json").read_bytes()
-    )
-    if case.allocation_key != key or case.status in {"offline_only", "complete"}:
+    case = store._read_case(key)
+    if case.status in {"offline_only", "complete"}:
         raise ValueError("ALLOCATION_CLOSED")
     amounts = dict(attempts=len(case.entries), input_tokens=0, output_tokens=0, micro_cny=0)
     for entry in case.entries:
@@ -1089,9 +1111,7 @@ def run_registration(
             raise ValueError("RECEIPT_ALLOCATION_MISMATCH")
         if prior.status == "complete" or (checkpoint is None and prior.status != "not_started"):
             raise ValueError("CASE_ALREADY_STARTED")
-        authority = CaseAllocationP3.model_validate_json(
-            (store.root / "allocations" / f"{key}.json").read_bytes()
-        )
+        authority = store._read_case(key)
         if checkpoint is None and (
             authority.head is not None
             or authority.entries
@@ -1383,7 +1403,7 @@ def finalize_registration(
     with _persistent_lock(receipts / "receipt.lock"):
         # Inspect under the existing OS lock; never construct a missing grant.
         with _ProcessLock(lock_path):
-            before = CaseAllocationP3.model_validate_json(authority_path.read_bytes())
+            before = store._read_case(key)
             prepared = before.status != "complete"
             head = before.prepared_head if prepared else before.head
             if (
@@ -1542,6 +1562,12 @@ def main(argv: list[str] | None = None) -> int:
     modes = initialize.add_mutually_exclusive_group(required=True)
     modes.add_argument("--live", action="store_true")
     modes.add_argument("--fake-authority", type=Path)
+    authorize = subcommands.add_parser(
+        "authorize-replacement", help="record explicit approval of a committed replacement"
+    )
+    authorize.add_argument("--registration", type=Path, required=True)
+    authorize.add_argument("--registration-sha256", required=True)
+    authorize.add_argument("--original-allocation-sha256", required=True)
     for name in ["validate", "enroll", "run", "resume", "finalize"]:
         command_parser = subcommands.add_parser(name)
         command_parser.add_argument("--registration", type=Path, required=True)
@@ -1605,6 +1631,14 @@ def main(argv: list[str] | None = None) -> int:
         elif args.operation == "validate":
             registration = validate_registration(repository, args.registration)
             print(f"VALID registration_sha256={canonical_sha256(registration)}; no dispatch")
+        elif args.operation == "authorize-replacement":
+            key = authorize_replacement_registration(
+                repository,
+                args.registration,
+                registration_sha256=args.registration_sha256,
+                original_allocation_sha256=args.original_allocation_sha256,
+            )
+            print(json.dumps({"authorized_allocation_key": key, "dispatches": 0}))
         elif args.operation == "enroll":
             keys = enroll_registration(
                 repository, args.registration, fake_authority=args.fake_authority
