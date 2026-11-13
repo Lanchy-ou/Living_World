@@ -1209,20 +1209,34 @@ def test_u4_reservations_preserve_original_output_envelope(u4_history):
 
 
 @pytest.mark.parametrize(
-    "change", ["prior missing", "prior incomplete", "prior debit", "original", "prior guard"]
+    "change",
+    [
+        "prior missing",
+        "prior incomplete",
+        "prior debit",
+        "original",
+        "prior guard",
+        "original lock",
+        "prior lock",
+        "invalid prior lock",
+    ],
 )
 def test_u4_replacement_refuses_changed_predecessor(u4_history, change):
     store, previous = u4_history
+    previous_digest = hashlib.sha256(previous.read_bytes()).hexdigest()
+    original = store._path(allocation_key(ORIGINAL_SMOKE_SHA, ORIGINAL_SMOKE_CASE))
     if change == "prior missing":
         previous.unlink()
     elif change == "prior guard":
         store._replacement_guard().unlink()
+    elif change == "original lock":
+        original.with_suffix(".lock").unlink()
+    elif change == "prior lock":
+        previous.with_suffix(".lock").unlink()
+    elif change == "invalid prior lock":
+        previous.with_suffix(".lock").write_bytes(b"")
     else:
-        path = (
-            store._path(allocation_key(ORIGINAL_SMOKE_SHA, ORIGINAL_SMOKE_CASE))
-            if change == "original"
-            else previous
-        )
+        path = original if change == "original" else previous
         data = json.loads(path.read_bytes())
         if change == "prior incomplete":
             data["status"] = "running"
@@ -1232,8 +1246,17 @@ def test_u4_replacement_refuses_changed_predecessor(u4_history, change):
             data["generation"] += 1
         path.write_bytes(canonical_bytes(data))
     with pytest.raises(AllocationError):
-        store.authorize_replacement_smoke(U4_REGISTRATION_SHA, "f" * 64, u4=True)
+        store.authorize_replacement_smoke(U4_REGISTRATION_SHA, previous_digest, u4=True)
     assert not (store.root / "smoke-u4-replacement.json").exists()
+
+
+def test_u4_issued_case_still_requires_intact_predecessor(u4_history):
+    store, previous = u4_history
+    key = authorize_u4(store, previous)
+    enroll_u4(store)
+    previous.with_suffix(".lock").unlink()
+    assert_code("ALLOCATION_UNAVAILABLE", lambda: store._read_case(key))
+    assert_code("ALLOCATION_UNAVAILABLE", lambda: enroll_u4(store))
 
 
 def test_u4_replacement_guard_survives_loss_of_new_case_and_primary(u4_history):

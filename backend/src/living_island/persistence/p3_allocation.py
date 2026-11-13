@@ -632,6 +632,15 @@ class AllocationStore:
             or binding.registration_sha256 != _PRIOR_REPLACEMENT_REGISTRATION
         ):
             _fail("ALLOCATION_UNAVAILABLE", "prior replacement binding unavailable")
+        original = self._original_smoke(pilot)
+        for key in (original.allocation_key, binding.allocation_key):
+            lock = self._path(key).with_suffix(".lock")
+            try:
+                size = lock.stat().st_size
+            except OSError as exc:
+                raise AllocationError("ALLOCATION_UNAVAILABLE", "predecessor lock missing") from exc
+            if not lock.is_file() or size != 1:
+                _fail("ALLOCATION_INTEGRITY", "invalid predecessor lock")
         previous = self._bound_case(binding)
         if (
             previous.status != "complete"
@@ -649,7 +658,7 @@ class AllocationStore:
             ledger.output_charged,
             ledger.money_charged,
         )
-        envelope = self._original_smoke(pilot).caps.model_dump()
+        envelope = original.caps.model_dump()
         envelope["attempts"] = 50
         if charged != _PRIOR_REPLACEMENT_CHARGED or any(
             _ORIGINAL_SMOKE_CHARGED[field] + used + getattr(U4_SMOKE_CAPS, field) > envelope[field]
