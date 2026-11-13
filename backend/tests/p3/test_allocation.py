@@ -945,6 +945,56 @@ def test_replacement_refuses_lost_or_modified_authority(completed_smoke, loss):
         store.authorize_replacement_smoke("b" * 64, "c" * 64)
 
 
+@pytest.mark.parametrize("loss", ["all root files", "stale primary", "guard", "case lock"])
+def test_replacement_guard_prevents_reissue_after_loss(completed_smoke, loss):
+    store, original = completed_smoke
+    args = REPLACEMENT_SHA, REPLACEMENT_SMOKE_CASE, REPLACEMENT_SMOKE_CAPS
+    key = authorize_replacement(store, original, REPLACEMENT_SHA)
+    record = store.root / "smoke-replacement.json"
+    initializing = record.read_bytes()
+    store.enroll_replacement_smoke(*args)
+    guard = store.approval_path.with_name("smoke-replacement-guard.json")
+    case_path = store._path(key)
+    lock = case_path.with_suffix(".lock")
+    if loss == "all root files":
+        record.unlink()
+        case_path.unlink()
+        lock.unlink()
+    elif loss == "stale primary":
+        record.write_bytes(initializing)
+        case_path.unlink()
+        lock.unlink()
+    elif loss == "guard":
+        guard.unlink()
+    else:
+        lock.unlink()
+
+    with pytest.raises(AllocationError):
+        store._read_case(key)
+    with pytest.raises(AllocationError):
+        store.enroll_replacement_smoke(*args)
+    with pytest.raises(AllocationError):
+        authorize_replacement(store, original, "b" * 64)
+    assert len(list(case_path.parent.glob("*.json"))) == (1 if not case_path.exists() else 2)
+
+
+def test_replacement_guard_refuses_changed_registration(completed_smoke):
+    store, original = completed_smoke
+    authorize_replacement(store, original, REPLACEMENT_SHA)
+    record = store.root / "smoke-replacement.json"
+    data = json.loads(record.read_bytes())
+    digest = "b" * 64
+    data["binding"]["registration_sha256"] = digest
+    data["binding"]["allocation_key"] = allocation_key(digest, REPLACEMENT_SMOKE_CASE)
+    record.write_bytes(canonical_bytes(data))
+    assert_code(
+        "ALLOCATION_INTEGRITY",
+        lambda: store.enroll_replacement_smoke(
+            digest, REPLACEMENT_SMOKE_CASE, REPLACEMENT_SMOKE_CAPS
+        ),
+    )
+
+
 def test_replacement_refuses_incomplete_or_unapproved_original(completed_smoke):
     store, original = completed_smoke
     raw = json.loads(original.read_bytes())
@@ -973,7 +1023,16 @@ _REPLACEMENT_CHILD_ENROLL = (
 )
 
 
-@pytest.mark.parametrize("operation", ["replacement_bind", "case_initialize", "replacement_issue"])
+@pytest.mark.parametrize(
+    "operation",
+    [
+        "replacement_bind",
+        "replacement_guard_bind",
+        "case_initialize",
+        "replacement_issue",
+        "replacement_guard_issue",
+    ],
+)
 @pytest.mark.parametrize("phase", ["before_write", "after_flush", "after_replace"])
 def test_replacement_crash_retry_at_every_durable_stage(
     tmp_path, completed_smoke, operation, phase
@@ -981,7 +1040,7 @@ def test_replacement_crash_retry_at_every_durable_stage(
     store, original = completed_smoke
     old_bytes = original.read_bytes()
     approval_bytes = store.approval_path.read_bytes()
-    if operation == "replacement_bind":
+    if operation in {"replacement_bind", "replacement_guard_bind"}:
         action = "authorize_replacement(s, original, REPLACEMENT_SHA)\n"
     else:
         authorize_replacement(store, original, REPLACEMENT_SHA)

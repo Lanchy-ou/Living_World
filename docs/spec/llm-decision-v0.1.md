@@ -448,7 +448,10 @@ uses the existing repository-wide enrollment lock and a separate durable
 authorization record. It binds the original completed allocation and its
 canonical bytes, and the exact new registration, case key and caps. The old
 allocation and approval remain immutable. The replacement transitions from
-initializing to issued only for that binding. After issuance, missing files or
+initializing to issued only for that binding, under the same lock. A guard
+beside the original pilot approval pins the same binding and issuance state.
+The authority record is published before the guard at each transition. Both
+must agree on issuance before dispatch. After issuance, missing files or
 an inconsistent original allocation refuse live access. Run/resume and replay
 cannot create an authorization or reconstruct one from retained checkpoints.
 

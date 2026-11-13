@@ -469,6 +469,8 @@ class AllocationStore:
         if pilot is not None:
             replacement = self._replacement(pilot)
             if replacement.binding.allocation_key == key and replacement.binding.state == "issued":
+                if not self._path(key).with_suffix(".lock").is_file():
+                    _fail("ALLOCATION_UNAVAILABLE", "issued replacement lock is missing")
                 return replacement.binding
         _fail("ALLOCATION_UNAVAILABLE", "case has not been issued")
 
@@ -596,7 +598,12 @@ class AllocationStore:
             _fail("ALLOCATION_INTEGRITY", "replacement exceeds or disagrees with approved envelope")
         return case
 
-    def _replacement(self, pilot: _Pilot) -> _ReplacementSmoke:
+    def _replacement_guard(self) -> Path:
+        if self.approval_path is None:
+            _fail("ALLOCATION_UNAVAILABLE", "replacement requires a live pilot")
+        return self.approval_path.with_name("smoke-replacement-guard.json")
+
+    def _replacement(self, pilot: _Pilot, *, for_enrollment: bool = False) -> _ReplacementSmoke:
         record = _read(self.root / _REPLACEMENT_RECORD, _ReplacementSmoke)
         original = self._original_smoke(pilot)
         binding = record.binding
@@ -613,7 +620,20 @@ class AllocationStore:
             )
         ):
             _fail("ALLOCATION_INTEGRITY", "replacement authorization mismatch")
+        guard = _read(self._replacement_guard(), _ReplacementSmoke)
+        if guard != record:
+            # The primary record is marked issued before its independent guard.
+            if not for_enrollment or guard != self._with_replacement_state(record, "initializing"):
+                _fail("ALLOCATION_INTEGRITY", "replacement guard mismatch")
         return record
+
+    @staticmethod
+    def _with_replacement_state(
+        record: _ReplacementSmoke, state: Literal["initializing", "issued"]
+    ) -> _ReplacementSmoke:
+        return record.model_copy(
+            update={"binding": record.binding.model_copy(update={"state": state})}
+        )
 
     def authorize_replacement_smoke(
         self, registration_sha256: str, original_allocation_sha256: str
@@ -627,10 +647,25 @@ class AllocationStore:
             if registration_sha256 == original.registration_sha256:
                 _fail("ALLOCATION_INTEGRITY", "replacement must have a distinct registration")
             key = allocation_key(registration_sha256, REPLACEMENT_SMOKE_CASE)
+            binding = _Binding(
+                registration_sha256=registration_sha256,
+                case_id=REPLACEMENT_SMOKE_CASE,
+                allocation_key=key,
+                caps=REPLACEMENT_SMOKE_CAPS,
+                state="initializing",
+            )
+            expected = _ReplacementSmoke(
+                replacement_version="0.1",
+                authority_root=_locator(self.root),
+                original_allocation_key=original.allocation_key,
+                original_allocation_sha256=original_allocation_sha256,
+                binding=binding,
+            )
             path = self.root / _REPLACEMENT_RECORD
-            if path.exists():
-                record = self._replacement(pilot)
-                if record.binding.allocation_key != key:
+            guard_path = self._replacement_guard()
+            if guard_path.exists():
+                record = self._replacement(pilot, for_enrollment=True)
+                if self._with_replacement_state(record, "initializing") != expected:
                     _fail("ALLOCATION_ALREADY_ENROLLED", "replacement already bound")
                 if record.binding.state == "issued":
                     self._bound_case(record.binding)
@@ -642,22 +677,15 @@ class AllocationStore:
                 for file in self._path(key).parent.iterdir()
                 if file.suffix in {".json", ".lock"}
             ):
-                _fail("ALLOCATION_INTEGRITY", "allocation exists without an authorization")
-            binding = _Binding(
-                registration_sha256=registration_sha256,
-                case_id=REPLACEMENT_SMOKE_CASE,
-                allocation_key=key,
-                caps=REPLACEMENT_SMOKE_CAPS,
-                state="initializing",
+                _fail("ALLOCATION_INTEGRITY", "allocation exists without a replacement guard")
+            if path.exists():
+                if _read(path, _ReplacementSmoke) != expected:
+                    _fail("ALLOCATION_INTEGRITY", "unguarded replacement differs")
+            else:
+                _atomic_write(path, canonical_bytes(expected), self.fault, "replacement_bind")
+            _atomic_write(
+                guard_path, canonical_bytes(expected), self.fault, "replacement_guard_bind"
             )
-            record = _ReplacementSmoke(
-                replacement_version="0.1",
-                authority_root=_locator(self.root),
-                original_allocation_key=original.allocation_key,
-                original_allocation_sha256=original_allocation_sha256,
-                binding=binding,
-            )
-            _atomic_write(path, canonical_bytes(record), self.fault, "replacement_bind")
             return key
 
     def enroll_replacement_smoke(
@@ -665,7 +693,7 @@ class AllocationStore:
     ) -> str:
         """Issue only the exact bound replacement, once, under the existing lock."""
         with _ProcessLock(self.root / "enrollment.lock"):
-            record = self._replacement(self._pilot())
+            record = self._replacement(self._pilot(), for_enrollment=True)
             binding = record.binding
             if (binding.registration_sha256, binding.case_id, binding.caps) != (
                 registration_sha256,
@@ -678,18 +706,23 @@ class AllocationStore:
                 case = self._bound_case(binding)
                 if case.generation or case.head is not None or case.entries:
                     _fail("ALLOCATION_ALREADY_ENROLLED", "replacement already consumed")
-                return key
-
-            self._initial_case(binding)
-            issued = record.model_copy(
-                update={"binding": binding.model_copy(update={"state": "issued"})}
-            )
-            _atomic_write(
-                self.root / _REPLACEMENT_RECORD,
-                canonical_bytes(issued),
-                self.fault,
-                "replacement_issue",
-            )
+                if not self._path(key).with_suffix(".lock").is_file():
+                    _fail("ALLOCATION_UNAVAILABLE", "issued replacement lock is missing")
+                issued = record
+            else:
+                self._initial_case(binding)
+                issued = self._with_replacement_state(record, "issued")
+                _atomic_write(
+                    self.root / _REPLACEMENT_RECORD,
+                    canonical_bytes(issued),
+                    self.fault,
+                    "replacement_issue",
+                )
+            guard_path = self._replacement_guard()
+            if _read(guard_path, _ReplacementSmoke) != issued:
+                _atomic_write(
+                    guard_path, canonical_bytes(issued), self.fault, "replacement_guard_issue"
+                )
             return key
 
     def enroll_fake(self, registration_sha256: str, case_id: str, caps: BudgetCaps) -> str:

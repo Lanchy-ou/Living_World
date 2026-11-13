@@ -45,7 +45,9 @@ immutable registration hash and caps. Under the same repository-wide enrollment
 lock, durably bind the exact candidate before creating its authority, then mark
 issuance before live use. Repeat, concurrent or crash-retried operations may
 complete only that exact initialization. Missing or corrupt durable authorization
-or issued allocation refuses live access. Run/resume, fake and replay cannot issue
+or issued allocation refuses live access. A separate guard beside the original
+pilot approval detects combined loss inside the authority root. Run/resume, fake
+and replay cannot issue
 an authorization. No old registration, receipt, replay or ledger is rewritten.
 
 The old case charged 14 attempts, 340192 input tokens, 28672 output tokens and
