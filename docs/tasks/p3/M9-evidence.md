@@ -85,6 +85,22 @@ Already-complete finalization never opens a case. No new grant or call is allowe
 Independent review of the final prepared-publication path is pending; live
 enrollment has not begun.
 
+### Independent pre-live code disposition
+
+**PASS** on `eac4d29b3474d337ca312677e609d9e15ddd431a`, by the nonauthor
+`p305_gate2` reviewer in its isolated worktree. It independently passed all 35
+launcher tests in 499.37 seconds, including real process crashes at startup,
+completed and prepared-final publication, and exact original-receipt recovery.
+All previously reported code and slice-evidence findings are closed. Its separate
+actual initial request measurement is 23082 input tokens, 2048 reserved output
+tokens and 62548 micro-CNY. Its complete retained-tape recount and wire equality
+also pass. Review worktree and diff checks are clean.
+
+This is a code disposition, not final M9 or task acceptance. The review explicitly
+requires the integrated task/full executor checks, committed 24-tick fake launcher
+proof, current metadata/remaining-grant checks and actual smoke evidence. Final
+independent Gate 2 will review those results before owner M9 review.
+
 ## Offline integration and tests
 
 Pending implementation results. Required evidence includes the one-Ella complete
