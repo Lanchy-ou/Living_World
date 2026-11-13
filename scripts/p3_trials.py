@@ -46,6 +46,7 @@ from living_island.agents.p3.prompts import (
 )
 from living_island.agents.p3.runtime import create_p3_runtime
 from living_island.agents.p3.types import (
+    AllocationHead,
     BudgetCaps,
     CaseAllocationP3,
     ContextProfile,
@@ -68,6 +69,7 @@ from living_island.memory.p3_types import canonical_bytes, canonical_sha256
 from living_island.persistence._files import atomic_create
 from living_island.persistence.characters import resolve_identity
 from living_island.persistence.p3 import (
+    checkpoint_verifier,
     git_source_reader,
     load_trace_p3,
     read_checkpoint_p3,
@@ -75,7 +77,9 @@ from living_island.persistence.p3 import (
     write_trace_p3,
 )
 from living_island.persistence.p3_allocation import (
+    AllocationError,
     AllocationStore,
+    VerifiedCheckpoint,
     _atomic_write,
     _ProcessLock,
     allocation_key,
@@ -1290,6 +1294,59 @@ def run_registration(
             raise
 
 
+def _execution_receipt(
+    receipts: Path, prior: CaseReceipt, source: Path
+) -> tuple[CaseReceipt, list[dict[str, str]]]:
+    """Follow only content-addressed invocation/previous links for this one case."""
+    current = prior
+    visited: set[str] = set()
+    proof = []
+    while True:
+        if (
+            current.registration_sha256 != prior.registration_sha256
+            or current.case_id != prior.case_id
+            or current.allocation_key != prior.allocation_key
+            or current.status == "not_started"
+            or (current.status == "complete" and current.run_directory != str(source.resolve()))
+        ):
+            raise ValueError("FINALIZATION_RECEIPT_LINEAGE_MISMATCH")
+        invocation = CaseReceipt.model_validate(
+            {
+                **current.model_dump(mode="json"),
+                "status": "running",
+                "exit_code": None,
+                "trace_sha256": None,
+                "failure": None,
+            }
+        )
+        identity = canonical_sha256(invocation)
+        if identity in visited:
+            raise ValueError("FINALIZATION_RECEIPT_LINEAGE_CYCLE")
+        visited.add(identity)
+        history = receipts / "lineage" / prior.case_id / identity
+        invocation_path = history / "invocation.json"
+        raw = invocation_path.read_bytes()
+        if CaseReceipt.model_validate_json(raw) != invocation:
+            raise ValueError("FINALIZATION_INVOCATION_MISMATCH")
+        proof.append(
+            {
+                "path": invocation_path.relative_to(receipts).as_posix(),
+                "sha256": sha256(raw).hexdigest(),
+            }
+        )
+        if invocation.run_directory == str(source.resolve()):
+            return invocation, proof
+        previous_path = history / "previous.json"
+        raw = previous_path.read_bytes()
+        proof.append(
+            {
+                "path": previous_path.relative_to(receipts).as_posix(),
+                "sha256": sha256(raw).hexdigest(),
+            }
+        )
+        current = CaseReceipt.model_validate_json(raw)
+
+
 def finalize_registration(
     repository: Path,
     path: Path,
@@ -1299,7 +1356,7 @@ def finalize_registration(
     fake_authority: Path | None = None,
     command: list[str] | None = None,
 ) -> CaseReceipt:
-    """Finish metadata for a verified complete grant without opening or spending it."""
+    """Finish a published horizon and its metadata without new execution or spend."""
     from living_island.sim.p3 import export_p3_replay
 
     registration = validate_registration(repository, path)
@@ -1317,66 +1374,125 @@ def finalize_registration(
         store = _live_store(repository)
     key = allocation_key(canonical_sha256(registration), case_id)
     receipts = _receipt_directory(repository, registration)
+    authority_path = store.root / "allocations" / f"{key}.json"
+    lock_path = authority_path.with_suffix(".lock")
+    reader = _reader(repository)
+    verifier = checkpoint_verifier(ancestors=ancestors, source_reader=reader, horizon=case.ticks)
     with _persistent_lock(receipts / "receipt.lock"):
-        # Existing lock only: finalization cannot construct missing authority files.
-        with _ProcessLock(store.root / "allocations" / f"{key}.lock"):
-            authority = CaseAllocationP3.model_validate_json(
-                (store.root / "allocations" / f"{key}.json").read_bytes()
-            )
-            head = authority.head
+        # Inspect under the existing OS lock; never construct a missing grant.
+        with _ProcessLock(lock_path):
+            before = CaseAllocationP3.model_validate_json(authority_path.read_bytes())
+            prepared = before.status != "complete"
+            head = before.prepared_head if prepared else before.head
             if (
-                authority.status != "complete"
-                or head is None
-                or authority.prepared_head is not None
-                or authority.pending_recovery_sha256 is not None
+                head is None
                 or head.checkpoint_tick != case.ticks
-                or head.reservation_cursor != len(authority.entries)
-                or authority.caps != case.caps
-                or authority.registration_sha256 != canonical_sha256(registration)
-                or authority.case_id != case_id
-                or authority.allocation_key != key
+                or head.reservation_cursor != len(before.entries)
+                or before.caps != case.caps
+                or before.registration_sha256 != canonical_sha256(registration)
+                or before.case_id != case_id
+                or before.allocation_key != key
+                or (
+                    prepared
+                    and (before.head is None or before.status not in {"running", "offline_only"})
+                )
+                or (
+                    not prepared
+                    and (
+                        before.prepared_head is not None
+                        or before.pending_recovery_sha256 is not None
+                    )
+                )
             ):
-                raise ValueError("FINALIZATION_REQUIRES_COMPLETE_AUTHORITY")
+                raise ValueError("FINALIZATION_REQUIRES_PUBLISHED_HORIZON")
             source = Path(head.run_directory)
-            reader = _reader(repository)
             checkpoint = read_checkpoint_p3(
                 source / f"checkpoint-{case.ticks:010d}.json",
                 ancestors=ancestors,
                 source_reader=reader,
             )
+            entries = checkpoint.save.allocation_entries
+
+            def identities(values: list[Any]) -> list[tuple[Any, str, str]]:
+                return [
+                    (entry.reservation, entry.provider_request_sha256, entry.wire_body_sha256)
+                    for entry in values
+                ]
+
             if (
                 sha256(checkpoint.raw).hexdigest() != head.checkpoint_sha256
                 or checkpoint.save.input_manifest_sha256 != head.input_manifest_sha256
-                or checkpoint.save.allocation_entries != authority.entries
+                or identities(entries) != identities(before.entries)
                 or checkpoint.inputs["trial-registration.json"] != canonical_bytes(registration)
                 or checkpoint.save.run_budget.allocation_key != key
+                or (not prepared and entries != before.entries)
             ):
                 raise ValueError("FINALIZATION_CHECKPOINT_MISMATCH")
             receipt_path = receipts / f"{case_id}.json"
             prior = CaseReceipt.model_validate_json(receipt_path.read_bytes())
-            if (
-                prior.registration_sha256 != canonical_sha256(registration)
-                or prior.case_id != case_id
-                or prior.allocation_key != key
-                or prior.run_directory != str(source.resolve())
-                or prior.status not in {"running", "failed", "complete"}
+            if (prior.registration_sha256, prior.case_id, prior.allocation_key) != (
+                canonical_sha256(registration),
+                case_id,
+                key,
             ):
                 raise ValueError("FINALIZATION_RECEIPT_LINEAGE_MISMATCH")
+            execution, proof = _execution_receipt(receipts, prior, source)
             operation = {
                 "command": command or ["p3_trials.py", "finalize", "--case", case_id],
                 "observed_at": datetime.now(UTC).isoformat(),
                 "head": head.model_dump(mode="json"),
+                "reconcile_prepared_horizon": prepared,
             }
             history = receipts / "finalizations" / case_id / canonical_sha256(operation)
             history.mkdir(parents=True)
             atomic_create(history / "invocation.json", canonical_bytes(operation))
             atomic_create(history / "previous.json", canonical_bytes(prior))
-            try:
+            atomic_create(history / "execution.json", canonical_bytes(execution))
+            atomic_create(history / "receipt-lineage.json", canonical_bytes(proof))
+            atomic_create(history / "authority-before.json", canonical_bytes(before))
+        try:
+            if prepared:
+                # This verifier runs while open_case owns its lock. Any state or
+                # candidate drift aborts before reconciliation can open a generation.
+                def guarded_verifier(target: AllocationHead) -> VerifiedCheckpoint | None:
+                    if CaseAllocationP3.model_validate_json(authority_path.read_bytes()) != before:
+                        raise ValueError("FINALIZATION_AUTHORITY_DRIFT")
+                    verified = verifier(target)
+                    if target == head and (
+                        verified is None
+                        or not verified.complete
+                        or list(verified.entries) != entries
+                    ):
+                        raise ValueError("FINALIZATION_PREPARED_TARGET_DRIFT")
+                    return verified
+
+                pricing = PricingPin.model_validate(case.policy_templates[0]["config"]["pricing"])
+                try:
+                    with store.open_case(key, pricing, before.head, guarded_verifier):
+                        raise ValueError("FINALIZATION_UNEXPECTED_OPEN_GENERATION")
+                except AllocationError as exc:
+                    if exc.code != "ALLOCATION_CLOSED":
+                        raise
+            # Do not nest OS locks. Existing complete cases never call open_case.
+            with _ProcessLock(lock_path):
+                authority = CaseAllocationP3.model_validate_json(authority_path.read_bytes())
+                expected = CaseAllocationP3.model_validate(
+                    {
+                        **before.model_dump(mode="json"),
+                        "head": head.model_dump(mode="json"),
+                        "prepared_head": None,
+                        "pending_recovery_sha256": None,
+                        "entries": [entry.model_dump(mode="json") for entry in entries],
+                        "status": "complete",
+                    }
+                )
+                if authority != expected:
+                    raise ValueError("FINALIZATION_AUTHORITY_DRIFT")
+                atomic_create(history / "authority-after.json", canonical_bytes(authority))
                 trace_path = source / "decision-trace-p3.json"
                 if not trace_path.exists():
                     write_trace_p3(trace_path, checkpoint, final_tick=case.ticks)
                 load_trace_p3(trace_path, ancestors=ancestors, source_reader=reader)
-                # Rebuild independently even when a previous export already exists.
                 verified_replay = history / "verified-replay.json"
                 export_p3_replay(source, verified_replay, ancestors=ancestors, source_reader=reader)
                 replay_path = source / "replay.json"
@@ -1387,7 +1503,7 @@ def finalize_registration(
                     atomic_create(replay_path, verified_replay.read_bytes())
                 completed = CaseReceipt.model_validate(
                     {
-                        **prior.model_dump(mode="json"),
+                        **execution.model_dump(mode="json"),
                         "status": "complete",
                         "exit_code": 0,
                         "trace_sha256": sha256(trace_path.read_bytes()).hexdigest(),
@@ -1399,12 +1515,11 @@ def finalize_registration(
                 atomic_create(history / "receipt.json", canonical_bytes(completed))
                 _atomic_write(receipt_path, canonical_bytes(completed), None, "receipt_finalize")
                 return completed
-            except Exception as exc:
-                atomic_create(
-                    history / "failure.json",
-                    canonical_bytes({"error_type": type(exc).__name__}),
-                )
-                raise
+        except Exception as exc:
+            atomic_create(
+                history / "failure.json", canonical_bytes({"error_type": type(exc).__name__})
+            )
+            raise
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1506,7 +1621,7 @@ def main(argv: list[str] | None = None) -> int:
                     *(sys.argv[1:] if argv is None else argv),
                 ],
             )
-            print(f"finalized case={receipt.case_id}; dispatches=0; authority_mutations=0")
+            print(f"finalized case={receipt.case_id}; dispatches=0; new_allocations=0")
         elif args.operation == "replay":
             result = reexecute_p3(
                 args.source_run,

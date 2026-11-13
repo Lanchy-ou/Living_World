@@ -664,23 +664,24 @@ def test_invalid_initial_and_resume_ticks_leave_receipt_and_authority_unchanged(
     assert second.world.tick == 2
 
 
-def crash_process(repository, path, case, authority, output, stage):
+def crash_process(repository, path, case, authority, output, stage, *, checkpoint=None):
     """Abrupt exit bypasses Python cleanup and releases only process-owned OS locks."""
     code = """import importlib.util,json,os,sys
 from pathlib import Path
-repository,registration,case,authority,output,stage,test_directory=sys.argv[1:]
+repository,registration,case,authority,output,stage,test_directory,checkpoint=sys.argv[1:]
 repository=Path(repository);authority=Path(authority)
 sys.path.insert(0,test_directory)
 from test_trial_registration import fake_provider,short_fake_builder
 s=importlib.util.spec_from_file_location('launcher_crash_child',repository/'scripts/p3_trials.py')
 m=importlib.util.module_from_spec(s);sys.modules[s.name]=m;s.loader.exec_module(m)
-if stage in {'complete_before_trace','receipt_final'}:
+if stage in {'complete_before_trace','receipt_final','prepared_final','resume_before_headmove'}:
     m.build_registration=short_fake_builder(m)
 write=m._atomic_write
 def crash_write(path,data,fault,where):
     if stage=='receipt_final' and where=='receipt_final': os._exit(87)
     write(path,data,fault,where)
-    if stage=='receipt_running' and where=='receipt_running': os._exit(87)
+    if stage in {'receipt_running','resume_before_headmove'} and where=='receipt_running':
+        os._exit(87)
 m._atomic_write=crash_write
 create=m.atomic_create
 def crash_create(path,data):
@@ -693,13 +694,18 @@ def fault(where):
     if stage=='complete_before_trace' and where=='checkpoint:finalized':
         states=[json.loads(p.read_bytes()) for p in (authority/'allocations').glob('*.json')]
         if any(state['status']=='complete' for state in states): os._exit(87)
+    if stage=='prepared_final' and where=='checkpoint:after_publish':
+        states=[json.loads(p.read_bytes()) for p in (authority/'allocations').glob('*.json')]
+        if any(state['prepared_head']['checkpoint_tick']==2 for state in states): os._exit(87)
 def crash_run(*args,**kwargs):
     return run(*args,**kwargs,fault=fault)
 m.run_p3=crash_run
 provider,transport=fake_provider()
-ticks=None if stage in {'complete_before_trace','receipt_final'} else 0
+ticks=None if stage in {'complete_before_trace','receipt_final','prepared_final'} else 0
 m.run_registration(repository,Path(registration),case,Path(output),fake_authority=authority,
-                   provider=provider,ticks=ticks)
+                   provider=provider,ticks=ticks,
+                   checkpoint=Path(checkpoint) if checkpoint else None,
+                   offline_recovery=stage=='resume_before_headmove')
 sys.exit(3)
 """
     result = subprocess.run(
@@ -714,6 +720,7 @@ sys.exit(3)
             str(output),
             stage,
             str(Path(__file__).parent),
+            str(checkpoint) if checkpoint is not None else "",
         ],
         env={**os.environ, "PYTHONPATH": str(repository / "backend/src")},
         capture_output=True,
@@ -877,3 +884,92 @@ def test_short_registered_launcher_completes_trace_export_and_receipt(
     )
     assert len(json.loads((output / "replay.json").read_bytes())["frames"]) == 3
     assert result.checkpoint.run_budget.money_charged == 0
+
+
+@pytest.mark.parametrize("interrupted_resume", [False, True])
+def test_real_prepared_final_crash_reconciles_without_generation_or_new_reservation(
+    repository, tmp_path, monkeypatch, interrupted_resume
+):
+    monkeypatch.setattr(launcher, "build_registration", short_fake_builder(launcher))
+    registration, path, authority, key = fake_enrollment(repository, tmp_path)
+    case = registration.cases[0].case_id
+    directory = repository / "runs/p3" / registration.registration_id
+    source = directory / "prepared-final"
+    crash_process(repository, path, case, authority, source, "prepared_final")
+    authority_path = authority / "allocations" / f"{key}.json"
+    before = launcher.CaseAllocationP3.model_validate_json(authority_path.read_bytes())
+    assert before.status == "running" and before.head.checkpoint_tick == 1
+    assert before.prepared_head.checkpoint_tick == 2
+    receipt_path = launcher._receipt_directory(repository, registration) / f"{case}.json"
+    execution = launcher.CaseReceipt.model_validate_json(receipt_path.read_bytes())
+    if interrupted_resume:
+        raw = authority_path.read_bytes()
+        unpublished = directory / "unpublished-resume"
+        crash_process(
+            repository,
+            path,
+            case,
+            authority,
+            unpublished,
+            "resume_before_headmove",
+            checkpoint=source / "checkpoint-0000000001.json",
+        )
+        assert authority_path.read_bytes() == raw and not unpublished.exists()
+        latest = launcher.CaseReceipt.model_validate_json(receipt_path.read_bytes())
+        assert latest.run_directory == str(unpublished.resolve())
+        assert latest.command != execution.command
+    checkpoint = launcher.read_checkpoint_p3(
+        source / "checkpoint-0000000002.json", source_reader=launcher._reader(repository)
+    )
+    logs_before = {p: p.read_bytes() for p in source.glob("*.jsonl")}
+    opened = []
+    original_open = launcher.AllocationStore.open_case
+
+    def track_open(store, *args, **kwargs):
+        opened.append(args[0])
+        return original_open(store, *args, **kwargs)
+
+    def external_access(*args, **kwargs):
+        raise AssertionError("finalization attempted a call or execution")
+
+    monkeypatch.setattr(launcher.AllocationStore, "open_case", track_open)
+    for name in (
+        "run_p3",
+        "resume_p3",
+        "_credential",
+        "current_preflight",
+        "DeepSeekResponsesAdapter",
+    ):
+        monkeypatch.setattr(launcher, name, external_access)
+    finalized = launcher.finalize_registration(repository, path, case, fake_authority=authority)
+    after = launcher.CaseAllocationP3.model_validate_json(authority_path.read_bytes())
+    assert opened == [key]
+    assert after.status == "complete" and after.prepared_head is None
+    assert (after.generation, after.caps, after.allocation_key) == (
+        before.generation,
+        before.caps,
+        before.allocation_key,
+    )
+    assert after.head == before.prepared_head
+    assert after.entries == checkpoint.save.allocation_entries
+    assert [entry.reservation for entry in after.entries] == [
+        entry.reservation for entry in before.entries
+    ]
+    assert len(list((authority / "allocations").glob("*.json"))) == 1
+    assert finalized.command == execution.command
+    assert finalized.executed_commit == execution.executed_commit
+    assert finalized.run_directory == str(source.resolve())
+    assert finalized.status == "complete" and finalized.exit_code == 0
+    assert {p: p.read_bytes() for p in logs_before} == logs_before
+    finalizations = receipt_path.parent / "finalizations" / case
+    histories = list(finalizations.iterdir())
+    assert len(histories) == 1
+    proof = json.loads((histories[0] / "receipt-lineage.json").read_bytes())
+    assert len(proof) == (3 if interrupted_resume else 1)
+    assert json.loads((histories[0] / "invocation.json").read_bytes())["reconcile_prepared_horizon"]
+    raw = authority_path.read_bytes()
+    assert (
+        launcher.finalize_registration(repository, path, case, fake_authority=authority)
+        == finalized
+    )
+    assert opened == [key] and authority_path.read_bytes() == raw
