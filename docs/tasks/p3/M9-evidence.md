@@ -359,6 +359,23 @@ uv run --directory backend python ../scripts/p3_trials.py resume --registration 
 uv run --directory backend python ../scripts/p3_trials.py replay --source-run ../runs/p3/p3-smoke-r1/continued --ancestor ../runs/p3/p3-smoke-r1/first/checkpoint-0000000008.json --out ../runs/p3/p3-smoke-r1/recorded
 ```
 
+The source reached tick 24 with 66 committed decisions and 595 events: Ella
+has 23 primary-LLM decisions, all effective rule fallback (seven provider failures,
+then 16 `RECOVERY_OFFLINE` decisions); Mia has 21 and Ryan 22 deliberate rule
+choices. The complete lineage has 0/23 LLM acceptance and 0/23 wait substitutions.
+The live prefix alone is 0/7 accepted. The continuation added zero attempts,
+charges or unknown-usage entries. No model-authored goal was created; its 23
+`continue` deltas are fallback preservation, not demonstrated model cognition.
+This is failed-smoke/recovery evidence, distinct from the passing headless goal
+fixture and the passing registered fake case.
+
+P3-04 published the non-production U3 evidence package at
+`ec7524cd1f5716f67a084090a2e4829cb9088c5b` (substantive regression
+`1279f4be03ff2bade7e41e9a9a16e5a2430db7b3`), independently reviewed for evidence
+only. It preserves the actual HTTP error and confirms the unchanged request/counter.
+It does not fix or authorize a changed schema, and is not consumed as a new live
+implementation. The lead confirmed that P3-02 owns the coordinated version change.
+
 ### Independent late finding: offline completion metadata
 
 The nonauthor reviewer reproduced a P3-05 launcher defect while the original
@@ -382,6 +399,90 @@ Snapshot replay immutability only after this legitimate finalization; retain the
 failed invocation history. The source fix will be integrated only after original
 artifact recovery/replay, then checked and independently reviewed. This local
 fix cannot repair the separately failed hosted schema or authorize another smoke.
+
+### Finalized recovery and recorded replay audit
+
+The original offline continuation reached tick 24, published its final trace and
+completed allocation generation 2, then reproduced the independently predicted
+metadata error with CLI exit 1. The metadata-only `finalize` command above exited
+0 with zero dispatches and zero new allocations. All 11 authority file hashes
+match the preserved pre-finalization snapshot. The exact failed receipt remains
+in both `lineage/.../failure.json` and `finalizations/.../previous.json`; it was
+not erased by publishing the completed receipt.
+
+The completed receipt retains original offline execution commit
+`61d57dff18945398fa2ad5f16bfd4b0ce471a3c1` and its exact invocation. Receipt SHA-256:
+`8da11781d524b4056cb045b8f3c795029ea2d5cc6e89681b6635fb0f2058a025`.
+The original live invocation was executed at the separately preserved pre-dispatch
+commit; finalization did not relabel it as a successful hosted-model trial.
+
+Recorded reexecution then exited 0, tick 24, external calls 0. All five verified
+full-lineage logs, final checkpoint, trace and replay.json are byte-identical.
+The replay has exactly 25 frames and 595 matching events. All 97 source, receipt,
+approval/authority and enrollment-marker file hashes are unchanged across replay.
+Provider, fallback and authority sentinels remain strict and untouched.
+
+Read-only audit records (ignored local artifacts):
+`runs/p305-before-finalize.json`, `runs/p305-live-before-replay.json`, and
+`runs/p305-live-audit.json`. Source segments are `runs/p3/p3-smoke-r1/first` and
+`continued`; reexecution segments are `recorded/segment-0000` and `segment-0001`.
+These artifact-integrity checks PASS for the retained failed/recovered case;
+the mandatory hosted-model acceptance gate remains FAIL.
+
+| Measurement | Observed value |
+| --- | --- |
+| Attempts / outcome | 14 / all provider_error, HTTP_400 |
+| Accepted / fallback / wait, full Ella lineage | 0/23 / 23/23 / 0/23 |
+| Live-prefix accepted / fallback / wait | 0/7 / 7/7 / 0/7 |
+| Retry decisions | 7/23 full lineage; 7/7 live prefix |
+| Parse/plan/delta rejections | 0/14; provider errors are reported separately |
+| Unknown usage | 14/14; input and output totals null; known subtotals 0, missing counts 14 each |
+| Charged input / output | 340192 / 28672 tokens; conservative reservations for unknown usage |
+| Ledger cost ceiling | 909760 micro-CNY; actual invoice unknown |
+| Latency | 14 known / 0 missing; min317, median342, p95=405, max405 ms |
+| Maximum input reserve / request bytes / response bytes | 26254 tokens / 56724 / 219 |
+| Mandatory / projected context high water | 8054 / 24145 canonical UTF-8 bytes |
+| Retained experience high water, all residents | 77 records / 49849 canonical record-array bytes |
+| Retrieved/projected experience selections | 343/343; 551 per-manifest retrieval-limit omissions; maximum recall16 |
+| Eviction / mandatory oversize / input-limit refusal | 0 / 0 / 0 |
+| Model-authored goals / evidenced completions | 0 / 0; no completion share inferred from zero created goals |
+
+The smoke slot is complete and cannot reuse its uncharged 4090240 micro-CNY.
+The other five approved slots remain unbound (aggregate caps 145000000 micro-CNY),
+within the original 150000000 ceiling. No unused smoke balance is transferred.
+
+| Full-lineage artifact | SHA-256 |
+| --- | --- |
+| Contexts | `4b35dfe53d3ab1781786586b7d379e7115a6e6ef54aafe91105b85fb5c674e25` |
+| Decisions | `7e0b8ceaf9a0494aed6ce0c385c8fbcbf36776131827bf6ca95dee53a4cebc21` |
+| Events | `8dd1f67b8040c3cb267a753f3e22da405cce0742edd057d28e7dcfe37f1268bc` |
+| Calls | `d36675c5a4b6cdc5badef54b82dbd652cb942c874e5988a592d1983f245507a1` |
+| Dispatches | `eb890a5d3743bb942d79f4540647ef0975c80d02be9cec6a71d22b8a476c7342` |
+| Final checkpoint | `961ae2f0b0c5a1c258747a1018bd1fc0ad4f85642e1ebf6ef68444f31fb5da14` |
+| Trace | `94bc7b412b04fb1ea2e7588615923a4e3065b72e878aa8d73180e6c6641a77af` |
+| Replay | `13754f712693cfea74ebe519bbee8e102795a7269356c9c8e3fb922524ad83b2` |
+
+### Reviewed launcher correction after preserving the original trial
+
+The independent author fixed only the final type guard and added a full-horizon
+CLI regression in `ab4a3f6a08ea36880d56851332f19bbe85642f09`, integrated as
+`de5a12ecc117fa0e20a2f7360af217a3d8887002`. The guard inspects the concrete Python
+type without reading any provider-instance attribute. The strict sentinel and
+closed-tape consumption checks are preserved. Author targeted checks: 3 PASS;
+independent reviewer: 3 PASS in 54.40 seconds, closing this local P2 finding.
+The regression checks exit 0, complete receipt/trace/export, no provider/network/
+credential accesses, unchanged charges/entries/caps and unchanged source artifacts.
+
+All backend, scripts, content and frontend bytes at the integrated candidate
+match the independently tested author candidate. Its full backend suite is running;
+final integrated Ruff/format/Mypy/import/frontend/type-generation checks pass.
+The original worktree remained frozen until recovery/replay completed; the final
+suite's isolated candidate worktree remains frozen throughout. The implementation and input pins inside both historical registrations
+remain unchanged. For original run/validation/finalization reproduction, use the
+source-compatible commit `0fd8a0085d9e06f3f3979a1a400c2e78158fcaa5`, which includes
+the committed registrations. The corrected launcher must refuse to run an old
+registration with changed implementation bytes; this is intentional pin enforcement,
+not a license to change an enrolled registration or retry the live case.
 
 ## Upstream follow-up P305-U1
 
