@@ -1,8 +1,67 @@
 # P3-04 provider evidence and offline counter proof
 
-Checked 2026-11-13. Response JSON fixtures are synthetic protocol vectors, not
-captured paid responses. The P305-U2 request fixture is derived from its supplied
-offline context reproduction. No credentials or model API calls were used.
+Checked 2026-11-13. Response fixtures are synthetic except the explicitly retained
+historical P305-U3 HTTP 400 body. P305-U2 requests retain the supplied offline
+context reproduction. The new schema 0.2 cases below are distinct offline inputs,
+not a migrated registration or hosted-response evidence. No credentials or model
+API calls were used by P3-04.
+
+## CR-006: schema 0.2 offline integration
+
+The reviewed P3-02 dependency `cb1a4a15a7cac49ce9d4873e7f8146a7ac7f76dd`
+introduces `p3-actions/0.2` under CR-006. The current adapter consumes that exact
+shared schema; it does not normalize or translate patterns. Its production file,
+mapping, adapter version 0.4 and counter version 0.3 remain unchanged. The current
+contract SHA-256 is
+`bf8afebe7d4d494def9cdc8c3b7a9514e868b1f82ae9f1ad8de968d38c0aaa14`;
+proposal-schema SHA-256 is
+`123873dbb8a1a6bcb7097b930000057d5cc4d89306293083fae778e7630ecd82`.
+
+[The new offline identity fixture](p305-u3-schema02-evidence.json) binds all 24
+cases to the unchanged historical gzip, the reviewed owner commit, the current
+contract/template hashes, new request/wire hashes, sizes and recounted bounds.
+Each case keeps its historical user-message bytes and builds a new system message
+using the unchanged trusted template plus the complete canonical 0.2 contract.
+The response schema is the exact new shared schema. This constructs new synthetic
+test inputs only; no old registration, log, authority, reservation or fixture is
+rewritten. The original first request and HTTP 400 remain available unchanged.
+
+The first new request SHA-256 is
+`2092d37a2ce23932699fdf2848d130e5512385eebd534852cc9222e582f3fd05`;
+its new wire-body SHA-256 is
+`196a753094bd28ce79369c57e2e14a5dc6dfa23d4bd7d62a1d942a0cae910fc8`.
+The ordered 24-case request/wire/bound identity-array SHA-256 is
+`85389f79cf1fa947b8f9159c5e564d1a433deb39bb46145c2117a6af819748c1`.
+Independent derivation agrees with all hashes and the official retained prompt
+renderer. The independent rank-rescan oracle and production counter agree on:
+
+```text
+24106, 25153, 26137, 27117, 28097, 28585,
+28561, 28529, 28400, 28368, 28241, 28211,
+28083, 28052, 27923, 27794, 27796, 27797,
+27798, 27799, 27801, 27806, 27809, 27812
+```
+
+The system/schema contribution is 15,574, an increase of 1,024 over the old
+contract; the existing input-counter proof applies unchanged. All bounds remain
+below B-05. Canonical requests span 51,007..61,029 bytes and wire bodies span
+50,892..60,914 bytes, below B-08. Tests retain and compare exact prepared, counted
+and sent bytes, use only local transports, and retain the B-05 exact/one-over and
+B-08 boundaries. Unsupported Unicode still uses conservative whole-span bounds.
+
+Current preparation/counting/completion refuse the old schema before dispatch.
+A current request paired with a historical wire envelope also fails before
+dispatch. The historical HTTP 400 is tested only through the pure response mapper
+against its original retained identity; it is never returned as evidence for a
+new 0.2 request. Separate synthetic current-schema success/rejection transports
+verify nullable usage, exact raw-body preservation and one exchange without an
+implicit retry. Old-source replay itself belongs to the original pinned source,
+not to a version-migrating adapter.
+
+The earlier U2 and initial U3 sections below are historical proof/evidence stages.
+Their old schema/wire hashes and bounds are not current registration values.
+Local schema compatibility and offline dispatch do not establish hosted DeepSeek
+acceptance, authorize a replacement smoke or alter any allocation.
 
 ## Frozen mapping
 
@@ -311,7 +370,7 @@ An independent oracle uses captured regex splits from the source artifact and
 rescans current minimum BPE pairs. It shares no production heap/iterator code.
 The previous complete-ASCII and unsupported-span tests remain in force.
 
-### Complete 24-request smoke admission evidence
+### Historical schema 0.1: complete 24-request smoke admission evidence
 
 [The compressed request fixture](p305-u2-smoke-requests.json.gz) contains only the
 24 original expected request/wire pairs and expected bounds, derived from the
@@ -362,7 +421,7 @@ silently changes weights while echoing the same alias is outside what this pure
 counter or the existing result DTO can establish; no new DTO field or authority
 is added to pretend otherwise.
 
-## P305-U3: retained structured-schema rejection
+## Historical P305-U3: retained structured-schema rejection
 
 [The real rejection body](p305-u3-invalid-regex-response.json) is the exact 219
 bytes from P3-05's first authorized smoke attempt. [Its provenance and proposed

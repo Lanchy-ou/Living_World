@@ -41,8 +41,13 @@ from living_island.agents.llm.provider import (
     verified_body,
 )
 from living_island.agents.p3.ports import ProviderAdapter
-from living_island.agents.p3.prompts import build_model_action_contract
-from living_island.agents.p3.types import DecisionProposal, ProviderRequest, decode_base64
+from living_island.agents.p3.prompts import RESIDENT_TEMPLATE, build_model_action_contract
+from living_island.agents.p3.types import (
+    DecisionProposal,
+    ProviderRequest,
+    WireRequest,
+    decode_base64,
+)
 from living_island.memory.p3_types import canonical_bytes
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "p3" / "provider"
@@ -89,6 +94,21 @@ def production_request(content="Observe the island.", *, system="Pinned trusted 
             ),
         }
     )
+
+
+def schema02_request(historical):
+    """Build a new offline case; never modify the historical request or registration."""
+    contract = build_model_action_contract()
+    data = historical.model_dump(mode="json")
+    data["messages"][0]["content"] = (
+        RESIDENT_TEMPLATE + b"\nACTION_CONTRACT\n" + canonical_bytes(contract)
+    ).decode("utf-8")
+    data["response_schema"] = contract.proposal_schema
+    data["settings"].update(
+        input_counter_id=provider_module.COUNTER_ID,
+        input_counter_version=provider_module.COUNTER_VERSION,
+    )
+    return ProviderRequest.model_validate(data)
 
 
 class LocalTransport:
@@ -372,7 +392,9 @@ def test_long_word_uses_linear_number_of_heap_operations(monkeypatch):
     assert popped == initial + pushed <= 3 * (size - 1)
 
 
-def test_p305_u2_actual_first_request_admits_unchanged_wire(tokenizer, all_merges):
+def test_p305_u2_historical_first_request_is_preserved_and_refused(
+    smoke_requests, tokenizer, all_merges
+):
     original = ProviderRequest.model_validate_json(
         (FIXTURES / "p305-u2-first-request.json").read_bytes()
     )
@@ -389,9 +411,8 @@ def test_p305_u2_actual_first_request_admits_unchanged_wire(tokenizer, all_merge
     )
     transport = LocalTransport()
     adapter = DeepSeekResponsesAdapter(transport)
-    wire = adapter.prepare(req)
-    assert adapter.prepare(original) == wire
-    body = verified_body(req, wire)
+    wire = WireRequest.model_validate(smoke_requests[0]["expected_wire"])
+    body = decode_base64(wire.body_base64)
     assert hashlib.sha256(body).hexdigest() == evidence["wire_body_sha256"]
     payload = json.loads(body)
     span = (
@@ -404,15 +425,21 @@ def test_p305_u2_actual_first_request_admits_unchanged_wire(tokenizer, all_merge
     assert 5 + len(span.encode()) + len(user.encode()) == 45161
     assert oracle_bound(span, tokenizer, all_merges) == 14550
     assert oracle_supported_bound(user, tokenizer, all_merges) == 8527
-    assert adapter.count_input_tokens(req, wire) == evidence["prefix_bound"] == 23082
-    assert adapter.complete(req, wire, 30000).response_text is not None
-    assert transport.sent == [(body, 30000)]
+    assert 5 + 14550 + 8527 == evidence["prefix_bound"] == 23082
+    for operation in (
+        lambda: adapter.prepare(req),
+        lambda: adapter.count_input_tokens(req, wire),
+        lambda: adapter.complete(req, wire, 30000),
+    ):
+        with pytest.raises(ValueError, match="pinned DecisionProposal schema"):
+            operation()
+    assert transport.sent == []
 
 
-@pytest.mark.parametrize("extra", [2520, 2521])
-def test_p305_u2_unsupported_unicode_growth_limit_remains_fail_closed(extra):
-    original = ProviderRequest.model_validate_json(
-        (FIXTURES / "p305-u2-first-request.json").read_bytes()
+@pytest.mark.parametrize("extra", [1496, 1497])
+def test_p305_u3_unsupported_unicode_growth_limit_remains_fail_closed(extra):
+    original = schema02_request(
+        ProviderRequest.model_validate_json((FIXTURES / "p305-u2-first-request.json").read_bytes())
     )
     # Synthetic text growth tests the provider limit, not a later retained context.
     req = original.model_copy(
@@ -432,7 +459,7 @@ def test_p305_u2_unsupported_unicode_growth_limit_remains_fail_closed(extra):
     adapter = DeepSeekResponsesAdapter(transport)
     wire = adapter.prepare(req)
     bound = adapter.count_input_tokens(req, wire)
-    assert bound == 30248 + extra
+    assert bound == 31272 + extra
     if bound > MAX_INPUT_TOKENS:
         with pytest.raises(ValueError, match="B-05"):
             adapter.complete(req, wire, 30000)
@@ -451,35 +478,78 @@ def smoke_requests():
     assert hashlib.sha256(decoded).hexdigest() == evidence["derived_requests_sha256"]
     data = json.loads(decoded)
     assert len(data) == evidence["request_count"] == 24
-    assert evidence["counter_version"] == provider_module.COUNTER_VERSION
+    assert evidence["counter_version"] == "0.3"
     assert min(case["expected_bound"] for case in data) == 23082
     assert max(case["expected_bound"] for case in data) == 27561
     return data
 
 
+@pytest.fixture(scope="module")
+def schema02_evidence():
+    evidence = json.loads((FIXTURES / "p305-u3-schema02-evidence.json").read_bytes())
+    assert evidence["fixture_kind"] == "new-offline-schema02-cases"
+    assert evidence["action_schema_version"] == "p3-actions/0.2"
+    contract = build_model_action_contract()
+    assert hashlib.sha256(canonical_bytes(contract)).hexdigest() == evidence["action_schema_sha256"]
+    assert (
+        hashlib.sha256(canonical_bytes(contract.proposal_schema)).hexdigest()
+        == evidence["proposal_schema_sha256"]
+    )
+    assert hashlib.sha256(RESIDENT_TEMPLATE).hexdigest() == evidence["template_sha256"]
+    assert (evidence["adapter_version"], evidence["counter_version"]) == (
+        provider_module.ADAPTER_VERSION,
+        provider_module.COUNTER_VERSION,
+    )
+    assert (
+        hashlib.sha256((FIXTURES / evidence["source_fixture"]).read_bytes()).hexdigest()
+        == (evidence["source_fixture_sha256"])
+    )
+    assert len(evidence["cases"]) == 24
+    identities = [
+        {
+            "decision_ordinal": case["decision_ordinal"],
+            "provider_request_sha256": case["request_sha256"],
+            "wire_body_sha256": case["wire_body_sha256"],
+            "bound": case["bound"],
+        }
+        for case in evidence["cases"]
+    ]
+    assert (
+        hashlib.sha256(canonical_bytes(identities)).hexdigest() == evidence["identity_array_sha256"]
+    )
+    assert min(case["bound"] for case in evidence["cases"]) == 24106
+    assert max(case["bound"] for case in evidence["cases"]) == 28585
+    return evidence
+
+
 @pytest.mark.parametrize("ordinal", range(24))
-def test_p305_u2_all_retained_smoke_requests_admit_exact_wire(
-    ordinal, smoke_requests, tokenizer, all_merges
+def test_p305_u3_new_schema_requests_admit_exact_new_wire(
+    ordinal, smoke_requests, schema02_evidence, tokenizer, all_merges, reference_renderer
 ):
     case = smoke_requests[ordinal]
+    expected_case = schema02_evidence["cases"][ordinal]
     assert case["actor_id"] == "ella" and case["decision_ordinal"] == ordinal
+    assert expected_case["decision_ordinal"] == ordinal
     original = ProviderRequest.model_validate(case["expected_request"])
-    req = original.model_copy(
-        update={
-            "settings": original.settings.model_copy(
-                update={
-                    "input_counter_id": provider_module.COUNTER_ID,
-                    "input_counter_version": provider_module.COUNTER_VERSION,
-                }
-            )
-        }
-    )
+    original_bytes = canonical_bytes(original)
+    req = schema02_request(original)
+    assert req.messages[1] == original.messages[1]
+    assert req.messages[0] != original.messages[0]
+    assert req.response_schema != original.response_schema
+    assert req.response_schema == build_model_action_contract().proposal_schema
+    assert hashlib.sha256(canonical_bytes(req)).hexdigest() == expected_case["request_sha256"]
     transport = LocalTransport()
     adapter = DeepSeekResponsesAdapter(transport)
     wire = adapter.prepare(req)
-    assert wire.model_dump(mode="json") == case["expected_wire"]
-    assert adapter.prepare(original) == wire
-    payload = json.loads(verified_body(req, wire))
+    retained_wire = canonical_bytes(wire)
+    body = verified_body(req, wire)
+    assert wire.model_dump(mode="json") != case["expected_wire"]
+    assert hashlib.sha256(body).hexdigest() == expected_case["wire_body_sha256"]
+    assert len(body) == expected_case["wire_body_bytes"] <= MAX_REQUEST_BYTES
+    assert len(canonical_bytes(req)) == expected_case["request_bytes"] <= MAX_REQUEST_BYTES
+    payload = json.loads(body)
+    assert payload["input"] == [message.model_dump(mode="json") for message in req.messages]
+    assert payload["text"]["format"]["schema"] == req.response_schema
     system = (
         payload["input"][0]["content"]
         + provider_module._SCHEMA_PREFIX
@@ -490,10 +560,29 @@ def test_p305_u2_all_retained_smoke_requests_admit_exact_wire(
         + oracle_supported_bound(system, tokenizer, all_merges)
         + oracle_supported_bound(payload["input"][1]["content"], tokenizer, all_merges)
     )
-    assert adapter.count_input_tokens(req, wire) == case["expected_bound"] == expected
+    assert adapter.count_input_tokens(req, wire) == expected_case["bound"] == expected
+    assert assert_reference_bound(adapter, req, wire, reference_renderer) == expected
     assert expected <= MAX_INPUT_TOKENS
     assert adapter.complete(req, wire, 30000).outcome == "response"
-    assert transport.sent == [(decode_base64(wire.body_base64), 30000)]
+    assert transport.sent == [(body, 30000)]
+    assert canonical_bytes(wire) == retained_wire
+    assert canonical_bytes(original) == original_bytes
+
+
+def test_p305_u3_old_schema_and_old_wire_never_dispatch(smoke_requests):
+    original = ProviderRequest.model_validate(smoke_requests[0]["expected_request"])
+    current = schema02_request(original)
+    historical_wire = WireRequest.model_validate(smoke_requests[0]["expected_wire"])
+    transport = LocalTransport()
+    adapter = DeepSeekResponsesAdapter(transport)
+    for req in (original, current.model_copy(update={"response_schema": original.response_schema})):
+        with pytest.raises(ValueError, match="pinned DecisionProposal schema"):
+            adapter.prepare(req)
+    with pytest.raises(ValueError, match="prepared wire request mismatch"):
+        adapter.count_input_tokens(current, historical_wire)
+    with pytest.raises(ValueError, match="prepared wire request mismatch"):
+        adapter.complete(current, historical_wire, 30000)
+    assert transport.sent == []
 
 
 def test_production_counter_sources_are_immutable_and_match_identity():
@@ -960,7 +1049,7 @@ def test_http_errors_never_extract_proposal_or_retry(status):
     assert len(provider.sent_bodies) == 1
 
 
-def test_p305_u3_retained_live_schema_error_preserves_wire_usage_and_single_dispatch():
+def test_p305_u3_retained_live_schema_error_is_historical_only(smoke_requests):
     evidence = json.loads((FIXTURES / "p305-u3-invalid-regex-evidence.json").read_bytes())
     raw = (FIXTURES / evidence["response_file"]).read_bytes()
     assert len(raw) == evidence["response_bytes"] == 219
@@ -977,27 +1066,55 @@ def test_p305_u3_retained_live_schema_error_preserves_wire_usage_and_single_disp
     )
     assert hashlib.sha256(canonical_bytes(req)).hexdigest() == evidence["provider_request_sha256"]
 
-    class RejectionTransport:
+    transport = LocalTransport()
+    adapter = DeepSeekResponsesAdapter(transport)
+    wire = WireRequest.model_validate(smoke_requests[0]["expected_wire"])
+    body = decode_base64(wire.body_base64)
+    assert hashlib.sha256(body).hexdigest() == evidence["wire_body_sha256"]
+    assert json.loads(body)["text"]["format"]["schema"] == req.response_schema
+    assert evidence["input_reserved"] == 23082
+    # Replay only the retained response mapper; never associate it with a new request.
+    result = map_response(
+        TransportResponse(evidence["http_status"], raw, True),
+        latency_ms=evidence["source_result"]["latency_ms"],
+    )
+    assert result.model_dump() == evidence["source_result"]
+    assert result.outcome == "provider_error" and result.provider_error_code == "HTTP_400"
+    assert result.response_text is None and result.token_input is result.token_output is None
+    with pytest.raises(ValueError, match="pinned DecisionProposal schema"):
+        adapter.complete(req, wire, 30000)
+    assert transport.sent == []
+
+
+@pytest.mark.parametrize("status", [200, 400])
+def test_p305_u3_new_schema_unknown_usage_and_single_synthetic_exchange(status, smoke_requests):
+    req = schema02_request(ProviderRequest.model_validate(smoke_requests[0]["expected_request"]))
+    raw = (
+        envelope(usage=None)
+        if status == 200
+        else canonical_bytes(
+            {"error": {"message": "synthetic offline rejection", "code": "fixture"}}
+        )
+    )
+
+    class SyntheticTransport:
         def __init__(self):
             self.sent = []
 
         def exchange(self, body, timeout_ms):
             self.sent.append((body, timeout_ms))
-            return TransportResponse(evidence["http_status"], raw, True)
+            return TransportResponse(status, raw, True)
 
-    transport = RejectionTransport()
+    transport = SyntheticTransport()
     adapter = DeepSeekResponsesAdapter(transport)
     wire = adapter.prepare(req)
     body = verified_body(req, wire)
-    assert hashlib.sha256(body).hexdigest() == evidence["wire_body_sha256"]
-    assert json.loads(body)["text"]["format"]["schema"] == req.response_schema
-    assert adapter.count_input_tokens(req, wire) == evidence["input_reserved"] == 23082
+    assert adapter.count_input_tokens(req, wire) == 24106
     result = adapter.complete(req, wire, 30000)
-    assert result.model_dump(exclude={"latency_ms"}) == {
-        key: value for key, value in evidence["source_result"].items() if key != "latency_ms"
-    }
-    assert result.outcome == "provider_error" and result.provider_error_code == "HTTP_400"
-    assert result.response_text is None and result.token_input is result.token_output is None
+    assert result.token_input is result.token_output is None
+    assert decode_base64(result.raw_body_base64) == raw
+    assert result.outcome == ("response" if status == 200 else "provider_error")
+    assert (result.response_text is None) == (status == 400)
     assert transport.sent == [(body, 30000)]
     assert verified_body(req, wire) == body
 
@@ -1020,7 +1137,13 @@ def test_p305_u3_owner_candidate_preserves_all_codepoints_and_scalar_sequences()
     assert evidence["candidate_is_production"] is False
     candidate = evidence["candidate_pattern"]
     assert candidate.isascii()
-    # A proposed schema-owner change only: neither the request nor adapter is rewritten.
+    # Preserve the historical candidate record; the owner has now versioned it explicitly.
+    assert (
+        build_model_action_contract().proposal_schema["$defs"]["GoalProposal"]["properties"][
+            "text"
+        ]["pattern"]
+        == candidate
+    )
     old = re.compile(r"^[^\uD800-\uDFFF]*$")
     new = re.compile(candidate)
     for codepoint in range(0x110000):
