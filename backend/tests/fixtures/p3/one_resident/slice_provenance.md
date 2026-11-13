@@ -33,8 +33,8 @@ the exact retained count under `p3-tape-count/0.1`; it does not invoke that rule
 or a production tokenizer. Adapter identity is `p3-closed-tape-v0/0.1`, with
 zero prices and zero micro-CNY. The model label describes the actual wire shape.
 
-Focused mechanics tests use `slice_fake_counter.py`, pinned at
-`a7fd50fdcbdb8c7d74d6293c9655adee3017e404`, under the distinct
+Focused mechanics tests use `slice_fake_counter.py`, introduced at
+`a7fd50fdcbdb8c7d74d6293c9655adee3017e404` and input-pinned at execution HEAD, under the distinct
 `fixture-p3-05-wire-chunks/0.1` identity. They execute the real wire mapper and
 frozen fallback over a custom tiny island solely to make exact goal, death,
 budget, action, and feedback oracles practical. The active/queued action fixture
@@ -72,9 +72,9 @@ additional full-suite execution by the fixture author.
 | VF-14 | Real fallback entry/return/reentry tests; `test_two_bad_responses_use_real_fallback_then_return_to_model` |
 | VF-15 | Transaction `test_real_fallback_malformed_plan_commits_one_wait_and_preserves_all_private_state` and `test_real_fallback_programming_and_io_failures_stop_runtime` |
 | VF-16 | Experience EX-01..10 and context EX-09; transaction ingestion idempotence tests |
-| VF-17 | Cognition CG-01..12 and exact transfer predicates; single-resident failed/completed/continued/revised/abandoned goal feedback |
+| VF-17 | `test_engine_transfer_feedback_requires_own_completed_give`: real engine request/accept, failed give, recipient inventory change, then exact own completed give; cognition CG-01..12 and single-resident goal lifecycle |
 | VF-18 | `test_three_runtime_contexts_keep_conflicting_claims_and_nonhearing_store_separate` assembles actual contexts for one LLM/two rule runtimes with two contradictory delivered claims and a third empty hearing store; malicious strings remain user data with no extra role/tool. Principal slice additionally checks every actor's own store and request identity |
-| VF-19 | `test_live_checkpoint_with_active_and_queued_actions_resumes_exactly`; every successful slice uses raising provider, fallback, and authority replay sentinels |
+| VF-19 | `test_live_checkpoint_with_active_and_queued_actions_resumes_exactly`; every completed `run_p3` scenario uses raising provider, fallback, and authority replay sentinels |
 
 The replay continuation test compares all five logs, full checkpoint state, private
 state, cognition and cursors, T+1 observer frames, exported display bundles, and
@@ -83,3 +83,11 @@ checkpoint hashes before the resumed suffix. Export negative cases remove exactl
 one intermediate checkpoint, corrupt one checkpoint, or replace it with a valid
 checkpoint from a different decision lineage. No authority or provider participates
 in recorded reexecution or export.
+
+The transfer fixture uses one Ella model runtime and explicit engine-protocol
+intents for the other actors. Its world oracles correspond to
+`backend/tests/unit/test_engine_dialogue.py::test_request_reply_and_hearing_event_order`,
+`backend/tests/unit/test_engine_actions.py::test_eat_drink_fill_and_give_effects`, and
+`backend/tests/invariants/test_legal_physical_sequences.py::test_item_5_give_needs_an_adjacent_recipient_and_owned_items`.
+The new seam feeds their actual engine boundary deliveries into P3 ingestion; it
+does not synthesize successful or failed transfer feedback.

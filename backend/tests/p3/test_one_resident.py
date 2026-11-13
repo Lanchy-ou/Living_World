@@ -13,6 +13,8 @@ from pathlib import Path
 import pytest
 import test_transactions as transactions
 from test_allocation import PRICE, Harness
+from test_engine_actions import intent as engine_intent
+from test_engine_movement import tick as engine_tick
 from test_experience import heard, packet
 from test_persistence import retained_fixture
 from world_builders import default_content, tiny_content
@@ -41,6 +43,8 @@ from living_island.persistence.p3_allocation import AllocationStore, initialize_
 from living_island.sim.p3 import export_p3_replay, reexecute_p3, resume_p3, run_p3
 from living_island.sim.runner import checkpoint_filename
 from living_island.world.content import build_world_content, map_bytes_from_rows
+from living_island.world.ports import create_engine
+from living_island.world.protocol import DECISION_TRIGGERS
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = Path(__file__).parents[1] / "fixtures/p3/one_resident"
@@ -428,7 +432,9 @@ def test_closed_principal_tape_refuses_mismatch_extra_and_missing_calls():
     tape = tools["FakeTape"].model_validate_json((FIXTURES / "slice_smoke_tape.json").read_bytes())
     provider = tools["TapeProvider"](tape)
     request = tape.steps[0].expected_request.model_copy(deep=True)
-    request.messages[1].content += " "
+    request.messages[1] = request.messages[1].model_copy(
+        update={"content": request.messages[1].content + " "}
+    )
     with pytest.raises(ValueError, match="REQUEST_MISMATCH"):
         provider.prepare(request)
     with pytest.raises(ValueError, match="CALLS_MISSING"):
@@ -782,6 +788,136 @@ def test_dead_primary_actor_stops_calls_and_cognitive_cursor(tmp_path):
     assert resident(result.checkpoint).next_decision_ordinal == 1
     assert resident(result.checkpoint).latest_perception_tick == 0
     assert_replay(tmp_path / "replay", result, reader)
+
+
+def test_engine_transfer_feedback_requires_own_completed_give():
+    """One Ella runtime; the other actors use explicit engine-protocol fixture intents."""
+    content = mechanic_world(radius=20)
+    data = content.config.model_dump(mode="json")
+    positions = {"ella": [2, 3], "mia": [3, 3], "ryan": [2, 4]}
+    for row in data["residents"]:
+        row["position"] = positions[row["id"]]
+    data["canteen"]["initial_owner_id"] = "ryan"
+    content = build_world_content(data, map_bytes_from_rows(content.map_rows))
+    files, _, _, fallback = slice_inputs(content, horizon=5)
+    cfg = P3PolicyConfig.model_validate(json.loads(files["p3-policy-configs.json"])[0]["config"])
+    identity = ResidentIdentity.model_validate(json.loads(files["identities.json"])[0])
+    give = action("give", {"kind": "resident", "id": "mia"}, item_type="canteen", quantity=1)
+    ask = action(
+        "talk",
+        {"kind": "resident", "id": "ryan"},
+        speech_act="request",
+        text="Please lend me the canteen for Mia.",
+        request={"item_type": "canteen", "quantity": 1},
+    )
+
+    def choose(user, _index):
+        current = user["context"]["goals"]["current"]
+        ordinal = user["request"]["decision_ordinal"]
+        if ordinal == 0:
+            return proposal(
+                actions=[ask], operation="revise", goal=own_goal("Give the canteen to Mia.", give)
+            )
+        return proposal(current["goal_id"], actions=[give] if ordinal in (2, 4) else [WAIT])
+
+    provider = MappedProvider(choose)
+    journal = transactions.Journal()
+    runtime = create_p3_runtime(
+        "ella",
+        cfg,
+        identity,
+        None,
+        live_enabled=True,
+        provider=provider,
+        budget=transactions.FakeBudget(cfg.pricing),
+        attempts=journal,
+        fallback=fallback,
+        run_id=content.config.meta.run_id,
+        purpose="fake",
+        clock_ms=lambda: 0,
+    )
+    engine = create_engine(content, None)
+    boundary = engine.initial_commit()
+    observations = []
+    spoken_id = None
+    actual_transfers = []
+    for ordinal in range(5):
+        delivered = next(item for item in boundary.pending_deliveries if item.actor_id == "ella")
+        runtime.ingest(delivered)
+        observations.append((runtime.export_state(), delivered, boundary.snapshot))
+        triggers = []
+        if ordinal:
+            assert delivered.perception.last_action_feedback is not None
+            assert not any(
+                active.intent.actor_id == "ella" for active in boundary.snapshot.active_actions
+            )
+            triggers = [
+                trigger
+                for trigger in DECISION_TRIGGERS
+                if trigger in (*delivered.decision_triggers, "PLAN_FINISHED")
+            ]
+        request = runtime.make_request(boundary.snapshot.tick, triggers)
+        decision = runtime.decide(request)
+        assert decision.status == "ok" and decision.effective_policy_id == "llm-v0"
+        runtime.commit_decision(decision)
+        extras = []
+        if ordinal == 1:
+            assert spoken_id is not None
+            extras.append(
+                engine_intent(
+                    "talk",
+                    "ryan",
+                    target={"kind": "resident", "id": "ella"},
+                    speech_act="accept",
+                    text="Yes.",
+                    in_reply_to=spoken_id,
+                )
+            )
+        if ordinal == 3:
+            extras.append(
+                engine_intent(
+                    "give",
+                    "ryan",
+                    target={"kind": "resident", "id": "ella"},
+                    item_type="canteen",
+                    quantity=1,
+                )
+            )
+        boundary = engine_tick(engine, decision.plan.intents[0], *extras)
+        if ordinal == 0:
+            spoken_id = next(
+                event.event_id for event in boundary.events if event.type == "utterance_spoken"
+            )
+        actual_transfers.extend(event for event in boundary.events if event.type == "item_given")
+    delivered = next(item for item in boundary.pending_deliveries if item.actor_id == "ella")
+    runtime.ingest(delivered)
+    observations.append((runtime.export_state(), delivered, boundary.snapshot))
+    goals = [state.cognitive_state.goals.current for state, _, _ in observations]
+    assert goals[0] is None
+    assert [goal.status for goal in goals[1:]] == ["attempted"] * 4 + ["observed_complete"]
+    assert {goal.goal_id for goal in goals[1:]} == {"ella:g000000"}
+    # A request and its acceptance leave ownership with Ryan and do not complete a give.
+    assert [world.unique_canteen.holder_id for _, _, world in observations[1:3]] == ["ryan", "ryan"]
+    assert observations[2][1].perception.heard_utterances[0].speech_act == "accept"
+    assert goals[3].evidence.feedback.status == "failure"
+    assert goals[3].evidence.owned_intent.intent.action_type == "give"
+    assert observations[3][2].unique_canteen.holder_id == "ryan"
+    # Receiving changes Ella's inventory, without an own successful give-to-Mia verdict.
+    assert observations[4][1].perception.own_inventory.canteen_id == "canteen_01"
+    assert goals[4].evidence.owned_intent.intent.action_type == "wait"
+    assert goals[4].status == "attempted"
+    assert [(event.actor_id, event.target_id) for event in actual_transfers] == [
+        ("ryan", "ella"),
+        ("ella", "mia"),
+    ]
+    completed = goals[5].evidence
+    assert completed.feedback.status == "success"
+    assert completed.owned_intent.intent.action_type == "give"
+    assert completed.owned_intent.intent.target.id == "mia"
+    assert completed.owned_intent.intent.intent_id == actual_transfers[1].intent_id
+    assert completed.delivery_id == observations[5][1].delivery_id
+    assert observations[5][2].unique_canteen.holder_id == "mia"
+    assert len(provider.transport.calls) == len(journal.calls) == 5
 
 
 def test_interrupted_real_mapping_recovers_once_without_model_access(tmp_path):
