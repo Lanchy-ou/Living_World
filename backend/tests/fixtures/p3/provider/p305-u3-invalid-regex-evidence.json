@@ -1,0 +1,39 @@
+{
+  "case": "P305-U3",
+  "status": "OPEN_SCHEMA_OWNER_DEPENDENCY",
+  "source_commit_reported_by_p305": "eac4d29b3474d337ca312677e609d9e15ddd431a",
+  "registration_sha256": "dcb337f07601f6c1b1abe9fd0a61f410a713a6caf26bcc7e4e7cf0d25e65ca5f",
+  "source_directory": "runs/p3/p3-smoke-r1/first",
+  "source_first_lines_including_lf": {
+    "llm-calls.jsonl": "c844038a4f0e3390013e9c3e172d803051b335de48121a57113a777c94223a46",
+    "llm-dispatches.jsonl": "1599577da341a9a5e6b9f6ac6332ac10dead9ef5b0c471bc5fc9d2044c7a4ea2"
+  },
+  "call_id": "default_island_seed20261108_run01:d:ella:000000:a0",
+  "adapter_id": "deepseek-responses-v0",
+  "adapter_version": "0.4",
+  "counter_id": "deepseek-flash1017-byte-upper-bound",
+  "counter_version": "0.3",
+  "provider_request_sha256": "565d92abbbfe7624a2a58e6d2c24be696efd0341b7e26d1de7751a94415f3eff",
+  "wire_body_sha256": "17113cf3943ec59fe8a77ee89486acf5bafe459cd4ef2d876cd9aab606433433",
+  "input_reserved": 23082,
+  "source_result": {
+    "latency_ms": 405,
+    "observed_body_bytes": 219,
+    "outcome": "provider_error",
+    "provider_error_code": "HTTP_400",
+    "provider_request_id": null,
+    "provider_result_version": "0.1",
+    "raw_body_base64": "eyJlcnJvciI6eyJtZXNzYWdlIjoiSW52YWxpZCBqc29uIHNjaGVtYTogXCJeW15cXFxcdUQ4MDAtXFxcXHVERkZGXSokXCIgaXMgbm90IGEgXCJyZWdleFwiIChyZXF1ZXN0X2lkOiA1YzU0MWUxMy1mZGI5LTRlZGEtOTUwNi1iY2RkZWU2ZTVmMmMpIiwidHlwZSI6ImludmFsaWRfcmVxdWVzdF9lcnJvciIsInBhcmFtIjpudWxsLCJjb2RlIjoiaW52YWxpZF9yZXF1ZXN0X2Vycm9yIn19",
+    "raw_response": "{\"error\":{\"message\":\"Invalid json schema: \\\"^[^\\\\\\\\uD800-\\\\\\\\uDFFF]*$\\\" is not a \\\"regex\\\" (request_id: 5c541e13-fdb9-4eda-9506-bcddee6e5f2c)\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":\"invalid_request_error\"}}",
+    "response_complete": true,
+    "response_text": null,
+    "token_input": null,
+    "token_output": null
+  },
+  "response_file": "p305-u3-invalid-regex-response.json",
+  "response_sha256": "1be73990686c5b490fc72d1b73f494bb808f0662fa5f21e43492f05a485c72f5",
+  "response_bytes": 219,
+  "http_status": 400,
+  "candidate_pattern": "^(?:[\\u0000-\\uD7FF\\uE000-\\uFFFF]|[^\\u0000-\\uFFFF])*$",
+  "candidate_is_production": false
+}

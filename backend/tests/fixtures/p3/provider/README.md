@@ -362,6 +362,64 @@ silently changes weights while echoing the same alias is outside what this pure
 counter or the existing result DTO can establish; no new DTO field or authority
 is added to pretend otherwise.
 
+## P305-U3: retained structured-schema rejection
+
+[The real rejection body](p305-u3-invalid-regex-response.json) is the exact 219
+bytes from P3-05's first authorized smoke attempt. [Its provenance and proposed
+replacement](p305-u3-invalid-regex-evidence.json) retain the first call/dispatch
+line hashes, immutable registration identity, exact request/wire hashes and
+nullable-usage result. No credential, complete run log or allocation authority
+is copied. HTTP 400 reports that `^[^\uD800-\uDFFF]*$` is not a regex.
+
+The original request still counts to 23,082 and has wire SHA-256
+`17113cf3943ec59fe8a77ee89486acf5bafe459cd4ef2d876cd9aab606433433`.
+An injected local transport returns the retained error once; the regression
+asserts exact sent bytes, preserved raw response, `HTTP_400`, no proposal and
+unknown input/output usage. It neither retries nor owns the reservation debit.
+Passing offline admission did not establish hosted schema compatibility.
+
+Python's regex engine accepts the original pattern, but the installed Pydantic
+Rust engine rejects its surrogate range endpoints as non-scalar literals. That
+is a local reproduction of the incompatibility class, not proof of the hosted
+service's implementation or a successful replacement request.
+
+The candidate for the schema owner is entirely ASCII:
+
+```python
+r"^(?:[\u0000-\uD7FF\uE000-\uFFFF]|[^\u0000-\uFFFF])*$"
+```
+
+Let U = [0, 10FFFF], S = [D800, DFFF] and B = [0, FFFF]. The first branch
+is B minus S; the second is U minus B. Their union is exactly U minus S.
+The same repetition and anchors therefore preserve the original accepted
+string language under Unicode codepoint semantics. Every range endpoint is
+a valid scalar. Empty strings, NUL, newlines, noncharacters and supplementary
+characters remain allowed by this pattern; the existing min/maxLength and
+DTO validators still impose their independent bounds.
+
+The regression compares old/new Python matching across all 1,114,112 codepoints,
+compiles the candidate with the existing Pydantic Rust engine, validates sequences
+covering every scalar, and rejects all 2,048 surrogate codepoints in mixed strings.
+JSON round-tripping preserves the pattern. ECMAScript requires Unicode (`u`)
+mode for intended supplementary-character semantics, as recommended by
+[JSON Schema 2020-12 section 6.4](https://json-schema.org/draft/2020-12/json-schema-core#section-6.4).
+Local compilation/equivalence is not hosted DeepSeek acceptance.
+
+ASCII spelling matters: literal non-ASCII endpoints would trigger the counter's
+whole-span byte fallback. An exploratory calculation replacing all 16 patterns
+in both the system action contract and response schema, and assuming the owner
+selects `p3-actions/0.2`, gives 24 tape bounds from 24,106 to 28,585. This is not a
+registered contract, a production rewrite or a substitute for retesting the
+actual owner's dependency. The tokenizer proof itself is unchanged.
+
+**Ownership dependency:** decision section 2.2 requires exact pinned schema
+preservation; cognition section 3.1 owns the contract and requires a new schema
+version/hash. P3-04 cannot silently translate or remove the pattern. The P3-02
+owner must publish the versioned correction; P3-04 then revalidates the exact
+prepared/counted/sent bytes and bounds. The original failed registration and
+unknown-usage charges remain retained by P3-05. No new live trial is authorized
+by this offline evidence, and U3 remains open until the dependency is integrated.
+
 ## Offline counter: exact finite proof
 
 `fixture-wire-bytes/0.1` belongs only to `FakeProviderAdapter`. Its synthetic input

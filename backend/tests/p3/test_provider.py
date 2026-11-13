@@ -13,10 +13,13 @@ from io import BytesIO
 from pathlib import Path
 from queue import Queue
 from threading import Event
+from typing import Annotated
 
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from pydantic import ConfigDict, StringConstraints, TypeAdapter, ValidationError
+from pydantic_core import SchemaError
 
 from living_island.agents.llm import provider as provider_module
 from living_island.agents.llm.fake import (
@@ -955,6 +958,93 @@ def test_http_errors_never_extract_proposal_or_retry(status):
     assert result.outcome == "provider_error" and result.response_text is None
     assert result.provider_error_code == f"HTTP_{status}"
     assert len(provider.sent_bodies) == 1
+
+
+def test_p305_u3_retained_live_schema_error_preserves_wire_usage_and_single_dispatch():
+    evidence = json.loads((FIXTURES / "p305-u3-invalid-regex-evidence.json").read_bytes())
+    raw = (FIXTURES / evidence["response_file"]).read_bytes()
+    assert len(raw) == evidence["response_bytes"] == 219
+    assert hashlib.sha256(raw).hexdigest() == evidence["response_sha256"]
+    original = ProviderRequest.model_validate_json(
+        (FIXTURES / "p305-u2-first-request.json").read_bytes()
+    )
+    req = original.model_copy(
+        update={
+            "settings": original.settings.model_copy(
+                update={"input_counter_version": evidence["counter_version"]}
+            )
+        }
+    )
+    assert hashlib.sha256(canonical_bytes(req)).hexdigest() == evidence["provider_request_sha256"]
+
+    class RejectionTransport:
+        def __init__(self):
+            self.sent = []
+
+        def exchange(self, body, timeout_ms):
+            self.sent.append((body, timeout_ms))
+            return TransportResponse(evidence["http_status"], raw, True)
+
+    transport = RejectionTransport()
+    adapter = DeepSeekResponsesAdapter(transport)
+    wire = adapter.prepare(req)
+    body = verified_body(req, wire)
+    assert hashlib.sha256(body).hexdigest() == evidence["wire_body_sha256"]
+    assert json.loads(body)["text"]["format"]["schema"] == req.response_schema
+    assert adapter.count_input_tokens(req, wire) == evidence["input_reserved"] == 23082
+    result = adapter.complete(req, wire, 30000)
+    assert result.model_dump(exclude={"latency_ms"}) == {
+        key: value for key, value in evidence["source_result"].items() if key != "latency_ms"
+    }
+    assert result.outcome == "provider_error" and result.provider_error_code == "HTTP_400"
+    assert result.response_text is None and result.token_input is result.token_output is None
+    assert transport.sent == [(body, 30000)]
+    assert verified_body(req, wire) == body
+
+
+def test_p305_u3_original_pattern_fails_local_unicode_regex_compilation():
+    original = json.loads((FIXTURES / "p305-u2-first-request.json").read_bytes())
+    pattern = original["response_schema"]["$defs"]["GoalProposal"]["properties"]["text"]["pattern"]
+    assert pattern == r"^[^\uD800-\uDFFF]*$"
+    assert re.fullmatch(pattern, "valid scalar text")
+    # This local engine reproduces the incompatibility class, not hosted backend identity.
+    with pytest.raises(SchemaError, match="not a Unicode scalar value"):
+        TypeAdapter(
+            Annotated[str, StringConstraints(pattern=pattern)],
+            config=ConfigDict(regex_engine="rust-regex"),
+        )
+
+
+def test_p305_u3_owner_candidate_preserves_all_codepoints_and_scalar_sequences():
+    evidence = json.loads((FIXTURES / "p305-u3-invalid-regex-evidence.json").read_bytes())
+    assert evidence["candidate_is_production"] is False
+    candidate = evidence["candidate_pattern"]
+    assert candidate.isascii()
+    # A proposed schema-owner change only: neither the request nor adapter is rewritten.
+    old = re.compile(r"^[^\uD800-\uDFFF]*$")
+    new = re.compile(candidate)
+    for codepoint in range(0x110000):
+        char = chr(codepoint)
+        expected = not 0xD800 <= codepoint <= 0xDFFF
+        assert bool(old.fullmatch(char)) == bool(new.fullmatch(char)) == expected
+    validator = TypeAdapter(
+        Annotated[str, StringConstraints(pattern=candidate)],
+        config=ConfigDict(regex_engine="rust-regex"),
+    )
+    assert validator.validate_python("") == ""
+    for start in range(0, 0x110000, 0x1000):
+        text = "".join(
+            chr(codepoint)
+            for codepoint in range(start, start + 0x1000)
+            if not 0xD800 <= codepoint <= 0xDFFF
+        )
+        assert validator.validate_python(text) == text
+    for codepoint in range(0xD800, 0xE000):
+        text = "before" + chr(codepoint) + "after\n"
+        assert old.fullmatch(text) is new.fullmatch(text) is None
+        with pytest.raises(ValidationError):
+            validator.validate_python(text)
+    assert json.loads(canonical_bytes({"pattern": candidate}))["pattern"] == candidate
 
 
 def test_failed_and_unknown_response_statuses():
