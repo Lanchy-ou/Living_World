@@ -639,6 +639,52 @@ and exercises explicit refusal of the original tape by the 0.2 adapter. The
 new tape and test do not replace either historical registration. See the
 [fixture provenance](../../../backend/tests/fixtures/p3/one_resident/slice_provenance.md).
 
+### Executor results for the corrected candidate
+
+The 0.2 candidate passed 1621 tests with three existing opt-in skips in six
+disjoint pytest selections. All 51 P3-05 task cases passed. Ruff, Mypy, all
+eight import contracts, frontend lint/typecheck/build and unchanged generated
+types passed. Fresh P1 and P2 runs matched all eight published hashes. See
+the [continuation handoff](P3-05.md#handoff-cr-006-continuation-2026-11-13) for
+the commands and report paths.
+
+The separate 0.2 fake run completed tick 24, with Ella's 24/24 scripted
+decisions accepted, zero monetary debit and zero external calls. The
+recorded reexecution matched the five logs, final checkpoint and trace
+byte-for-byte. The trace SHA-256 is
+`442b57dec5a1d6ae376e5caf97e8ce13ee90d8cbcc0b695ff02e7fb05c2163db`.
+Hosted acceptance and costs for the proposed replacement are pending.
+
+### Independent Gate 2 for the offline integration
+
+Nonauthor reviewer `p305_gate2` passed the corrected candidate `0ffa1f8` in an
+independent detached snapshot. The reviewer executed the 24-step schema 0.2
+slice through its full horizon and reexecuted it with raising external-access
+sentinels. All five logs, final checkpoint and trace matched byte-for-byte.
+The leading six cases in the reviewer's corrected task run passed before the
+duplicate broad run was stopped. This is focused independent evidence.
+
+The reviewer also ran 452 focused schema/provider/allocation/persistence/
+cognition/recovery/reexecution/transaction cases on `60fe91e`, all passing
+in 240.78 seconds. Their source and test blobs match the corrected candidate.
+The JUnit file is `p305-u3-gate2-focused.xml` in local system temp, SHA-256
+`2e528bbcc795d365d4210940e1507e9f65f8e3821285dcd38e4d96e47598f923`.
+Six launcher vectors in the initial review passed, including once-only
+enrollment, crash recovery, and no-call full-horizon offline recovery.
+The initial slice's known stale-tape failure is closed by the corrected run.
+
+The independent reviewer validated both old registrations under their
+pinned-compatible `0fd8a00` source and reexecuted the original failed live
+lineage to tick 24 with zero external calls. It verified all 13 recorded
+output digests, 97 pre-replay and 11 pre-finalization authority digests, and
+both original failure receipt copies. The pilot approval and allocation
+SHA-256 values are, respectively,
+`a2cc35219335e3d3f8908257c4c0c1b3a912da912c3e8044bb13ed20f31713fd` and
+`1b11dbc07b5a6494842931a02312b0d680b8af76d773b58b2c91f14c9684cefb`.
+The reviewer independently reconstructed the draft registration hash, first
+request reservation and budget calculation below. This disposition covers
+offline integration. The original live V-05 remains FAIL.
+
 ### Proposed registration and code pins
 
 | Pin | Proposed value |
@@ -686,6 +732,8 @@ The original allocation is complete at generation 2. The original provider
 invoice remains unknown. Under the pinned peak prices a maximal attempt costs
 `32768 * 2 + 2048 * 8 = 81920` micro-CNY. The proposed money cap covers 34 such
 attempts. A case with 24 first attempts has ten additional attempts available.
+The cap controls admission and reservations. If provider-reported usage causes an
+overrun, record the full debit, stop live dispatch, and fail technical validity.
 A budget refusal or excess fallback can still fail V-05.
 
 The total ceiling remains 150000000 micro-CNY (CNY150). The only issued
@@ -719,9 +767,10 @@ replacement case. Run the same 24-tick registration with an initial
 `run --ticks 1` pause, then inspect Ella's first decision and settled ledger
 before any live continuation. The pinned transaction policy permits up to two
 attempts in that decision. If the schema rejection recurs or admission/authority
-fails, stop live dispatch and preserve the partial evidence. Upon successful
-preflight and first decision, resume the same allocation to the registered
-horizon, with zero additional paid probe or grant. Reexecute retained inputs
+fails, stop live dispatch, preserve the partial evidence and use the recorded
+offline recovery path when possible. Upon successful preflight and first
+decision, resume the same allocation to the registered horizon, with zero
+additional paid probe or grant. Reexecute retained inputs
 with raising provider, fallback and allocation sentinels and verify all five
 logs, final checkpoint, trace and replay across the lineage.
 
