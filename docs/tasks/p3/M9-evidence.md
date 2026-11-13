@@ -151,6 +151,25 @@ Exit 0: tick 1008, 14351 events, 1305 decisions. Every published P2 reference ma
 P1 reference verification will be recorded from the full executor suite. No
 reference, scenario, world, rule-policy or generated frontend source is edited.
 
+## Registered full offline launcher proof
+
+Implementation: `eac4d29b3474d337ca312677e609d9e15ddd431a`.
+Registration commit: `c3364c4`; canonical registration SHA-256:
+`6831584ac724912640b518f7302fa7326efe14e466139a30c198838be8327e85`.
+Case: `p3-05-fake-r1.s1292387875`, full 24 ticks, isolated fake authority
+`runs/p305-fake-authority-20261113`, zero money. Allocation key:
+`00f7062baaa1c8f94ecd6faf659412419ddebf52ecf06a8d6e4a246bb97c4a1c`.
+
+No-dispatch validation, explicit fake initialization and once-only enrollment
+have each exited 0. The following exact run is recorded before execution:
+
+```sh
+uv run --directory backend python ../scripts/p3_trials.py run --registration ../content/experiments/p3/development/p3-05-fake-r1.json --case p3-05-fake-r1.s1292387875 --out ../runs/p3/p3-05-fake-r1/first --fake-authority ../runs/p305-fake-authority-20261113 --tape tests/fixtures/p3/one_resident/slice_smoke_tape.json
+```
+
+Full launcher completion, immutable receipt, export and sentinel replay results
+remain pending. This fake authority does not enroll any M8 live slot.
+
 ## Registered live command and results
 
 NOT_RUN yet. The exact committed registration, implementation/input hashes, case,
