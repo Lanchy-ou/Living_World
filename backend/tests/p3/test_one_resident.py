@@ -50,7 +50,9 @@ ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = Path(__file__).parents[1] / "fixtures/p3/one_resident"
 FAKE_COUNTER = runpy.run_path(str(FIXTURES / "slice_fake_counter.py"))
 SMOKE_SEED = 1292387875
-TAPE_SHA256 = "68acba21ebed8b1b9c10edd458c7cc1f3f056e37b32db160adfd0d383889722f"
+HISTORICAL_TAPE_SHA256 = "68acba21ebed8b1b9c10edd458c7cc1f3f056e37b32db160adfd0d383889722f"
+SCHEMA02_TAPE = "slice_smoke_schema02_tape.json"
+SCHEMA02_TAPE_SHA256 = "ccc5f2c0bc3c1ac5374a867bcea79ea3bfc15a491be80f0debdf718d83919056"
 WAIT = {"action_type": "wait", "target": None, "parameters": {}, "reason": None}
 
 
@@ -324,8 +326,8 @@ def execute_principal(tmp_path, provider):
         ROOT,
         source_commit(),
         purpose="fake",
-        registration_id="p3-slice-fake-r1",
-        fake_fixture_path="backend/tests/fixtures/p3/one_resident/slice_smoke_tape.json",
+        registration_id="p3-slice-fake-schema02-r1",
+        fake_fixture_path=f"backend/tests/fixtures/p3/one_resident/{SCHEMA02_TAPE}",
     )
     case = registration.cases[0]
     content, files = tools["build_case_inputs"](ROOT, registration, case.case_id)
@@ -391,10 +393,9 @@ def fake_input_units(request, wire):
 
 
 def test_frozen_smoke_world_one_model_actor_and_zero_call_replay(tmp_path):
-    assert sha256((FIXTURES / "slice_smoke_tape.json").read_bytes()).hexdigest() == TAPE_SHA256
-    tape = launcher()["FakeTape"].model_validate_json(
-        (FIXTURES / "slice_smoke_tape.json").read_bytes()
-    )
+    tape_bytes = (FIXTURES / SCHEMA02_TAPE).read_bytes()
+    assert sha256(tape_bytes).hexdigest() == SCHEMA02_TAPE_SHA256
+    tape = launcher()["FakeTape"].model_validate_json(tape_bytes)
     provider = launcher()["TapeProvider"](tape)
     production = DeepSeekResponsesAdapter()
     assert all(
@@ -402,6 +403,7 @@ def test_frozen_smoke_world_one_model_actor_and_zero_call_replay(tmp_path):
     )
     result, store, reader, _ = execute_principal(tmp_path, provider)
     provider.assert_consumed()
+    assert result.world.tick == len(tape.steps) == 24
     decisions = rows(result, "decisions-p3.jsonl")
     assert {row["actor_id"] for row in decisions} == {"ella", "mia", "ryan"}
     ella = [row for row in decisions if row["actor_id"] == "ella"]
@@ -429,7 +431,12 @@ def test_frozen_smoke_world_one_model_actor_and_zero_call_replay(tmp_path):
 
 def test_closed_principal_tape_refuses_mismatch_extra_and_missing_calls():
     tools = launcher()
-    tape = tools["FakeTape"].model_validate_json((FIXTURES / "slice_smoke_tape.json").read_bytes())
+    historical_bytes = (FIXTURES / "slice_smoke_tape.json").read_bytes()
+    assert sha256(historical_bytes).hexdigest() == HISTORICAL_TAPE_SHA256
+    historical_tape = tools["FakeTape"].model_validate_json(historical_bytes)
+    with pytest.raises(ValueError, match="pinned DecisionProposal schema"):
+        DeepSeekResponsesAdapter().prepare(historical_tape.steps[0].expected_request)
+    tape = tools["FakeTape"].model_validate_json((FIXTURES / SCHEMA02_TAPE).read_bytes())
     provider = tools["TapeProvider"](tape)
     request = tape.steps[0].expected_request.model_copy(deep=True)
     request.messages[1] = request.messages[1].model_copy(
