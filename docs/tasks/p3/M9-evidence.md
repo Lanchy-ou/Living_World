@@ -138,6 +138,30 @@ valid-shape intermediate world edit is outside those structural checks. M9's
 stronger proof compares the full source export with the independently recorded-
 reexecuted export using raising provider/fallback/authority sentinels.
 
+### Headless goal evidence
+
+The passing lifecycle fixture is retained at
+`runs/p305-integrated-task-20261113/test_goal_failure_completion_c0/run`.
+These are Ella's exact post-ingestion predecision contexts joined to accepted
+changes by decision ID; they do not label a pre-ingestion checkpoint as updated.
+
+| Tick / ordinal | Current goal before decision | Accepted operation | Actual evidence / next plan |
+| --- | --- | --- | --- |
+| 0 / 0 | none | revise | Propose drink from canteen; create `ella:g000000` |
+| 1 / 1 | `ella:g000000`, attempted | continue | Own `ella:p000000:i0` failed with `NO_ITEM`; no completion |
+| 2 / 2 | `ella:g000000`, attempted | revise | Own `ella:p000001:i0` also failed; create wait goal `ella:g000001` |
+| 3 / 3 | `ella:g000001`, observed_complete | continue | Delivered success for own `ella:p000002:i0`, observed at tick 3 |
+| 4 / 4 | `ella:g000001`, observed_complete | abandon | Tick-3 inline evidence retained exactly before explicit abandonment |
+| 5 / 5 | none | continue | No completion inferred from text or a pending result |
+
+`test_engine_transfer_feedback_requires_own_completed_give` supplies the stronger
+transfer oracle: a real request and acceptance do not transfer the canteen or
+complete Ella's give goal; a failed give does not complete it; receiving the
+canteen from Ryan changes inventory without completing it; only Ella's exact
+successful give to Mia, delivered with its own accepted intent, completes it.
+Other participants in this focused engine-protocol fixture are scripted test
+intents. The principal island trial retains the actual frozen rule policies.
+
 ## Integrated executor checks
 
 The full command is now running; no full-suite PASS is claimed yet:
