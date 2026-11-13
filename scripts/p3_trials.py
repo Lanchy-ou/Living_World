@@ -647,6 +647,19 @@ def validate_registration(repository: Path, registration_path: Path) -> TrialReg
             raise ValueError("PINNED_SOURCE_DRIFT")
         if sha256(_blob(repository.resolve(), head, pin.path)).hexdigest() != pin.sha256:
             raise ValueError("EXECUTED_COMMIT_DRIFT")
+    pins = {pin.path: pin.sha256 for pin in registration.implementation_pins}
+    active = {"scripts/p3_trials.py": Path(__file__)}
+    for name, module in list(sys.modules.items()):
+        if name == "living_island" or name.startswith("living_island."):
+            source = getattr(module, "__file__", None)
+            if source is not None:
+                path = Path(source)
+                suffix = "/__init__.py" if path.name == "__init__.py" else ".py"
+                active[f"backend/src/{name.replace('.', '/')}{suffix}"] = path
+    if any(
+        pins.get(name) != sha256(path.read_bytes()).hexdigest() for name, path in active.items()
+    ):
+        raise ValueError("ACTIVE_IMPLEMENTATION_SOURCE_DRIFT")
     for case in registration.cases:
         build_case_inputs(repository, registration, case.case_id)
     return registration
@@ -835,7 +848,11 @@ def _live_store(repository: Path) -> AllocationStore:
 def _registration_commit(repository: Path, path: Path) -> str:
     relative = path.resolve().relative_to(repository.resolve()).as_posix()
     head = git(repository, "rev-parse", "HEAD").decode().strip()
-    if git_source_reader(repository)(head, relative) != path.read_bytes():
+    try:
+        committed = git_source_reader(repository)(head, relative)
+    except ValueError:
+        raise ValueError("REGISTRATION_MUST_BE_COMMITTED") from None
+    if committed != path.read_bytes():
         raise ValueError("REGISTRATION_MUST_BE_COMMITTED")
     commit = git(repository, "log", "-1", "--format=%H", "--", relative).decode().strip()
     if not commit:
@@ -1364,7 +1381,8 @@ def main(argv: list[str] | None = None) -> int:
             )
             ledger = result.checkpoint.run_budget
             print(
-                f"tick={result.world.tick} complete={result.trace is not None} charged_micro_cny={ledger.money_charged}"
+                f"tick={result.world.tick} complete={result.trace is not None} "
+                f"charged_micro_cny={ledger.money_charged}"
             )
     except Exception as exc:
         # Never echo exception messages after a credential might have been injected.
