@@ -86,7 +86,7 @@ class P3Model(ProtocolModel):
 MAX_PROJECTION_BYTES = 65536
 MAX_STATIC_TILE_CANDIDATES = 128
 PROMPT_VERSION = "p3-resident/0.1"
-ACTION_SCHEMA_VERSION = "p3-actions/0.1"
+ACTION_SCHEMA_VERSION = "p3-actions/0.2"
 PILOT_CEILING_MICRO_CNY = 150000000
 
 
@@ -312,7 +312,7 @@ class ActionDescription(P3Model):
 
 
 class ModelActionContract(P3Model):
-    action_schema_version: Literal["p3-actions/0.1"]
+    action_schema_version: Literal["p3-actions/0.2"]
     descriptions: list[ActionDescription]
     proposal_schema: dict[str, JsonValue]
 

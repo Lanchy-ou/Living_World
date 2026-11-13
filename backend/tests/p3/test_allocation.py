@@ -762,7 +762,7 @@ def test_dispatch_requires_matching_durable_reservation_and_owner(tmp_path):
         allocation_key=h.key,
         reservation_ordinal=0,
         prompt_version="p3-resident/0.1",
-        action_schema_version="p3-actions/0.1",
+        action_schema_version="p3-actions/0.2",
         adapter_id="fake",
         adapter_version="1",
         model_id="fake",

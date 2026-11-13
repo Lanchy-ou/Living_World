@@ -98,7 +98,7 @@ def _text(minimum: int, maximum: int) -> dict[str, JsonValue]:
         "type": "string",
         "minLength": minimum,
         "maxLength": maximum,
-        "pattern": r"^[^\uD800-\uDFFF]*$",
+        "pattern": r"^(?:[\u0000-\uD7FF\uE000-\uFFFF]|[^\u0000-\uFFFF])*$",
     }
 
 
@@ -182,7 +182,7 @@ def build_model_action_contract() -> ModelActionContract:
         ]
     }
     return ModelActionContract(
-        action_schema_version="p3-actions/0.1",
+        action_schema_version="p3-actions/0.2",
         descriptions=[
             ActionDescription(action_type=action, description=_DESCRIPTIONS[action])
             for action in ACTION_TYPES

@@ -135,7 +135,7 @@ def config(req):
             "identity_sha256": canonical_sha256(req.context.identity),
             "prompt_version": "p3-resident/0.1",
             "prompt_sha256": sha256(RESIDENT_TEMPLATE).hexdigest(),
-            "action_schema_version": "p3-actions/0.1",
+            "action_schema_version": "p3-actions/0.2",
             "action_schema_sha256": canonical_sha256(build_model_action_contract()),
             "context_profile_id": "p3-context-v0",
             "adapter_id": "deepseek-responses-v0",

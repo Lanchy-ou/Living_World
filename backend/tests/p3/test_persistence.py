@@ -97,7 +97,7 @@ def retained_fixture(content, policy="llm-v0", horizon=3, *, fixture_profile=Fal
             identity_sha256=canonical_sha256(identity),
             prompt_version="p3-resident/0.1",
             prompt_sha256=sha256(RESIDENT_TEMPLATE).hexdigest(),
-            action_schema_version="p3-actions/0.1",
+            action_schema_version="p3-actions/0.2",
             action_schema_sha256=canonical_sha256(action),
             context_profile_id=profile.context_profile_id,
             adapter_id="fake",
