@@ -12,6 +12,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+
 from living_island.agents.llm.provider import DeepSeekResponsesAdapter, TransportResponse
 from living_island.memory.p3_types import canonical_bytes, canonical_sha256
 from living_island.persistence.p3_allocation import (
@@ -54,7 +55,9 @@ def clone_repository(directory: Path) -> Path:
     assert result.returncode == 0, result.stderr.decode(errors="replace")
     # Tests also work before the executor commits a reversible launcher correction.
     (directory / "scripts/p3_trials.py").write_bytes(SCRIPT.read_bytes())
-    commit(directory, "scripts/p3_trials.py")
+    test_source = "backend/tests/p3/test_trial_registration.py"
+    (directory / test_source).write_bytes(Path(__file__).read_bytes())
+    commit(directory, "scripts/p3_trials.py", test_source)
     return directory
 
 
@@ -143,6 +146,35 @@ class FixtureAdapter(DeepSeekResponsesAdapter):
 def fake_provider():
     transport = WaitTransport()
     return FixtureAdapter(transport), transport
+
+
+def short_fake_builder(module):
+    """Pin this test source and an explicit two-tick, zero-money fake registration.
+
+    This seam bounds crash mechanics tests. Production smoke/default fake builders
+    remain at 24 ticks; a full registered launcher trial is separate evidence.
+    """
+    original = module.build_registration
+
+    def build(repository, implementation_commit, **options):
+        registration = original(repository, implementation_commit, **options)
+        assert registration.purpose == "fake" and registration.aggregate_caps.micro_cny == 0
+        raw = registration.model_dump(mode="json")
+        raw["cases"][0]["ticks"] = 2
+        raw["fake_fixture_id"] = "launcher-finalization-two-ticks-v0"
+        source = "backend/tests/p3/test_trial_registration.py"
+        raw["input_pins"].append(
+            {
+                "path": source,
+                "sha256": sha256(
+                    module._reader(repository)(registration.implementation_commit, source)
+                ).hexdigest(),
+            }
+        )
+        raw["input_pins"].sort(key=lambda pin: pin["path"])
+        return module.TrialRegistration.model_validate(raw)
+
+    return build
 
 
 def public_documents(*, model=None, input_price="2", schema=True):
@@ -567,3 +599,281 @@ def test_live_and_offline_resume_modes_are_mutually_exclusive(capsys):
         )
     assert stopped.value.code == 2
     assert "not allowed with argument" in capsys.readouterr().err
+
+
+def test_invalid_initial_and_resume_ticks_leave_receipt_and_authority_unchanged(
+    repository, tmp_path
+):
+    registration, path, authority, key = fake_enrollment(repository, tmp_path)
+    provider, transport = fake_provider()
+    case = registration.cases[0].case_id
+    directory = repository / "runs/p3" / registration.registration_id
+    receipt_path = launcher._receipt_directory(repository, registration) / f"{case}.json"
+    authority_path = authority / "allocations" / f"{key}.json"
+    before = (receipt_path.read_bytes(), authority_path.read_bytes())
+    for index, invalid in enumerate((-1, 25, True, 1.5)):
+        with pytest.raises(ValueError, match="TICKS_OUTSIDE_REGISTERED_HORIZON"):
+            launcher.run_registration(
+                repository,
+                path,
+                case,
+                directory / f"invalid-initial-{index}",
+                fake_authority=authority,
+                provider=provider,
+                ticks=invalid,
+            )
+        assert (receipt_path.read_bytes(), authority_path.read_bytes()) == before
+    assert transport.bodies == []
+    assert not (receipt_path.parent / "lineage").exists()
+    first = launcher.run_registration(
+        repository,
+        path,
+        case,
+        directory / "first",
+        fake_authority=authority,
+        provider=provider,
+        ticks=1,
+    )
+    before = (receipt_path.read_bytes(), authority_path.read_bytes())
+    calls = len(transport.bodies)
+    checkpoint = first.output / "checkpoint-0000000001.json"
+    for index, invalid in enumerate((-1, 24, True)):
+        with pytest.raises(ValueError, match="TICKS_OUTSIDE_REGISTERED_HORIZON"):
+            launcher.run_registration(
+                repository,
+                path,
+                case,
+                directory / f"invalid-resume-{index}",
+                fake_authority=authority,
+                provider=provider,
+                checkpoint=checkpoint,
+                ticks=invalid,
+            )
+        assert (receipt_path.read_bytes(), authority_path.read_bytes()) == before
+        assert len(transport.bodies) == calls
+    second = launcher.run_registration(
+        repository,
+        path,
+        case,
+        directory / "second",
+        fake_authority=authority,
+        provider=provider,
+        checkpoint=checkpoint,
+        ticks=1,
+    )
+    assert second.world.tick == 2
+
+
+def crash_process(repository, path, case, authority, output, stage):
+    """Abrupt exit bypasses Python cleanup and releases only process-owned OS locks."""
+    code = """import importlib.util,json,os,sys
+from pathlib import Path
+repository,registration,case,authority,output,stage,test_directory=sys.argv[1:]
+repository=Path(repository);authority=Path(authority)
+sys.path.insert(0,test_directory)
+from test_trial_registration import fake_provider,short_fake_builder
+s=importlib.util.spec_from_file_location('launcher_crash_child',repository/'scripts/p3_trials.py')
+m=importlib.util.module_from_spec(s);sys.modules[s.name]=m;s.loader.exec_module(m)
+if stage in {'complete_before_trace','receipt_final'}:
+    m.build_registration=short_fake_builder(m)
+write=m._atomic_write
+def crash_write(path,data,fault,where):
+    if stage=='receipt_final' and where=='receipt_final': os._exit(87)
+    write(path,data,fault,where)
+    if stage=='receipt_running' and where=='receipt_running': os._exit(87)
+m._atomic_write=crash_write
+create=m.atomic_create
+def crash_create(path,data):
+    create(path,data)
+    if stage=='invocation' and path.name=='invocation.json': os._exit(87)
+m.atomic_create=crash_create
+run=m.run_p3
+def fault(where):
+    if where==stage: os._exit(87)
+    if stage=='complete_before_trace' and where=='checkpoint:finalized':
+        states=[json.loads(p.read_bytes()) for p in (authority/'allocations').glob('*.json')]
+        if any(state['status']=='complete' for state in states): os._exit(87)
+def crash_run(*args,**kwargs):
+    return run(*args,**kwargs,fault=fault)
+m.run_p3=crash_run
+provider,transport=fake_provider()
+ticks=None if stage in {'complete_before_trace','receipt_final'} else 0
+m.run_registration(repository,Path(registration),case,Path(output),fake_authority=authority,
+                   provider=provider,ticks=ticks)
+sys.exit(3)
+"""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            code,
+            str(repository),
+            str(path),
+            case,
+            str(authority),
+            str(output),
+            stage,
+            str(Path(__file__).parent),
+        ],
+        env={**os.environ, "PYTHONPATH": str(repository / "backend/src")},
+        capture_output=True,
+        timeout=120,
+    )
+    assert result.returncode == 87, result.stderr.decode(errors="replace")
+
+
+@pytest.mark.parametrize(
+    "stage",
+    [
+        "invocation",
+        "checkpoint:prepared",
+        "checkpoint:after_publish",
+        "checkpoint:finalized",
+        "receipt_running",
+    ],
+)
+def test_real_startup_crash_preserves_one_grant_and_requires_checkpoint_once_published(
+    repository, tmp_path, stage
+):
+    registration, path, authority, key = fake_enrollment(repository, tmp_path)
+    case = registration.cases[0].case_id
+    directory = repository / "runs/p3" / registration.registration_id
+    interrupted = directory / "interrupted"
+    receipt_path = launcher._receipt_directory(repository, registration) / f"{case}.json"
+    initial_receipt = receipt_path.read_bytes()
+    crash_process(repository, path, case, authority, interrupted, stage)
+    state = launcher.CaseAllocationP3.model_validate_json(
+        (authority / "allocations" / f"{key}.json").read_bytes()
+    )
+    assert not state.entries
+    assert len(list((authority / "allocations").glob("*.json"))) == 1
+    histories = list((receipt_path.parent / "lineage" / case).iterdir())
+    assert len(histories) == 1 and (histories[0] / "invocation.json").is_file()
+    evidence_before = {p: p.read_bytes() for p in histories[0].iterdir() if p.is_file()}
+    provider, transport = fake_provider()
+    checkpoint = interrupted / "checkpoint-0000000000.json"
+    if not checkpoint.exists():
+        assert receipt_path.read_bytes() == initial_receipt and state.head is None
+        result = launcher.run_registration(
+            repository,
+            path,
+            case,
+            directory / "retried",
+            fake_authority=authority,
+            provider=provider,
+            ticks=0,
+        )
+    else:
+        with pytest.raises(ValueError, match="CASE_ALREADY_STARTED"):
+            launcher.run_registration(
+                repository,
+                path,
+                case,
+                directory / "forbidden-restart",
+                fake_authority=authority,
+                provider=provider,
+                ticks=0,
+            )
+        result = launcher.run_registration(
+            repository,
+            path,
+            case,
+            directory / "resumed",
+            fake_authority=authority,
+            provider=provider,
+            checkpoint=checkpoint,
+            ticks=0,
+        )
+    assert result.world.tick == 0 and transport.bodies == []
+    assert result.checkpoint.run_budget.allocation_key == key
+    assert {p: p.read_bytes() for p in evidence_before} == evidence_before
+    assert len(list((authority / "allocations").glob("*.json"))) == 1
+
+
+@pytest.mark.parametrize("stage", ["complete_before_trace", "receipt_final"])
+def test_real_completion_crash_finalizes_metadata_without_calls_or_authority_mutation(
+    repository, tmp_path, monkeypatch, stage
+):
+    monkeypatch.setattr(launcher, "build_registration", short_fake_builder(launcher))
+    registration, path, authority, key = fake_enrollment(repository, tmp_path)
+    assert registration.cases[0].ticks == 2
+    case = registration.cases[0].case_id
+    source = repository / "runs/p3" / registration.registration_id / "completed"
+    crash_process(repository, path, case, authority, source, stage)
+    receipt_path = launcher._receipt_directory(repository, registration) / f"{case}.json"
+    prior = launcher.CaseReceipt.model_validate_json(receipt_path.read_bytes())
+    assert prior.status == "running"
+    authority_before = {p: p.read_bytes() for p in authority.rglob("*") if p.is_file()}
+    logs_before = {p: p.read_bytes() for p in source.glob("*.jsonl")}
+    state = launcher.CaseAllocationP3.model_validate_json(
+        (authority / "allocations" / f"{key}.json").read_bytes()
+    )
+    assert state.status == "complete"
+    assert (source / "decision-trace-p3.json").exists() == (stage == "receipt_final")
+
+    def external_access(*args, **kwargs):
+        raise AssertionError("finalization attempted dispatch or grant mutation")
+
+    monkeypatch.setattr(launcher, "run_p3", external_access)
+    monkeypatch.setattr(launcher, "resume_p3", external_access)
+    monkeypatch.setattr(launcher, "_credential", external_access)
+    monkeypatch.setattr(launcher, "current_preflight", external_access)
+    monkeypatch.setattr(launcher, "DeepSeekResponsesAdapter", external_access)
+    monkeypatch.setattr(launcher.AllocationStore, "open_case", external_access)
+    finalized = launcher.finalize_registration(
+        repository,
+        path,
+        case,
+        fake_authority=authority,
+        command=["p3_trials.py", "finalize", "--case", case],
+    )
+    assert finalized.status == "complete" and finalized.exit_code == 0
+    assert finalized.command == prior.command
+    assert finalized.executed_commit == prior.executed_commit
+    assert finalized.allocation_key == key
+    assert (
+        finalized.trace_sha256
+        == sha256((source / "decision-trace-p3.json").read_bytes()).hexdigest()
+    )
+    assert len(json.loads((source / "replay.json").read_bytes())["frames"]) == 3
+    assert {p: p.read_bytes() for p in authority_before} == authority_before
+    assert {p: p.read_bytes() for p in logs_before} == logs_before
+    assert (
+        launcher.finalize_registration(repository, path, case, fake_authority=authority)
+        == finalized
+    )
+    replay = source / "replay.json"
+    replay.write_bytes(replay.read_bytes() + b" ")
+    with pytest.raises(ValueError, match="FINALIZATION_REPLAY_MISMATCH"):
+        launcher.finalize_registration(repository, path, case, fake_authority=authority)
+    assert launcher.CaseReceipt.model_validate_json(receipt_path.read_bytes()) == finalized
+    assert {p: p.read_bytes() for p in authority_before} == authority_before
+
+
+def test_short_registered_launcher_completes_trace_export_and_receipt(
+    repository, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(launcher, "build_registration", short_fake_builder(launcher))
+    registration, path, authority, key = fake_enrollment(repository, tmp_path)
+    case = registration.cases[0].case_id
+    output = repository / "runs/p3" / registration.registration_id / "normal-completion"
+    provider, transport = fake_provider()
+    result = launcher.run_registration(
+        repository,
+        path,
+        case,
+        output,
+        fake_authority=authority,
+        provider=provider,
+    )
+    assert result.trace is not None and result.world.tick == 2 and transport.bodies
+    receipt = launcher.CaseReceipt.model_validate_json(
+        (launcher._receipt_directory(repository, registration) / f"{case}.json").read_bytes()
+    )
+    assert receipt.status == "complete" and receipt.exit_code == 0
+    assert receipt.allocation_key == key
+    assert (
+        receipt.trace_sha256 == sha256((output / "decision-trace-p3.json").read_bytes()).hexdigest()
+    )
+    assert len(json.loads((output / "replay.json").read_bytes())["frames"]) == 3
+    assert result.checkpoint.run_budget.money_charged == 0

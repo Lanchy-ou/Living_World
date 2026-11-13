@@ -23,6 +23,8 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.request import urlopen
 
+from pydantic import Field, model_validator
+
 from living_island.agents.llm.fallback import FrozenRuleFallbackAdapter
 from living_island.agents.llm.provider import (
     ADAPTER_ID,
@@ -63,11 +65,14 @@ from living_island.contract.p3_save import (
     TrialRegistration,
 )
 from living_island.memory.p3_types import canonical_bytes, canonical_sha256
+from living_island.persistence._files import atomic_create
 from living_island.persistence.characters import resolve_identity
 from living_island.persistence.p3 import (
     git_source_reader,
+    load_trace_p3,
     read_checkpoint_p3,
     validate_inputs,
+    write_trace_p3,
 )
 from living_island.persistence.p3_allocation import (
     AllocationStore,
@@ -84,7 +89,6 @@ from living_island.world.content import (
     map_bytes_from_rows,
 )
 from living_island.world.ports import create_engine
-from pydantic import Field, model_validator
 
 WORLD_COMMIT = "7c13d78ffd7d89006f6008c8a09f37ae97c253db"
 WORLD_CONFIG = "content/worlds/default.toml"
@@ -1057,6 +1061,7 @@ def run_registration(
     if not is_fake and (fake_authority is not None or provider is not None or fallback is not None):
         raise ValueError("LIVE_PORT_OR_AUTHORITY_OVERRIDE_REFUSED")
     content, files = build_case_inputs(repository, registration, case_id)
+    case = next(case for case in registration.cases if case.case_id == case_id)
     policies = [
         ActorPolicyConfig.model_validate(row).config
         for row in json.loads(files["p3-policy-configs.json"])
@@ -1080,6 +1085,24 @@ def run_registration(
             raise ValueError("RECEIPT_ALLOCATION_MISMATCH")
         if prior.status == "complete" or (checkpoint is None and prior.status != "not_started"):
             raise ValueError("CASE_ALREADY_STARTED")
+        authority = CaseAllocationP3.model_validate_json(
+            (store.root / "allocations" / f"{key}.json").read_bytes()
+        )
+        if checkpoint is None and (
+            authority.head is not None
+            or authority.entries
+            or authority.pending_recovery_sha256 is not None
+            or authority.status not in {"ready", "running"}
+            or (
+                authority.prepared_head is not None
+                and (
+                    Path(authority.prepared_head.run_directory)
+                    / f"checkpoint-{authority.prepared_head.checkpoint_tick:010d}.json"
+                ).exists()
+            )
+        ):
+            raise ValueError("CASE_ALREADY_STARTED_CHECKPOINT_REQUIRED")
+        start_tick = 0
         if checkpoint is not None:
             verified = read_checkpoint_p3(
                 checkpoint, ancestors=ancestors, source_reader=source_reader
@@ -1089,9 +1112,7 @@ def run_registration(
                 or verified.save.run_budget.allocation_key != key
             ):
                 raise ValueError("CHECKPOINT_REGISTRATION_MISMATCH")
-            authority = CaseAllocationP3.model_validate_json(
-                (store.root / "allocations" / f"{key}.json").read_bytes()
-            )
+            start_tick = verified.save.world.tick
             # A crash can leave the invocation receipt ahead of the durable head.
             # The authority, rather than the attempted output path, owns resume.
             matches = [
@@ -1108,6 +1129,9 @@ def run_registration(
                 or len(authority.entries) > len(verified.save.allocation_entries)
             ):
                 raise ValueError("INTERRUPTED_CALL_RECOVERY_REQUIRED")
+        count = case.ticks - start_tick if ticks is None else ticks
+        if type(count) is not int or count < 0 or start_tick + count > case.ticks:
+            raise ValueError("TICKS_OUTSIDE_REGISTERED_HORIZON")
         output = output.resolve()
         allowed = repository.resolve() / "runs" / "p3" / registration.registration_id
         if not output.is_relative_to(allowed) or output.exists():
@@ -1173,7 +1197,8 @@ def run_registration(
         if history.exists():
             raise ValueError("RECEIPT_LINEAGE_ALREADY_EXISTS")
         history.mkdir(parents=True)
-        _atomic_write(history / "previous.json", canonical_bytes(prior), None, "receipt_previous")
+        atomic_create(history / "previous.json", canonical_bytes(prior))
+        atomic_create(history / "invocation.json", canonical_bytes(running))
         if observation is not None:
             _atomic_write(
                 history / "public-preflight.json",
@@ -1181,7 +1206,20 @@ def run_registration(
                 None,
                 "receipt_preflight",
             )
-        _atomic_write(receipt_path, canonical_bytes(running), None, "receipt_running")
+        started = checkpoint is not None
+        if started:
+            _atomic_write(receipt_path, canonical_bytes(running), None, "receipt_running")
+
+        def initial_boundary_committed(snapshot: Any, events: Any) -> None:
+            nonlocal started
+            if not started:
+                if snapshot.tick != 0:
+                    raise ValueError("INITIAL_RECEIPT_REQUIRES_CHECKPOINT_ZERO")
+                # The finalized initial head precedes the first decision/reservation.
+                # A crash before this point preserves not_started and the same grant.
+                _atomic_write(receipt_path, canonical_bytes(running), None, "receipt_running")
+                started = True
+
         try:
             if checkpoint is None:
                 result = run_p3(
@@ -1194,6 +1232,7 @@ def run_registration(
                     fallback=fallback,
                     source_reader=source_reader,
                     ticks=ticks,
+                    on_boundary_committed=initial_boundary_committed,
                 )
             else:
                 result = resume_p3(
@@ -1230,12 +1269,7 @@ def run_registration(
                     else None,
                 }
             )
-            _atomic_write(
-                history / "receipt.json",
-                canonical_bytes(completed),
-                None,
-                "receipt_lineage",
-            )
+            atomic_create(history / "receipt.json", canonical_bytes(completed))
             _atomic_write(receipt_path, canonical_bytes(completed), None, "receipt_final")
             return result
         except Exception as exc:
@@ -1247,14 +1281,130 @@ def run_registration(
                     "failure": type(exc).__name__,
                 }
             )
-            _atomic_write(
-                history / "receipt.json",
-                canonical_bytes(failed),
-                None,
-                "receipt_lineage",
+            atomic_create(history / "failure.json", canonical_bytes(failed))
+            current = CaseAllocationP3.model_validate_json(
+                (store.root / "allocations" / f"{key}.json").read_bytes()
             )
-            _atomic_write(receipt_path, canonical_bytes(failed), None, "receipt_failed")
+            if started or current.head is not None:
+                _atomic_write(receipt_path, canonical_bytes(failed), None, "receipt_failed")
             raise
+
+
+def finalize_registration(
+    repository: Path,
+    path: Path,
+    case_id: str,
+    *,
+    ancestors: tuple[Path, ...] = (),
+    fake_authority: Path | None = None,
+    command: list[str] | None = None,
+) -> CaseReceipt:
+    """Finish metadata for a verified complete grant without opening or spending it."""
+    from living_island.sim.p3 import export_p3_replay
+
+    registration = validate_registration(repository, path)
+    _registration_commit(repository, path)
+    case = next((case for case in registration.cases if case.case_id == case_id), None)
+    if case is None:
+        raise ValueError("CASE_NOT_REGISTERED")
+    if registration.purpose == "fake":
+        if fake_authority is None:
+            raise ValueError("ISOLATED_FAKE_AUTHORITY_REQUIRED")
+        store = AllocationStore(fake_authority, mode="fake")
+    else:
+        if fake_authority is not None:
+            raise ValueError("LIVE_AUTHORITY_CANNOT_BE_OVERRIDDEN")
+        store = _live_store(repository)
+    key = allocation_key(canonical_sha256(registration), case_id)
+    receipts = _receipt_directory(repository, registration)
+    with _persistent_lock(receipts / "receipt.lock"):
+        # Existing lock only: finalization cannot construct missing authority files.
+        with _ProcessLock(store.root / "allocations" / f"{key}.lock"):
+            authority = CaseAllocationP3.model_validate_json(
+                (store.root / "allocations" / f"{key}.json").read_bytes()
+            )
+            head = authority.head
+            if (
+                authority.status != "complete"
+                or head is None
+                or authority.prepared_head is not None
+                or authority.pending_recovery_sha256 is not None
+                or head.checkpoint_tick != case.ticks
+                or head.reservation_cursor != len(authority.entries)
+                or authority.caps != case.caps
+                or authority.registration_sha256 != canonical_sha256(registration)
+                or authority.case_id != case_id
+                or authority.allocation_key != key
+            ):
+                raise ValueError("FINALIZATION_REQUIRES_COMPLETE_AUTHORITY")
+            source = Path(head.run_directory)
+            reader = _reader(repository)
+            checkpoint = read_checkpoint_p3(
+                source / f"checkpoint-{case.ticks:010d}.json",
+                ancestors=ancestors,
+                source_reader=reader,
+            )
+            if (
+                sha256(checkpoint.raw).hexdigest() != head.checkpoint_sha256
+                or checkpoint.save.input_manifest_sha256 != head.input_manifest_sha256
+                or checkpoint.save.allocation_entries != authority.entries
+                or checkpoint.inputs["trial-registration.json"] != canonical_bytes(registration)
+                or checkpoint.save.run_budget.allocation_key != key
+            ):
+                raise ValueError("FINALIZATION_CHECKPOINT_MISMATCH")
+            receipt_path = receipts / f"{case_id}.json"
+            prior = CaseReceipt.model_validate_json(receipt_path.read_bytes())
+            if (
+                prior.registration_sha256 != canonical_sha256(registration)
+                or prior.case_id != case_id
+                or prior.allocation_key != key
+                or prior.run_directory != str(source.resolve())
+                or prior.status not in {"running", "failed", "complete"}
+            ):
+                raise ValueError("FINALIZATION_RECEIPT_LINEAGE_MISMATCH")
+            operation = {
+                "command": command or ["p3_trials.py", "finalize", "--case", case_id],
+                "observed_at": datetime.now(UTC).isoformat(),
+                "head": head.model_dump(mode="json"),
+            }
+            history = receipts / "finalizations" / case_id / canonical_sha256(operation)
+            history.mkdir(parents=True)
+            atomic_create(history / "invocation.json", canonical_bytes(operation))
+            atomic_create(history / "previous.json", canonical_bytes(prior))
+            try:
+                trace_path = source / "decision-trace-p3.json"
+                if not trace_path.exists():
+                    write_trace_p3(trace_path, checkpoint, final_tick=case.ticks)
+                load_trace_p3(trace_path, ancestors=ancestors, source_reader=reader)
+                # Rebuild independently even when a previous export already exists.
+                verified_replay = history / "verified-replay.json"
+                export_p3_replay(source, verified_replay, ancestors=ancestors, source_reader=reader)
+                replay_path = source / "replay.json"
+                if replay_path.exists():
+                    if replay_path.read_bytes() != verified_replay.read_bytes():
+                        raise ValueError("FINALIZATION_REPLAY_MISMATCH")
+                else:
+                    atomic_create(replay_path, verified_replay.read_bytes())
+                completed = CaseReceipt.model_validate(
+                    {
+                        **prior.model_dump(mode="json"),
+                        "status": "complete",
+                        "exit_code": 0,
+                        "trace_sha256": sha256(trace_path.read_bytes()).hexdigest(),
+                        "failure": None,
+                    }
+                )
+                if prior.status == "complete" and prior != completed:
+                    raise ValueError("FINALIZATION_COMPLETED_RECEIPT_MISMATCH")
+                atomic_create(history / "receipt.json", canonical_bytes(completed))
+                _atomic_write(receipt_path, canonical_bytes(completed), None, "receipt_finalize")
+                return completed
+            except Exception as exc:
+                atomic_create(
+                    history / "failure.json",
+                    canonical_bytes({"error_type": type(exc).__name__}),
+                )
+                raise
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1275,11 +1425,14 @@ def main(argv: list[str] | None = None) -> int:
     modes = initialize.add_mutually_exclusive_group(required=True)
     modes.add_argument("--live", action="store_true")
     modes.add_argument("--fake-authority", type=Path)
-    for name in ["validate", "enroll", "run", "resume"]:
+    for name in ["validate", "enroll", "run", "resume", "finalize"]:
         command_parser = subcommands.add_parser(name)
         command_parser.add_argument("--registration", type=Path, required=True)
-        if name == "enroll":
+        if name in {"enroll", "finalize"}:
             command_parser.add_argument("--fake-authority", type=Path)
+        if name == "finalize":
+            command_parser.add_argument("--case", required=True)
+            command_parser.add_argument("--ancestor", type=Path, action="append", default=[])
         if name in {"run", "resume"}:
             command_parser.add_argument("--case", required=True)
             command_parser.add_argument("--out", type=Path, required=True)
@@ -1340,6 +1493,20 @@ def main(argv: list[str] | None = None) -> int:
                 repository, args.registration, fake_authority=args.fake_authority
             )
             print(json.dumps({"allocation_keys": keys, "dispatches": 0}))
+        elif args.operation == "finalize":
+            receipt = finalize_registration(
+                repository,
+                args.registration,
+                args.case,
+                ancestors=tuple(args.ancestor),
+                fake_authority=args.fake_authority,
+                command=[
+                    sys.executable,
+                    str(Path(__file__).resolve()),
+                    *(sys.argv[1:] if argv is None else argv),
+                ],
+            )
+            print(f"finalized case={receipt.case_id}; dispatches=0; authority_mutations=0")
         elif args.operation == "replay":
             result = reexecute_p3(
                 args.source_run,
