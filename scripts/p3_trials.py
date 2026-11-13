@@ -79,6 +79,8 @@ from living_island.persistence.p3 import (
 from living_island.persistence.p3_allocation import (
     REPLACEMENT_SMOKE_CAPS,
     REPLACEMENT_SMOKE_ID,
+    U4_SMOKE_CAPS,
+    U4_SMOKE_ID,
     AllocationError,
     AllocationStore,
     VerifiedCheckpoint,
@@ -124,6 +126,7 @@ MODULE_PATHS = {
     ],
 }
 SMOKE_CAPS = BudgetCaps(attempts=48, input_tokens=1572864, output_tokens=98304, micro_cny=5000000)
+LINKED_SMOKE_CAPS = {REPLACEMENT_SMOKE_ID: REPLACEMENT_SMOKE_CAPS, U4_SMOKE_ID: U4_SMOKE_CAPS}
 
 
 class LiveEvidence(P3Model):
@@ -417,7 +420,7 @@ def build_registration(
     """Build the approved one-Ella slice; this task does not open later trial arms."""
     if purpose not in {"smoke", "fake"}:
         raise ValueError("P3-05 supports smoke and isolated fake registrations only")
-    if registration_id == REPLACEMENT_SMOKE_ID and purpose != "smoke":
+    if registration_id in LINKED_SMOKE_CAPS and purpose != "smoke":
         raise ValueError("REPLACEMENT_SMOKE_REQUIRES_SMOKE_PURPOSE")
     commit = git(repository, "rev-parse", implementation_commit).decode().strip()
     content = _world(repository, SMOKE_SEED)
@@ -527,8 +530,7 @@ def build_registration(
             }
         )
     caps = SMOKE_CAPS if purpose == "smoke" else SMOKE_CAPS.model_copy(update={"micro_cny": 0})
-    if registration_id == REPLACEMENT_SMOKE_ID:
-        caps = REPLACEMENT_SMOKE_CAPS
+    caps = LINKED_SMOKE_CAPS.get(registration_id, caps)
     return TrialRegistration.model_validate(
         dict(
             registration_schema_version="0.1",
@@ -620,9 +622,7 @@ def validate_registration(repository: Path, registration_path: Path) -> TrialReg
     """No provider, credential or allocation access; enforce complete source identity."""
     data = registration_path.read_bytes()
     registration = TrialRegistration.model_validate_json(data)
-    if registration.registration_id == REPLACEMENT_SMOKE_ID and data != canonical_bytes(
-        registration
-    ):
+    if registration.registration_id in LINKED_SMOKE_CAPS and data != canonical_bytes(registration):
         raise ValueError("REPLACEMENT_REGISTRATION_MUST_BE_CANONICAL")
     tapes = [
         p.path
@@ -894,13 +894,15 @@ def authorize_replacement_registration(
 ) -> str:
     """Explicit owner-approved setup only. Enrollment and dispatch are separate."""
     registration = validate_registration(repository, path)
-    if registration.purpose != "smoke" or registration.registration_id != REPLACEMENT_SMOKE_ID:
+    if registration.purpose != "smoke" or registration.registration_id not in LINKED_SMOKE_CAPS:
         raise ValueError("REPLACEMENT_SMOKE_REGISTRATION_REQUIRED")
     if canonical_sha256(registration) != registration_sha256:
         raise ValueError("REPLACEMENT_APPROVAL_HASH_MISMATCH")
     _registration_commit(repository, path)
     return _live_store(repository).authorize_replacement_smoke(
-        registration_sha256, original_allocation_sha256
+        registration_sha256,
+        original_allocation_sha256,
+        u4=registration.registration_id == U4_SMOKE_ID,
     )
 
 
@@ -924,7 +926,7 @@ def enroll_registration(
             digest = canonical_sha256(registration)
             if registration.purpose == "fake":
                 key = store.enroll_fake(digest, case.case_id, case.caps)
-            elif registration.registration_id == REPLACEMENT_SMOKE_ID:
+            elif registration.registration_id in LINKED_SMOKE_CAPS:
                 key = store.enroll_replacement_smoke(digest, case.case_id, case.caps)
             else:
                 key = store.enroll_live(
@@ -1567,7 +1569,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     authorize.add_argument("--registration", type=Path, required=True)
     authorize.add_argument("--registration-sha256", required=True)
-    authorize.add_argument("--original-allocation-sha256", required=True)
+    authorize.add_argument(
+        "--previous-allocation-sha256",
+        "--original-allocation-sha256",
+        dest="original_allocation_sha256",
+        required=True,
+        help="digest of the completed smoke allocation immediately preceding this registration",
+    )
     for name in ["validate", "enroll", "run", "resume", "finalize"]:
         command_parser = subcommands.add_parser(name)
         command_parser.add_argument("--registration", type=Path, required=True)

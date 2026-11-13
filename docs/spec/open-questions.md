@@ -62,6 +62,30 @@ registration hashes and caps require separate explicit owner approval before
 creating the real authorization or dispatching. Historical V-05 remains FAIL.
 See the [task card](../tasks/p3/P305-R1.md).
 
+## CR-008: P305-R2 counter 0.4 smoke authorization (approved development)
+
+The owner approved offline implementation and review of one further linked
+smoke after the original and CR-007 trials closed. It uses counter 0.4, the
+original seed and 24-tick horizon, and only Ella as primary LLM. The separate
+authorization binds the exact new registration and completed CR-007 allocation,
+whose authorization in turn binds the original allocation. Keep all prior
+registrations, records, guards, receipts and ledgers intact.
+
+The cumulative smoke attempt ceiling is 50, including the 16 already charged.
+The new case may reserve at most 34 attempts and 3000000 micro-CNY. Keep
+the original aggregate smoke input, output and money envelopes. Cap the new
+case at 1114112 input tokens (34 times B-05) and 69275 output tokens (98304
+minus the two prior settled output charges of 28672 and 357). Per-request
+B-05 remains 32768. Other pilot allocations and the 150000000 micro-CNY
+ceiling remain in force.
+
+Use the existing exclusive enrollment lock and separate authorization and
+guard files for this exact case. Reuse only the same interrupted initialization.
+Refuse lost, changed or unsettled history, conflicting registrations, and
+consumed allocations. The owner must separately approve the final code and
+registration hashes and caps before creating real authorization or using
+credentials and dispatch. See [P305-R2](../tasks/p3/P305-R2.md).
+
 ## Question register
 
 | ID | Date | Raised in task | Question | Assumption made | Status |

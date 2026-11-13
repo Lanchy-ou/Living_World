@@ -12,7 +12,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from test_allocation import completed_original_smoke
+from test_allocation import completed_original_smoke, completed_u4_predecessor
 
 from living_island.agents.llm.provider import DeepSeekResponsesAdapter, TransportResponse
 from living_island.memory.p3_types import canonical_bytes, canonical_sha256
@@ -396,12 +396,15 @@ def test_enrollment_crash_after_binding_recovers_same_slot_once(repository, monk
     assert len(list((root / "allocations").glob("*.json"))) == 1
 
 
-def test_replacement_launcher_requires_explicit_committed_authorization(repository, monkeypatch):
-    name = "p3-smoke-u3-r1"
+@pytest.mark.parametrize("u4", [False, True], ids=["u3", "u4"])
+def test_replacement_launcher_requires_explicit_committed_authorization(
+    repository, monkeypatch, u4
+):
+    name = "p3-smoke-u4-r1" if u4 else "p3-smoke-u3-r1"
     registration, path = register(repository, purpose="smoke", name=name, committed=False)
     case = registration.cases[0]
     assert (case.case_id, case.seed, case.ticks, case.llm_actor_ids) == (
-        "p3-smoke-u3-r1.s1292387875",
+        f"{name}.s1292387875",
         1292387875,
         24,
         ["ella"],
@@ -409,12 +412,15 @@ def test_replacement_launcher_requires_explicit_committed_authorization(reposito
     assert registration.aggregate_caps.model_dump() == {
         "attempts": 34,
         "input_tokens": 1114112,
-        "output_tokens": 69632,
-        "micro_cny": 2785280,
+        "output_tokens": 69275 if u4 else 69632,
+        "micro_cny": 3000000 if u4 else 2785280,
     }
     assert launcher.validate_registration(repository, path) == registration
     root, approval = launcher.live_locations(repository)
-    store, original = completed_original_smoke(root, approval)
+    predecessor = completed_u4_predecessor if u4 else completed_original_smoke
+    store, original = predecessor(root, approval)
+    record_path = root / ("smoke-u4-replacement.json" if u4 else "smoke-replacement.json")
+    prior_record = (root / "smoke-replacement.json").read_bytes() if u4 else None
     old_hash = sha256(original.read_bytes()).hexdigest()
     locator = launcher.common_directory(repository) / "living-island-p3-enrollment.json"
     locator.write_bytes(
@@ -443,7 +449,7 @@ def test_replacement_launcher_requires_explicit_committed_authorization(reposito
         )
     with pytest.raises(AllocationError, match="ALLOCATION_UNAVAILABLE"):
         launcher.enroll_registration(repository, path)
-    assert not (root / "smoke-replacement.json").exists()
+    assert not record_path.exists()
 
     pilot_bytes = approval.read_bytes()
     assert (
@@ -456,7 +462,7 @@ def test_replacement_launcher_requires_explicit_committed_authorization(reposito
                 str(path),
                 "--registration-sha256",
                 digest,
-                "--original-allocation-sha256",
+                "--previous-allocation-sha256" if u4 else "--original-allocation-sha256",
                 old_hash,
             ]
         )
@@ -471,7 +477,9 @@ def test_replacement_launcher_requires_explicit_committed_authorization(reposito
     assert sha256(original.read_bytes()).hexdigest() == old_hash
 
     # The replacement case file and receipt alone cannot reach live preflight.
-    (root / "smoke-replacement.json").unlink()
+    if u4:
+        assert (root / "smoke-replacement.json").read_bytes() == prior_record
+    record_path.unlink()
     with pytest.raises(AllocationError, match="ALLOCATION_UNAVAILABLE"):
         launcher.run_registration(
             repository, path, case.case_id, repository / "replacement", live=True, ticks=1

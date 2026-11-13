@@ -455,6 +455,12 @@ must agree on issuance before dispatch. After issuance, missing files or
 an inconsistent original allocation refuse live access. Run/resume and replay
 cannot create an authorization or reconstruct one from retained checkpoints.
 
+**[CR-008]** The further linked case uses its own authorization and guard
+with the same CR-007 durable issuance protocol and shared lock. Its predecessor
+is the completed CR-007 allocation. Validate both settled predecessor ledgers,
+their linked authorization digests and the revised cumulative smoke envelope
+before binding or using the new allocation. Preserve prior records byte-for-byte.
+
 Hold an OS-managed exclusive process lock on that case's persistent lock file for
 the whole live execution, including provider IO, terminal logging, checkpoint writes
 and shutdown. Do not replace/unlink the locked file. Acquisition is nonblocking:

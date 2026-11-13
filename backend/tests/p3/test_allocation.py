@@ -23,6 +23,8 @@ from living_island.memory.p3_types import canonical_bytes
 from living_island.persistence.p3_allocation import (
     REPLACEMENT_SMOKE_CAPS,
     REPLACEMENT_SMOKE_CASE,
+    U4_SMOKE_CAPS,
+    U4_SMOKE_CASE,
     AllocationError,
     AllocationStore,
     CaseAllocationSession,
@@ -1097,3 +1099,204 @@ def test_replacement_competing_processes_share_the_enrollment_lock(tmp_path, com
         if first.poll() is None:
             first.kill()
             first.communicate(timeout=30)
+
+
+U4_PREVIOUS_SHA = "7e63f9d2fe41330f262e409bf942186aedbbfd5d829d65e54c5e580bb161081e"
+U4_REGISTRATION_SHA = "d" * 64
+
+
+def completed_u4_predecessor(root, approval):
+    store, original = completed_original_smoke(root, approval)
+    key = authorize_replacement(store, original, U4_PREVIOUS_SHA)
+    store.enroll_replacement_smoke(U4_PREVIOUS_SHA, REPLACEMENT_SMOKE_CASE, REPLACEMENT_SMOKE_CAPS)
+    fixture = Harness.__new__(Harness)
+    fixture.run = root.parent / "prior-replacement-run"
+    with store.open_case(key, LIVE_PRICE, None, fixture.verify) as session:
+        fixture.publish(session, 0, [])
+        debits = []
+        for index, output in enumerate((147, 210)):
+            call = f"test:d:ella:000000:a{index}"
+            reserve = session.admit(call, 24106, 2048, REQUEST, WIRE)
+            assert reserve is not None
+            debit = CallDebit(
+                call_id=call,
+                input_reserved=24106,
+                output_reserved=2048,
+                money_reserved=reserve.money_reserved,
+                input_reported=14562,
+                output_reported=output,
+                input_charged=14562,
+                output_charged=output,
+                money_charged=reserved_money(LIVE_PRICE, 14562, output),
+                usage_unknown=False,
+            )
+            debits.append(debit)
+        session.commit(DECISION, debits)
+        entries = [
+            entry.model_copy(
+                update={"state": "settled", "debit": debit, "terminal_call_sha256": TERMINAL}
+            )
+            for entry, debit in zip(session.snapshot().entries, debits, strict=True)
+        ]
+        fixture.publish(session, 24, entries, complete=True)
+    return store, store._path(key)
+
+
+@pytest.fixture
+def u4_history(tmp_path):
+    return completed_u4_predecessor(tmp_path / "authority", tmp_path / "approval.json")
+
+
+def authorize_u4(store, previous, digest=U4_REGISTRATION_SHA):
+    return store.authorize_replacement_smoke(
+        digest, hashlib.sha256(previous.read_bytes()).hexdigest(), u4=True
+    )
+
+
+def enroll_u4(store):
+    return store.enroll_replacement_smoke(U4_REGISTRATION_SHA, U4_SMOKE_CASE, U4_SMOKE_CAPS)
+
+
+def test_u4_replacement_issues_once_under_cumulative_envelope(u4_history):
+    store, previous = u4_history
+    retained = {path: path.read_bytes() for path in store.root.parent.rglob("*") if path.is_file()}
+    assert_code("ALLOCATION_UNAVAILABLE", lambda: enroll_u4(store))
+    assert_code(
+        "ALLOCATION_INTEGRITY",
+        lambda: store.authorize_replacement_smoke(U4_REGISTRATION_SHA, "f" * 64, u4=True),
+    )
+    assert_code("ALLOCATION_INTEGRITY", lambda: authorize_u4(store, previous, U4_PREVIOUS_SHA))
+    key = authorize_u4(store, previous)
+    assert_code("ALLOCATION_UNAVAILABLE", lambda: store._read_case(key))
+    assert_code("ALLOCATION_ALREADY_ENROLLED", lambda: authorize_u4(store, previous, "f" * 64))
+    assert_code(
+        "ALLOCATION_ALREADY_ENROLLED",
+        lambda: store.enroll_replacement_smoke(
+            U4_REGISTRATION_SHA, U4_SMOKE_CASE, REPLACEMENT_SMOKE_CAPS
+        ),
+    )
+    assert enroll_u4(store) == enroll_u4(store) == key
+    fixture = Harness.__new__(Harness)
+    fixture.run = store.root.parent / "u4-run"
+    with store.open_case(key, LIVE_PRICE, None, fixture.verify, offline_recovery=True):
+        pass
+    assert_code("ALLOCATION_ALREADY_ENROLLED", lambda: enroll_u4(store))
+    assert {path: path.read_bytes() for path in retained} == retained
+    assert len(list((store.root / "allocations").glob("*.json"))) == 3
+
+
+def test_u4_reservations_preserve_original_output_envelope(u4_history):
+    store, previous = u4_history
+    key = authorize_u4(store, previous)
+    assert enroll_u4(store) == key
+    fixture = Harness.__new__(Harness)
+    fixture.run = store.root.parent / "u4-run"
+    session = store.open_case(key, LIVE_PRICE, None, fixture.verify)
+    try:
+        fixture.publish(session, 0, [])
+        for index in range(33):
+            assert session.admit(f"test:d:ella:{index:06d}:a0", 32768, 2048, REQUEST, WIRE)
+        last = "test:d:ella:000033:a0"
+        assert session.admit(last, 32768, 2048, REQUEST, WIRE) is None
+        assert session.admit(last, 32768, 1691, REQUEST, WIRE)
+        assert session.admit("test:d:ella:000034:a0", 0, 0, REQUEST, WIRE) is None
+        entries = session.snapshot().entries
+        assert len(entries) == 34
+        assert sum(entry.reservation.output_reserved for entry in entries) == 69275
+        assert sum(entry.reservation.money_reserved for entry in entries) == 2782424
+    finally:
+        session.close(clean=False)
+
+
+@pytest.mark.parametrize(
+    "change", ["prior missing", "prior incomplete", "prior debit", "original", "prior guard"]
+)
+def test_u4_replacement_refuses_changed_predecessor(u4_history, change):
+    store, previous = u4_history
+    if change == "prior missing":
+        previous.unlink()
+    elif change == "prior guard":
+        store._replacement_guard().unlink()
+    else:
+        path = (
+            store._path(allocation_key(ORIGINAL_SMOKE_SHA, ORIGINAL_SMOKE_CASE))
+            if change == "original"
+            else previous
+        )
+        data = json.loads(path.read_bytes())
+        if change == "prior incomplete":
+            data["status"] = "running"
+        elif change == "prior debit":
+            data["entries"][-1]["debit"]["money_charged"] += 1
+        else:
+            data["generation"] += 1
+        path.write_bytes(canonical_bytes(data))
+    with pytest.raises(AllocationError):
+        store.authorize_replacement_smoke(U4_REGISTRATION_SHA, "f" * 64, u4=True)
+    assert not (store.root / "smoke-u4-replacement.json").exists()
+
+
+def test_u4_replacement_guard_survives_loss_of_new_case_and_primary(u4_history):
+    store, previous = u4_history
+    key = authorize_u4(store, previous)
+    enroll_u4(store)
+    store._path(key).unlink()
+    store._path(key).with_suffix(".lock").unlink()
+    (store.root / "smoke-u4-replacement.json").unlink()
+    assert_code("ALLOCATION_UNAVAILABLE", lambda: authorize_u4(store, previous))
+    assert_code("ALLOCATION_UNAVAILABLE", lambda: enroll_u4(store))
+    assert_code("ALLOCATION_UNAVAILABLE", lambda: store._read_case(key))
+
+
+@pytest.mark.parametrize(
+    "stage",
+    [
+        "replacement_bind:after_replace",
+        "replacement_guard_bind:after_replace",
+        "case_initialize:after_replace",
+        "replacement_issue:after_replace",
+        "replacement_guard_issue:after_replace",
+    ],
+)
+def test_u4_replacement_real_process_retry(u4_history, tmp_path, stage):
+    store, previous = u4_history
+    bind = stage.startswith(("replacement_bind:", "replacement_guard_bind:"))
+    if not bind:
+        authorize_u4(store, previous)
+    process = child(
+        tmp_path,
+        "def fault(stage):\n if stage == sys.argv[3]: os._exit(73)\n"
+        + _REPLACEMENT_CHILD_STORE
+        + ("authorize_u4(s, Path(sys.argv[4]))\n" if bind else "enroll_u4(s)\n"),
+        stage,
+        str(previous),
+    )
+    finish(process, 73)
+    key = authorize_u4(store, previous)
+    assert enroll_u4(store) == key
+    assert store._read_case(key).generation == 0
+    assert len(list((store.root / "allocations").glob("*.json"))) == 3
+
+
+def test_u4_replacement_uses_shared_enrollment_lock(u4_history, tmp_path):
+    store, previous = u4_history
+    process = child(
+        tmp_path,
+        "def fault(stage):\n if stage == 'replacement_bind:after_replace':\n"
+        "  print('HELD',flush=True)\n  sys.stdin.readline()\n"
+        + _REPLACEMENT_CHILD_STORE
+        + "authorize_u4(s, Path(sys.argv[3]))\n",
+        str(previous),
+    )
+    try:
+        assert process.stdout.readline().strip() == "HELD"
+        assert_code("ALLOCATION_BUSY", lambda: authorize_u4(store, previous, "f" * 64))
+        assert_code("ALLOCATION_BUSY", lambda: enroll_u4(store))
+        process.stdin.write("continue\n")
+        process.stdin.flush()
+        finish(process)
+        assert enroll_u4(store) == authorize_u4(store, previous)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate(timeout=30)

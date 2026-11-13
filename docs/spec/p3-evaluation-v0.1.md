@@ -501,6 +501,13 @@ remain in force. Apply the same exclusive enrollment, crash recovery and
 fail-closed issuance rules. The implementation approval alone gives no live
 authority. The final hashes and caps require explicit owner dispatch approval.
 
+**[CR-008]** One counter 0.4 smoke may follow the completed original and
+CR-007 cases. Their settled debits and the new caps must fit the cumulative
+smoke envelope. CR-008 raises only its attempt ceiling to 50. The new case
+caps are 34 attempts, 1114112 input tokens, 69275 output tokens and 3000000
+micro-CNY. The seed, horizon, resident assignment and per-request limits
+remain fixed. Require separate owner approval of the final execution pins.
+
 Prices/model availability and a proven input counter are live preflight requirements;
 changed pins never silently authorize extra spend. No live calls were made by this
 M8 documentation task.

@@ -54,6 +54,14 @@ _ORIGINAL_SMOKE_CHARGED = {
     "micro_cny": 909760,
 }
 _REPLACEMENT_RECORD = "smoke-replacement.json"
+U4_SMOKE_ID = "p3-smoke-u4-r1"
+U4_SMOKE_CASE = f"{U4_SMOKE_ID}.s{REPLACEMENT_SMOKE_SEED}"
+U4_SMOKE_CAPS = BudgetCaps(
+    attempts=34, input_tokens=1114112, output_tokens=69275, micro_cny=3000000
+)
+_U4_RECORD = "smoke-u4-replacement.json"
+_PRIOR_REPLACEMENT_REGISTRATION = "7e63f9d2fe41330f262e409bf942186aedbbfd5d829d65e54c5e580bb161081e"
+_PRIOR_REPLACEMENT_CHARGED = (2, 29124, 357, 61104)
 
 
 class AllocationError(ValueError):
@@ -468,10 +476,13 @@ class AllocationStore:
             return matches[0]
         if pilot is not None:
             replacement = self._replacement(pilot)
-            if replacement.binding.allocation_key == key and replacement.binding.state == "issued":
+            binding = replacement.binding
+            if binding.allocation_key != key:
+                binding = self._u4_replacement(pilot).binding
+            if binding.allocation_key == key and binding.state == "issued":
                 if not self._path(key).with_suffix(".lock").is_file():
                     _fail("ALLOCATION_UNAVAILABLE", "issued replacement lock is missing")
-                return replacement.binding
+                return binding
         _fail("ALLOCATION_UNAVAILABLE", "case has not been issued")
 
     def _read_case(self, key: str) -> CaseAllocationP3:
@@ -517,7 +528,7 @@ class AllocationStore:
         self, purpose: str, seed: int, registration_sha256: str, case_id: str, caps: BudgetCaps
     ) -> str:
         self._pilot()
-        if case_id == REPLACEMENT_SMOKE_CASE:
+        if case_id in {REPLACEMENT_SMOKE_CASE, U4_SMOKE_CASE}:
             _fail("ALLOCATION_UNAVAILABLE", "replacement requires linked authorization")
         key = allocation_key(registration_sha256, case_id)
         wanted = _Binding(
@@ -598,33 +609,105 @@ class AllocationStore:
             _fail("ALLOCATION_INTEGRITY", "replacement exceeds or disagrees with approved envelope")
         return case
 
-    def _replacement_guard(self) -> Path:
+    def _replacement_guard(self, filename: str = _REPLACEMENT_RECORD) -> Path:
         if self.approval_path is None:
             _fail("ALLOCATION_UNAVAILABLE", "replacement requires a live pilot")
-        return self.approval_path.with_name("smoke-replacement-guard.json")
+        return self.approval_path.with_name(f"{Path(filename).stem}-guard.json")
 
     def _replacement(self, pilot: _Pilot, *, for_enrollment: bool = False) -> _ReplacementSmoke:
-        record = _read(self.root / _REPLACEMENT_RECORD, _ReplacementSmoke)
         original = self._original_smoke(pilot)
+        return self._read_replacement(
+            pilot,
+            _REPLACEMENT_RECORD,
+            original,
+            REPLACEMENT_SMOKE_CASE,
+            REPLACEMENT_SMOKE_CAPS,
+            for_enrollment=for_enrollment,
+        )
+
+    def _u4_previous(self, pilot: _Pilot) -> CaseAllocationP3:
+        binding = self._replacement(pilot).binding
+        if (
+            binding.state != "issued"
+            or binding.registration_sha256 != _PRIOR_REPLACEMENT_REGISTRATION
+        ):
+            _fail("ALLOCATION_UNAVAILABLE", "prior replacement binding unavailable")
+        previous = self._bound_case(binding)
+        if (
+            previous.status != "complete"
+            or previous.head is None
+            or previous.head.checkpoint_tick != 24
+            or previous.head.reservation_cursor != len(previous.entries)
+            or previous.prepared_head is not None
+            or previous.pending_recovery_sha256 is not None
+        ):
+            _fail("ALLOCATION_INTEGRITY", "prior replacement must be settled and complete")
+        ledger = ledger_from_entries(previous.allocation_key, previous.caps, previous.entries)
+        charged = (
+            ledger.attempts_charged,
+            ledger.input_charged,
+            ledger.output_charged,
+            ledger.money_charged,
+        )
+        envelope = self._original_smoke(pilot).caps.model_dump()
+        envelope["attempts"] = 50
+        if charged != _PRIOR_REPLACEMENT_CHARGED or any(
+            _ORIGINAL_SMOKE_CHARGED[field] + used + getattr(U4_SMOKE_CAPS, field) > envelope[field]
+            for field, used in zip(
+                ("attempts", "input_tokens", "output_tokens", "micro_cny"), charged, strict=True
+            )
+        ):
+            _fail(
+                "ALLOCATION_INTEGRITY", "U4 replacement exceeds or disagrees with approved envelope"
+            )
+        return previous
+
+    def _u4_replacement(self, pilot: _Pilot, *, for_enrollment: bool = False) -> _ReplacementSmoke:
+        return self._read_replacement(
+            pilot,
+            _U4_RECORD,
+            self._u4_previous(pilot),
+            U4_SMOKE_CASE,
+            U4_SMOKE_CAPS,
+            for_enrollment=for_enrollment,
+        )
+
+    def _read_replacement(
+        self,
+        pilot: _Pilot,
+        filename: str,
+        previous: CaseAllocationP3,
+        case_id: str,
+        caps: BudgetCaps,
+        *,
+        for_enrollment: bool,
+    ) -> _ReplacementSmoke:
+        record = _read(self.root / filename, _ReplacementSmoke)
         binding = record.binding
         if (
             record.authority_root != _locator(self.root)
-            or record.original_allocation_key != original.allocation_key
-            or record.original_allocation_sha256 != canonical_sha256(original)
-            or binding.case_id != REPLACEMENT_SMOKE_CASE
-            or binding.registration_sha256 == original.registration_sha256
-            or binding.caps != REPLACEMENT_SMOKE_CAPS
+            or record.original_allocation_key != previous.allocation_key
+            or record.original_allocation_sha256 != canonical_sha256(previous)
+            or binding.case_id != case_id
+            or binding.registration_sha256 == previous.registration_sha256
             or any(
-                slot.binding is not None and slot.binding.allocation_key == binding.allocation_key
+                slot.binding is not None
+                and (
+                    slot.binding.allocation_key == binding.allocation_key
+                    or slot.binding.registration_sha256 == binding.registration_sha256
+                )
                 for slot in pilot.slots
             )
+            or binding.caps != caps
         ):
             _fail("ALLOCATION_INTEGRITY", "replacement authorization mismatch")
-        guard = _read(self._replacement_guard(), _ReplacementSmoke)
-        if guard != record:
-            # The primary record is marked issued before its independent guard.
-            if not for_enrollment or guard != self._with_replacement_state(record, "initializing"):
-                _fail("ALLOCATION_INTEGRITY", "replacement guard mismatch")
+        guard = _read(self._replacement_guard(filename), _ReplacementSmoke)
+        if guard != record and not (
+            for_enrollment
+            and binding.state == "issued"
+            and guard == self._with_replacement_state(record, "initializing")
+        ):
+            _fail("ALLOCATION_INTEGRITY", "replacement guard mismatch")
         return record
 
     @staticmethod
@@ -636,35 +719,48 @@ class AllocationStore:
         )
 
     def authorize_replacement_smoke(
-        self, registration_sha256: str, original_allocation_sha256: str
+        self, registration_sha256: str, original_allocation_sha256: str, *, u4: bool = False
     ) -> str:
         """Bind an explicitly approved registration before its separate enrollment."""
         with _ProcessLock(self.root / "enrollment.lock"):
             pilot = self._pilot()
-            original = self._original_smoke(pilot)
-            if canonical_sha256(original) != original_allocation_sha256:
-                _fail("ALLOCATION_INTEGRITY", "approved original allocation hash differs")
-            if registration_sha256 == original.registration_sha256:
+            previous = self._u4_previous(pilot) if u4 else self._original_smoke(pilot)
+            if canonical_sha256(previous) != original_allocation_sha256:
+                _fail("ALLOCATION_INTEGRITY", "approved previous allocation hash differs")
+            if registration_sha256 == previous.registration_sha256 or any(
+                slot.binding is not None and registration_sha256 == slot.binding.registration_sha256
+                for slot in pilot.slots
+            ):
                 _fail("ALLOCATION_INTEGRITY", "replacement must have a distinct registration")
-            key = allocation_key(registration_sha256, REPLACEMENT_SMOKE_CASE)
+            filename = _U4_RECORD if u4 else _REPLACEMENT_RECORD
+            case_id = U4_SMOKE_CASE if u4 else REPLACEMENT_SMOKE_CASE
+            caps = U4_SMOKE_CAPS if u4 else REPLACEMENT_SMOKE_CAPS
+            key = allocation_key(registration_sha256, case_id)
             binding = _Binding(
                 registration_sha256=registration_sha256,
-                case_id=REPLACEMENT_SMOKE_CASE,
+                case_id=case_id,
                 allocation_key=key,
-                caps=REPLACEMENT_SMOKE_CAPS,
+                caps=caps,
                 state="initializing",
             )
             expected = _ReplacementSmoke(
                 replacement_version="0.1",
                 authority_root=_locator(self.root),
-                original_allocation_key=original.allocation_key,
+                original_allocation_key=previous.allocation_key,
                 original_allocation_sha256=original_allocation_sha256,
                 binding=binding,
             )
-            path = self.root / _REPLACEMENT_RECORD
-            guard_path = self._replacement_guard()
+            path = self.root / filename
+            guard_path = self._replacement_guard(filename)
             if guard_path.exists():
-                record = self._replacement(pilot, for_enrollment=True)
+                record = self._read_replacement(
+                    pilot,
+                    filename,
+                    previous,
+                    case_id,
+                    caps,
+                    for_enrollment=True,
+                )
                 if self._with_replacement_state(record, "initializing") != expected:
                     _fail("ALLOCATION_ALREADY_ENROLLED", "replacement already bound")
                 if record.binding.state == "issued":
@@ -672,6 +768,7 @@ class AllocationStore:
                 return key
 
             existing = {s.binding.allocation_key for s in pilot.slots if s.binding is not None}
+            existing.add(previous.allocation_key)
             if any(
                 file.stem not in existing
                 for file in self._path(key).parent.iterdir()
@@ -693,7 +790,13 @@ class AllocationStore:
     ) -> str:
         """Issue only the exact bound replacement, once, under the existing lock."""
         with _ProcessLock(self.root / "enrollment.lock"):
-            record = self._replacement(self._pilot(), for_enrollment=True)
+            pilot = self._pilot()
+            if case_id == U4_SMOKE_CASE:
+                record = self._u4_replacement(pilot, for_enrollment=True)
+                filename = _U4_RECORD
+            else:
+                record = self._replacement(pilot, for_enrollment=True)
+                filename = _REPLACEMENT_RECORD
             binding = record.binding
             if (binding.registration_sha256, binding.case_id, binding.caps) != (
                 registration_sha256,
@@ -713,12 +816,12 @@ class AllocationStore:
                 self._initial_case(binding)
                 issued = self._with_replacement_state(record, "issued")
                 _atomic_write(
-                    self.root / _REPLACEMENT_RECORD,
+                    self.root / filename,
                     canonical_bytes(issued),
                     self.fault,
                     "replacement_issue",
                 )
-            guard_path = self._replacement_guard()
+            guard_path = self._replacement_guard(filename)
             if _read(guard_path, _ReplacementSmoke) != issued:
                 _atomic_write(
                     guard_path, canonical_bytes(issued), self.fault, "replacement_guard_issue"
