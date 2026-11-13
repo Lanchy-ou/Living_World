@@ -166,14 +166,15 @@ intents. The principal island trial retains the actual frozen rule policies.
 
 ## Integrated executor checks
 
-The full command is now running; no full-suite PASS is claimed yet:
+The full executor command exited 0:
 
 ```sh
 uv run --directory backend pytest --basetemp ../runs/p305-final-full-20261113 --junitxml ../runs/p305-final-full-20261113.xml
 ```
 
-It collected 1596 items, including the three existing opt-in development skips.
-The following final-code checks have already exited 0:
+**1593 passed, 3 existing opt-in development skips, in 1812.66 seconds**.
+The JUnit record is `runs/p305-final-full-20261113.xml`. The complete 50-task
+subset also passed in this run. The following final-code checks exited 0:
 
 | Check | Result |
 | --- | --- |
@@ -186,7 +187,7 @@ The following final-code checks have already exited 0:
 | `pnpm --dir frontend build` | PASS |
 | `uv run --directory backend python ../scripts/gen_types.py` | PASS |
 | `git diff --exit-code -- frontend/src/api/generated` | PASS; unchanged |
-| Local Markdown file links | PASS; 37 across 5 changed documents, plus new upstream handoff anchor |
+| Local Markdown file links | PASS; 38 across 5 changed documents, plus upstream handoff anchor |
 | `git diff --check` / committed working-tree diff | PASS at this checkpoint |
 
 ## Frozen compatibility evidence
@@ -206,8 +207,18 @@ Exit 0: tick 1008, 14351 events, 1305 decisions. Every published P2 reference ma
 | Final world | `5efcf3eab02db3928bc55e4a226327acde2bbfee54abc898f7649d6e4302382c` |
 | Replay | `720bccc76cb1c3baff78a74bec7703e76764be777713b43df6e30d297f9d36e8` |
 
-P1 reference verification will be recorded from the full executor suite. No
-reference, scenario, world, rule-policy or generated frontend source is edited.
+The full-suite P1 fixture also completed its original 1008-tick reference run.
+All four published hashes match exactly; its twin/resume/reexecution assertions
+are included in the complete executor result above.
+
+| P1 artifact | SHA-256 |
+| --- | --- |
+| Events | `2d68a49b495e46a150322711bc8fbb38779ad947c4345ec0f11c89bd08d03287` |
+| Decisions | `ee614c057b02d65b67ee6ff5336e17434ab4aeb6026c710f853d7d599c36e4bd` |
+| Final world | `113483069d74936a3fa5ecf0f719405dc7499698fc851cdc4b992a84e25357ed` |
+| Replay | `8e26d853b6bf324fa4a375f0edfca526c09754b78d7eaee9b96c615464dbfb83` |
+
+No reference, scenario, world, rule-policy or generated frontend source is edited.
 
 ## Registered full offline launcher proof
 
@@ -261,8 +272,8 @@ This fake authority does not enroll any M8 live slot.
 
 ## Registered live command and results
 
-The smoke is prepared but NOT_RUN. Offline full-suite completion remains a
-prerequisite. Its immutable registration is
+The smoke is prepared but NOT_RUN at this checkpoint. Offline full-suite and
+all plan executor checks have passed. Its immutable registration is
 [development/p3-smoke-r1.json](../../../content/experiments/p3/development/p3-smoke-r1.json),
 canonical/file SHA-256
 `dcb337f07601f6c1b1abe9fd0a61f410a713a6caf26bcc7e4e7cf0d25e65ca5f`.
