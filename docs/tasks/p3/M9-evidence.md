@@ -932,3 +932,62 @@ context audit confirmed unchanged projections and resident memory. The
 [U4 repair handoff](P305-U4.md#offline-repair-by-p3-04) records the proof
 and independent Gate 2. The historical replacement result remains V-05
 FAIL. This follow-up has no live trial result or M9 acceptance.
+
+## CR-008 counter 0.4 smoke approval candidate
+
+The owner approved offline implementation of a second linked smoke
+authorization, with a cumulative limit of 50 attempts and the original
+CNY150 pilot ceiling. The final live dispatch decision remains pending.
+The original and CR-007 smoke results remain V-05 FAIL.
+
+| Pin | Approval candidate |
+| --- | --- |
+| Execution implementation | `506cfaf65db92fd2079bd36a2a906100ac55d2d7` |
+| Registration commit | `8fb5a74ae519629d4377b1e1a1573b692645232f` |
+| Registration / revision | `p3-smoke-u4-r1` / schema 0.1, revision 1 |
+| Canonical registration SHA-256 | `9bc3e90bf3bbc05f01acc96029f15f85aa1c8a000bc943e6d4357a3fb0428017` |
+| Case / seed / ticks | `p3-smoke-u4-r1.s1292387875` / 1292387875 / 24 |
+| Primary LLM actor | Ella only |
+| Counter / adapter / schema | `deepseek-flash1017-byte-upper-bound/0.4`, `deepseek-responses-v0/0.4`, `p3-actions/0.2` |
+| Completed CR-007 allocation SHA-256 | `e15e7e4f5121111ff1bd7e12928e8309ae94ed3e9d738a30dad2376f2f061795` |
+| Proposed allocation key | `3e015f153820e0f2ff2b5b95cdd4bdb1cf88705b9bdefbd1d7f835af80bfccbd` |
+
+| Envelope | Attempts | Input tokens | Output tokens | micro-CNY |
+| --- | ---: | ---: | ---: | ---: |
+| Original and CR-007 settled charges | 16 | 369316 | 29029 | 970864 |
+| Proposed new case caps | 34 | 1114112 | 69275 | 3000000 |
+| Combined upper admission envelope | 50 | 1483428 | 98304 | 3970864 |
+
+The pilot ceiling remains 150000000 micro-CNY, with 149029136 currently
+unspent and 146029136 after the new maximum. The 145000000 micro-CNY
+for the other five slots stays intact. The new output allowance
+preserves the original cumulative 98304-token envelope. Each dispatch
+reserves up to 2048 output tokens, so the output cap can prevent the
+34th attempt if prior attempts leave fewer than 2048. At pinned prices
+the proposed token caps imply at most 2782424 micro-CNY in normal
+reservations; the monetary admission cap remains 3000000 micro-CNY.
+Provider-reported overrun handling remains unchanged.
+
+Gate 1 passed 1705 tests with three existing skips. Static, frontend and
+generated-type checks passed. Fresh P1/P2 artifacts matched all eight
+published hashes. Independent Gate 2 passed the 48 focused and 54 existing
+allocation checks, independently reproduced the final registration hash
+and matched all 196 historical snapshot digests.
+
+No-dispatch validation passed. The pure first-request probe returned
+24106 input tokens, 2048 reserved output tokens and 64596 micro-CNY.
+There is no real U4 authorization or allocation. See the
+[P305-R2 handoff](P305-R2.md#handoff).
+
+After approval, the launcher can bind this registration through
+`authorize-replacement` with the exact registration digest and
+`--previous-allocation-sha256` above, then enroll it in the existing
+shared authority. Use a fresh output location. Inspect the first tick's
+attempts, proposal, reported usage and settled ledger before live
+continuation. Pause at each later tick boundary to check for schema
+rejection and input-limit refusal before further live continuation.
+The existing transaction can retry within one tick; record every such
+attempt. On a stop condition, preserve the partial live record and
+use the recorded offline recovery path as applicable. Reexecute the
+retained result with raising external-access sentinels. Final reporting
+will distinguish technical completion, V-05 and owner M9 disposition.
