@@ -91,3 +91,26 @@ intents for the other actors. Its world oracles correspond to
 `backend/tests/invariants/test_legal_physical_sequences.py::test_item_5_give_needs_an_adjacent_recipient_and_owned_items`.
 The new seam feeds their actual engine boundary deliveries into P3 ingestion; it
 does not synthesize successful or failed transfer feedback.
+
+## CR-006 schema 0.2 fixture
+
+`slice_smoke_tape.json` remains the historical 0.1 tape, and the two old
+registrations retain their original implementation and input pins. The current
+adapter refuses the old schema. Historical validation and replay use the exact
+pinned implementation as recorded in [M9 evidence](../../../../../docs/tasks/p3/M9-evidence.md).
+
+`slice_smoke_schema02_tape.json` contains 24 separate offline test steps
+(3353152 bytes, SHA-256
+`ccc5f2c0bc3c1ac5374a867bcea79ea3bfc15a491be80f0debdf718d83919056`).
+The new fixture copies the old user messages, scripted input units and mapped
+local responses. It substitutes the current canonical action contract in the
+system message and response schema and renders each wire through the production
+adapter. The retained fake units remain explicit integers for the new fixture.
+The arithmetic rule described above was used when authoring the historical
+tape. Production token admission is independently verified by the P3-04 tests.
+
+The principal test uses the new `p3-slice-fake-schema02-r1` test registration
+with the new fixture pinned to the executing commit. It verifies all 24 wire
+envelopes, completes 24 ticks on the frozen island, and reexecutes the entire
+run with raising sentinels and byte-identical outputs. The tests also pin the
+old tape hash and exercise refusal of its schema under the new adapter.

@@ -1,7 +1,8 @@
 # M9 evidence: one-resident P3 integration
 
-Status: READY_FOR_REVIEW. Full task/M9 acceptance is blocked by P305-U3; this
-sheet preserves the failed live case and prepares owner review, not acceptance. P3-07 inspection export/UI remains pending and is not claimed as PV-07 PASS.
+Status: READY_FOR_REVIEW. CR-006 offline integration is recorded below. The
+original smoke failed V-05. A replacement trial awaits an allocation disposition
+and owner approval. M9 and P3-07 inspection export/UI remain pending.
 
 ## Authority and scope
 
@@ -620,3 +621,114 @@ of U3, as recorded above. A future
 smoke needs a centrally approved schema correction and explicit replacement-trial
 disposition; the consumed slot cannot be reset or silently reused. No main merge
 or P3-06 start is authorized by this task.
+
+## CR-006 integration and replacement smoke proposal (2026-11-13)
+
+The continuation branch `task/P3-05-u3-finish` starts at `f84aaae`. It applies
+the complete P3-02 U3 delivery `2b198ad` (including the allocation and
+persistence test fixture pins), P3-04's U3-only verification changes through
+`8102eb3`, and central disposition `cd5ca0d`. The P3-04 U2 production adapter
+and counter were already in the base. Source and tests for the three imported
+deliveries were checked against the relevant upstream Git blobs. The only
+production changes are the approved P3-02 action contract and version pins.
+
+The first independent review of `60fe91e` reproduced a failing full-horizon slice
+test using the historical 0.1 tape with the new adapter. Correction
+`0ffa1f87a4d85511909c389ccf151e5f1407d79b` gives the test a separate 0.2 tape
+and exercises explicit refusal of the original tape by the 0.2 adapter. The
+new tape and test do not replace either historical registration. See the
+[fixture provenance](../../../backend/tests/fixtures/p3/one_resident/slice_provenance.md).
+
+### Proposed registration and code pins
+
+| Pin | Proposed value |
+| --- | --- |
+| Reviewed offline implementation candidate | `0ffa1f87a4d85511909c389ccf151e5f1407d79b` |
+| Draft registration schema / revision / ID | `0.1` / `1` / `p3-smoke-u3-r1` |
+| Draft registration SHA-256 | `5177a9a069d5e06a3f2d0e4622a6c6be73b5d5494cea820c19189ee01f1c6bd1` |
+| Case and horizon | `p3-smoke-u3-r1.s1292387875`, seed 1292387875, 24 ticks |
+| Primary policies | Ella `llm-v0`; Mia and Ryan `rule-based-v0` |
+| World source | `7c13d78ffd7d89006f6008c8a09f37ae97c253db` |
+| World config / map SHA-256 | `03ae94b16856119b34286292b3e7b276bece3f887aeb9b7fd49cfbc05f6da0cc` / `007a113879e45ceea908306b00606d3c6bc9dc516632939fd13023563bff1a9c` |
+| Action contract | `p3-actions/0.2`, SHA-256 `bf8afebe7d4d494def9cdc8c3b7a9514e868b1f82ae9f1ad8de968d38c0aaa14` |
+| Prompt and context | `p3-resident/0.1`, SHA-256 `7122e5bb50194db0251afe18d4b194e0d15e63dc9699ffa079545ed341eed9a1`, `p3-context-v0` |
+| Model, adapter and counter | `deepseek-flash` / `DeepSeek-V4.1-Flash-1017`; `deepseek-responses-v0/0.4`; `deepseek-flash1017-byte-upper-bound/0.3` |
+
+The draft hash is the canonical `TrialRegistration` built by
+`build_registration(repository, "0ffa1f87a4d85511909c389ccf151e5f1407d79b",
+purpose="smoke", registration_id="p3-smoke-u3-r1")` with both the single case
+and aggregate caps set to the proposed row below before validation and canonical
+serialization. The draft conforms to the DTO. The current launcher validates
+against the original M8 caps and cannot enroll the draft. The approved authority
+implementation will change source pins, so its final immutable registration
+bytes, exact code SHA and hash require a new review and explicit dispatch
+approval. No live registration was created or enrolled in this continuation.
+
+The credential-free initial preflight measured 24106 reserved input tokens, 2048
+reserved output tokens and 64596 micro-CNY. Public model/version, peak pricing
+and Responses metadata were checked against the registered assumptions. The
+peak uncached rates are CNY2 input and CNY8 output per million tokens. Refresh
+metadata at live startup under the final pins. Hosted schema acceptance remains
+untested. [DeepSeek model and pricing](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)
+and [Responses API](https://api-docs.deepseek.com/api/create-response/).
+
+### Budget and upstream disposition
+
+| Amount | Attempts | Input tokens | Output tokens | micro-CNY |
+| --- | ---: | ---: | ---: | ---: |
+| Original issued smoke caps | 48 | 1572864 | 98304 | 5000000 |
+| Original settled debits (all usage unknown) | 14 | 340192 | 28672 | 909760 |
+| Arithmetic balance of original smoke envelope | 34 | 1232672 | 69632 | 4090240 |
+| Proposed replacement hard caps | 34 | 1114112 | 69632 | 2785280 |
+| Cumulative smoke exposure at replacement cap | 48 | 1454304 | 98304 | 3695040 |
+
+The original allocation is complete at generation 2. The original provider
+invoice remains unknown. Under the pinned peak prices a maximal attempt costs
+`32768 * 2 + 2048 * 8 = 81920` micro-CNY. The proposed money cap covers 34 such
+attempts. A case with 24 first attempts has ten additional attempts available.
+A budget refusal or excess fallback can still fail V-05.
+
+The total ceiling remains 150000000 micro-CNY (CNY150). The only issued
+allocation is the old smoke. The other five bindings are null and their caps
+sum to 145000000 micro-CNY. The current headroom after booked spend is
+149090240 micro-CNY (CNY149.09024). After the proposed maximum additional
+spend, headroom would be 146304960 micro-CNY (CNY146.30496), including the
+145000000 micro-CNY for the other five slots. The remaining 1304960 micro-CNY
+within the smoke envelope would remain unused. The current arithmetic
+balance carries no dispatch authority.
+
+Current M8 and the 0.1 authority fix six once-only bindings. The original
+smoke binding is issued and complete. A different registration for its purpose
+and seed fails closed. Request an explicit owner disposition for the evaluation
+and persistence owners to implement one linked, once-only replacement within
+the existing smoke envelope. Preserve the original approval, registration,
+allocation, logs and failure receipts byte-for-byte. The replacement record
+should bind the immutable old allocation and settled debits, and the new
+registration and hard caps in the same repository-wide authority. Review the
+effective combined caps, duplicate/concurrent refusal and crash recovery before
+final registration. The alternatives of resetting the old slot or creating an
+independent pilot would invalidate the original accounting constraints.
+This change requires an upstream change request and review. CR-006's offline
+approval does not authorize it.
+
+### Conditional trial and reporting
+
+After upstream review and explicit owner approval of the final pins and hard
+caps, validate and enroll once. Use new output and receipt paths for the
+replacement case. Run the same 24-tick registration with an initial
+`run --ticks 1` pause, then inspect Ella's first decision and settled ledger
+before any live continuation. The pinned transaction policy permits up to two
+attempts in that decision. If the schema rejection recurs or admission/authority
+fails, stop live dispatch and preserve the partial evidence. Upon successful
+preflight and first decision, resume the same allocation to the registered
+horizon, with zero additional paid probe or grant. Reexecute retained inputs
+with raising provider, fallback and allocation sentinels and verify all five
+logs, final checkpoint, trace and replay across the lineage.
+
+Report Ella's accepted/L, fallback/L, wait/L, rejected/dispatched,
+unknown-usage/dispatched, reported usage, conservative ledger charges, invoice
+if known, and technical validity. V-05 requires `L > 0` and
+`5 * accepted >= 4 * L`, zero wait substitutions and zero evidence/privacy
+violations. Mia and Ryan's deliberate rule decisions are excluded. Preserve the
+original failure and label the replacement result independently. M9 disposition
+belongs to the owner.
