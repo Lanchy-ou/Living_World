@@ -119,8 +119,9 @@ The five inserted registered tokens and IDs in the exact tokenizer are BOS
 128803, ASSISTANT `<｜Assistant｜>` / 128804 and THINKING_END `</think>` / 128822.
 They are registered single IDs; only BOS has the tokenizer JSON `special=true`
 flag. Recipe's [prompt tokenizer](recipe-tokenizer.rs.txt) selects one ID for each
-explicit structural span and disables added vocabulary on ordinary spans. Literal marker text
-inside a message remains ordinary text and receives the full byte allowance.
+explicit structural span and disables added vocabulary on ordinary spans. Literal
+marker text inside a message is counted by the ordinary-text bound, never as an
+inserted structural token.
 
 ### Tokenizer nonexpansion proof
 
