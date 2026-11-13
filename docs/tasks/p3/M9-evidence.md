@@ -103,49 +103,65 @@ independent Gate 2 will review those results before owner M9 review.
 
 ## Offline integration and tests
 
-Pending implementation results. Required evidence includes the one-Ella complete
-loop, real frozen-rule fallback and return, goal revise/continue/abandon and own
-feedback, failed physical actions, private-state isolation, active/queued living
-resume, budget/case ownership and no-call replay with raising external-port sentinels.
-The [fixture provenance and VF-01..19 map](../../../backend/tests/fixtures/p3/one_resident/slice_provenance.md)
-identifies named integration and inherited owner tests. The original 14-case author
-run had 13 passes and one frozen-DTO test-construction failure. The corrected
-negative case and newly added actual-engine VF-17 transfer case both pass; the
-independent reviewer reproduced the same results and closed both findings. This
-is passing evidence for 15 distinct cases across runs, not a claim of a single
-final integrated suite run.
+The exact integrated task command exited 0:
 
-The principal source run completed 24 ticks: Ella 24 accepted fake decisions,
-Mia 21 and Ryan 22 deliberate frozen-rule decisions, zero substitutions, 240
-charged fake input units, 480 fake output units and zero micro-CNY. Raising
-provider/fallback/authority sentinels reproduced its checkpoint, trace and all
-five logs exactly. Its source artifacts are retained in the author's isolated
-worktree under `runs/p305-slice-final-01/test_frozen_smoke_world_one_mo0/run`;
-recorded output is its sibling `recorded/segment-0000`. Full launcher execution
-with a committed closed-tape registration is still required before live smoke.
+```sh
+uv run --directory backend pytest tests/p3/test_one_resident.py tests/p3/test_trial_registration.py --basetemp ../runs/p305-integrated-task-20261113 --junitxml ../runs/p305-integrated-task-20261113.xml
+```
 
-The launcher author passed the original 33-case recovery suite on `7150bbc`,
-then five affected/new completion vectors on `cdab3cf`. The final suite has 35
-cases. Process-crash mechanics use an explicitly registered two-tick, zero-money
-fake case; this does not shorten the required 24-tick smoke or principal fake run.
+**50 passed in 1482.86 seconds**: 15 slice tests and 35 launcher tests. The
+[fixture provenance and VF-01..19 map](../../../backend/tests/fixtures/p3/one_resident/slice_provenance.md)
+identifies the integration seams and inherited owner vectors. Actual engine
+request/accept/failure/receipt/success feedback now proves that only the exact
+resident's successful give completes its give goal. Conflicting resident stores,
+unheard claims, malformed replies, retry limits, money one micro-CNY below a
+reservation, unknown usage, rule fallback/return, death, active/queued plans,
+repeated zero-tick continuation, corrupted checkpoints and external-port replay
+sentinels are covered.
 
-Current executor checkpoint (before final slice and upstream counter integration):
-`test_reexecution.py` passed 8 tests in 180.89 seconds; the launcher author's
-`test_trial_registration.py` passed 24 tests in 132.17 seconds. Backend Ruff,
-format check, Mypy (88 source files), all eight import contracts, frontend
-lint/typecheck/build and frozen type-generation comparison passed. These are
-intermediate checks, not the final candidate's full-suite result. The initial
-misspelled path `tests/p3/test_reexecute.py` collected no tests (exit 1); it was
-corrected to `test_reexecution.py` before the eight-test successful run.
+Real subprocess crash tests cover invocation/initial-publication/receipt stages,
+complete-authority finalization, prepared-final reconciliation and a crashed
+resume before ownership moves. They use an explicitly registered two-tick,
+zero-money fake case for their focused mechanical oracle. The principal frozen
+world and the separately registered full launcher proof both retain all 24 ticks.
+The once-only six-slot and BD-18..27 regression vectors remain in the full suite.
 
-The replay exporter validates checkpoint schemas, input and committed log prefixes,
-lineage, frame/event cardinality and the final trace identity. It does not provide
-an independent cryptographic seal on every intermediate world or semantically
-reexecute the engine during export. The reviewer demonstrated that a same-prefix,
-valid-shape intermediate health edit is outside those structural checks. This is
-the frozen display-contract trust boundary, not a claimed rejection guarantee.
-M9's stronger evidence is an exact comparison of the complete source export with
-the independently recorded-reexecuted export using raising external-port sentinels.
+Earlier author/reviewer runs exposed a frozen-message test-construction error;
+it was corrected with model_copy, not a DTO change. The integrated 50-case result
+above supersedes the earlier split-run evidence. Independent review also closed
+the added actual-engine VF-17 gap.
+
+The replay exporter checks schemas, retained inputs/log prefixes, lineage,
+frame/event cardinality and final trace identity. It does not independently seal
+every intermediate world or reexecute the engine during export. A same-prefix,
+valid-shape intermediate world edit is outside those structural checks. M9's
+stronger proof compares the full source export with the independently recorded-
+reexecuted export using raising provider/fallback/authority sentinels.
+
+## Integrated executor checks
+
+The full command is now running; no full-suite PASS is claimed yet:
+
+```sh
+uv run --directory backend pytest --basetemp ../runs/p305-final-full-20261113 --junitxml ../runs/p305-final-full-20261113.xml
+```
+
+It collected 1596 items, including the three existing opt-in development skips.
+The following final-code checks have already exited 0:
+
+| Check | Result |
+| --- | --- |
+| `uv run --directory backend ruff check . ../scripts/p3_trials.py` | PASS |
+| `uv run --directory backend ruff format --check . ../scripts/p3_trials.py` | PASS; 159 files |
+| `uv run --directory backend mypy src` | PASS; 88 source files |
+| `uv run --directory backend lint-imports --no-cache` | PASS; all 8 contracts kept |
+| `pnpm --dir frontend lint` | PASS |
+| `pnpm --dir frontend typecheck` | PASS |
+| `pnpm --dir frontend build` | PASS |
+| `uv run --directory backend python ../scripts/gen_types.py` | PASS |
+| `git diff --exit-code -- frontend/src/api/generated` | PASS; unchanged |
+| Local Markdown file links | PASS; 37 across 5 changed documents, plus new upstream handoff anchor |
+| `git diff --check` / committed working-tree diff | PASS at this checkpoint |
 
 ## Frozen compatibility evidence
 
@@ -183,8 +199,39 @@ have each exited 0. The following exact run is recorded before execution:
 uv run --directory backend python ../scripts/p3_trials.py run --registration ../content/experiments/p3/development/p3-05-fake-r1.json --case p3-05-fake-r1.s1292387875 --out ../runs/p3/p3-05-fake-r1/first --fake-authority ../runs/p305-fake-authority-20261113 --tape tests/fixtures/p3/one_resident/slice_smoke_tape.json
 ```
 
-Full launcher completion, immutable receipt, export and sentinel replay results
-remain pending. This fake authority does not enroll any M8 live slot.
+The full run exited 0 at tick 24. The complete receipt records execution commit
+`f895d7609de371ffe64e41298a0a92d879e40027`; receipt SHA-256 is
+`6bbd50e54bf16d4d402e5a4e6b92dd50f19cdb2962d19628f98b677c054645bf`.
+Its allocation is complete, with exactly the checkpoint's allocation entries and
+matching head/hash. Totals: 447 events, 67 decisions, 24/24 accepted Ella model
+choices, 43 deliberate rule choices, zero fallback/wait substitutions, 24 fake
+attempts, 240 input units, 480 output units, zero unknown usage and zero micro-CNY.
+These are explicitly fake units and responses, not production usage or invoices.
+
+Recorded replay also exited 0:
+
+```sh
+uv run --directory backend python ../scripts/p3_trials.py replay --source-run ../runs/p3/p3-05-fake-r1/first --out ../runs/p3/p3-05-fake-r1/recorded
+```
+
+All five logs, final checkpoint, trace and replay.json are byte-identical. The
+25 frames cover ticks 0..24 and their event list equals events.jsonl. Hashes of
+all 43 source files and all five isolated-authority files are unchanged. Raising
+provider, fallback and authority sentinels were untouched. Audit details are
+retained locally in `runs/p305-registered-fake-audit.json`.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Events | `5e7bff239a44c91e8a91309cc6a126975b4591caa237db4d6ae9a44c58adb971` |
+| Decisions | `959ac11d832932ec9665eb833e0a9c15670b96884578564ee4745fb0bd523af3` |
+| Contexts | `070df33e1bb29599add7ddaba33093e18aac53f2a2ba0e30804c2bcf44d37980` |
+| Dispatches | `265b34f0675e0982b2bc9c97b599fbc4fc794842d6e0d626fd732fc6b2ece662` |
+| Calls | `ece18981ac32439862e7fc9f37206a850c313935663eb91ed6651fa0ca0f6804` |
+| Final checkpoint | `6332fdd74ee5df9fabfe614bc3e23f0a936a70c0cc789873f6783ffe0fa394f8` |
+| Trace | `944931537eea6d7871c57d79e4a768d8d03be9dcfe997d052cb1a59645d067e3` |
+| Replay | `952961d0a119d58b93790cdf59bdcaa55bc2b43bde381bc064ead8465061d193` |
+
+This fake authority does not enroll any M8 live slot.
 
 ## Registered live command and results
 
