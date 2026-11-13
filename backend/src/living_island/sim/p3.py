@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import cache
 from hashlib import sha256
 from pathlib import Path
 
@@ -45,8 +47,18 @@ from living_island.contract.p3_save import (
     TrialCase,
     TrialRegistration,
 )
+from living_island.contract.projections import project_frame
+from living_island.contract.replay import (
+    ConditionBounds,
+    LegendEntry,
+    ReplayBundle,
+    ReplayClock,
+    ReplayMap,
+    ReplayResident,
+)
 from living_island.contract.save import DeliveryCursor
 from living_island.memory.p3_types import RetrievalSelector, canonical_bytes, canonical_sha256
+from living_island.persistence._files import atomic_create
 from living_island.persistence.content import load_run_content
 from living_island.persistence.p3 import (
     P3Journal,
@@ -73,6 +85,7 @@ from living_island.world.facts import AgentFallbackUsedPayload, WorldEvent
 from living_island.world.ports import WorldEngine, WorldTickCommit, create_engine
 from living_island.world.protocol import (
     DECISION_TRIGGERS,
+    TERRAIN_BY_SYMBOL,
     ActionIntent,
     ActionPlan,
     DecisionTrigger,
@@ -273,6 +286,7 @@ def _drive_live(
     origins: Sequence[ResumeOriginP3],
     fault: Fault | None,
     observer: BoundaryObserver | None,
+    observe_initial: bool = False,
 ) -> SavePackageP3:
     def publish() -> SavePackageP3:
         entries = candidate_allocation_entries(session.snapshot().entries, journal.raw_prefixes())
@@ -299,6 +313,8 @@ def _drive_live(
     # Tick zero, a clean continuation, and a recovery import all acquire a durable
     # current head before any subsequent decision can reserve or dispatch.
     save = publish()
+    if observe_initial and observer is not None:
+        observer(loop.boundary.snapshot.model_copy(deep=True), tuple(loop.boundary.events))
     for _ in range(count):
         boundary, records = loop.advance()
         journal.append_events(boundary.events)
@@ -383,6 +399,7 @@ def run_p3(
             origins=(),
             fault=fault,
             observer=on_boundary_committed,
+            observe_initial=True,
         )
         return _finish(save, output, (), source_reader, inputs.case.ticks)
 
@@ -786,6 +803,10 @@ def reexecute_p3(
                 raise ReplayDiverged("checkpoint skipped a required recovery origin")
         segment = 0
         save = publish()
+        if restored is None and on_boundary_committed is not None:
+            on_boundary_committed(
+                loop.boundary.snapshot.model_copy(deep=True), tuple(loop.boundary.events)
+            )
         while True:
             while pending_origins and pending_origins[0].checkpoint_tick == save.world.tick:
                 origin = pending_origins.pop(0)
@@ -1048,3 +1069,105 @@ class P3BoundaryLoop:
                 }
             ),
         )
+
+
+def export_p3_replay(
+    source: Path,
+    output: Path,
+    *,
+    ancestors: tuple[Path, ...] = (),
+    source_reader: SourceReader,
+) -> ReplayBundle:
+    """Export the unchanged display contract from a verified complete P3 lineage.
+
+    Every frame comes from its committed checkpoint, including tick zero. No
+    provider, mutable allocation or agent execution participates in this export.
+    The destination is create-once; a missing intermediate checkpoint refuses
+    publication instead of filling the gap from another output directory.
+    """
+    source, output = source.resolve(), output.resolve()
+    if output.exists():
+        raise ValueError("P3 replay destination must be a fresh file")
+
+    @cache
+    def archived(commit: str, path: str) -> bytes:
+        return source_reader(commit, path)
+
+    trace, final = load_trace_p3(
+        source / "decision-trace-p3.json", ancestors=ancestors, source_reader=archived
+    )
+    content = load_run_content(
+        source, expected_config_hash=trace.config_hash, expected_map_hash=trace.map_hash
+    )
+    events = decode_records(final.logs["events.jsonl"], WorldEvent, source / "events.jsonl")
+    event_counts = Counter(event.tick for event in events)
+    final_lines = {name: raw.splitlines(keepends=True) for name, raw in final.logs.items()}
+    segments: list[tuple[Path, int, int]] = []
+    start = 0
+    for origin in final.origins:
+        matches = [
+            path
+            for path in ancestors
+            if sha256(path.read_bytes()).hexdigest() == origin.checkpoint_sha256
+        ]
+        if not matches:
+            raise ValueError("P3 replay export requires each verified origin locator")
+        segments.append((matches[0].parent, start, origin.checkpoint_tick))
+        start = origin.checkpoint_tick
+    segments.append((source, start, trace.final_tick))
+    frames = []
+    event_cursor = 0
+    for tick in range(trace.final_tick + 1):
+        directory = next(
+            directory for directory, lower, upper in reversed(segments) if lower <= tick <= upper
+        )
+        checkpoint = read_checkpoint_p3(
+            directory / checkpoint_filename(tick), ancestors=ancestors, source_reader=archived
+        )
+        if checkpoint.inputs != final.inputs:
+            raise ValueError("P3 replay frame inputs differ from the final trace")
+        for prefix in checkpoint.save.log_prefixes:
+            expected = b"".join(final_lines[prefix.name][: prefix.records])
+            if checkpoint.logs[prefix.name] != expected:
+                raise ValueError("P3 replay frame is outside the committed trace lineage")
+        event_cursor += event_counts[tick]
+        if checkpoint.save.event_cursor != event_cursor:
+            raise ValueError("P3 replay frame event cursor disagrees with the trace")
+        frames.append(project_frame(checkpoint.save.world, event_counts[tick]))
+    config = content.config
+    bundle = ReplayBundle(
+        replay_schema_version="0.1",
+        run_id=trace.run_id,
+        world_id=config.meta.world_id,
+        config_hash=trace.config_hash,
+        map_hash=trace.map_hash,
+        clock=ReplayClock(
+            tick_minutes=config.time.tick_minutes,
+            start_hour=config.time.start_hour,
+            day_start_hour=config.time.day_start_hour,
+            day_end_hour=config.time.day_end_hour,
+        ),
+        condition_bounds=ConditionBounds(
+            min_value=config.needs.min_value, max_value=config.needs.max_value
+        ),
+        map=ReplayMap(
+            width=config.map.width,
+            height=config.map.height,
+            rows=list(content.map_rows),
+            terrain_legend=[
+                LegendEntry(symbol=symbol, terrain=terrain)
+                for symbol, terrain in TERRAIN_BY_SYMBOL.items()
+            ],
+        ),
+        residents=[
+            ReplayResident(id=resident.id, display_name=resident.name)
+            for resident in sorted(config.residents, key=lambda resident: resident.id)
+        ],
+        frames=frames,
+        events=list(events),
+    )
+    if frames[-1] != project_frame(final.save.world, event_counts[trace.final_tick]):
+        raise ValueError("P3 replay final frame differs from its trace checkpoint")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    atomic_create(output, canonical_bytes(bundle) + b"\n")
+    return bundle
