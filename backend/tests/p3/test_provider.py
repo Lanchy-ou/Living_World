@@ -5,6 +5,7 @@ import gzip
 import hashlib
 import http.client
 import json
+import os
 import re
 import runpy
 import unicodedata
@@ -41,9 +42,15 @@ from living_island.agents.llm.provider import (
     verified_body,
 )
 from living_island.agents.p3.ports import ProviderAdapter
-from living_island.agents.p3.prompts import RESIDENT_TEMPLATE, build_model_action_contract
+from living_island.agents.p3.prompts import (
+    RESIDENT_TEMPLATE,
+    build_model_action_contract,
+    render_provider_request,
+)
 from living_island.agents.p3.types import (
+    ContextRecordP3,
     DecisionProposal,
+    P3PolicyConfig,
     ProviderRequest,
     WireRequest,
     decode_base64,
@@ -96,7 +103,7 @@ def production_request(content="Observe the island.", *, system="Pinned trusted 
     )
 
 
-def schema02_request(historical):
+def schema02_request(historical, counter_version=provider_module.COUNTER_VERSION):
     """Build a new offline case; never modify the historical request or registration."""
     contract = build_model_action_contract()
     data = historical.model_dump(mode="json")
@@ -106,7 +113,7 @@ def schema02_request(historical):
     data["response_schema"] = contract.proposal_schema
     data["settings"].update(
         input_counter_id=provider_module.COUNTER_ID,
-        input_counter_version=provider_module.COUNTER_VERSION,
+        input_counter_version=counter_version,
     )
     return ProviderRequest.model_validate(data)
 
@@ -237,6 +244,94 @@ def oracle_supported_bound(text, tokenizer, merges):
     )
 
 
+# Independently specify the exact allowed scalars from the proof, not production data.
+U4_PUNCTUATION = (
+    "\u3001\u3002\u3008\u3009\u300a\u300b\u300c\u300d\u300e\u300f"
+    "\u3010\u3011\u3014\u3015\uff01\uff08\uff09\uff0c\uff0e\uff1a\uff1b\uff1f"
+)
+
+
+def oracle_u4_bound(text, tokenizer, merges):
+    if any(not (c.isascii() or "\u4e00" <= c <= "\u9fa5" or c in U4_PUNCTUATION) for c in text):
+        return len(text.encode("utf-8"))
+    splits = [p["pattern"]["Regex"] for p in tokenizer["pre_tokenizer"]["pretokenizers"][:3]]
+    final = (
+        splits[2]
+        .replace(r"\p{L}", "A-Za-z")
+        .replace(r"\p{M}", "")
+        .replace(r"\p{P}\p{S}", r"\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e" + U4_PUNCTUATION)
+    )
+    return sum(
+        oracle_bpe(part, merges, cutoff=4096) if part.isascii() else len(part.encode())
+        for numeric in re.split(r"([0-9]{1,3})", text, flags=re.ASCII)
+        for han in re.split("(" + splits[1] + ")", numeric, flags=re.ASCII)
+        for part in (
+            [han]
+            if re.fullmatch(splits[1], han)
+            else re.split("(" + final + ")", han, flags=re.ASCII)
+        )
+        if part
+    )
+
+
+def test_u4_punctuation_membership_is_certified_from_pinned_properties(tokenizer):
+    source = (FIXTURES / "oniguruma-unicode-properties.c.txt").read_text(encoding="utf-8")
+    points = {ord(c) for c in U4_PUNCTUATION}
+    assert provider_module._CJK_PUNCTUATION == set(U4_PUNCTUATION)
+    for name, expected in (
+        ("P", points),
+        ("S", set()),
+        ("L", set()),
+        ("M", set()),
+        ("N", set()),
+        ("Space", set()),
+    ):
+        match = re.search(rf"CR_{name}\[\] = \{{ (\d+),(.*?)\}};", source, re.DOTALL)
+        assert match is not None, name
+        values = [int(v, 16) for v in re.findall(r"0x[0-9a-f]+", match[2])]
+        ranges = list(zip(values[::2], values[1::2], strict=True))
+        assert len(ranges) == int(match[1])
+        assert {p for p in points if any(a <= p <= b for a, b in ranges)} == expected
+    han = tokenizer["pre_tokenizer"]["pretokenizers"][1]["pattern"]["Regex"]
+    assert all(not re.fullmatch(han, char) for char in U4_PUNCTUATION)
+
+
+@given(
+    text=st.text(
+        alphabet=st.one_of(
+            st.characters(min_codepoint=0, max_codepoint=127),
+            st.characters(min_codepoint=0x4E00, max_codepoint=0x9FA5),
+            st.sampled_from(U4_PUNCTUATION),
+        ),
+        max_size=150,
+    )
+)
+@settings(max_examples=150)
+def test_u4_punctuation_parts_follow_pinned_split(text, tokenizer, all_merges):
+    assert provider_module._plain_token_bound(text) == oracle_u4_bound(text, tokenizer, all_merges)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "hello,world，again。name？\r\n",
+        "  ，,!\r\n中文123456？ascii",
+        "a、。〈〉《》「」『』【】〔〕！（），．：；？Z",
+        "the world" * 20 + "中文：准备好了？",
+    ],
+)
+def test_u4_mixed_punctuation_and_whitespace(text, tokenizer, all_merges):
+    bound = provider_module._plain_token_bound(text)
+    assert bound == oracle_u4_bound(text, tokenizer, all_merges)
+    assert bound <= oracle_supported_bound(text, tokenizer, all_merges)
+
+
+@pytest.mark.parametrize("char", ["🙂", "\u0301", "é", "ア", "１", "𠀀", "\u3000", "\u200d"])
+def test_u4_other_unicode_preserves_whole_span_byte_fallback(char):
+    text = "abc" * 10 + "中文，目标。" + char + "abc" * 10
+    assert provider_module._plain_token_bound(text) == len(text.encode())
+
+
 def test_pinned_number_property_and_han_domain_are_disjoint(tokenizer):
     source = (FIXTURES / "oniguruma-unicode-properties.c.txt").read_text(encoding="utf-8")
     match = re.search(r"CR_N\[\] = \{ (\d+),(.*?)\};", source, re.DOTALL)
@@ -258,8 +353,8 @@ def test_pinned_number_property_and_han_domain_are_disjoint(tokenizer):
 def test_han_scope_endpoints_and_unsupported_unicode_are_fail_closed(char, tokenizer, all_merges):
     text = "the " * 10 + char + " the" * 10
     bound = provider_module._plain_token_bound(text)
-    assert bound == oracle_supported_bound(text, tokenizer, all_merges)
-    if "\u4e00" <= char <= "\u9fa5":
+    assert bound == oracle_u4_bound(text, tokenizer, all_merges)
+    if "\u4e00" <= char <= "\u9fa5" or char == "。":
         assert bound < len(text.encode("utf-8"))
     else:
         assert bound == len(text.encode("utf-8"))
@@ -496,10 +591,8 @@ def schema02_evidence():
         == evidence["proposal_schema_sha256"]
     )
     assert hashlib.sha256(RESIDENT_TEMPLATE).hexdigest() == evidence["template_sha256"]
-    assert (evidence["adapter_version"], evidence["counter_version"]) == (
-        provider_module.ADAPTER_VERSION,
-        provider_module.COUNTER_VERSION,
-    )
+    assert evidence["adapter_version"] == provider_module.ADAPTER_VERSION
+    assert evidence["counter_version"] == "0.3"
     assert (
         hashlib.sha256((FIXTURES / evidence["source_fixture"]).read_bytes()).hexdigest()
         == (evidence["source_fixture_sha256"])
@@ -532,12 +625,15 @@ def test_p305_u3_new_schema_requests_admit_exact_new_wire(
     assert expected_case["decision_ordinal"] == ordinal
     original = ProviderRequest.model_validate(case["expected_request"])
     original_bytes = canonical_bytes(original)
+    historical = schema02_request(original, schema02_evidence["counter_version"])
+    assert (
+        hashlib.sha256(canonical_bytes(historical)).hexdigest() == expected_case["request_sha256"]
+    )
     req = schema02_request(original)
     assert req.messages[1] == original.messages[1]
     assert req.messages[0] != original.messages[0]
     assert req.response_schema != original.response_schema
     assert req.response_schema == build_model_action_contract().proposal_schema
-    assert hashlib.sha256(canonical_bytes(req)).hexdigest() == expected_case["request_sha256"]
     transport = LocalTransport()
     adapter = DeepSeekResponsesAdapter(transport)
     wire = adapter.prepare(req)
@@ -546,7 +642,8 @@ def test_p305_u3_new_schema_requests_admit_exact_new_wire(
     assert wire.model_dump(mode="json") != case["expected_wire"]
     assert hashlib.sha256(body).hexdigest() == expected_case["wire_body_sha256"]
     assert len(body) == expected_case["wire_body_bytes"] <= MAX_REQUEST_BYTES
-    assert len(canonical_bytes(req)) == expected_case["request_bytes"] <= MAX_REQUEST_BYTES
+    assert len(canonical_bytes(historical)) == expected_case["request_bytes"]
+    assert len(canonical_bytes(req)) <= MAX_REQUEST_BYTES
     payload = json.loads(body)
     assert payload["input"] == [message.model_dump(mode="json") for message in req.messages]
     assert payload["text"]["format"]["schema"] == req.response_schema
@@ -583,6 +680,98 @@ def test_p305_u3_old_schema_and_old_wire_never_dispatch(smoke_requests):
     with pytest.raises(ValueError, match="prepared wire request mismatch"):
         adapter.complete(current, historical_wire, 30000)
     assert transport.sent == []
+
+
+@pytest.fixture(scope="module")
+def u4_contexts():
+    evidence = json.loads((FIXTURES / "p305-u4-count-evidence.json").read_bytes())
+    run_path = os.environ.get("P305_U4_RETAINED_RUN")
+    if not run_path:
+        pytest.skip("P305_U4_RETAINED_RUN locates the retained live evidence")
+    root = Path(run_path)
+    retained = root / "continued"
+    for path, field in (
+        (retained / "contexts-p3.jsonl", "source_context_log_sha256"),
+        (retained / "decision-trace-p3.json", "source_trace_sha256"),
+        (retained / "trial-registration.json", "source_registration_sha256"),
+        (root / "input-limit-recount.json", "source_recount_sha256"),
+        (retained / "p3-policy-configs.json", "source_policy_log_sha256"),
+        (retained / "prompt.txt", "prompt_sha256"),
+    ):
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == evidence[field]
+    by_id = {
+        json.loads(line)["decision_id"]: line
+        for line in (retained / "contexts-p3.jsonl").read_bytes().splitlines()
+    }
+    cases = evidence["cases"]
+    assert len(cases) == 21
+    lines = [by_id[case["decision_id"]] for case in cases]
+    assert hashlib.sha256(b"\n".join(lines) + b"\n").hexdigest() == evidence["contexts_sha256"]
+    policy = next(
+        P3PolicyConfig.model_validate(row["config"])
+        for row in json.loads((retained / "p3-policy-configs.json").read_bytes())
+        if row["actor_id"] == "ella"
+    )
+    assert policy.provider_settings.input_counter_version == "0.3"
+    assert policy.trial_registration_sha256 == evidence["source_registration_sha256"]
+    assert hashlib.sha256(RESIDENT_TEMPLATE).hexdigest() == evidence["prompt_sha256"]
+    return policy, lines, cases
+
+
+@pytest.mark.parametrize("index", range(21))
+def test_u4_real_committed_contexts_admit_same_wire(
+    index, u4_contexts, tokenizer, all_merges, reference_renderer
+):
+    policy, lines, cases = u4_contexts
+    case = cases[index]
+    raw = lines[index]
+    context = ContextRecordP3.model_validate_json(raw)
+    assert canonical_bytes(context) == raw
+    assert context.decision_id == case["decision_id"]
+    assert context.request.tick == case["tick"] and context.request.actor_id == "ella"
+    assert context.provider_request is None
+    assert policy.limits.max_input_tokens == MAX_INPUT_TOKENS == 32768
+    historical = render_provider_request(
+        context.assembly, context.request, policy, RESIDENT_TEMPLATE
+    )
+    adapter = DeepSeekResponsesAdapter()
+    wire = adapter.prepare(historical)
+    body = decode_base64(wire.body_base64)
+    assert hashlib.sha256(body).hexdigest() == case["wire_sha256"]
+    assert len(body) == case["wire_bytes"]
+    assert len(canonical_bytes(historical)) == case["request_bytes"]
+    payload = json.loads(body)
+    system = (
+        payload["input"][0]["content"]
+        + provider_module._SCHEMA_PREFIX
+        + json.dumps(payload["text"]["format"]["schema"], ensure_ascii=False)
+    )
+    user = payload["input"][1]["content"]
+    assert (
+        5
+        + oracle_supported_bound(system, tokenizer, all_merges)
+        + oracle_supported_bound(user, tokenizer, all_merges)
+        == case["bound"]
+        > MAX_INPUT_TOKENS
+    )
+
+    with pytest.raises(InputCounterUnavailable):
+        adapter.count_input_tokens(historical, wire)
+    request = historical.model_copy(
+        update={
+            "settings": historical.settings.model_copy(
+                update={"input_counter_version": provider_module.COUNTER_VERSION}
+            )
+        }
+    )
+    assert adapter.prepare(request) == wire
+    expected = (
+        5
+        + oracle_u4_bound(system, tokenizer, all_merges)
+        + oracle_u4_bound(user, tokenizer, all_merges)
+    )
+    assert assert_reference_bound(adapter, request, wire, reference_renderer) == expected
+    assert expected == case["new_bound"] <= MAX_INPUT_TOKENS
 
 
 def test_production_counter_sources_are_immutable_and_match_identity():
@@ -733,7 +922,7 @@ def test_production_counter_is_pure_and_preserves_counted_recorded_sent_bytes(mo
     assert hashlib.sha256(transport.sent[0][0]).digest() == hashlib.sha256(body).digest()
 
 
-@pytest.mark.parametrize("version", ["", "wrong", "0.1", "0.2", "0.3 "])
+@pytest.mark.parametrize("version", ["", "wrong", "0.1", "0.2", "0.3", "0.4 "])
 def test_production_counter_rejects_uncertified_versions_without_dispatch(version):
     transport = LocalTransport()
     adapter = DeepSeekResponsesAdapter(transport)

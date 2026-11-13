@@ -1,7 +1,7 @@
 {
   "model_version": "DeepSeek-V4.1-Flash-1017",
   "counter_id": "deepseek-flash1017-byte-upper-bound",
-  "counter_version": "0.3",
+  "counter_version": "0.4",
   "sources": {
     "flash1017-tokenizer.json": {
       "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/resolve/08c8657f02291e11b6f6b63e0e16014f8e748518/tokenizer.json",

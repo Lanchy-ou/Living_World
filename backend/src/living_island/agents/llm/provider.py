@@ -35,7 +35,7 @@ ADAPTER_ID = "deepseek-responses-v0"
 ADAPTER_VERSION = "0.4"
 MODEL_ID = "deepseek-flash"
 COUNTER_ID = "deepseek-flash1017-byte-upper-bound"
-COUNTER_VERSION = "0.3"
+COUNTER_VERSION = "0.4"
 COUNTER_MODEL_VERSION = "DeepSeek-V4.1-Flash-1017"
 COUNTER_TOKENIZER_SHA256 = "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b"
 _SCHEMA_PREFIX = (
@@ -44,13 +44,22 @@ _SCHEMA_PREFIX = (
 _MERGE_PREFIX_SIZE = 4096
 _ASCII_DIGITS = re.compile(r"[0-9]{1,3}")
 _BASIC_HAN = re.compile(r"[\u4e00-\u9fa5]+")
-# Exact ASCII restriction of the pinned tokenizer's final Split regex. In
-# particular, re.ASCII excludes U+001C..001F from Python's default whitespace.
-_ASCII_SPLIT = re.compile(
-    r"[!\"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~][A-Za-z]+"
-    r"|[^\r\nA-Za-z\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]?[A-Za-z]+"
-    r"| ?[\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]+[\r\n]*"
-    r"|\s*[\r\n]+|\s+(?!\S)|\s+",
+# The additional domain contains only verified Oniguruma punctuation.
+# It does not overlap N/L/M, whitespace or the Han/Kana splitter.
+_CJK_PUNCTUATION = frozenset("、。〈〉《》「」『』【】〔〕！（），．：；？")
+_ASCII_PUNCTUATION_CLASS = r"\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e"
+_FINAL_SPLIT = (
+    r"""[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~][A-Za-z]+"""
+    r"|[^\r\nA-Za-z{punctuation}]?[A-Za-z]+"
+    r"| ?[{punctuation}]+[\r\n]*"
+    r"|\s*[\r\n]+|\s+(?!\S)|\s+"
+)
+# re.ASCII matches the pinned whitespace class on the supported domain.
+_ASCII_SPLIT = re.compile(_FINAL_SPLIT.replace("{punctuation}", _ASCII_PUNCTUATION_CLASS), re.ASCII)
+_CJK_PUNCTUATION_SPLIT = re.compile(
+    _FINAL_SPLIT.replace(
+        "{punctuation}", _ASCII_PUNCTUATION_CLASS + re.escape("".join(sorted(_CJK_PUNCTUATION)))
+    ),
     re.ASCII,
 )
 MAX_REQUEST_BYTES = 131072
@@ -358,21 +367,23 @@ def _plain_token_bound(text: str) -> int:
     """Use only proven tokenizer boundaries; unsupported spans keep byte bounds."""
     if text.isascii():
         return sum(_ascii_word_bound(part) for part in _ascii_parts(text))
-    if any(not (char.isascii() or "\u4e00" <= char <= "\u9fa5") for char in text):
+    if any(
+        not (char.isascii() or "\u4e00" <= char <= "\u9fa5" or char in _CJK_PUNCTUATION)
+        for char in text
+    ):
         return len(text.encode("utf-8"))
-    # The pinned N property has no basic Han code points. In this entire-span
-    # domain, stage 1 is therefore exactly ASCII digits. Follow the tokenizer's
-    # original order: numeric Split, then its real Han Split, then final Split.
-    # Han parts retain the byte bound regardless of any further splitting/BPE.
+    # Reproduce the numeric, Han and final Split stages in source order.
+    # The final Split can group ASCII and Chinese punctuation with spaces
+    # and newlines. Keep each mixed part whole and charge its UTF-8 bytes.
     total = 0
     for numeric_part in _isolated_parts(text, _ASCII_DIGITS):
         for part in _isolated_parts(numeric_part, _BASIC_HAN):
-            if part.isascii():
-                total += sum(
-                    _ascii_word_bound(word) for word in _isolated_parts(part, _ASCII_SPLIT)
-                )
-            else:
+            if "\u4e00" <= part[0] <= "\u9fa5":
                 total += len(part.encode("utf-8"))
+                continue
+            split = _ASCII_SPLIT if part.isascii() else _CJK_PUNCTUATION_SPLIT
+            for word in _isolated_parts(part, split):
+                total += _ascii_word_bound(word) if word.isascii() else len(word.encode("utf-8"))
     return total
 
 
