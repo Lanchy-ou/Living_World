@@ -922,3 +922,13 @@ snapshots and validated all 21 counter reproductions. Technical live
 execution, linked accounting, artifact preservation and strict replay
 PASS. Gate 2 for replacement acceptance is NEEDS_UPSTREAM_REWORK due to
 P305-U4 and the resulting V-05 FAIL. No further paid run was made.
+
+### P305-U4 offline counter repair
+
+P3-04's reviewed counter 0.4 reproduces the original 21 refused wire
+digests and bounds of 34915–41672, then certifies new bounds of 25858–29625.
+All 21 retained inputs fit the unchanged 32768-token cap. The P3-02
+context audit confirmed unchanged projections and resident memory. The
+[U4 repair handoff](P305-U4.md#offline-repair-by-p3-04) records the proof
+and independent Gate 2. The historical replacement result remains V-05
+FAIL. This follow-up has no live trial result or M9 acceptance.

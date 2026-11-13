@@ -510,3 +510,80 @@ change is the owner's `InvalidFallbackPlan` contract, imported as an explicitly
 approved dependency so the fallback adapter and coordinator use the same type.
 No other shared-interface change, package dependency, budget authority or P3-05
 integration is introduced.
+
+## P305-U4: certified Chinese punctuation in counter 0.4
+
+Counter 0.4 extends the 0.3 whole-span domain to ASCII, U+4E00–U+9FA5 and
+the following closed punctuation set:
+
+`3001 3002 3008–300F 3010 3011 3014 3015 FF01 FF08 FF09 FF0C FF0E FF1A FF1B FF1F`.
+
+The retained Oniguruma tables certify every added scalar is `P` and
+outside `S`, `N`, `L`, `M` and `Space`. Each is outside the actual
+second Split's Han/Kana class. The first Split still isolates only ASCII
+digits in groups of one through three. The second isolates the same
+basic-Han runs. A complete isolated Han part uses its UTF-8 byte bound.
+
+For the remaining pieces, the final Split's first alternative still
+uses its original ASCII-only punctuation and letter classes. The two
+`P ∪ S` sites use the existing ASCII set plus the certified punctuation,
+including the exclusion in the optional letter prefix. The `L ∪ M`
+and whitespace behavior on these pieces stays ASCII. Matches and gaps
+remain separate in the original order. A mixed final part uses its whole
+UTF-8 byte bound, including any adjacent ASCII punctuation or whitespace
+that the real Split groups with it. A fully ASCII final part uses the
+certified BPE prefix. This refinement adds no boundary to the tokenizer's
+partitions. The BPE prefix and nonexpansion arguments above therefore
+bound every part. A scalar outside the extended domain keeps the previous
+whole-span byte bound.
+
+The combined system/schema span, five structural IDs, model, tokenizer,
+wire mapping and 32768-token admission limit retain their pins. The
+adapter mapping remains 0.4. A new counter version and a separately named
+preflight fixture identify the admission behavior. Counter 0.3 requests
+are refused by the new counter; their historic registrations and replays
+use the original implementation.
+
+The [21-input comparison](p305-u4-count-evidence.json) records both bounds,
+old wire hashes and sizes, and the registration, trace, context log, Ella
+policy file, prompt and recount digests. The original context rows contain
+no dispatchable request. Set `P305_U4_RETAINED_RUN` to the original
+`runs/p3/p3-smoke-u3-r1` directory and run
+`pytest tests/p3/test_provider.py -k u4_real_committed` from `backend`.
+The test reads the archive in place, reconstructs each request from its
+retained assembly, and changes only local counter metadata. Each wire
+stays identical. Routine CI without the original archive skips these
+21 cases and still runs the independent synthetic Unicode regressions.
+The independent test oracle uses source-derived regex splits and a
+minimum-rank BPE pair rescan. No credentials, transport, provider token
+count or new response participates.
+
+| Tick | Counter 0.3 | Counter 0.4 | Headroom at 32768 |
+| ---: | ---: | ---: | ---: |
+| 1 | 35691 | 26778 | 5990 |
+| 3 | 37013 | 27228 | 5540 |
+| 4 | 37478 | 27393 | 5375 |
+| 5 | 39575 | 28476 | 4292 |
+| 6 | 41672 | 29625 | 3143 |
+| 7 | 36342 | 26608 | 6160 |
+| 8 | 36044 | 26438 | 6330 |
+| 9 | 36654 | 26787 | 5981 |
+| 10 | 39688 | 28462 | 4306 |
+| 11 | 37602 | 27293 | 5475 |
+| 12 | 35832 | 26334 | 6434 |
+| 13 | 35784 | 26308 | 6460 |
+| 15 | 35248 | 26028 | 6740 |
+| 16 | 35131 | 25958 | 6810 |
+| 17 | 34915 | 25858 | 6910 |
+| 18 | 35184 | 25991 | 6777 |
+| 19 | 35689 | 26252 | 6516 |
+| 20 | 35701 | 26259 | 6509 |
+| 21 | 35751 | 26280 | 6488 |
+| 22 | 36702 | 26787 | 5981 |
+| 23 | 36095 | 26461 | 6307 |
+
+All 21 previously refused inputs fit the unchanged cap. The narrowest
+headroom is 3143 tokens. Other Unicode can still trigger conservative
+whole-span admission refusal, and even supported contexts can exceed
+the cap as they grow. These results describe the recorded inputs and
+do not predict a new hosted decision trajectory.
