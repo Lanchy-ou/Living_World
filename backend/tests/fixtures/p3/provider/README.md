@@ -421,7 +421,10 @@ silently changes weights while echoing the same alias is outside what this pure
 counter or the existing result DTO can establish; no new DTO field or authority
 is added to pretend otherwise.
 
-## Historical P305-U3: retained structured-schema rejection
+## P305-U3: retained structured-schema rejection
+
+This section records the historical pre-integration evidence and owner dependency.
+The CR-006 section above records the current schema 0.2 integration.
 
 [The real rejection body](p305-u3-invalid-regex-response.json) is the exact 219
 bytes from P3-05's first authorized smoke attempt. [Its provenance and proposed
