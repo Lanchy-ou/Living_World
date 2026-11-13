@@ -307,7 +307,8 @@ uv run --directory backend python ../scripts/p3_trials.py validate --registratio
 uv run --directory backend python ../scripts/p3_trials.py initialize --live
 uv run --directory backend python ../scripts/p3_trials.py enroll --registration ../content/experiments/p3/development/p3-smoke-r1.json
 uv run --directory backend python ../scripts/p3_trials.py run --registration ../content/experiments/p3/development/p3-smoke-r1.json --case p3-smoke-r1.s1292387875 --out ../runs/p3/p3-smoke-r1/first --live --ticks 8 --dotenv "E:/桌面/Living_World/.env"
-uv run --directory backend python ../scripts/p3_trials.py resume --registration ../content/experiments/p3/development/p3-smoke-r1.json --case p3-smoke-r1.s1292387875 --checkpoint ../runs/p3/p3-smoke-r1/first/checkpoint-0000000008.json --out ../runs/p3/p3-smoke-r1/continued --live --dotenv "E:/桌面/Living_World/.env"
+# NOT_RUN after HTTP_400; the no-call replacement is recorded below.
+# uv run --directory backend python ../scripts/p3_trials.py resume --registration ../content/experiments/p3/development/p3-smoke-r1.json --case p3-smoke-r1.s1292387875 --checkpoint ../runs/p3/p3-smoke-r1/first/checkpoint-0000000008.json --out ../runs/p3/p3-smoke-r1/continued --live --dotenv "E:/桌面/Living_World/.env"
 uv run --directory backend python ../scripts/p3_trials.py replay --source-run ../runs/p3/p3-smoke-r1/continued --ancestor ../runs/p3/p3-smoke-r1/first/checkpoint-0000000008.json --out ../runs/p3/p3-smoke-r1/recorded
 ```
 
@@ -327,17 +328,23 @@ and provider invoice evidence. It never labels a conservative ceiling as a
 confirmed invoice. Deliberate rule choices are excluded from the LLM acceptance
 denominator; fallback and wait shares remain visible.
 
-### Live failure and bounded offline continuation
+### Upstream P305-U3: live schema rejection and offline continuation
 
 The first invocation exited 0 at its registered pause boundary, tick 8. Its
 14 attempts all returned HTTP_400 / PROVIDER_REJECTED with missing usage. The
 retained structured error identifies `^[^\\uD800-\\uDFFF]*$` as an invalid regex
-in the JSON Schema. No successful provider proposal was received. The exact
-response/request remains in the ignored run artifacts; no credential is retained.
+in the JSON Schema. No successful provider proposal was received: all seven Ella decisions in the
+live prefix used the typed rule fallback. The exact response/request remains in the ignored run artifacts; no credential is retained.
 
 The checkpoint ledger charges 909760 micro-CNY conservatively, not a confirmed
-invoice. No missing usage is counted as zero. P305-U3 is returned to the P3-04
-adapter owner for an offline compatibility fix and independent review. Frozen
+invoice. No missing usage is counted as zero. P305-U3 was returned to the P3-04 adapter owner. Its investigation and the
+independent reviewer locate the pattern in frozen `agents/p3/prompts.py:101`
+(P3-02). Current provider rules require the schema to be sent unchanged, so a
+shared schema disposition is now with the lead/foundation owner. A local Python
+regex compilation succeeds; the evidence specifically proves incompatibility
+with the hosted schema validator, not universal invalidity. The reviewer also
+reproduced the retained HTTP_400 as a typed provider error through the real
+adapter offline, with null usage and zero external calls. Frozen
 contracts and the already-enrolled registration are not modified. No new slot,
 refill or paid retry outside this failed case is authorized or performed.
 
@@ -351,6 +358,30 @@ the failed live trial into a V-05 pass or an M9 acceptance result.
 uv run --directory backend python ../scripts/p3_trials.py resume --registration ../content/experiments/p3/development/p3-smoke-r1.json --case p3-smoke-r1.s1292387875 --checkpoint ../runs/p3/p3-smoke-r1/first/checkpoint-0000000008.json --out ../runs/p3/p3-smoke-r1/continued --offline-recovery
 uv run --directory backend python ../scripts/p3_trials.py replay --source-run ../runs/p3/p3-smoke-r1/continued --ancestor ../runs/p3/p3-smoke-r1/first/checkpoint-0000000008.json --out ../runs/p3/p3-smoke-r1/recorded
 ```
+
+### Independent late finding: offline completion metadata
+
+The nonauthor reviewer reproduced a P3-05 launcher defect while the original
+registered offline continuation was still running. At the final horizon,
+`isinstance(provider, TapeProvider)` introspects the strict no-external-access
+provider's `__class__` attribute and raises its sentinel. This is a metadata
+completion error, not a new API call. It occurs after trace/allocation completion
+and before final receipt/export publication.
+
+The original execution retains its registered source. The launcher author is
+preparing a narrow isolated fix and full-horizon CLI regression; the sentinel
+will not be weakened. If the expected completion error occurs, preserve its
+receipt/history and use the already-tested metadata-only finalizer under the
+original source, without a new grant, generation, call or settlement:
+
+```sh
+uv run --directory backend python ../scripts/p3_trials.py finalize --registration ../content/experiments/p3/development/p3-smoke-r1.json --case p3-smoke-r1.s1292387875 --ancestor ../runs/p3/p3-smoke-r1/first/checkpoint-0000000008.json
+```
+
+Snapshot replay immutability only after this legitimate finalization; retain the
+failed invocation history. The source fix will be integrated only after original
+artifact recovery/replay, then checked and independently reviewed. This local
+fix cannot repair the separately failed hosted schema or authorize another smoke.
 
 ## Upstream follow-up P305-U1
 
@@ -410,5 +441,8 @@ still checks current official version/pricing evidence. No paid probe was used.
 
 ## M9 disposition
 
-Pending evidence, independent Gate 2 and owner review. No M9 acceptance declaration,
-main merge or P3-06 start is authorized by this task.
+The mandatory live V-05 gate failed. M9 is not ready for acceptance. Final
+independent review of the retained offline failure lineage is pending. A future
+smoke needs a centrally approved schema correction and explicit replacement-trial
+disposition; the consumed slot cannot be reset or silently reused. No main merge
+or P3-06 start is authorized by this task.
