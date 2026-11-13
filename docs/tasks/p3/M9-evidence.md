@@ -38,8 +38,8 @@ must recheck current metadata and refuse detected drift or unavailable evidence.
   the model, non-thinking setting and JSON Schema format remain supported.
 - [Responses compatibility](https://api-docs.deepseek.com/guides/responses_api/):
   stateless requests omit unsupported store/background/history parameters.
-- Adapter `deepseek-responses-v0` / `0.2`; counter
-  `deepseek-flash1017-byte-upper-bound` / `0.1`; tokenizer SHA-256
+- Adapter `deepseek-responses-v0` / `0.4`; counter
+  `deepseek-flash1017-byte-upper-bound` / `0.3`; tokenizer SHA-256
   `c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b`.
   The P3-04 proof and retained source inventory are preserved.
 - The owner supplied an existing local `.env` locator. Only the outer live launcher
@@ -70,13 +70,48 @@ an unsplit run, repeated-same-boundary continuation and sentinel reexecution exp
 are byte-identical; all source and allocation file hashes remain unchanged.
 This closes that finding only; full Gate 2 awaits the integrated candidate.
 
+Independent launcher review of `5d6867c` reproduced a second P2 finding:
+invalid initial `--ticks=-1` mutated the receipt before the runtime rejected the
+length, stranding an unused allocation with no checkpoint. The launcher owner is
+moving length validation ahead of mutation and making receipt publication follow
+the first durable boundary. The same review requested explicit coverage for
+crashes before checkpoint zero and after final allocation completion but before
+trace/export/receipt completion. The invalid-ticks finding is independently closed at `1aa9296`.
+Startup/complete-receipt fixes landed in `b4b4365`; prepared-final publication and
+immutable invocation-chain recovery landed in `1329660`. The latter reuses the
+existing allocation reconciliation API, catches only its typed closed outcome,
+and verifies that generation, caps and reservation identities are unchanged.
+Already-complete finalization never opens a case. No new grant or call is allowed.
+Independent review of the final prepared-publication path is pending; live
+enrollment has not begun.
+
 ## Offline integration and tests
 
 Pending implementation results. Required evidence includes the one-Ella complete
 loop, real frozen-rule fallback and return, goal revise/continue/abandon and own
 feedback, failed physical actions, private-state isolation, active/queued living
 resume, budget/case ownership and no-call replay with raising external-port sentinels.
-VF-01..19 will be mapped to named new or inherited regression evidence.
+The [fixture provenance and VF-01..19 map](../../../backend/tests/fixtures/p3/one_resident/slice_provenance.md)
+identifies named integration and inherited owner tests. The original 14-case author
+run had 13 passes and one frozen-DTO test-construction failure. The corrected
+negative case and newly added actual-engine VF-17 transfer case both pass; the
+independent reviewer reproduced the same results and closed both findings. This
+is passing evidence for 15 distinct cases across runs, not a claim of a single
+final integrated suite run.
+
+The principal source run completed 24 ticks: Ella 24 accepted fake decisions,
+Mia 21 and Ryan 22 deliberate frozen-rule decisions, zero substitutions, 240
+charged fake input units, 480 fake output units and zero micro-CNY. Raising
+provider/fallback/authority sentinels reproduced its checkpoint, trace and all
+five logs exactly. Its source artifacts are retained in the author's isolated
+worktree under `runs/p305-slice-final-01/test_frozen_smoke_world_one_mo0/run`;
+recorded output is its sibling `recorded/segment-0000`. Full launcher execution
+with a committed closed-tape registration is still required before live smoke.
+
+The launcher author passed the original 33-case recovery suite on `7150bbc`,
+then five affected/new completion vectors on `cdab3cf`. The final suite has 35
+cases. Process-crash mechanics use an explicitly registered two-tick, zero-money
+fake case; this does not shorten the required 24-tick smoke or principal fake run.
 
 Current executor checkpoint (before final slice and upstream counter integration):
 `test_reexecution.py` passed 8 tests in 180.89 seconds; the launcher author's
@@ -86,6 +121,15 @@ lint/typecheck/build and frozen type-generation comparison passed. These are
 intermediate checks, not the final candidate's full-suite result. The initial
 misspelled path `tests/p3/test_reexecute.py` collected no tests (exit 1); it was
 corrected to `test_reexecution.py` before the eight-test successful run.
+
+The replay exporter validates checkpoint schemas, input and committed log prefixes,
+lineage, frame/event cardinality and the final trace identity. It does not provide
+an independent cryptographic seal on every intermediate world or semantically
+reexecute the engine during export. The reviewer demonstrated that a same-prefix,
+valid-shape intermediate health edit is outside those structural checks. This is
+the frozen display-contract trust boundary, not a claimed rejection guarantee.
+M9's stronger evidence is an exact comparison of the complete source export with
+the independently recorded-reexecuted export using raising external-port sentinels.
 
 ## Frozen compatibility evidence
 
@@ -131,24 +175,49 @@ one registration cannot satisfy both. There is no implemented base-config hash
 interpretation that resolves this conflict. No frozen file is changed in P3-05.
 The finding is returned to the upstream owner for an explicit contract disposition.
 
-## Upstream follow-up P305-U2
+## Upstream follow-up P305-U2: resolved for the retained smoke inputs
 
-Owner: P3-04 provider token counter. The original certified byte upper bound
-rejects the real first smoke request before dispatch: 45161 input tokens exceeds
-B-05's 32768. This is reproduced with the unchanged M6 world, approved smoke seed,
-Ella explorer identity, production prompt/schema and the real Responses adapter;
-system and user UTF-8 sizes are 15286 and 15691 bytes respectively. The remaining
-bound covers schema/framing. The runtime correctly records
-`INVALID_CONTEXT / INPUT_LIMIT`; no credential or provider call was used.
+Owner: P3-04 provider token counter. The baseline certified byte upper bound
+correctly refused the actual first smoke request at 45161 versus B-05's 32768,
+with zero calls. An initial ASCII-only refinement admitted that request but left
+22 of the 24 retained user messages outside its non-ASCII allowance. P3-05
+returned both reproductions to the owning task without changing frozen limits,
+required context, prompts or provider internals.
 
-The finding was returned to the P3-04 owner for a separately reviewed, proven
-counter refinement. Initial upstream analysis reports an ASCII-only partial BPE
-bound of 30209 for this request, retaining the full byte bound for non-ASCII text.
-That result is preliminary until its implementation and independent review land.
-P3-05 does not alter the frozen input cap, context, prompt or provider internals,
-and will not use a synthetic counter as live evidence. Live execution remains
-blocked until the reviewed counter admits the actual request and the committed
-registration pins its exact identity and source bytes.
+The owner delivered the proven ASCII/basic-Han refinement, its source certificate,
+24-request regression and independent Gate 2 in
+`e5095a585b5f18289653be437074debf7a2ac199`. See the
+[P3-04 follow-up handoff](P3-04.md#final-p305-u2-follow-up-handoff-2026-11-13)
+and [counter proof](../../../backend/tests/fixtures/p3/provider/README.md).
+The approved upstream range is consumed as a dependency correction:
+
+| Upstream commit | Integrated task commit | Purpose |
+| --- | --- | --- |
+| `1ac2a95340264c12451a9b12ff26f6a41df3d4aa` | `4e58866` | Certified ASCII BPE prefix and explicit response-model mismatch refusal |
+| `035fbab63b45daa0ecf463acf542d2921556d528` | `8475e57` | Certified basic-Han partitions and all 24 retained requests |
+| `52ab6548e31d41876009402990a5669604ac6906` | `8914b60` | Literal-marker proof clarification |
+| `e5095a585b5f18289653be437074debf7a2ac199` | `2c30754` | Final upstream evidence and seven-field handoff |
+
+Only the upstream task-card header needed merge resolution; both the accepted
+2026-11-12 baseline and the new follow-up status/references are retained. Provider
+code, tests and proof fixtures match the published upstream delivery byte-for-byte.
+No shared DTO, dependency package, world, rule or legacy serializer changed.
+
+The integration lead independently loaded the exact pinned pure counter and
+checked all 24 retained request/wire pairs: bounds 23082 through 27561, all within
+32768, with identical wire bytes and zero external calls. Only the counter identity
+metadata was bound to the production counter for this probe; no message or wire
+content was changed. Final provider source SHA-256:
+`8081323909dc0eb1539481e2cdecb4185d882bfa9f9e834b0a023e1c01fa467a`.
+Expected live pins are adapter `deepseek-responses-v0/0.4` and counter
+`deepseek-flash1017-byte-upper-bound/0.3`; tokenizer/model identity is unchanged.
+
+Upstream evidence: 195 adapter tests, 374 independent P3 tests, full executor
+1337 passed/3 existing skips, all plan checks and all eight P1/P2 reference hashes.
+These are explicitly upstream results; P3-05's integrated checks are recorded
+separately. The counter remains conservative for other Unicode and may refuse
+other long inputs. An alias echo does not attest hosted weights, so live startup
+still checks current official version/pricing evidence. No paid probe was used.
 
 ## M9 disposition
 

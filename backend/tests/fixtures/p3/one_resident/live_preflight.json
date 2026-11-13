@@ -11,10 +11,10 @@
     "output_micro_cny_per_million_tokens": 8000000
   },
   "counter_id": "deepseek-flash1017-byte-upper-bound",
-  "counter_version": "0.1",
+  "counter_version": "0.3",
   "counter_tokenizer_sha256": "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b",
   "adapter_id": "deepseek-responses-v0",
-  "adapter_version": "0.2",
+  "adapter_version": "0.4",
   "responses_supported": true,
   "json_schema_supported": true,
   "reasoning_none_supported": true,
