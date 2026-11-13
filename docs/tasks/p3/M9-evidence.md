@@ -68,12 +68,13 @@ continuation chain before assigning frame segments. The nonauthor reviewer
 reproduced the original failure and independently closed it: the seven frames of
 an unsplit run, repeated-same-boundary continuation and sentinel reexecution export
 are byte-identical; all source and allocation file hashes remain unchanged.
-This closes that finding only; full Gate 2 awaits the integrated candidate.
+The integrated code subsequently passed the pre-live review below; final Gate 2
+still requires the completed executor and smoke evidence.
 
 Independent launcher review of `5d6867c` reproduced a second P2 finding:
 invalid initial `--ticks=-1` mutated the receipt before the runtime rejected the
-length, stranding an unused allocation with no checkpoint. The launcher owner is
-moving length validation ahead of mutation and making receipt publication follow
+length, stranding an unused allocation with no checkpoint. The launcher owner
+moved length validation ahead of mutation and made receipt publication follow
 the first durable boundary. The same review requested explicit coverage for
 crashes before checkpoint zero and after final allocation completion but before
 trace/export/receipt completion. The invalid-ticks finding is independently closed at `1aa9296`.
@@ -82,8 +83,9 @@ immutable invocation-chain recovery landed in `1329660`. The latter reuses the
 existing allocation reconciliation API, catches only its typed closed outcome,
 and verifies that generation, caps and reservation identities are unchanged.
 Already-complete finalization never opens a case. No new grant or call is allowed.
-Independent review of the final prepared-publication path is pending; live
-enrollment has not begun.
+The nonauthor review below independently passed the final prepared-publication
+path and its crash regressions. Live execution still follows the separate
+prerequisites and authorization recorded below.
 
 ### Independent pre-live code disposition
 
@@ -259,15 +261,50 @@ This fake authority does not enroll any M8 live slot.
 
 ## Registered live command and results
 
-NOT_RUN yet. The exact committed registration, implementation/input hashes, case,
-canonical authority, preflight result, remaining caps, invocation and fresh output
-path will be recorded here before the first dispatch. No API spend has been made
-by this task at this stage. Calls may begin only after offline integration passes.
+The smoke is prepared but NOT_RUN. Offline full-suite completion remains a
+prerequisite. Its immutable registration is
+[development/p3-smoke-r1.json](../../../content/experiments/p3/development/p3-smoke-r1.json),
+canonical/file SHA-256
+`dcb337f07601f6c1b1abe9fd0a61f410a713a6caf26bcc7e4e7cf0d25e65ca5f`.
+It pins reviewed implementation `eac4d29b3474d337ca312677e609d9e15ddd431a`,
+94 implementation files and 13 input files. Case `p3-smoke-r1.s1292387875`
+retains the approved 24-tick horizon and 5000000 micro-CNY cap.
 
-The completed report will separate reported usage, conservative ledger charges,
-unknown usage and any provider invoice evidence. It will not label a conservative
-ceiling as a confirmed provider invoice. Deliberate rule decisions will be excluded
-from the LLM acceptance denominator; fallback and wait shares remain visible.
+- Effective world config: `03ae94b16856119b34286292b3e7b276bece3f887aeb9b7fd49cfbc05f6da0cc`.
+- Frozen map: `007a113879e45ceea908306b00606d3c6bc9dc516632939fd13023563bff1a9c`.
+- M6 content commit: `7c13d78ffd7d89006f6008c8a09f37ae97c253db`.
+- Canonical live authority: `E:/桌面/Living_World/.git/living-island-p3/authority`.
+- Six-slot approval: sibling `pilot-approval.json`; repository-wide initialization
+  marker: `.git/living-island-p3-enrollment.json`. All three were absent at the
+  pre-initialization check; none is reconstructed from run files.
+- The first request's independently checked bound is 23082 input tokens plus
+  2048 output tokens, reserving 62548 micro-CNY at the pinned peak prices.
+- Current official model/version, Responses capabilities and prices were checked
+  again before registration. The launcher rechecks public metadata, counter and
+  remaining authority before reading the owner-provided local credential.
+
+The following exact invocation sequence is recorded before any live dispatch.
+After committing and validating registration, initialize the approved pilot once
+and enroll only this smoke slot. Pause at tick 8 and continue the same case to
+24, demonstrating normal authorized continuation without another grant or
+approval. Output directories are fresh and remain under this registration.
+
+```sh
+uv run --directory backend python ../scripts/p3_trials.py validate --registration ../content/experiments/p3/development/p3-smoke-r1.json
+uv run --directory backend python ../scripts/p3_trials.py initialize --live
+uv run --directory backend python ../scripts/p3_trials.py enroll --registration ../content/experiments/p3/development/p3-smoke-r1.json
+uv run --directory backend python ../scripts/p3_trials.py run --registration ../content/experiments/p3/development/p3-smoke-r1.json --case p3-smoke-r1.s1292387875 --out ../runs/p3/p3-smoke-r1/first --live --ticks 8 --dotenv "E:/桌面/Living_World/.env"
+uv run --directory backend python ../scripts/p3_trials.py resume --registration ../content/experiments/p3/development/p3-smoke-r1.json --case p3-smoke-r1.s1292387875 --checkpoint ../runs/p3/p3-smoke-r1/first/checkpoint-0000000008.json --out ../runs/p3/p3-smoke-r1/continued --live --dotenv "E:/桌面/Living_World/.env"
+uv run --directory backend python ../scripts/p3_trials.py replay --source-run ../runs/p3/p3-smoke-r1/continued --ancestor ../runs/p3/p3-smoke-r1/first/checkpoint-0000000008.json --out ../runs/p3/p3-smoke-r1/recorded
+```
+
+No live authority has been initialized, no live slot enrolled, and no API spend
+incurred at this documentation checkpoint. Initialization/enrollment results and
+the actual remaining grant will be added before dispatch. The completed report
+separates reported usage, conservative ledger charges, unknown usage and provider
+invoice evidence. It never labels a conservative ceiling as a confirmed invoice.
+Deliberate rule choices are excluded from the LLM acceptance denominator;
+fallback and wait shares remain visible.
 
 ## Upstream follow-up P305-U1
 
