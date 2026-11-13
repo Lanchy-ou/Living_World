@@ -31,6 +31,35 @@ additional budget. P305-U3 remains open until the approved offline repair and
 independent review complete; M9 still needs a separately authorized successful
 replacement trial. See [U3 record](../tasks/p3/P305-U3.md).
 
+## CR-007: P305-R1 linked replacement smoke authorization (approved 2026-11-13)
+
+Current rule: each of six M8 slots binds once. The original smoke slot is issued
+and complete. The owner approved development and independent offline review of
+one explicitly linked replacement. Alternatives of resetting the original slot,
+adding an independent grant or borrowing another slot were rejected.
+
+The evaluation/persistence implementation may add one separately recorded
+authorization for `p3-smoke-u3-r1.s1292387875`. It retains the original approval,
+binding, completed allocation and settled debits, and pins the replacement's
+immutable registration hash and caps. Under the same repository-wide enrollment
+lock, durably bind the exact candidate before creating its authority, then mark
+issuance before live use. Repeat, concurrent or crash-retried operations may
+complete only that exact initialization. Missing or corrupt durable authorization
+or issued allocation refuses live access. Run/resume, fake and replay cannot issue
+an authorization. No old registration, receipt, replay or ledger is rewritten.
+
+The old case charged 14 attempts, 340192 input tokens, 28672 output tokens and
+909760 micro-CNY. The replacement caps are 34 attempts, 1114112 input tokens,
+69632 output tokens and 2785280 micro-CNY. Check component-wise old debits plus
+new caps against the original smoke slot. Other slots retain their caps, and
+the total ceiling remains 150000000 micro-CNY. Provider-reported overruns retain
+their existing failure and accounting semantics.
+
+Approval covers implementation and offline review. The final source and
+registration hashes and caps require separate explicit owner approval before
+creating the real authorization or dispatching. Historical V-05 remains FAIL.
+See the [task card](../tasks/p3/P305-R1.md).
+
 ## Question register
 
 | ID | Date | Raised in task | Question | Assumption made | Status |

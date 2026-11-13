@@ -443,6 +443,15 @@ This is a single-host authority with durable local storage, not a distributed le
 Moving/cloning authority storage is not an ordinary continuation and is not supported
 as a way to obtain live capacity. Store loss never permits automatic re-enrollment.
 
+**[CR-007]** The one linked P3-05 replacement permitted by the evaluation spec
+uses the existing repository-wide enrollment lock and a separate durable
+authorization record. It binds the original completed allocation and its
+canonical bytes, and the exact new registration, case key and caps. The old
+allocation and approval remain immutable. The replacement transitions from
+initializing to issued only for that binding. After issuance, missing files or
+an inconsistent original allocation refuse live access. Run/resume and replay
+cannot create an authorization or reconstruct one from retained checkpoints.
+
 Hold an OS-managed exclusive process lock on that case's persistent lock file for
 the whole live execution, including provider IO, terminal logging, checkpoint writes
 and shutdown. Do not replace/unlink the locked file. Acquisition is nonblocking:

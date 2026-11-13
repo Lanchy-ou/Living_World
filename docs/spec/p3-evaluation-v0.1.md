@@ -491,6 +491,16 @@ missing authority refuses instead of re-creating capacity. Repeated enrollment f
 a consumed slot or a different registration binding refuses. Missing/corrupt pilot
 approval storage refuses all live enrollment. Fake/replay modes cannot acquire or
 mutate this live approval record.
+**[CR-007]** The completed original smoke may have exactly one owner-approved
+linked replacement using the same seed, horizon and actor assignment. Its
+separate authorization is stored in the same authority, pins the exact
+replacement registration and completed original allocation, and preserves all
+original records. Its caps and the original settled debits must fit the original
+smoke envelope component-wise. The other five allocations and CNY150 ceiling
+remain in force. Apply the same exclusive enrollment, crash recovery and
+fail-closed issuance rules. The implementation approval alone gives no live
+authority. The final hashes and caps require explicit owner dispatch approval.
+
 Prices/model availability and a proven input counter are live preflight requirements;
 changed pins never silently authorize extra spend. No live calls were made by this
 M8 documentation task.
