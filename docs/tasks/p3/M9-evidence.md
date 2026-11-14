@@ -1,8 +1,8 @@
 # M9 evidence: one-resident P3 integration
 
-Status: READY_FOR_REVIEW. CR-006 offline integration is recorded below. The
-original smoke failed V-05. A replacement trial awaits an allocation disposition
-and owner approval. M9 and P3-07 inspection export/UI remain pending.
+Status: READY_FOR_REVIEW. The CR-008 counter 0.4 smoke completed and passed
+V-05. The original and CR-007 trial results are retained below. M9 owner
+disposition and P3-07 inspection export/UI remain pending.
 
 ## Authority and scope
 
@@ -991,3 +991,104 @@ attempt. On a stop condition, preserve the partial live record and
 use the recorded offline recovery path as applicable. Reexecute the
 retained result with raising external-access sentinels. Final reporting
 will distinguish technical completion, V-05 and owner M9 disposition.
+
+## CR-008 authorized counter 0.4 smoke result (2026-11-14)
+
+The owner approved a single linked authorization and live case in the
+registered 24-tick, Ella-only configuration. `validate`,
+`authorize-replacement` and `enroll` exited 0 with zero paid requests.
+The latter two returned allocation key
+`3e015f153820e0f2ff2b5b95cdd4bdb1cf88705b9bdefbd1d7f835af80bfccbd`.
+The grant links to the completed CR-007 allocation SHA-256
+`e15e7e4f5121111ff1bd7e12928e8309ae94ed3e9d738a30dad2376f2f061795`.
+
+| Execution pin | Value |
+| --- | --- |
+| Case | `p3-smoke-u4-r1.s1292387875`, seed 1292387875, 24 ticks |
+| Approved implementation | `506cfaf65db92fd2079bd36a2a906100ac55d2d7` |
+| Registration commit | `8fb5a74ae519629d4377b1e1a1573b692645232f` |
+| Canonical registration SHA-256 | `9bc3e90bf3bbc05f01acc96029f15f85aa1c8a000bc943e6d4357a3fb0428017` |
+| Receipt execution HEAD | `224c0b8fb036de45084d1a86be5fd0df11db72ae`, matching all pinned implementation and input blobs |
+| Provider and model | DeepSeek `deepseek-flash` / `DeepSeek-V4.1-Flash-1017` |
+| Counter / adapter / schema | `deepseek-flash1017-byte-upper-bound/0.4` / `deepseek-responses-v0/0.4` / `p3-actions/0.2` |
+| Case caps | 34 attempts, 1114112 input, 69275 output, 3000000 micro-CNY |
+| Per-request input limit | 32768 tokens |
+
+The first tick used one accepted response. The proposal had `move_to` and
+`talk` intents, with no goal change. Reported usage was 14562 input and
+150 output tokens. The request reserved 24106 input and 2048 output tokens,
+and settled at 30324 micro-CNY. The committed checkpoint and shared ledger
+matched. The launcher continued 23 times with `resume --live --ticks 1`,
+receiving a clean per-boundary check before proceeding. No schema rejection
+or input-limit refusal occurred. Preflight observations and the command
+lineage are retained in the receipt history.
+[DeepSeek pricing](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/).
+
+| Measurement | Observed value |
+| --- | --- |
+| Ella accepted / rule fallback / wait | 22/22 (100%) / 0/22 / 0/22 |
+| Deliberate rule decisions | Mia 21, Ryan 22, excluded from Ella's denominator |
+| Dispatched / provider errors / local parse-plan-delta rejections | 22 / 0 / 0 |
+| Retry decisions / unknown usage | 0/22 / 0/22 |
+| Provider-reported and ledger-charged input / output | 372348 / 2315 tokens |
+| Peak certified input / peak reported input | 29962 / 17857 tokens |
+| Provider latency in ms | min 1170, median 1546.5, p95 1889, max 1966 |
+| New conservative ledger charge | 763216 micro-CNY (CNY0.763216) |
+| New case headroom at close | 12 attempts, 2236784 micro-CNY (CNY2.236784) |
+| All linked smoke cases | 38/50 attempts, 1734080 micro-CNY (CNY1.734080) |
+| Pilot ceiling / remaining | CNY150 / CNY148.265920 |
+| Provider invoice | Pending |
+| CR-008 V-05 | PASS (`L = 22`, `5 * 22 >= 4 * 22`, zero wait and zero evidence/privacy violations) |
+
+The final receipt and allocation are complete. All 22 reservations have
+settled terminal records and no unknown usage, orphan, recovery or overrun.
+Committed experience and goal evidence passed the pinned join checks, and
+retained context actor and experience ownership were checked. The replay
+has 25 frames and 530 events. Its final frame matches the
+world projection. Canteen and fruit conservation checks passed. Of Ella's 22 adopted goal
+deltas, 20 continued and two revised a goal. Pinned evidence checks
+verified one observed completion.
+
+### Recorded replay and independent Gate 2
+
+The recorded replay invoked the pinned launcher's `replay` command through
+an offline-only process-local cache of successful `_validate_logs` checks.
+The cache key used exact canonical checkpoint and origin bytes and all five
+ordered committed log contents. Retention, ancestry, source pin validation,
+reconstruction and external-access sentinels used the stock code. There
+were 48 distinct validations and 672 identical repeats. The separate
+uncached replay command was not started. A stock reader independently
+validated both final lineages, and the live launcher produced its own
+uncached display export. The ignored harness SHA-256 is
+`225855d159ee8ca30031c3d7d6753ff6b99645caddbc07e9d59a9837ba0ea37e`.
+A snapshot captured while the recorded process was finishing matched all
+476 source and authority digests after that process exited.
+
+Replay exited 0 with zero calls under raising provider, fallback and
+allocation sentinels. All five logs in each of 24 segments and the final
+checkpoint, trace and display replay matched byte-for-byte, for 123 output
+comparisons. An additional independent comparison matched all 48
+checkpoint files across the 24 segments. The final comparison snapshot's 1059 file digests
+and all 196 historical snapshot digests match, including both
+predecessor allocations and original failure records.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Complete receipt | `7c66af94d52808ed6420f55e981942a462046e44a22eca46d984b39481925c5d` |
+| Final checkpoint | `95e2e7d7ec3dec7319337e218015aea551ad1e4de7a5ae8dd840296696f8dd8a` |
+| Decision trace | `85bc8304355595cad71dfd426fc503bed29ba0155351a01416973d452d176974` |
+| Display replay | `909f44d06cc30218c345034e42d838b0245ed820f9228d7fc5cc7a7c9506afb4` |
+| Aggregate metrics | `c4aa55070904bb7f39f162459c03821588d55af391b2f2eac6a7c0f054263447` |
+| Replay audit | `0fb6cfc24e0e95732e849e39f734098519fa61f2dd1cc11c3ad5f4705b07f12f` |
+
+Nonauthor reviewer `p305_gate2` returned PASS for CR-008 execution,
+accounting, retention, zero-call replay and V-05. Independent checks
+verified the pinned source and registration, final receipt, complete
+allocation, context and evidentiary joins, all 25 frame projections,
+530 events and the historical and current snapshots.
+
+The live source, check reports, snapshots and replay remain under
+`runs/p3/p3-smoke-u4-r1/` in the execution worktree. The shared receipt
+and authority remain in their existing paths. The original and CR-007
+trials retain their historical V-05 FAIL results. M9 awaits owner
+disposition. PV-07 and P3-06 remain pending. P305-U1 remains separate.
