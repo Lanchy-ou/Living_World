@@ -1,8 +1,9 @@
 # M9 evidence: one-resident P3 integration
 
-Status: READY_FOR_REVIEW. The CR-008 counter 0.4 smoke completed and passed
-V-05. The original and CR-007 trial results are retained below. M9 owner
-disposition and P3-07 inspection export/UI remain pending.
+Status: ACCEPTED for M9 on 2026-11-14 under the owner conditional acceptance
+and branch-publication instruction. See [central acceptance](P3-05-acceptance-review.md).
+The CR-008 smoke passed V-05. Historical failed results remain unchanged;
+P3-07 inspection export/UI (PV-07) and P305-U1 remain pending.
 
 ## Authority and scope
 
