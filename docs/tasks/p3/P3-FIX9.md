@@ -68,10 +68,18 @@ None.
 
 1. `base_commit` / `result_commit`: `ea27c67f326700e71a44c805ed6ca3a97c3d19f8` /
    `fa531084fa2374ab0076172781a0f40589061c01` (implementation before this handoff).
-2. `status`: `READY_FOR_REVIEW`.
+2. `status`: `ACCEPTED`.
 3. `scope_changed`: no.
 4. `human_interventions`: 0.
 5. `rework_rounds`: 0.
 6. `verification`: Targeted Gate 1 checks and expected mutation failure above.
    Final integration and independent Gate 2 are `NOT_RUN` here.
 7. `open_questions`: none.
+
+### Independent Gate 2
+
+PASS on `2e09f0dbedf6af794e3bf07fedbfaed865e864a3`, implementation `fa531084fa2374ab0076172781a0f40589061c01`. Reviewer explicitly assigned GPT-6 Astra / High, separate from the author. Reviewed complete diff, World Rules sections 4-5, engine movement/recovery/dialogue handling and tests. Existing action logic and vocabulary are unchanged. No findings or rework.
+
+Independent virtual-environment Python pytest on test_engine_actions.py and all invariants with a fresh temporary basetemp exited 0: 37 passed including 26 invariants, no skips. Full-source mypy (88 files), scoped Ruff lint/format and whitespace checks passed. A temporary protocol shadow added only Literal["review_missing_action"]; mypy returned expected exit 1 with exactly two assert_never errors, and the probe assertions exited 0. The original protocol remained unchanged. The runtime regression exercises both guards; the mutation establishes static rejection of future omitted implementations. Worktree remained clean.
+
+Full backend, P1 long-reference comparison, import-linter, frontend, generation and GitHub Actions were NOT_RUN by the reviewer; see final integration verification in P3-architecture-fixes.md.

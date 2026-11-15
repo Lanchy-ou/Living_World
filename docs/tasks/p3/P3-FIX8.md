@@ -54,9 +54,17 @@ None.
 ### Required fields
 
 1. `base_commit`: `dcef8bb4d0e7f573a751c5767000059754d6d585`. `result_commit`: `fceb5b755fa66a61d4fdcc47a01bf804fa9bf76b`.
-2. `status`: `READY_FOR_REVIEW`. Gate 1 passed. Gate 2 verdict and retest `NOT_RUN`.
+2. `status`: `ACCEPTED`. Gate 1 passed. Gate 2 verdict and retest `NOT_RUN`.
 3. `scope_changed`: no.
 4. `human_interventions`: 0.
 5. `rework_rounds`: 0 independent-review rounds. Gate 1 caught and corrected the type fixture lint issue before handoff.
 6. `verification`: see the commands and results above, including `NOT_RUN` items under Deviations.
 7. `open_questions`: none.
+
+### Independent Gate 2
+
+PASS on `1b2f2fb0a7938d5c57c7c436f9198bfd4e1440d0`, implementation `fceb5b755fa66a61d4fdcc47a01bf804fa9bf76b`. Reviewer explicitly assigned GPT-6 Astra / High, separate from the author. Reviewed full diff, canonical mapping, generator, display behavior, interface/replay specifications and actual tests. All 25 event/payload pairs derive from PAYLOAD_MODEL_BY_TYPE. JSON schemas and legacy contract.ts are unchanged. No findings or rework.
+
+Independent commands all exited 0: replay-contract pytest with fresh `D:/t8r-4a71e5` (90 passed, no skips), Ruff lint/format including the generator (160 files), mypy (88 files), import-linter (8 kept), frontend lint/typecheck/build, schema smoke (17 checks), frontend tests (151 passed, no skips), and standalone strict type fixture check. An in-memory suppression-removal probe produced exactly two TS2339 errors and one TS2322 error. Two formal generator runs produced identical hashes; git diff --exit-code and final clean status passed. Initial cache-lock errors were resolved by authorized retries; Git used per-command safe.directory.
+
+Full backend and GitHub Actions were NOT_RUN by reviewer. Integration must verify FIX5's type-fixture inclusion and combined readonly/discriminated types; see P3-architecture-fixes.md for final results.

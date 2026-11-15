@@ -65,8 +65,7 @@ None.
 
 1. `base_commit` / `result_commit`: `ea27c67f326700e71a44c805ed6ca3a97c3d19f8` /
    `7fb1d4fedd7e92abffe736dc43c184f9d600a0ab` (implementation and tests).
-2. `status`: `ACCEPTED`. Implementer gpt-6.1-sol / Medium. Gate 2 pending,
-   reviewer configuration and reproduction results NOT_RUN at this handoff.
+2. `status`: `ACCEPTED`. Implementer gpt-6.1-sol / Medium. Independent Gate 2 passed with GPT-6.1 Sol / High; reproduction evidence follows below.
 3. `scope_changed`: No.
 4. `human_interventions`: 0.
 5. `rework_rounds`: 0.

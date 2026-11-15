@@ -21,7 +21,7 @@ Open risks / deferred decisions: The first load of each replay takes one clone a
 - `ReplayStore.load()` takes a `structuredClone()` of the validated input and recursively freezes the clone. The caller can continue editing its own input. The store exposes the same owned replay object throughout playback and camera, filter and selection updates. A new load provides a new key to the motion cache.
 - `getState()` exposes a deeply read-only snapshot. A new state starts with a fresh camera and filters. Store commands replace the snapshot and freeze new camera and filter values. Playback touches only the fixed-size state object.
 - Reader types are derived from the generated replay types. The validator still returns the writable wire shape. Scene grouping and resident lookup accept read-only collections.
-- Three runtime tests exercise camera isolation, original input aliasing, frozen snapshots and motion across playback and reload. A TypeScript fixture checks six forbidden writes, including writes through a frame helper and into an event payload.
+- Three runtime tests exercise camera isolation, original input aliasing, frozen snapshots and motion across playback and reload. A TypeScript fixture checks seven forbidden writes, including writes through a frame helper and into an event payload.
 
 ### Commands and results
 
@@ -29,7 +29,7 @@ Open risks / deferred decisions: The first load of each replay takes one clone a
 | --- | --- | --- |
 | `pnpm --dir frontend install --frozen-lockfile` | 0 | Locked install completed with pnpm 10.34.9 and Node 24.15.0. The initial sandboxed invocation exited 1 because access to pnpm's store lock was denied. |
 | `pnpm --dir frontend lint` | 0 | Passed. |
-| `pnpm --dir frontend typecheck` | 0 | Passed with all six expected-error assertions active. |
+| `pnpm --dir frontend typecheck` | 0 | Passed with all seven expected-error assertions active. |
 | `pnpm --dir frontend exec tsc --project tsconfig.app.json --listFilesOnly` | 0 | The compiler listed `tests/replay-store.typecheck.ts`. |
 | `pnpm --dir frontend build` | 0 | TypeScript and Vite built the viewer. |
 | `pnpm --dir frontend run test:schema` | 0 | 17 smoke checks passed. |
@@ -49,9 +49,15 @@ None.
 ### Required fields
 
 1. `base_commit` / `result_commit`: `b3fe49abfa28379e832d65e2be3c13dcf8205fa3` / `bd05220736751ae06993a0547927bb8165787240` (implementation and tests).
-2. `status`: `READY_FOR_REVIEW`. Implementer GPT-6.1 Sol / High. Gate 2 pending. Reviewer configuration and re-verification pending.
+2. `status`: `ACCEPTED`. Implementer GPT-6.1 Sol / High. Independent Gate 2 passed with GPT-6 Astra / High; evidence follows below.
 3. `scope_changed`: Yes. The owner authorized the narrow TypeScript test configuration change on 2026-11-15.
 4. `human_interventions`: 1. Owner authorization for the TypeScript test configuration change.
 5. `rework_rounds`: 0. No reviewer-requested changes yet.
 6. `verification`: Gate 1 passed. See commands, exit codes, counts and `NOT_RUN` entries above.
 7. `open_questions`: None.
+
+### Independent Gate 2
+
+PASS on `8130177b8d4fb1c85ea7be4d85986264f336827b`, implementation `bd05220736751ae06993a0547927bb8165787240`. Reviewer explicitly assigned GPT-6 Astra / High, separate from the author. Verified accepted FIX3 ancestry, authorized scope, deep readonly public types, distinct cameras, caller-input isolation, recursive runtime freezing and stable motion-cache identity. No blocking findings or code rework. The author handoff's type-test count was corrected from six to seven by the lead.
+
+Independent pnpm frontend test (151 passed, no skips), test:schema (17 checks), lint, typecheck and build all exited 0. `pnpm --dir frontend exec tsc --project tsconfig.app.json --noEmit --listFiles` confirmed fixture inclusion. An in-memory compiler-host probe removed the suppressions and observed seven genuine readonly errors. A runtime probe verified 483 frozen-object visits, patch isolation, old snapshots, follow behavior and exactly one structuredClone per load with none during playback. Whitespace check passed and reviewed worktree was clean. Initial pnpm sandbox engine-lock errors were resolved by authorized escalated reruns. Backend, generation, browser/manual and GitHub Actions were NOT_RUN by this reviewer; final integration verification follows in P3-architecture-fixes.md.

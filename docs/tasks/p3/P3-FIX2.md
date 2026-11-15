@@ -20,14 +20,13 @@ Acceptance (positive, negative, edge, determinism): Nested returned state mutati
   resume unchanged; P1 CLI flow and historical reference hashes remain identical.
 Verification commands: Scoped pytest, backend ruff/format/mypy/import-linter,
   P1 reference integration and artifact hashing. Full final CI matrix is lead-owned.
-Open risks / deferred decisions: Independent Gate 2 pending; no specification changes.
+Open risks / deferred decisions: Independent Gate 2 passed; no specification changes.
 ```
 
 ## Handoff
 
 Implementation configuration: Astra / High (`gpt-6-astra`, high), as assigned by
-the lead. Independent reviewer configuration: pending assignment; requested
-Astra / High. The implementer has not performed Gate 2.
+the lead. Independent reviewer configuration: GPT-6 Astra / High. The implementer has not performed Gate 2.
 
 Branch: `task/P3-FIX2-boundary-resume`.
 Worktree: `D:/Codex/.codex/worktrees/p3-fix2-boundary-resume/Living_World`.
@@ -115,15 +114,14 @@ or file/worktree deletions occurred. All failed-run evidence remains untouched.
 
 None. The frozen legacy scheduling semantics support latest-plan ownership;
 there was no need to copy P3 behavior where it differs or request a spec change.
-Gate 2 remains pending; the lead will append its independent conclusion and any
-reverification evidence.
+Gate 2 passed; the independent conclusion and reproduction evidence follow below.
 
 ### Required fields
 
 1. `base_commit` / `result_commit`: `ea27c67f326700e71a44c805ed6ca3a97c3d19f8` /
    `d20378b19db31029141bf8b745addf5b60383e5d` (implementation and tests; this card
    is recorded in a following documentation commit).
-2. `status`: `READY_FOR_REVIEW`; scoped Gate 1 passed; Gate 2 pending.
+2. `status`: `ACCEPTED`; scoped Gate 1 and independent Gate 2 passed.
 3. `scope_changed`: no.
 4. `human_interventions`: 0; existing task authorization covered worktree,
    dependency installation and Git operations.
@@ -132,3 +130,11 @@ reverification evidence.
 6. `verification`: commands, exit codes, counts and NOT_RUN items above; full
    combined CI verification belongs to the lead's final integration handoff.
 7. `open_questions`: none; no frozen-spec edits requested.
+
+### Independent Gate 2
+
+PASS on `1452350e84763436e62b54a0c11838dfe3a69658`, implementation `d20378b19db31029141bf8b745addf5b60383e5d`. Reviewer explicitly assigned GPT-6 Astra / High, separate from the author. Reviewed full code/test diff against frozen specifications and actual legacy scheduling. Latest-plan provenance, deferred triggers, complete suffixes, failure/interruption/death cleanup, active progress, ancestry checks before output staging and both nested copy boundaries were confirmed. No findings or rework.
+
+Independent `uv run --directory backend pytest tests/unit/test_sim_boundaries.py tests/unit/test_legacy_resume_progress.py tests/unit/test_sim_runs.py tests/unit/test_p1_integration.py --basetemp D:/r2g2-1115a` exited 0: 62 passed, no skips, 276.20 seconds. Additional independent probes accepted 906 generated boundaries (random/rule policies, three seeds each, nondefault multi-tick settings) and three-hop continuation including a zero-tick hop, and rejected descendant queue/active tampering before output. Scoped Ruff lint/format and whitespace checks passed. Fresh world and replay hashes matched the historical values recorded above. Evidence remains at `D:/r2g2-1115a` and `D:/r2g2-chain-1115a`.
+
+The first review probe omitted required rule_params; the corrected harness passed. Cache/read permission failures were resolved with no-cache or authorized reads. Full backend/invariants, mypy/import-linter, frontend, generation and cloud CI were NOT_RUN by this reviewer; see final integration verification in P3-architecture-fixes.md.
