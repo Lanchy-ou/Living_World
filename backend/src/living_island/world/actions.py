@@ -1,5 +1,7 @@
 """Preconditions and atomic effects for timed physical actions."""
 
+from typing import assert_never
+
 from living_island.world.canteen import fill_canteen, give_canteen, pick_up_canteen, spend_serving
 from living_island.world.content import EffectiveConfig
 from living_island.world.facts import (
@@ -129,6 +131,14 @@ def validate(
             return "ITEM_TAKEN"
         if _room(config, state, actor) < params.quantity:
             return "INVENTORY_FULL"
+    else:
+        match kind:
+            case "move_to" | "rest" | "sleep" | "talk" | "wait":
+                # The engine handles movement and dialogue checks. Rest, sleep and wait
+                # require only the shared checks above.
+                pass
+            case _:
+                assert_never(kind)
     return None
 
 
@@ -239,4 +249,10 @@ def settle(
                 canteen_id=canteen_id,
             ),
         )
-    return None
+    match kind:
+        case "move_to" | "rest" | "sleep" | "talk" | "wait":
+            # Movement and recovery apply during progress. The engine settles dialogue.
+            # Wait has no direct effect.
+            return None
+        case _:
+            assert_never(kind)
