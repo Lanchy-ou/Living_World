@@ -61,3 +61,7 @@ None.
 PASS on `8130177b8d4fb1c85ea7be4d85986264f336827b`, implementation `bd05220736751ae06993a0547927bb8165787240`. Reviewer explicitly assigned GPT-6 Astra / High, separate from the author. Verified accepted FIX3 ancestry, authorized scope, deep readonly public types, distinct cameras, caller-input isolation, recursive runtime freezing and stable motion-cache identity. No blocking findings or code rework. The author handoff's type-test count was corrected from six to seven by the lead.
 
 Independent pnpm frontend test (151 passed, no skips), test:schema (17 checks), lint, typecheck and build all exited 0. `pnpm --dir frontend exec tsc --project tsconfig.app.json --noEmit --listFiles` confirmed fixture inclusion. An in-memory compiler-host probe removed the suppressions and observed seven genuine readonly errors. A runtime probe verified 483 frozen-object visits, patch isolation, old snapshots, follow behavior and exactly one structuredClone per load with none during playback. Whitespace check passed and reviewed worktree was clean. Initial pnpm sandbox engine-lock errors were resolved by authorized escalated reruns. Backend, generation, browser/manual and GitHub Actions were NOT_RUN by this reviewer; final integration verification follows in P3-architecture-fixes.md.
+
+### Central integration verification
+
+Task-level NOT_RUN entries above describe that author/reviewer worktree only. See [the final integration handoff](P3-architecture-fixes.md) for the complete combined checks, reference hashes, final branch identity and remaining limitations.

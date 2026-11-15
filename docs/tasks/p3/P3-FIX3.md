@@ -60,3 +60,7 @@ None.
 PASS on branch tip `c5c820665dce513eed59b3963b2b98decac3a629`, implementation `f7917621d95a08648eabc4f2e73b9ea9b5525446`. Reviewer: GPT-6.1 Sol / High, separate from the author. Reviewed the full diff, frozen replay and frontend specifications, picker/drop/Example wiring and error display. No findings; no rework.
 
 Independent commands all exited 0: `node --test frontend/tests/replay-loading.test.mjs` (5 passed), `node --test tests/*.test.mjs` from frontend (148 passed, no skips), `node tests/replay-schema.smoke.mjs` (17 checks), installed ESLint, app and node TypeScript checks, Vite build (149 modules), and `git diff --check <base> HEAD`. Extra coordinator probes verified a stale success while the latest request remains pending and a synchronous read failure. React static rendering verified the actual read-error alert, title, filename and retry copy. The pnpm wrapper encountered an OS error 5 user-store lock; independent checks used the installed locked binaries directly. Browser manual checks, backend checks and GitHub Actions: NOT_RUN by reviewer. Final integration verification is recorded in P3-architecture-fixes.md.
+
+### Central integration verification
+
+Task-level NOT_RUN entries above describe that author/reviewer worktree only. See [the final integration handoff](P3-architecture-fixes.md) for the complete combined checks, reference hashes, final branch identity and remaining limitations.

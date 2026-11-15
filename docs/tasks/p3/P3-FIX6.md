@@ -77,3 +77,7 @@ None.
 PASS on branch tip `ebbd023d8d15c2b99c852046d9650ceb69aba0d0`, implementation `7fb1d4fedd7e92abffe736dc43c184f9d600a0ab`. Reviewer: GPT-6.1 Sol / High, separate from the author. Reviewed the full diff, frozen replay/frontend specifications and filtering, store and raw-event call paths. No findings; no rework.
 
 Independent commands all exited 0: `node --test frontend/tests/event-pagination.test.mjs` (3 passed), full frontend Node tests (146 passed, no skips), schema smoke (17 checks), installed ESLint, app and node TypeScript checks, and `git diff --check <base>...HEAD`. An independent harness exercised the actual transpiled EventList handlers with real validator/filter/store and mocked hook bindings: 201 valid tick-zero events in 150+51 rows, disabled boundaries, navigation, same-tick selected raw event, filter resets, empty/single-page results, bundle reset, later-tick selection and seek-back reset. Browser/manual, build rerun, backend, contract generation and GitHub Actions: NOT_RUN by reviewer. A mistyped lint path was corrected; pnpm user-store lock warnings were avoided by invoking installed locked tools directly. Final integration verification is recorded in P3-architecture-fixes.md.
+
+### Central integration verification
+
+Task-level NOT_RUN entries above describe that author/reviewer worktree only. See [the final integration handoff](P3-architecture-fixes.md) for the complete combined checks, reference hashes, final branch identity and remaining limitations.

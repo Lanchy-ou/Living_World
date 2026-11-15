@@ -56,9 +56,7 @@ Actions is `NOT_RUN` for the local task branch.
 
 ### Deviations
 
-None. Implementation used GPT-6.1 Sol / High. Independent Gate 2 review and any
-re-review are pending, with Astra / High requested. The reviewer's actual
-configuration will be recorded with the review.
+None. Implementation used GPT-6.1 Sol / High. Independent Gate 2 passed with GPT-6 Astra / High; its evidence follows below.
 
 ### Open questions
 
@@ -83,3 +81,7 @@ PASS on `2e09f0dbedf6af794e3bf07fedbfaed865e864a3`, implementation `fa531084fa23
 Independent virtual-environment Python pytest on test_engine_actions.py and all invariants with a fresh temporary basetemp exited 0: 37 passed including 26 invariants, no skips. Full-source mypy (88 files), scoped Ruff lint/format and whitespace checks passed. A temporary protocol shadow added only Literal["review_missing_action"]; mypy returned expected exit 1 with exactly two assert_never errors, and the probe assertions exited 0. The original protocol remained unchanged. The runtime regression exercises both guards; the mutation establishes static rejection of future omitted implementations. Worktree remained clean.
 
 Full backend, P1 long-reference comparison, import-linter, frontend, generation and GitHub Actions were NOT_RUN by the reviewer; see final integration verification in P3-architecture-fixes.md.
+
+### Central integration verification
+
+Task-level NOT_RUN entries above describe that author/reviewer worktree only. See [the final integration handoff](P3-architecture-fixes.md) for the complete combined checks, reference hashes, final branch identity and remaining limitations.

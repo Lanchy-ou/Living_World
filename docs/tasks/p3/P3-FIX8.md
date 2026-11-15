@@ -21,7 +21,7 @@ Open risks / deferred decisions: The FIX5 project configuration change will incl
 - The formal generator refines the schema-derived replay TypeScript into a discriminated `WorldEvent` using `PAYLOAD_MODEL_BY_TYPE` from `world/facts.py`. It retains the generated envelope and payload field types. The two JSON schemas and the legacy contract TypeScript have identical content to the task base.
 - `eventView.ts` reads narrowed payloads for summaries and failure codes. Resident matching still uses the replay viewer's configured reference fields, typed as optional string properties on the payload.
 - The backend regression test compares all 25 generated event/payload pairs to their canonical Python models. The frontend type fixture checks narrowing from a replay bundle event, wrong payload fields, and mismatched discriminator/payload pairs.
-- Implementer configuration used `gpt-6.1-sol`, reasoning effort `high`. Independent reviewer configuration, verdict, and any retest are `NOT_RUN` pending Gate 2. The requested reviewer profile is Astra / High.
+- Implementer configuration used `gpt-6.1-sol`, reasoning effort `high`. Independent Gate 2 passed with GPT-6 Astra / High; the reproduction evidence follows below.
 
 ### Commands and results
 
@@ -45,7 +45,7 @@ Open risks / deferred decisions: The FIX5 project configuration change will incl
 
 ### Deviations
 
-None. The type fixture ran through standalone `tsc` on this task branch. FIX5 supplies default project inclusion for `tests/**/*.typecheck.ts` on the integration branch. Full backend pytest, integrated project typecheck, independent Gate 2, and GitHub Actions are `NOT_RUN` here. The first two belong to final integration verification.
+None. The type fixture ran through standalone `tsc` on this task branch. FIX5 supplies default project inclusion for `tests/**/*.typecheck.ts` on the integration branch. Full backend pytest, integrated project typecheck and GitHub Actions were `NOT_RUN` in the author worktree. The first two belong to final integration verification; independent Gate 2 evidence follows below.
 
 ### Open questions
 
@@ -54,7 +54,7 @@ None.
 ### Required fields
 
 1. `base_commit`: `dcef8bb4d0e7f573a751c5767000059754d6d585`. `result_commit`: `fceb5b755fa66a61d4fdcc47a01bf804fa9bf76b`.
-2. `status`: `ACCEPTED`. Gate 1 passed. Gate 2 verdict and retest `NOT_RUN`.
+2. `status`: `ACCEPTED`. Gate 1 passed. Independent Gate 2 passed; see the evidence below.
 3. `scope_changed`: no.
 4. `human_interventions`: 0.
 5. `rework_rounds`: 0 independent-review rounds. Gate 1 caught and corrected the type fixture lint issue before handoff.
@@ -68,3 +68,7 @@ PASS on `1b2f2fb0a7938d5c57c7c436f9198bfd4e1440d0`, implementation `fceb5b755fa6
 Independent commands all exited 0: replay-contract pytest with fresh `D:/t8r-4a71e5` (90 passed, no skips), Ruff lint/format including the generator (160 files), mypy (88 files), import-linter (8 kept), frontend lint/typecheck/build, schema smoke (17 checks), frontend tests (151 passed, no skips), and standalone strict type fixture check. An in-memory suppression-removal probe produced exactly two TS2339 errors and one TS2322 error. Two formal generator runs produced identical hashes; git diff --exit-code and final clean status passed. Initial cache-lock errors were resolved by authorized retries; Git used per-command safe.directory.
 
 Full backend and GitHub Actions were NOT_RUN by reviewer. Integration must verify FIX5's type-fixture inclusion and combined readonly/discriminated types; see P3-architecture-fixes.md for final results.
+
+### Central integration verification
+
+Task-level NOT_RUN entries above describe that author/reviewer worktree only. See [the final integration handoff](P3-architecture-fixes.md) for the complete combined checks, reference hashes, final branch identity and remaining limitations.

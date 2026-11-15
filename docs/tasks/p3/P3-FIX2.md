@@ -119,14 +119,12 @@ Gate 2 passed; the independent conclusion and reproduction evidence follow below
 ### Required fields
 
 1. `base_commit` / `result_commit`: `ea27c67f326700e71a44c805ed6ca3a97c3d19f8` /
-   `d20378b19db31029141bf8b745addf5b60383e5d` (implementation and tests; this card
-   is recorded in a following documentation commit).
+   `26075c4979df39ceb6c5b9cfcb70cad0cd344203` (includes the reviewed test-fixture correction; original production implementation is `d20378b19db31029141bf8b745addf5b60383e5d`).
 2. `status`: `ACCEPTED`; scoped Gate 1 and independent Gate 2 passed.
 3. `scope_changed`: no.
 4. `human_interventions`: 0; existing task authorization covered worktree,
    dependency installation and Git operations.
-5. `rework_rounds`: 0 independent-review rounds; executor test setup/format
-   corrections are documented above.
+5. `rework_rounds`: 1, integration-discovered incomplete synthetic storage fixtures; original executor setup corrections are documented above.
 6. `verification`: commands, exit codes, counts and NOT_RUN items above; full
    combined CI verification belongs to the lead's final integration handoff.
 7. `open_questions`: none; no frozen-spec edits requested.
@@ -138,3 +136,49 @@ PASS on `1452350e84763436e62b54a0c11838dfe3a69658`, implementation `d20378b19db3
 Independent `uv run --directory backend pytest tests/unit/test_sim_boundaries.py tests/unit/test_legacy_resume_progress.py tests/unit/test_sim_runs.py tests/unit/test_p1_integration.py --basetemp D:/r2g2-1115a` exited 0: 62 passed, no skips, 276.20 seconds. Additional independent probes accepted 906 generated boundaries (random/rule policies, three seeds each, nondefault multi-tick settings) and three-hop continuation including a zero-tick hop, and rejected descendant queue/active tampering before output. Scoped Ruff lint/format and whitespace checks passed. Fresh world and replay hashes matched the historical values recorded above. Evidence remains at `D:/r2g2-1115a` and `D:/r2g2-chain-1115a`.
 
 The first review probe omitted required rule_params; the corrected harness passed. Cache/read permission failures were resolved with no-cache or authorized reads. Full backend/invariants, mypy/import-linter, frontend, generation and cloud CI were NOT_RUN by this reviewer; see final integration verification in P3-architecture-fixes.md.
+
+### Central integration verification
+
+Task-level NOT_RUN entries above describe that author/reviewer worktree only. See [the final integration handoff](P3-architecture-fixes.md) for the complete combined checks, reference hashes, final branch identity and remaining limitations.
+
+### Integration rework 1: storage fixture execution history
+
+The lead's first complete integration pytest run reported six failures in
+`backend/tests/unit/persistence/test_storage.py`. The executor reproduced exactly
+those failures before changing anything:
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `uv run --directory backend pytest tests/unit/persistence/test_storage.py --basetemp D:/f2-e-1115` | 1 | 38 passed, 6 failed in 4.53 s; all six failed at the new plan-prefix validation. |
+| `uv run --directory backend pytest tests/unit/persistence/test_storage.py tests/unit/test_legacy_resume_progress.py tests/unit/test_sim_boundaries.py --basetemp D:/f2-f-1115` | 0 | 78 passed in 8.00 s, no skips; includes the new missing-history negative case. |
+| `uv run --directory backend ruff check .` | 0 | All checks passed after the correction. |
+| `uv run --directory backend ruff format --check .` | 0 | 160 files already formatted after the correction. |
+
+Root cause: the shared, hand-built `source_run` fixture committed a tick-zero wait
+decision and a tick-one checkpoint, yet recorded only `world_initialized`. It
+omitted the required wait start/completion events. The analogous continuation
+fixture omitted its second decision's action facts as well. These fixtures could
+exercise the former storage-only checks but do not represent legal legacy
+simulation history. The six failures were not legal-history compatibility failures.
+
+Correction: add explicit `action_started` / `action_succeeded` facts for the fixture's
+committed waits and adjust its event cursors, trace expectations and complete prior
+history. Scripted/recorded variants derive their checkpoint from that corrected
+source. All existing behavioral and negative assertions remain; the source-preservation,
+tail-ignore, trace-identity, ancestor-prefix and publication-failure tests still
+exercise their original behavior. A new negative test reconstructs the incomplete
+old fixture and requires rejection before a staging directory is created.
+
+No production validation was relaxed or changed. No frozen inputs were changed.
+The lead explicitly confirmed this corresponding-unit-test correction is within
+the existing scope. This is not a new human permission request or intervention.
+All failed and successful test directories remain available. The original P1
+reference result remains applicable because this follow-up changes tests only;
+the lead owns final integrated revalidation and the full-suite completion record.
+
+Correction author: the same Astra / High implementation agent. Independent
+Astra / High re-review passed on 26075c4979df39ceb6c5b9cfcb70cad0cd344203 and author tip a7144b14b6d322409c18592b88b76e4cc21e6af1. The original
+task-card Gate 2 status is historical; the final integration handoff owns prior
+review evidence and the new re-review conclusion.
+
+Independent re-review (GPT-6 Astra / High): the exact correction and author handoff were reviewed with no findings. The reviewer confirmed the six original fixtures were impossible under frozen wait scheduling and all original test intentions/assertions remain. Independent pytest on storage, legacy progress and boundary tests with fresh D:/r2g2-storage-1115a exited 0: 78 passed in 8.09 seconds, no skips. Scoped Ruff lint/format and whitespace checks exited 0. No production edits. The lead merged the reviewed test commit directly and reconciled the author's handoff here to preserve the existing independent review records without a documentation merge conflict.
