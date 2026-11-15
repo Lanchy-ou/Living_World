@@ -1,6 +1,7 @@
 import type { ReplayError } from "../replay/types.ts";
 
 const TITLES: Record<ReplayError["kind"], string> = {
+  file_read: "Unable to read file",
   broken_json: "Broken JSON",
   unknown_version: "Unknown replay version",
   schema: "Schema validation failed",
@@ -15,8 +16,9 @@ interface Props {
 }
 
 export function ErrorDetails({ error, fileName, onDismiss }: Props) {
+  const readFailed = error.kind === "file_read";
   return (
-    <section className="error" role="alert" aria-label="Validation error">
+    <section className="error" role="alert" aria-label={readFailed ? "File read error" : "Validation error"}>
       <div className="error-head">
         <h2>File refused: {TITLES[error.kind]}</h2>
         {onDismiss !== undefined && (
@@ -37,7 +39,9 @@ export function ErrorDetails({ error, fileName, onDismiss }: Props) {
           ))}
         </ul>
       )}
-      <p className="hint">The viewer never repairs or modifies a file. Fix the file and load it again.</p>
+      <p className="hint">
+        {readFailed ? "Try opening the file again." : "The viewer never repairs or modifies a file. Fix the file and load it again."}
+      </p>
     </section>
   );
 }
