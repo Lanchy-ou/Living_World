@@ -19,6 +19,20 @@ intents; the frontend only displays state and sends commands.
   `docs/plans/p2-implementation-plan-v0.1.md` (tasks, milestones and change requests).
 - Decisions: `docs/adr/`. Task briefs and handoffs: `docs/tasks/<phase>/` (e.g. `docs/tasks/p1/`).
 
+## Current phase and entry points
+
+P3 reached M9 on 2026-11-14 with acceptance of the one-resident integration.
+[P3-06](docs/tasks/p3/P3-06.md) (three-resident isolation and interaction)
+and [P3-07](docs/tasks/p3/P3-07.md) (evaluation, inspection, and M10) are pending
+in this repository. Follow their task cards for current status.
+
+- [P3 implementation plan](docs/plans/p3-implementation-plan-v0.1.md)
+- P3 specifications for [resident experience](docs/spec/resident-experience-v0.1.md),
+  [resident cognition](docs/spec/resident-cognition-v0.1.md),
+  [LLM decisions and recovery](docs/spec/llm-decision-v0.1.md), and
+  [evaluation and inspection](docs/spec/p3-evaluation-v0.1.md)
+- [M9 acceptance and evidence](docs/tasks/p3/M9-evidence.md)
+
 ## Source of truth order
 
 When documents disagree: `docs/spec/` > `docs/adr/` > `docs/product/` > code.
@@ -57,28 +71,55 @@ Python package `living_island` (`backend/src/living_island/`). Enforced by impor
 
 ## Commands
 
-Run from the repo root. Works on Windows, macOS and Linux.
+Run from the repo root on Windows, macOS or Linux. Use the tool versions in
+[README.md](README.md#prerequisites) and install the locked dependencies.
 
-```bash
-# Backend setup
-uv sync --directory backend
+```sh
+# Locked setup shared by the relevant CI jobs
+uv sync --directory backend --locked
+pnpm --dir frontend install --frozen-lockfile
 
-# Backend checks
-uv run --directory backend pytest
+# Backend CI
 uv run --directory backend ruff check .
 uv run --directory backend ruff format --check .
 uv run --directory backend mypy src
 uv run --directory backend lint-imports --no-cache
+uv run --directory backend pytest
 
-# Frontend
-pnpm --dir frontend install
-pnpm --dir frontend dev
+# Frontend CI
 pnpm --dir frontend lint
 pnpm --dir frontend typecheck
 pnpm --dir frontend build
+pnpm --dir frontend run test:schema
+pnpm --dir frontend run test
 
-# Regenerate TS types from the pydantic contract
+# Contract CI
 uv run --directory backend python ../scripts/gen_types.py
+git diff --exit-code
+```
+
+For the backend checks, use a checkout with the pinned historical commits
+available. The [CI workflow](.github/workflows/ci.yml) fetches full history for
+that job. For local viewer development, run `pnpm --dir frontend dev`.
+
+### Windows backend checks
+
+Use `git config --local core.longpaths true` from the repository root when deep
+test paths require it. P3 registration tests create temporary Git repositories
+that can require the same setting. If they do, use Git's command-scope
+configuration in a fresh PowerShell session so child Git processes inherit it.
+Use an existing short, writable parent in place of `C:\Temp`. Each pytest run
+needs a dedicated base path that does not already exist. Keep that path separate
+from working directories and retained data because pytest may clear its base.
+
+```powershell
+# Optional command-scope configuration for the test repositories
+$env:GIT_CONFIG_COUNT = '1'
+$env:GIT_CONFIG_KEY_0 = 'core.longpaths'
+$env:GIT_CONFIG_VALUE_0 = 'true'
+
+$pytestBase = Join-Path 'C:\Temp' ('li-' + [guid]::NewGuid().ToString('N').Substring(0, 12))
+uv run --directory backend pytest --basetemp $pytestBase
 ```
 
 ## Workflow rules
@@ -107,5 +148,14 @@ uv run --directory backend python ../scripts/gen_types.py
 
 ## Definition of done
 
-All CI steps pass locally: ruff, mypy, lint-imports, pytest, frontend lint/typecheck/build,
-and type generation leaves `git diff --exit-code` clean.
+Pass the commands above locally with locked dependencies. The jobs in the
+[CI workflow](.github/workflows/ci.yml) map to these checks.
+
+- `backend` installs with `uv sync --directory backend --locked`, then runs Ruff
+  lint and format checks, mypy, import-linter, and pytest. On Windows the pytest
+  command can use the dedicated `--basetemp` above.
+- `frontend` installs with `pnpm --dir frontend install --frozen-lockfile`, then
+  runs lint, typecheck, build, `pnpm --dir frontend run test:schema`, and
+  `pnpm --dir frontend run test`.
+- `contract` installs both locked dependency sets, regenerates types, and
+  verifies that `git diff --exit-code` is clean.
