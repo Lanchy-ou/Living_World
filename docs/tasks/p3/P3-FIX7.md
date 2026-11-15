@@ -27,11 +27,14 @@ repositories, and a dedicated pytest base path.
 
 Implementation agent was Sol / Medium (`gpt-6.1-sol`, medium). The architecture
 lead passed the required AGENTS review of the implementation commit before
-integration. The independent Sol / High Gate 2 is pending.
+integration. The independent Sol / High Gate 2 (`gpt-6.1-sol`, high) requested
+one clarification: the Windows definition of done must require a new dedicated
+`--basetemp` on each pytest run. The lead approved the corrected wording,
+which is pending independent recheck.
 
 ### Commands and results
 
-- `git diff --check` exited 0.
+- `git diff --check` exited 0 on the original changes and the review correction.
 - Inline `python -` exited 0. Resolved 17 distinct local Markdown targets,
   checked the order of validation commands and the locked setup in all 16 CI
   run entries across three jobs, verified the relevant frontend script names,
@@ -53,12 +56,12 @@ None.
 
 ### Required fields
 
-1. `base_commit` / `result_commit`: `ea27c67f326700e71a44c805ed6ca3a97c3d19f8` / `2b4cdf903a6ed9c83aa76313e37c85ada55cb0ed`.
+1. `base_commit` / `result_commit`: `ea27c67f326700e71a44c805ed6ca3a97c3d19f8` / `377767afd659086b704aabef3ab6cc779b7fcb2a`.
 2. `status`: `READY_FOR_REVIEW`.
 3. `scope_changed`: no.
 4. `human_interventions`: 0.
-5. `rework_rounds`: 0.
+5. `rework_rounds`: 1. The Windows definition of done described the required pytest base path as optional.
 6. `verification`: three documentation checks exited 0. Application tests
    and full local CI are NOT_RUN on this task branch. GitHub Actions is NOT_RUN
-   on this task branch. Gate 2 is pending.
+   on this task branch. Gate 2 recheck is pending.
 7. `open_questions`: none.
