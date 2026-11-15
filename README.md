@@ -16,14 +16,28 @@ through tick 1,008 and signed off M7 on 2026-11-11. P2 is complete.
 - [P2 acceptance and M7 evidence](docs/tasks/p2/P2-05.md)
 - [Development checks](AGENTS.md)
 
+## Current phase and entry points
+
+P3 reached M9 on 2026-11-14 with acceptance of the one-resident integration.
+[P3-06](docs/tasks/p3/P3-06.md) (three-resident isolation and interaction)
+and [P3-07](docs/tasks/p3/P3-07.md) (evaluation, inspection, and M10) are pending
+in this repository. Follow their task cards for current status.
+
+- [P3 implementation plan](docs/plans/p3-implementation-plan-v0.1.md)
+- P3 specifications for [resident experience](docs/spec/resident-experience-v0.1.md),
+  [resident cognition](docs/spec/resident-cognition-v0.1.md),
+  [LLM decisions and recovery](docs/spec/llm-decision-v0.1.md), and
+  [evaluation and inspection](docs/spec/p3-evaluation-v0.1.md)
+- [M9 acceptance and evidence](docs/tasks/p3/M9-evidence.md)
+
 ## Prerequisites
 
 Use Python 3.13 with [uv](https://docs.astral.sh/uv/), Node.js 24, and pnpm 10.34.9.
 Run the commands from the repository root.
 
 ```sh
-uv sync --directory backend
-pnpm --dir frontend install
+uv sync --directory backend --locked
+pnpm --dir frontend install --frozen-lockfile
 ```
 
 ## P1 reference walkthrough
