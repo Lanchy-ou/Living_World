@@ -128,7 +128,7 @@ export function entityScale(layout: Layout): number {
   return Math.max(layout.tile / TILE_PX, MIN_ENTITY_SCALE);
 }
 
-function groupByTile<T>(items: T[], tileOf: (item: T) => { x: number; y: number }): Map<string, T[]> {
+function groupByTile<T>(items: readonly T[], tileOf: (item: T) => { x: number; y: number }): Map<string, T[]> {
   const groups = new Map<string, T[]>();
   for (const item of items) {
     const { x, y } = tileOf(item);

@@ -15,12 +15,14 @@ from pydantic.json_schema import models_json_schema
 
 from living_island import contract
 from living_island.contract.replay import ReplayBundle
+from living_island.world.facts import PAYLOAD_MODEL_BY_TYPE
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = REPO_ROOT / "frontend"
 OUT_DIR = FRONTEND / "src" / "api" / "generated"
 SCHEMA_PATH = OUT_DIR / "contract.schema.json"
 REPLAY_SCHEMA_PATH = OUT_DIR / "replay.schema.json"
+REPLAY_TYPES_PATH = OUT_DIR / "replay.ts"
 JSON_SCHEMA_2020_12 = "https://json-schema.org/draft/2020-12/schema"
 
 
@@ -56,6 +58,32 @@ def write_text(path: Path, text: str) -> None:
         f.write(text)
 
 
+def render_discriminated_replay_types(source: str) -> str:
+    """Refine the TypeScript event union using the same pairs as the Python validator."""
+    event_declaration = "export interface WorldEvent {"
+    if source.count(event_declaration) != 1:
+        raise ValueError("Expected one json-schema-to-typescript WorldEvent declaration")
+
+    source = source.replace(event_declaration, "interface WorldEventShape {")
+    payload_mapping = "\n".join(
+        f"  {json.dumps(event_type)}: {model.__name__};"
+        for event_type, model in PAYLOAD_MODEL_BY_TYPE.items()
+    )
+    return f"""{source.rstrip()}
+
+type EventPayloadByType = {{
+{payload_mapping}
+}};
+
+export type WorldEvent = {{
+  [EventType in WorldEventShape["type"]]: Omit<WorldEventShape, "type" | "payload"> & {{
+    type: EventType;
+    payload: EventPayloadByType[EventType];
+  }};
+}}[WorldEventShape["type"]];
+"""
+
+
 def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     # Legacy combined output: same bytes as before.
@@ -68,6 +96,8 @@ def main() -> int:
         print("pnpm not found on PATH", file=sys.stderr)
         return 1
     subprocess.run([pnpm, "--dir", str(FRONTEND), "run", "gen:types"], check=True)
+    source = REPLAY_TYPES_PATH.read_text(encoding="utf-8")
+    write_text(REPLAY_TYPES_PATH, render_discriminated_replay_types(source))
     return 0
 
 

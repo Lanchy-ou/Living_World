@@ -6,6 +6,7 @@ import pytest
 from test_engine_movement import ROWS, tick
 from world_builders import tiny_content
 
+from living_island.world import actions
 from living_island.world.content import WorldContent, build_world_content, map_bytes_from_rows
 from living_island.world.facts import ActionFailedPayload
 from living_island.world.ports import WorldTickCommit, create_engine
@@ -54,6 +55,19 @@ def failures(commit: WorldTickCommit) -> list[str]:
 TREE = {"kind": "entity", "id": "fruit_01"}
 CANTEEN = {"kind": "entity", "id": "canteen_01"}
 RYAN = {"kind": "resident", "id": "ryan"}
+
+
+def test_action_dispatch_rejects_unhandled_kind() -> None:
+    content = content_with({"ella": (2, 2), "ryan": (4, 2)})
+    snapshot = create_engine(content, None).initial_commit().snapshot
+    actor = next(resident for resident in snapshot.residents if resident.id == "ella")
+    # Bypass intent validation to reach both dispatch guards directly.
+    unhandled = intent("wait").model_copy(update={"action_type": "unhandled_action"})
+
+    with pytest.raises(AssertionError, match="unhandled_action"):
+        actions.validate(content.config, snapshot, actor, unhandled)
+    with pytest.raises(AssertionError, match="unhandled_action"):
+        actions.settle(content.config, snapshot, actor, unhandled)
 
 
 def test_last_fruit_resolves_after_full_duration_before_regrowth() -> None:
