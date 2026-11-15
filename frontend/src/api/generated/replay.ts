@@ -309,7 +309,7 @@ export interface EventRange {
 /**
  * Objective event envelope (Interface Contract §3.1) with a typed payload.
  */
-export interface WorldEvent {
+interface WorldEventShape {
   schema_version: SchemaVersion;
   run_id: RunId1;
   event_id: EventId;
@@ -469,3 +469,38 @@ export interface GodInterventionRecordedPayload {
   kind: Kind;
   transcript_retained: TranscriptRetained;
 }
+
+type EventPayloadByType = {
+  "world_initialized": WorldInitializedPayload;
+  "config_changed": ConfigChangedPayload;
+  "action_started": ActionStartedPayload;
+  "action_progressed": ActionProgressedPayload;
+  "resident_moved": ResidentMovedPayload;
+  "action_succeeded": ActionSucceededPayload;
+  "action_failed": ActionFailedPayload;
+  "action_interrupted": ActionInterruptedPayload;
+  "fruit_gathered": FruitGatheredPayload;
+  "fruit_consumed": FruitConsumedPayload;
+  "water_drank": WaterDrankPayload;
+  "canteen_filled": CanteenFilledPayload;
+  "stamina_action_cost_applied": StaminaActionCostAppliedPayload;
+  "fruit_regrew": FruitRegrewPayload;
+  "condition_updated": ConditionUpdatedPayload;
+  "utterance_spoken": UtteranceSpokenPayload;
+  "utterance_heard": UtteranceHeardPayload;
+  "item_given": ItemGivenPayload;
+  "item_picked_up": ItemPickedUpPayload;
+  "resident_died": ResidentDiedPayload;
+  "corpse_created": CorpseCreatedPayload;
+  "item_dropped": ItemDroppedPayload;
+  "exploration_updated": ExplorationUpdatedPayload;
+  "agent_fallback_used": AgentFallbackUsedPayload;
+  "god_intervention_recorded": GodInterventionRecordedPayload;
+};
+
+export type WorldEvent = {
+  [EventType in WorldEventShape["type"]]: Omit<WorldEventShape, "type" | "payload"> & {
+    type: EventType;
+    payload: EventPayloadByType[EventType];
+  };
+}[WorldEventShape["type"]];
