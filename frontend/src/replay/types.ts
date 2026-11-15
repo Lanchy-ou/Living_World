@@ -1,12 +1,19 @@
-// Types come straight from the generated replay types; nothing is redefined by hand.
+// Derive the viewer's read-only types from the generated replay contract.
 import type {
-  DisplayFrame,
-  ReplayBundle,
-  ResidentFrame,
-  WorldEvent,
+  DisplayFrame as WireDisplayFrame,
+  ReplayBundle as WireReplayBundle,
+  ResidentFrame as WireResidentFrame,
+  WorldEvent as WireWorldEvent,
 } from "../api/generated/replay.ts";
 
-export type { DisplayFrame, ReplayBundle, ResidentFrame, WorldEvent };
+export type DeepReadonly<T> = T extends object
+  ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> }
+  : T;
+
+export type DisplayFrame = DeepReadonly<WireDisplayFrame>;
+export type ReplayBundle = DeepReadonly<WireReplayBundle>;
+export type ResidentFrame = DeepReadonly<WireResidentFrame>;
+export type WorldEvent = DeepReadonly<WireWorldEvent>;
 
 /** Why a file was refused. The viewer never repairs data. */
 export interface ReplayError {
@@ -17,7 +24,7 @@ export interface ReplayError {
   details: string[];
 }
 
-export type LoadResult = { ok: true; bundle: ReplayBundle } | { ok: false; error: ReplayError };
+export type LoadResult = { ok: true; bundle: WireReplayBundle } | { ok: false; error: ReplayError };
 
 /** Payload fields that reference a resident (replay-frontend §4.4; `recipient_id` per OQ-009). */
 export const RESIDENT_REF_FIELDS = [

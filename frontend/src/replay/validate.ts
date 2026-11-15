@@ -2,8 +2,9 @@
 // payload/type agreement, then the cross-field rules. The file is never repaired or modified.
 import Ajv2020 from "ajv/dist/2020.js";
 import type { ValidateFunction } from "ajv/dist/2020.js";
+import type { ReplayBundle } from "../api/generated/replay.ts";
 import { checkCrossField } from "./crossField.ts";
-import type { LoadResult, ReplayBundle, ReplayError, WorldEvent } from "./types.ts";
+import type { LoadResult, ReplayError, WorldEvent } from "./types.ts";
 
 const MAX_DETAILS = 8;
 
