@@ -10,7 +10,7 @@ export type { DisplayFrame, ReplayBundle, ResidentFrame, WorldEvent };
 
 /** Why a file was refused. The viewer never repairs data. */
 export interface ReplayError {
-  kind: "broken_json" | "unknown_version" | "schema" | "event_payload" | "cross_field";
+  kind: "file_read" | "broken_json" | "unknown_version" | "schema" | "event_payload" | "cross_field";
   /** Rule slug for cross-field errors (same slugs as backend `contract/replay.py`). */
   rule?: string;
   message: string;

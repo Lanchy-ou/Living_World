@@ -13,9 +13,10 @@ import { Roster } from "./panels/Roster.tsx";
 import { residentSprite } from "./render/assets/residentArt.ts";
 import { MapCanvas } from "./render/MapCanvas.tsx";
 import { SpriteCanvas } from "./render/SpriteCanvas.tsx";
+import { createReplayLoadCoordinator } from "./replay/loadCoordinator.ts";
 import { EXAMPLE_NAME, loadExample, loadFromFile } from "./replay/loader.ts";
 import { ReplayStore } from "./replay/store.ts";
-import type { LoadResult, ReplayError, WorldEvent } from "./replay/types.ts";
+import type { ReplayError, WorldEvent } from "./replay/types.ts";
 import { useReplayState } from "./replay/useStore.ts";
 import "./App.css";
 
@@ -28,24 +29,24 @@ export default function App() {
   // Which on-demand detail view is open, if any. Display state only.
   const [drawer, setDrawer] = useState<DrawerTab | null>(null);
 
-  function accept(result: LoadResult, name: string) {
-    if (result.ok) {
-      setError(null);
-      store.load(result.bundle, name);
-    } else {
-      // A refused file never replaces a successfully loaded replay and is never repaired.
-      setError({ error: result.error, fileName: name });
-    }
-  }
+  const [requestLoad] = useState(() =>
+    createReplayLoadCoordinator({
+      onLoad: (nextBundle, name) => {
+        setError(null);
+        store.load(nextBundle, name);
+      },
+      onError: (loadError, name) => setError({ error: loadError, fileName: name }),
+    }),
+  );
 
-  async function onFile(file: File) {
-    accept(await loadFromFile(file), file.name);
+  function onFile(file: File) {
+    void requestLoad(file.name, () => loadFromFile(file));
   }
 
   function onDrop(e: DragEvent<HTMLElement>) {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    if (file) void onFile(file);
+    if (file) onFile(file);
   }
 
   function showEvent(event: WorldEvent) {
@@ -83,8 +84,8 @@ export default function App() {
 
   const load = (
     <LoadControls
-      onFile={(f) => void onFile(f)}
-      onExample={() => accept(loadExample(), EXAMPLE_NAME)}
+      onFile={onFile}
+      onExample={() => void requestLoad(EXAMPLE_NAME, loadExample)}
       fileName={fileName}
     />
   );

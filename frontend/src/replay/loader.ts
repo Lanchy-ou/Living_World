@@ -2,6 +2,7 @@
 // The text is parsed and checked as-is; it is never repaired or written back.
 import exampleText from "../../tests/fixtures/handmade/move-and-gather.json?raw";
 import schemaText from "../api/generated/replay.schema.json?raw";
+import { readReplayFile } from "./loadCoordinator.ts";
 import type { LoadResult } from "./types.ts";
 import type { ReplayValidator } from "./validate.ts";
 import { createReplayValidator } from "./validate.ts";
@@ -13,9 +14,8 @@ export function getValidator(): ReplayValidator {
   return validator;
 }
 
-export async function loadFromFile(file: File): Promise<LoadResult> {
-  const text = await file.text();
-  return getValidator().validateText(text);
+export function loadFromFile(file: File): Promise<LoadResult> {
+  return readReplayFile(file, (text) => getValidator().validateText(text));
 }
 
 export const EXAMPLE_NAME = "move-and-gather.json (hand-made example)";
