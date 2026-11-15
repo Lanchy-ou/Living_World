@@ -73,8 +73,9 @@ const facingCache = new WeakMap<ReplayBundle, Map<string, Facing[]>>();
 /**
  * Facing at rest for every tick: the direction of the last recorded step up to that tick, or
  * "down" before the resident has moved. The value for a tick depends only on frames and
- * events up to that tick. Memoised per bundle object: a loaded bundle is never mutated, so the
- * cache cannot change a result (a bundle edited in place would need a fresh object).
+ * events up to that tick. The store provides a frozen bundle whose identity stays stable until
+ * the next load, so the cached facing remains valid across playback and view changes.
+ * Other callers must also use a new bundle object if their replay data changes.
  */
 function restFacings(bundle: ReplayBundle, residentId: string): Facing[] {
   let perBundle = facingCache.get(bundle);
