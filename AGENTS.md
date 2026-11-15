@@ -152,8 +152,8 @@ Pass the commands above locally with locked dependencies. The jobs in the
 [CI workflow](.github/workflows/ci.yml) map to these checks.
 
 - `backend` installs with `uv sync --directory backend --locked`, then runs Ruff
-  lint and format checks, mypy, import-linter, and pytest. On Windows the pytest
-  command can use the dedicated `--basetemp` above.
+  lint and format checks, mypy, import-linter, and pytest. On Windows, use a new
+  dedicated `--basetemp` for each pytest run as shown above.
 - `frontend` installs with `pnpm --dir frontend install --frozen-lockfile`, then
   runs lint, typecheck, build, `pnpm --dir frontend run test:schema`, and
   `pnpm --dir frontend run test`.
