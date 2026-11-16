@@ -57,4 +57,5 @@ jobs:
       - run: uv sync --directory backend --locked
       - run: pnpm --dir frontend install --frozen-lockfile
       - run: uv run --directory backend python ../scripts/gen_types.py
+      - run: uv run --directory backend python ../scripts/gen_p3_inspection_types.py
       - run: git diff --exit-code

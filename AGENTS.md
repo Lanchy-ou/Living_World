@@ -21,10 +21,10 @@ intents; the frontend only displays state and sends commands.
 
 ## Current phase and entry points
 
-P3 reached M9 on 2026-11-14 with acceptance of the one-resident integration.
-[P3-06](docs/tasks/p3/P3-06.md) (three-resident isolation and interaction)
-and [P3-07](docs/tasks/p3/P3-07.md) (evaluation, inspection, and M10) are pending
-in this repository. Follow their task cards for current status.
+P3 is closed as a delivered foundation under the owner decision of 2026-11-16.
+Long proof and full live evaluation are explicitly deferred, not passed.
+Read [P3 closeout and P3.5 handoff](docs/tasks/p3/P3-closeout.md) before starting
+new work; do not silently restart deferred trials or merge parked candidates.
 
 - [P3 implementation plan](docs/plans/p3-implementation-plan-v0.1.md)
 - P3 specifications for [resident experience](docs/spec/resident-experience-v0.1.md),
@@ -95,6 +95,7 @@ pnpm --dir frontend run test
 
 # Contract CI
 uv run --directory backend python ../scripts/gen_types.py
+uv run --directory backend python ../scripts/gen_p3_inspection_types.py
 git diff --exit-code
 ```
 

@@ -18,12 +18,12 @@ through tick 1,008 and signed off M7 on 2026-11-11. P2 is complete.
 
 ## Current phase and entry points
 
-P3 reached M9 on 2026-11-14 with acceptance of the one-resident integration.
-The owner accepted [P3-06](docs/tasks/p3/P3-06.md) offline validation, which merged
-through PR #3 on 2026-11-16. [P3-07](docs/tasks/p3/P3-07.md) is implementing offline
-evaluation and character inspection; M10 and new real trials remain pending.
-See the [P3-07 evidence report](docs/tasks/p3/P3-07-report.md) for current results
-and explicit NOT_RUN items.
+P3 is closed as a delivered resident-agent foundation under the owner's
+2026-11-16 scope decision. P3-06 offline isolation/interaction proofs and P3-07
+reporting, character inspection and decision-debug features are included.
+Long-duration proof, new live multi-resident evaluation and full original M10
+acceptance are deferred, not passed. See the [closeout and P3.5 handoff](docs/tasks/p3/P3-closeout.md)
+for retained evidence, unmerged follow-ups and known limits.
 
 - [P3 implementation plan](docs/plans/p3-implementation-plan-v0.1.md)
 - P3 specifications for [resident experience](docs/spec/resident-experience-v0.1.md),

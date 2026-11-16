@@ -1,5 +1,11 @@
 # P3-07 offline evaluation and inspection evidence
 
+> **Current disposition (2026-11-16): ACCEPTED_WITH_DEFERRED_VALIDATION.**
+> The owner closed P3 as a delivered foundation and deferred long proof and full
+> live evaluation. See [P3 closeout](P3-closeout.md). Earlier IN_PROGRESS,
+> pending-gate and preview-only statements below are historical execution records,
+> superseded only for this limited release, not claims of original full M10 PASS.
+
 Status: IN_PROGRESS. This report is not M10 acceptance or live-trial authorization.
 
 ## Current delivery: feature preview, further testing deferred
