@@ -459,13 +459,48 @@ def test_checkpoint_version_and_content_hash(
         read_checkpoint(path, content)
 
 
+def completed_wait(tick: int = 1, ordinal: int = 0, seq: int = 0) -> tuple[WorldEvent, ...]:
+    """Supply execution facts for the committed decision in a storage-only fixture."""
+    plan = decision(tick - 1, ordinal).plan
+    return tuple(
+        WorldEvent.model_validate(
+            {
+                "schema_version": "0.1",
+                "run_id": RUN_ID,
+                "event_id": format_event_id(RUN_ID, tick, seq + index),
+                "tick": tick,
+                "seq_in_tick": seq + index,
+                "type": kind,
+                "actor_id": ACTOR,
+                "target_id": None,
+                "intent_id": plan.intents[0].intent_id,
+                "llm_call_id": None,
+                "caused_by_event_ids": [],
+                "payload": payload,
+            }
+        )
+        for index, (kind, payload) in enumerate(
+            (
+                (
+                    "action_started",
+                    {"action_type": "wait", "plan_id": plan.plan_id, "duration_ticks": 1},
+                ),
+                ("action_succeeded", {"action_type": "wait", "result_code": "OK"}),
+            )
+        )
+    )
+
+
 def source_run(directory: Path, content: WorldContent) -> Path:
     directory.mkdir()
     retain_run_content(directory, content)
-    EventLogWriter(directory / "events.jsonl", RUN_ID).append([fact(content)])
+    EventLogWriter(directory / "events.jsonl", RUN_ID).append([fact(content), *completed_wait()])
     DecisionLogWriter(directory / "decisions.jsonl", RUN_ID).append([decision()])
     path = directory / "checkpoint.json"
-    write_checkpoint(path, SavePackage.model_validate(checkpoint_data(content, tick=1, ordinal=1)))
+    data = checkpoint_data(content, tick=1, ordinal=1)
+    data["world"].update(event_log_cursor=3, next_event_seq_in_tick=2)
+    data["event_cursor"] = 3
+    write_checkpoint(path, SavePackage.model_validate(data))
     return path
 
 
@@ -492,7 +527,9 @@ def test_resume_writes_only_continuation_and_preserves_source(
         assert not output.exists()
     assert (output / "events.jsonl").read_bytes() == canonical(event) + b"\n"
     assert (output / "decisions.jsonl").read_bytes() == canonical(decision(1, 1)) + b"\n"
-    assert read_events(output / "events.jsonl", RUN_ID, prior=[initial], after_tick=1) == (event,)
+    assert read_events(
+        output / "events.jsonl", RUN_ID, prior=[initial, *completed_wait()], after_tick=1
+    ) == (event,)
     assert read_decisions(output / "decisions.jsonl", RUN_ID, ordinals={ACTOR: 1}, from_tick=1) == (
         decision(1, 1),
     )
@@ -500,7 +537,7 @@ def test_resume_writes_only_continuation_and_preserves_source(
         {
             "source_run_id": RUN_ID,
             "checkpoint_tick": 1,
-            "event_cursor": 1,
+            "event_cursor": 3,
             "decision_record_cursor": 1,
             "checkpoint_sha256": sha256(checkpoint.read_bytes()).hexdigest(),
         }
@@ -548,7 +585,7 @@ def script_data() -> dict[str, Any]:
 
 def test_script_identity_actor_slice_and_resume(tmp_path: Path, content: WorldContent) -> None:
     source = tmp_path / "source"
-    source_run(source, content)
+    original_checkpoint = source_run(source, content)
     path = source / "script.json"
     data = script_data()
     path.write_bytes(json.dumps(data, indent=2).encode())
@@ -557,7 +594,7 @@ def test_script_identity_actor_slice_and_resume(tmp_path: Path, content: WorldCo
     script.for_actor(ACTOR).plans.clear()
     assert len(script.for_actor(ACTOR).plans) == 1
 
-    payload = checkpoint_data(content, tick=1, ordinal=1)
+    payload = read_checkpoint(original_checkpoint, content).model_dump()
     saved_runtime = payload["agent_state"]["runtime_states"][0]
     saved_runtime["policy_config"].update(policy_id="scripted-v0", script_sha256=script.sha256)
     saved_runtime["policy_state"] = {"cursor": 1}
@@ -612,7 +649,7 @@ def test_verified_trace_and_tampering(tmp_path: Path, content: WorldContent, mut
     manifest = write_trace(source, world)
     assert manifest.final_world_sha256 == sha256(canonical(world)).hexdigest()
     trace = load_trace(source)
-    assert trace.events == (fact(content),)
+    assert trace.events == (fact(content), *completed_wait())
     assert trace.for_actor(ACTOR) == (decision(),)
     trace.for_actor(ACTOR)[0].plan.intents.clear()
     assert trace.for_actor(ACTOR) == (decision(),)
@@ -639,7 +676,7 @@ def test_recorded_resume_requires_the_saved_trace_identity(
     path = source_run(source, content)
     manifest = write_trace(source, read_checkpoint(path, content).world)
     trace_path = source / "decision-trace.json"
-    payload = checkpoint_data(content, tick=1, ordinal=1)
+    payload = read_checkpoint(path, content).model_dump()
     payload["agent_state"]["runtime_states"][0]["policy_config"].update(
         policy_id="recorded-v0", source_trace_sha256=sha256(trace_path.read_bytes()).hexdigest()
     )
@@ -667,10 +704,10 @@ def test_resume_continuation_uses_ancestor_prefix(tmp_path: Path, content: World
     initial = fact(content)
     event = fact(content, 2, causes=[initial.event_id])
     data = checkpoint_data(content, tick=2, ordinal=2)
-    data["world"].update(event_log_cursor=2, next_event_seq_in_tick=1)
-    data["event_cursor"] = 2
+    data["world"].update(event_log_cursor=6, next_event_seq_in_tick=3)
+    data["event_cursor"] = 6
     with stage_resume_output(source, middle, checkpoint) as staged:
-        staged.events.append([event])
+        staged.events.append([event, *completed_wait(tick=2, ordinal=1, seq=1)])
         staged.decisions.append([decision(1, 1)])
         write_checkpoint(staged.directory / "checkpoint.json", SavePackage.model_validate(data))
 
@@ -740,3 +777,21 @@ def test_resume_stages_bootstrap_before_publishing(tmp_path, content, monkeypatc
         pass
     assert (output / "events.jsonl").is_file()
     assert (output / "decisions.jsonl").is_file()
+
+
+def test_resume_rejects_committed_decision_without_execution_history(tmp_path, content):
+    source = tmp_path / "source"
+    checkpoint = source_run(source, content)
+    # Reproduce the incomplete old synthetic fixture: the committed wait has no
+    # start or terminal event, despite the checkpoint having passed its decision.
+    (source / "events.jsonl").write_bytes(canonical(fact(content)) + b"\n")
+    data = json.loads(checkpoint.read_bytes())
+    data["world"].update(event_log_cursor=1, next_event_seq_in_tick=0)
+    data["event_cursor"] = 1
+    checkpoint.write_bytes(canonical_json_bytes(data))
+    output = tmp_path / "output"
+    with pytest.raises(PersistenceError, match="started intents must be a plan prefix"):
+        with stage_resume_output(source, output, checkpoint):
+            pytest.fail("unverified action history reached continuation staging")
+    assert not output.exists()
+    assert not list(tmp_path.glob(".output.resume-*"))

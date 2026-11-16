@@ -113,7 +113,7 @@ class BoundaryLoop:
 
     @property
     def boundary(self) -> WorldTickCommit:
-        return self._commit
+        return self._commit.model_copy(deep=True)
 
     def advance(self) -> tuple[WorldTickCommit, list[DecisionRecord]]:
         if not self._at_boundary:
@@ -128,7 +128,7 @@ class BoundaryLoop:
         self._discard_unstarted()
         self._decision_cursor += len(records)
         self._at_boundary = True
-        return self._commit, records
+        return self._commit.model_copy(deep=True), records
 
     def _ingest(self) -> None:
         snapshot = self._commit.snapshot

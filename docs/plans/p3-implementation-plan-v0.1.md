@@ -1,5 +1,10 @@
 # Living Island - P3 implementation plan v0.1
 
+> **Owner scope disposition, 2026-11-16:** P3 closes as a delivered foundation.
+> The original long-proof/live-evaluation/M10 matrix below is deferred, not passed.
+> This release follows [P3 closeout](../tasks/p3/P3-closeout.md); reopening the
+> deferred work requires a deliberate P3.5 plan and any applicable live approval.
+
 > **Accepted at M8, 2026-11-12.** Independent P3-01 Gate 2 passed at `659e1212`.
 > The owner approved the package and CR-005 amendments; the later DeepSeek/CNY150
 > instruction supersedes the earlier provider/USD proposal. See the M8 decision sheet.

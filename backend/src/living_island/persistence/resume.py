@@ -15,8 +15,13 @@ from living_island.agents.types import DecisionRecord
 from living_island.contract.save import SavePackage
 from living_island.events import WorldEvent
 from living_island.world.content import WorldContent, canonical_json_bytes
-from living_island.world.facts import WorldInitializedPayload
-from living_island.world.protocol import ProtocolModel
+from living_island.world.facts import (
+    ActionProgressedPayload,
+    ActionStartedPayload,
+    WorldInitializedPayload,
+)
+from living_island.world.protocol import ActionPlan, ProtocolModel
+from living_island.world.state import ActiveAction
 
 from ._codec import PersistenceError, decode_model, digest, encode, read_bytes, verify_identity
 from ._files import atomic_create
@@ -167,6 +172,122 @@ class _Prefix:
     has_rule_runtime: bool
 
 
+def _verify_active_progress(
+    path: Path,
+    save: SavePackage,
+    action: ActiveAction,
+    started: WorldEvent,
+    progressed: WorldEvent | None,
+) -> None:
+    if (
+        progressed is None
+        or progressed.tick != save.world.tick
+        or not isinstance(progressed.payload, ActionProgressedPayload)
+        or action.tick_started != started.tick - 1
+        or action.elapsed_ticks != save.world.tick - action.tick_started
+        or (
+            action.intent.action_type,
+            action.elapsed_ticks,
+            action.remaining_ticks,
+            action.route_cursor,
+        )
+        != (
+            progressed.payload.action_type,
+            progressed.payload.elapsed_ticks,
+            progressed.payload.remaining_ticks,
+            progressed.payload.route_cursor,
+        )
+    ):
+        raise PersistenceError(path, "active_actions", "active progress differs from event prefix")
+
+
+def _verify_plan_progress(
+    path: Path,
+    save: SavePackage,
+    events: tuple[WorldEvent, ...],
+    decisions: tuple[DecisionRecord, ...],
+) -> None:
+    """Resolve queues against decisions and their actually started/finished prefix.
+
+    Legacy scheduling commits only while idle and starts the first intent immediately.
+    Deferred triggers do not discard the suffix until the next idle scheduling phase;
+    failure, interruption and death discard it at the completed boundary itself.
+    """
+    latest = {record.actor_id: record for record in decisions}
+    starts: dict[str, list[WorldEvent]] = {}
+    terminals: dict[str, WorldEvent] = {}
+    progress: dict[str, WorldEvent] = {}
+    for event in events:
+        if event.intent_id is None:
+            continue
+        if event.type == "action_started":
+            starts.setdefault(event.intent_id, []).append(event)
+        elif event.type in ("action_succeeded", "action_failed", "action_interrupted"):
+            terminals[event.intent_id] = event
+        elif event.type == "action_progressed":
+            progress[event.intent_id] = event
+
+    active = {action.intent.actor_id: action for action in save.world.active_actions}
+    expected_active: set[str] = set()
+    expected_queues: dict[str, ActionPlan] = {}
+    for resident in save.world.residents:
+        record = latest.get(resident.id)
+        if record is None:
+            continue
+        plan = record.plan
+        count = 0
+        terminal = None
+        for intent in plan.intents:
+            rows = starts.get(intent.intent_id, [])
+            if not rows:
+                break
+            if len(rows) != 1:
+                raise PersistenceError(path, "queued_plans", "intent started more than once")
+            started = rows[0]
+            payload = started.payload
+            if (
+                started.actor_id != resident.id
+                or not isinstance(payload, ActionStartedPayload)
+                or (payload.plan_id, payload.action_type) != (plan.plan_id, intent.action_type)
+                or (count == 0 and started.tick != record.tick + 1)
+                or (count > 0 and (terminal is None or terminal.type != "action_succeeded"))
+                or (terminal is not None and started.tick <= terminal.tick)
+            ):
+                raise PersistenceError(path, "queued_plans", "invalid committed plan progress")
+            count += 1
+            terminal = terminals.get(intent.intent_id)
+            if terminal is None:
+                expected_active.add(resident.id)
+                action = active.get(resident.id)
+                if not resident.alive or action is None or action.intent != intent:
+                    raise PersistenceError(
+                        path, "active_actions", "active intent differs from committed plan progress"
+                    )
+                _verify_active_progress(path, save, action, started, progress.get(intent.intent_id))
+        if count == 0 or any(intent.intent_id in starts for intent in plan.intents[count:]):
+            raise PersistenceError(path, "queued_plans", "started intents must be a plan prefix")
+        remaining = plan.intents[count:]
+        if (
+            resident.alive
+            and remaining
+            and (terminal is None or terminal.type == "action_succeeded")
+        ):
+            expected_queues[resident.id] = plan.model_copy(update={"intents": remaining})
+
+    if len(active) != len(save.world.active_actions) or set(active) != expected_active:
+        raise PersistenceError(
+            path, "active_actions", "active intents differ from committed progress"
+        )
+    queued = save.agent_state.queued_plans
+    if (
+        len(queued) != len(expected_queues)
+        or {plan.actor_id: plan for plan in queued} != expected_queues
+    ):
+        raise PersistenceError(
+            path, "queued_plans", "must equal the complete unstarted committed plan suffix"
+        )
+
+
 def _verify_policy_identity(path: Path, save: SavePackage, baseline: SavePackage) -> None:
     expected = {r.actor_id: r.policy_config for r in baseline.agent_state.runtime_states}
     actual = {r.actor_id: r.policy_config for r in save.agent_state.runtime_states}
@@ -227,6 +348,7 @@ def _prefix(source: Path, output: Path, save: SavePackage, seen: frozenset[Path]
     ):
         raise PersistenceError(event_path, "tick", "expected a post-checkpoint event")
     decisions = _decision_prefix(source / DECISIONS_FILENAME, save, prior.decisions, from_tick)
+    _verify_plan_progress(source, save, history, decisions)
     has_rule_runtime = prior.has_rule_runtime or any(
         runtime.policy_config.policy_id == "rule-based-v0"
         for runtime in save.agent_state.runtime_states

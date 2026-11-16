@@ -10,6 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # P3 registrations read frozen content from pinned historical commits
+          # (e.g. scripts/p3_trials.py WORLD_COMMIT); a shallow clone lacks them.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --directory backend --locked
       - run: uv run --directory backend ruff check .
@@ -53,4 +57,5 @@ jobs:
       - run: uv sync --directory backend --locked
       - run: pnpm --dir frontend install --frozen-lockfile
       - run: uv run --directory backend python ../scripts/gen_types.py
+      - run: uv run --directory backend python ../scripts/gen_p3_inspection_types.py
       - run: git diff --exit-code

@@ -36,7 +36,7 @@ export interface ResidentView {
   canteenDelta: number | null;
 }
 
-function find(frameResidents: ResidentFrame[], id: string): ResidentFrame | undefined {
+function find(frameResidents: readonly ResidentFrame[], id: string): ResidentFrame | undefined {
   return frameResidents.find((r) => r.id === id);
 }
 

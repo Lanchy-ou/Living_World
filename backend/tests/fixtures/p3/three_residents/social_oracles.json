@@ -1,0 +1,33 @@
+{
+  "fixture_id": "p3-06-social-oracles-v0",
+  "shared_hearing": {
+    "positions": {"ella": [2, 3], "mia": [2, 4], "ryan": [3, 3]},
+    "speaker": "ella",
+    "addressee": "ryan",
+    "bystander": "mia",
+    "text": "I can share the canteen after we agree."
+  },
+  "private_hearing": {
+    "positions": {"ella": [2, 3], "mia": [9, 3], "ryan": [3, 3]},
+    "non_hearer": "mia",
+    "text": "The canteen is promised, not delivered."
+  },
+  "conflicting_knowledge": {
+    "positions": {"ella": [2, 3], "mia": [6, 3], "ryan": [3, 3]},
+    "speaker_target_position": [5, 3],
+    "ella_claim": "The fruit cache is west.",
+    "mia_claim": "The fruit cache is east."
+  },
+  "moved_target": {
+    "positions": {"ella": [2, 3], "mia": [3, 3], "ryan": [2, 4]},
+    "target_position": [5, 3],
+    "promise_text": "I will give you my canteen."
+  },
+  "contention": {
+    "positions": {"ella": [2, 3], "mia": [3, 3], "ryan": [3, 4]},
+    "receiver": "mia",
+    "item_type": "fruit",
+    "quantity": 1,
+    "receiver_slot_capacity": 1
+  }
+}

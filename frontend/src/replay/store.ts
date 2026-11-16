@@ -1,7 +1,7 @@
 // ReplayStore: the only mutable viewer state. It holds a validated, immutable bundle plus
 // local view state (tick, selection, filters, camera). It never simulates: seeking and stepping
 // only change which recorded frame is current.
-import type { DisplayFrame, ReplayBundle, WorldEvent } from "./types.ts";
+import type { DeepReadonly, DisplayFrame, ReplayBundle, WorldEvent } from "./types.ts";
 
 export const SPEEDS = [1, 2, 4, 8, 16] as const;
 export type Speed = (typeof SPEEDS)[number];
@@ -24,7 +24,7 @@ export interface Filters {
   failuresOnly: boolean;
 }
 
-export interface ReplayState {
+export type ReplayState = DeepReadonly<{
   bundle: ReplayBundle | null;
   fileName: string | null;
   currentTick: number;
@@ -34,12 +34,10 @@ export interface ReplayState {
   selectedEventId: string | null;
   filters: Filters;
   camera: Camera;
-}
-
-const INITIAL_CAMERA: Camera = { zoom: 1, panX: 0, panY: 0, follow: false };
+}>;
 
 export function initialState(): ReplayState {
-  return {
+  return Object.freeze({
     bundle: null,
     fileName: null,
     currentTick: 0,
@@ -47,9 +45,9 @@ export function initialState(): ReplayState {
     speed: 1,
     selectedResidentId: null,
     selectedEventId: null,
-    filters: { residentId: null, failuresOnly: false },
-    camera: INITIAL_CAMERA,
-  };
+    filters: Object.freeze({ residentId: null, failuresOnly: false }),
+    camera: Object.freeze({ zoom: FIT_ZOOM, panX: 0, panY: 0, follow: false }),
+  });
 }
 
 /** Frames are contiguous from tick 0 (validated), so a tick is its own array index. */
@@ -75,6 +73,13 @@ export function clampTick(bundle: ReplayBundle, tick: number): number {
 
 type Listener = () => void;
 
+/** Freeze an owned replay's JSON objects and arrays before publishing it. */
+function freezeReplayData(value: unknown): void {
+  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return;
+  Object.freeze(value);
+  for (const child of Object.values(value)) freezeReplayData(child);
+}
+
 export class ReplayStore {
   private state: ReplayState = initialState();
   private followPan: { panX: number; panY: number } | null = null;
@@ -88,20 +93,24 @@ export class ReplayStore {
   };
 
   private set(patch: Partial<ReplayState>): void {
-    this.state = { ...this.state, ...patch };
+    this.state = Object.freeze({ ...this.state, ...patch });
     for (const l of this.listeners) l();
   }
 
-  /** A newly loaded bundle starts at tick 0, paused, with the whole island in view and nobody selected. */
+  /**
+   * Take an immutable snapshot of the validated input. The caller retains ownership of its input.
+   * The new replay starts at tick 0, paused, with the whole island in view and nobody selected.
+   */
   load(bundle: ReplayBundle, fileName: string | null = null): void {
-    this.state = {
+    const ownedBundle = structuredClone(bundle);
+    freezeReplayData(ownedBundle);
+    this.followPan = null;
+    this.set({
       ...initialState(),
-      bundle,
+      bundle: ownedBundle,
       fileName,
       speed: this.state.speed,
-    };
-    this.followPan = null;
-    for (const l of this.listeners) l();
+    });
   }
 
   unload(): void {
@@ -147,7 +156,7 @@ export class ReplayStore {
   selectResident(id: string | null): void {
     if (id === this.state.selectedResidentId) return;
     if (this.state.camera.follow) {
-      this.set({ selectedResidentId: id, camera: this.withoutFollow(this.state.camera) });
+      this.set({ selectedResidentId: id, camera: Object.freeze(this.withoutFollow(this.state.camera)) });
     } else {
       this.set({ selectedResidentId: id });
     }
@@ -166,7 +175,7 @@ export class ReplayStore {
   }
 
   setFilters(patch: Partial<Filters>): void {
-    this.set({ filters: { ...this.state.filters, ...patch } });
+    this.set({ filters: Object.freeze({ ...this.state.filters, ...patch }) });
   }
 
   /** Clicking an event seeks to its tick and expands its raw JSON. */
@@ -187,6 +196,6 @@ export class ReplayStore {
         ? this.withoutFollow(current)
         : current;
     if (patch.follow === true && !current.follow) this.followPan = null;
-    this.set({ camera: { ...base, ...patch } });
+    this.set({ camera: Object.freeze({ ...base, ...patch }) });
   }
 }

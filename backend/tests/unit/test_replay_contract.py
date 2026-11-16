@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -18,6 +19,7 @@ from pydantic import BaseModel, ValidationError
 
 from living_island.contract import replay
 from living_island.contract.replay import ReplayBundle
+from living_island.world.facts import PAYLOAD_MODEL_BY_TYPE
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = REPO_ROOT / "backend" / "tests" / "fixtures" / "replay"
@@ -196,6 +198,18 @@ def test_committed_replay_schema_matches_the_models() -> None:
     gen = _load_gen_types()
     committed = REPO_ROOT / "frontend" / "src" / "api" / "generated" / "replay.schema.json"
     assert committed.read_text(encoding="utf-8") == gen.render_schema(gen.build_replay_schema())
+
+
+def test_generated_world_event_uses_canonical_payload_mapping() -> None:
+    committed = REPO_ROOT / "frontend" / "src" / "api" / "generated" / "replay.ts"
+    source = committed.read_text(encoding="utf-8")
+    start = source.index("type EventPayloadByType = {\n")
+    end = source.index("\n};", start)
+    entries = re.findall(r'  "([^"]+)": (\w+);', source[start:end])
+    assert len(entries) == len(PAYLOAD_MODEL_BY_TYPE)
+    assert dict(entries) == {
+        event_type: model.__name__ for event_type, model in PAYLOAD_MODEL_BY_TYPE.items()
+    }
 
 
 def test_replay_module_has_no_sim_or_world_state_dependency() -> None:

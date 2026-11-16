@@ -1,0 +1,1473 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "AcceptedDecisionData": {
+      "additionalProperties": false,
+      "properties": {
+        "plan": {
+          "$ref": "#/$defs/ActionPlan"
+        },
+        "goal_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Goal Id"
+        }
+      },
+      "required": [
+        "plan",
+        "goal_id"
+      ],
+      "title": "AcceptedDecisionData",
+      "type": "object"
+    },
+    "ActionFeedback": {
+      "additionalProperties": false,
+      "properties": {
+        "intent_id": {
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "success",
+            "failure",
+            "interrupted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "failure_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "DEAD",
+                "EXHAUSTED",
+                "INVALID_TARGET",
+                "PATH_BLOCKED",
+                "NO_PATH",
+                "OUT_OF_REACH",
+                "RESOURCE_TAKEN",
+                "INVENTORY_FULL",
+                "NO_ITEM",
+                "NO_NEED",
+                "NO_WATER",
+                "ALREADY_FULL",
+                "OUT_OF_HEARING",
+                "INVALID_SPEECH_ACT",
+                "INVALID_REPLY",
+                "DIALOGUE_LIMIT",
+                "ITEM_TAKEN"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Failure Code"
+        },
+        "interruption_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "DEATH",
+                "URGENT_NEED",
+                "DIRECT_SPEECH",
+                "NEW_SIGHT"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Interruption Reason"
+        },
+        "visible_effects": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Visible Effects",
+          "type": "array"
+        }
+      },
+      "required": [
+        "intent_id",
+        "status",
+        "failure_code",
+        "interruption_reason",
+        "visible_effects"
+      ],
+      "title": "ActionFeedback",
+      "type": "object"
+    },
+    "ActionIntent": {
+      "additionalProperties": false,
+      "properties": {
+        "intent_id": {
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "plan_id": {
+          "title": "Plan Id",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "action_type": {
+          "enum": [
+            "move_to",
+            "gather",
+            "eat",
+            "drink",
+            "fill_canteen",
+            "rest",
+            "sleep",
+            "talk",
+            "give",
+            "pick_up",
+            "wait"
+          ],
+          "title": "Action Type",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "entity": "#/$defs/EntityTarget",
+                  "resident": "#/$defs/ResidentTarget",
+                  "tile": "#/$defs/TileTarget"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TileTarget"
+                },
+                {
+                  "$ref": "#/$defs/EntityTarget"
+                },
+                {
+                  "$ref": "#/$defs/ResidentTarget"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        },
+        "parameters": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmptyParameters"
+            },
+            {
+              "$ref": "#/$defs/DrinkParameters"
+            },
+            {
+              "$ref": "#/$defs/TalkParameters"
+            },
+            {
+              "$ref": "#/$defs/ItemTransferParameters"
+            }
+          ],
+          "title": "Parameters"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "intent_id",
+        "plan_id",
+        "actor_id",
+        "action_type",
+        "target",
+        "parameters",
+        "reason"
+      ],
+      "title": "ActionIntent",
+      "type": "object"
+    },
+    "ActionPlan": {
+      "additionalProperties": false,
+      "description": "1..agents.max_plan_actions intents; the configured upper bound is checked by agents.",
+      "properties": {
+        "plan_id": {
+          "title": "Plan Id",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "created_at_tick": {
+          "minimum": 0,
+          "title": "Created At Tick",
+          "type": "integer"
+        },
+        "intents": {
+          "items": {
+            "$ref": "#/$defs/ActionIntent"
+          },
+          "minItems": 1,
+          "title": "Intents",
+          "type": "array"
+        }
+      },
+      "required": [
+        "plan_id",
+        "actor_id",
+        "created_at_tick",
+        "intents"
+      ],
+      "title": "ActionPlan",
+      "type": "object"
+    },
+    "Commitment": {
+      "additionalProperties": false,
+      "properties": {
+        "goal_id": {
+          "title": "Goal Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "completion": {
+          "discriminator": {
+            "mapping": {
+              "own_action_success": "#/$defs/OwnActionSuccessPredicate",
+              "unverifiable": "#/$defs/UnverifiablePredicate"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/OwnActionSuccessPredicate"
+            },
+            {
+              "$ref": "#/$defs/UnverifiablePredicate"
+            }
+          ],
+          "title": "Completion"
+        },
+        "status": {
+          "enum": [
+            "intended",
+            "attempted",
+            "observed_complete"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "created_at_tick": {
+          "minimum": 0,
+          "title": "Created At Tick",
+          "type": "integer"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoalEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "goal_id",
+        "text",
+        "completion",
+        "status",
+        "created_at_tick",
+        "evidence"
+      ],
+      "title": "Commitment",
+      "type": "object"
+    },
+    "Coord": {
+      "additionalProperties": false,
+      "description": "A tile coordinate ``{x, y}``; (0,0) is top left.",
+      "properties": {
+        "x": {
+          "minimum": 0,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "minimum": 0,
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "Coord",
+      "type": "object"
+    },
+    "DecisionSourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "const": "decision",
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "decision_ordinal": {
+          "minimum": 0,
+          "title": "Decision Ordinal",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_kind",
+        "run_id",
+        "decision_id",
+        "decision_ordinal"
+      ],
+      "title": "DecisionSourceRef",
+      "type": "object"
+    },
+    "DeliverySourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "const": "delivery",
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "delivery_id": {
+          "title": "Delivery Id",
+          "type": "string"
+        },
+        "field": {
+          "enum": [
+            "own_state",
+            "visible_entities",
+            "transient_sightings",
+            "environmental_cues",
+            "heard_utterances",
+            "last_action_feedback"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Index"
+        }
+      },
+      "required": [
+        "source_kind",
+        "run_id",
+        "delivery_id",
+        "field",
+        "index"
+      ],
+      "title": "DeliverySourceRef",
+      "type": "object"
+    },
+    "DrinkParameters": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "enum": [
+            "spring",
+            "canteen"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "title": "DrinkParameters",
+      "type": "object"
+    },
+    "EmptyParameters": {
+      "additionalProperties": false,
+      "description": "``{}`` parameters for move_to, gather, eat, fill_canteen, rest, sleep, wait.",
+      "properties": {},
+      "title": "EmptyParameters",
+      "type": "object"
+    },
+    "EntityTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "entity",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "EntityTarget",
+      "type": "object"
+    },
+    "EnvironmentalCue": {
+      "additionalProperties": false,
+      "properties": {
+        "cue_id": {
+          "title": "Cue Id",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "detail_level": {
+          "enum": [
+            "distant",
+            "near"
+          ],
+          "title": "Detail Level",
+          "type": "string"
+        },
+        "physical_description": {
+          "title": "Physical Description",
+          "type": "string"
+        },
+        "direction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Direction"
+        }
+      },
+      "required": [
+        "cue_id",
+        "position",
+        "detail_level",
+        "physical_description",
+        "direction"
+      ],
+      "title": "EnvironmentalCue",
+      "type": "object"
+    },
+    "ExperiencePayload": {
+      "additionalProperties": false,
+      "properties": {
+        "information_kind": {
+          "enum": [
+            "delivered",
+            "interpretation"
+          ],
+          "title": "Information Kind",
+          "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "const": "unassessed",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confidence"
+        },
+        "data": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OwnStateData"
+            },
+            {
+              "$ref": "#/$defs/VisibleEntity"
+            },
+            {
+              "$ref": "#/$defs/TransientSighting"
+            },
+            {
+              "$ref": "#/$defs/EnvironmentalCue"
+            },
+            {
+              "$ref": "#/$defs/HeardUtterance"
+            },
+            {
+              "$ref": "#/$defs/FeedbackData"
+            },
+            {
+              "$ref": "#/$defs/AcceptedDecisionData"
+            }
+          ],
+          "title": "Data"
+        }
+      },
+      "required": [
+        "information_kind",
+        "confidence",
+        "data"
+      ],
+      "title": "ExperiencePayload",
+      "type": "object"
+    },
+    "ExperienceRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "experience_id": {
+          "title": "Experience Id",
+          "type": "string"
+        },
+        "owner_id": {
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 0,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "observed_tick": {
+          "minimum": 0,
+          "title": "Observed Tick",
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "own_state",
+            "entity_seen",
+            "transient_seen",
+            "cue_seen",
+            "heard_speech",
+            "action_feedback",
+            "accepted_decision"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "source": {
+          "discriminator": {
+            "mapping": {
+              "decision": "#/$defs/DecisionSourceRef",
+              "delivery": "#/$defs/DeliverySourceRef"
+            },
+            "propertyName": "source_kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/DeliverySourceRef"
+            },
+            {
+              "$ref": "#/$defs/DecisionSourceRef"
+            }
+          ],
+          "title": "Source"
+        },
+        "payload": {
+          "$ref": "#/$defs/ExperiencePayload"
+        }
+      },
+      "required": [
+        "experience_id",
+        "owner_id",
+        "sequence",
+        "observed_tick",
+        "kind",
+        "source",
+        "payload"
+      ],
+      "title": "ExperienceRecord",
+      "type": "object"
+    },
+    "FeedbackData": {
+      "additionalProperties": false,
+      "properties": {
+        "feedback": {
+          "$ref": "#/$defs/ActionFeedback"
+        },
+        "owned_intent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OwnedIntentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "feedback",
+        "owned_intent"
+      ],
+      "title": "FeedbackData",
+      "type": "object"
+    },
+    "GoalEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "delivery_id": {
+          "title": "Delivery Id",
+          "type": "string"
+        },
+        "observed_tick": {
+          "minimum": 0,
+          "title": "Observed Tick",
+          "type": "integer"
+        },
+        "owned_intent": {
+          "$ref": "#/$defs/OwnedIntentRef"
+        },
+        "feedback": {
+          "$ref": "#/$defs/ActionFeedback"
+        }
+      },
+      "required": [
+        "delivery_id",
+        "observed_tick",
+        "owned_intent",
+        "feedback"
+      ],
+      "title": "GoalEvidence",
+      "type": "object"
+    },
+    "GoalState": {
+      "additionalProperties": false,
+      "properties": {
+        "goal_schema_version": {
+          "const": "0.1",
+          "title": "Goal Schema Version",
+          "type": "string"
+        },
+        "current": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Commitment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "next_goal_sequence": {
+          "minimum": 0,
+          "title": "Next Goal Sequence",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "goal_schema_version",
+        "current",
+        "next_goal_sequence"
+      ],
+      "title": "GoalState",
+      "type": "object"
+    },
+    "HeardUtterance": {
+      "additionalProperties": false,
+      "properties": {
+        "utterance_id": {
+          "title": "Utterance Id",
+          "type": "string"
+        },
+        "speaker_id": {
+          "title": "Speaker Id",
+          "type": "string"
+        },
+        "addressee_id": {
+          "title": "Addressee Id",
+          "type": "string"
+        },
+        "speech_act": {
+          "enum": [
+            "statement",
+            "request",
+            "accept",
+            "refuse"
+          ],
+          "title": "Speech Act",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "request_item_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Request Item Type"
+        },
+        "request_quantity": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Request Quantity"
+        },
+        "in_reply_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "In Reply To"
+        },
+        "heard_at_tick": {
+          "minimum": 0,
+          "title": "Heard At Tick",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "utterance_id",
+        "speaker_id",
+        "addressee_id",
+        "speech_act",
+        "text",
+        "request_item_type",
+        "request_quantity",
+        "in_reply_to",
+        "heard_at_tick"
+      ],
+      "title": "HeardUtterance",
+      "type": "object"
+    },
+    "ItemRequest": {
+      "additionalProperties": false,
+      "description": "The ``request`` object of ``talk`` parameters.",
+      "properties": {
+        "item_type": {
+          "enum": [
+            "fruit",
+            "canteen"
+          ],
+          "title": "Item Type",
+          "type": "string"
+        },
+        "quantity": {
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "item_type",
+        "quantity"
+      ],
+      "title": "ItemRequest",
+      "type": "object"
+    },
+    "ItemTransferParameters": {
+      "additionalProperties": false,
+      "description": "Parameters for ``give`` and ``pick_up``.",
+      "properties": {
+        "item_type": {
+          "enum": [
+            "fruit",
+            "canteen"
+          ],
+          "title": "Item Type",
+          "type": "string"
+        },
+        "quantity": {
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "item_type",
+        "quantity"
+      ],
+      "title": "ItemTransferParameters",
+      "type": "object"
+    },
+    "OwnActionSuccessPredicate": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "own_action_success",
+          "title": "Kind",
+          "type": "string"
+        },
+        "action_type": {
+          "enum": [
+            "move_to",
+            "gather",
+            "eat",
+            "drink",
+            "fill_canteen",
+            "rest",
+            "sleep",
+            "talk",
+            "give",
+            "pick_up",
+            "wait"
+          ],
+          "title": "Action Type",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "entity": "#/$defs/EntityTarget",
+                  "resident": "#/$defs/ResidentTarget",
+                  "tile": "#/$defs/TileTarget"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TileTarget"
+                },
+                {
+                  "$ref": "#/$defs/EntityTarget"
+                },
+                {
+                  "$ref": "#/$defs/ResidentTarget"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        },
+        "parameters": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmptyParameters"
+            },
+            {
+              "$ref": "#/$defs/DrinkParameters"
+            },
+            {
+              "$ref": "#/$defs/TalkParameters"
+            },
+            {
+              "$ref": "#/$defs/ItemTransferParameters"
+            }
+          ],
+          "title": "Parameters"
+        }
+      },
+      "required": [
+        "kind",
+        "action_type",
+        "target",
+        "parameters"
+      ],
+      "title": "OwnActionSuccessPredicate",
+      "type": "object"
+    },
+    "OwnCondition": {
+      "additionalProperties": false,
+      "properties": {
+        "satiety": {
+          "enum": [
+            "critical",
+            "low",
+            "moderate",
+            "good",
+            "strong"
+          ],
+          "title": "Satiety",
+          "type": "string"
+        },
+        "hydration": {
+          "enum": [
+            "critical",
+            "low",
+            "moderate",
+            "good",
+            "strong"
+          ],
+          "title": "Hydration",
+          "type": "string"
+        },
+        "stamina": {
+          "enum": [
+            "critical",
+            "low",
+            "moderate",
+            "good",
+            "strong"
+          ],
+          "title": "Stamina",
+          "type": "string"
+        },
+        "health": {
+          "enum": [
+            "critical",
+            "low",
+            "moderate",
+            "good",
+            "strong"
+          ],
+          "title": "Health",
+          "type": "string"
+        }
+      },
+      "required": [
+        "satiety",
+        "hydration",
+        "stamina",
+        "health"
+      ],
+      "title": "OwnCondition",
+      "type": "object"
+    },
+    "OwnInventory": {
+      "additionalProperties": false,
+      "properties": {
+        "fruit_count": {
+          "minimum": 0,
+          "title": "Fruit Count",
+          "type": "integer"
+        },
+        "canteen_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Canteen Id"
+        },
+        "canteen_servings": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Canteen Servings"
+        }
+      },
+      "required": [
+        "fruit_count",
+        "canteen_id",
+        "canteen_servings"
+      ],
+      "title": "OwnInventory",
+      "type": "object"
+    },
+    "OwnStateData": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "$ref": "#/$defs/OwnCondition"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "inventory": {
+          "$ref": "#/$defs/OwnInventory"
+        }
+      },
+      "required": [
+        "condition",
+        "position",
+        "inventory"
+      ],
+      "title": "OwnStateData",
+      "type": "object"
+    },
+    "OwnedIntentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "intent": {
+          "$ref": "#/$defs/ActionIntent"
+        },
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "decision_ordinal": {
+          "minimum": 0,
+          "title": "Decision Ordinal",
+          "type": "integer"
+        },
+        "committed_tick": {
+          "minimum": 0,
+          "title": "Committed Tick",
+          "type": "integer"
+        },
+        "goal_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Goal Id"
+        }
+      },
+      "required": [
+        "intent",
+        "decision_id",
+        "decision_ordinal",
+        "committed_tick",
+        "goal_id"
+      ],
+      "title": "OwnedIntentRef",
+      "type": "object"
+    },
+    "ResidentIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "identity_schema_version": {
+          "const": "0.1",
+          "title": "Identity Schema Version",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "profile_id": {
+          "title": "Profile Id",
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Values",
+          "type": "array"
+        },
+        "initial_direction": {
+          "title": "Initial Direction",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "identity_schema_version",
+        "actor_id",
+        "display_name",
+        "profile_id",
+        "values",
+        "initial_direction",
+        "source_sha256"
+      ],
+      "title": "ResidentIdentity",
+      "type": "object"
+    },
+    "ResidentTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "resident",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "ResidentTarget",
+      "type": "object"
+    },
+    "TalkParameters": {
+      "additionalProperties": false,
+      "description": "``request`` only for speech_act=request; ``in_reply_to`` only for accept/refuse.",
+      "properties": {
+        "speech_act": {
+          "enum": [
+            "statement",
+            "request",
+            "accept",
+            "refuse"
+          ],
+          "title": "Speech Act",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "in_reply_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "In Reply To"
+        }
+      },
+      "required": [
+        "speech_act",
+        "text"
+      ],
+      "title": "TalkParameters",
+      "type": "object"
+    },
+    "TileTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "tile",
+          "title": "Kind",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        }
+      },
+      "required": [
+        "kind",
+        "position"
+      ],
+      "title": "TileTarget",
+      "type": "object"
+    },
+    "TransientSighting": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "entity_type": {
+          "enum": [
+            "resident",
+            "corpse",
+            "fruit_tree",
+            "ground_fruit",
+            "canteen",
+            "cue"
+          ],
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "seen_at_step": {
+          "minimum": 1,
+          "title": "Seen At Step",
+          "type": "integer"
+        },
+        "observable_signs": {
+          "items": {
+            "enum": [
+              "weak",
+              "dehydrated",
+              "fatigued"
+            ],
+            "type": "string"
+          },
+          "title": "Observable Signs",
+          "type": "array"
+        },
+        "fruit_band": {
+          "anyOf": [
+            {
+              "enum": [
+                "empty",
+                "few",
+                "many"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fruit Band"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Quantity"
+        }
+      },
+      "required": [
+        "entity_id",
+        "entity_type",
+        "position",
+        "seen_at_step",
+        "observable_signs",
+        "fruit_band",
+        "quantity"
+      ],
+      "title": "TransientSighting",
+      "type": "object"
+    },
+    "UnverifiablePredicate": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "unverifiable",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "UnverifiablePredicate",
+      "type": "object"
+    },
+    "VisibleEntity": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "entity_type": {
+          "enum": [
+            "resident",
+            "corpse",
+            "fruit_tree",
+            "ground_fruit",
+            "canteen",
+            "cue"
+          ],
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "observable_signs": {
+          "items": {
+            "enum": [
+              "weak",
+              "dehydrated",
+              "fatigued"
+            ],
+            "type": "string"
+          },
+          "title": "Observable Signs",
+          "type": "array"
+        },
+        "fruit_band": {
+          "anyOf": [
+            {
+              "enum": [
+                "empty",
+                "few",
+                "many"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fruit Band"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Quantity"
+        }
+      },
+      "required": [
+        "entity_id",
+        "entity_type",
+        "position",
+        "observable_signs",
+        "fruit_band",
+        "quantity"
+      ],
+      "title": "VisibleEntity",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "inspection_schema_version": {
+      "const": "0.1",
+      "title": "Inspection Schema Version",
+      "type": "string"
+    },
+    "tick": {
+      "minimum": 0,
+      "title": "Tick",
+      "type": "integer"
+    },
+    "actor_id": {
+      "title": "Actor Id",
+      "type": "string"
+    },
+    "latest_perception_tick": {
+      "minimum": -1,
+      "title": "Latest Perception Tick",
+      "type": "integer"
+    },
+    "identity": {
+      "$ref": "#/$defs/ResidentIdentity"
+    },
+    "goals": {
+      "$ref": "#/$defs/GoalState"
+    },
+    "recent_experience": {
+      "items": {
+        "$ref": "#/$defs/ExperienceRecord"
+      },
+      "title": "Recent Experience",
+      "type": "array"
+    },
+    "retained_record_count": {
+      "minimum": 0,
+      "title": "Retained Record Count",
+      "type": "integer"
+    },
+    "next_sequence": {
+      "minimum": 0,
+      "title": "Next Sequence",
+      "type": "integer"
+    },
+    "latest_decision_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Latest Decision Id"
+    },
+    "state_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "State Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "inspection_schema_version",
+    "tick",
+    "actor_id",
+    "latest_perception_tick",
+    "identity",
+    "goals",
+    "recent_experience",
+    "retained_record_count",
+    "next_sequence",
+    "latest_decision_id",
+    "state_sha256"
+  ],
+  "title": "ResidentInspection",
+  "type": "object"
+}

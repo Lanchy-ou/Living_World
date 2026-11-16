@@ -1,5 +1,6 @@
 """Multi-actor boundary scheduling and plan-queue acceptance."""
 
+import pytest
 from test_engine_actions import content_with
 from test_sim_policies import PROFILE, policy_config
 from test_sim_runtime import WaitPolicy
@@ -161,3 +162,30 @@ def test_policy_exception_stops_before_physical_commit():
     assert loop.boundary.snapshot.tick == 0
     with pytest.raises(ValueError, match="stopped"):
         loop.advance()
+
+
+@pytest.mark.parametrize("returned_by", ["boundary", "advance"])
+def test_returned_commit_mutation_cannot_change_later_boundaries(returned_by):
+    content = content_with({"ella": (2, 3)}, actions={"sleep_ticks": 3})
+
+    def make_loop():
+        return BoundaryLoop(
+            create_engine(content, None), [scripted("ella", [[template("sleep"), WAIT]])]
+        )
+
+    changed, control = make_loop(), make_loop()
+    if returned_by == "boundary":
+        exposed = changed.boundary
+    else:
+        exposed, _ = changed.advance()
+        control.advance()
+    exposed.snapshot.residents[0].health = 0
+    exposed.snapshot.explored_tiles_by_resident[0].tile_indices.clear()
+    exposed.snapshot.active_actions.clear()
+    exposed.pending_deliveries[0].decision_triggers.append("ACTION_FAILED")
+    exposed.pending_deliveries[0].perception.visible_entities.clear()
+    exposed.pending_deliveries.clear()
+    assert changed.boundary == control.boundary
+    for _ in range(6):
+        assert changed.advance() == control.advance()
+        assert changed.checkpoint() == control.checkpoint()

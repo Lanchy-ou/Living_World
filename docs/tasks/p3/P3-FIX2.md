@@ -1,0 +1,184 @@
+# Task P3-FIX2: Legacy boundary isolation and restored plan validation
+
+## Brief
+
+```text
+Task ID / title: P3-FIX2 / Legacy boundary isolation and restored plan validation
+Spec baseline (commit SHA): ea27c67f326700e71a44c805ed6ca3a97c3d19f8
+Goal / non-goals: Isolate returned commits; reject modified queued/active legacy plans
+  before resume output or simulation advancement. Preserve formats and normal results.
+Lane / depends on: First architecture-fix batch; merged P3-CI1 and successful CI verified
+  by the lead before assigning this unified baseline.
+Allowed files / forbidden dependencies: sim/boundary.py, persistence/resume.py,
+  corresponding backend unit/invariant tests, and this task card only. No frozen
+  specs, generated files, APIs, secrets, live trial authorization, or P3-06 work.
+Deliverables: Implementation, regression tests, reviewable branch, this handoff.
+Acceptance (positive, negative, edge, determinism): Nested returned state mutation
+  cannot affect subsequent boundaries. Queue identity and complete remaining suffix,
+  active intent identity and progress must agree with committed records/events.
+  Legal active, exhausted, failed, interrupted, dead and deferred-trigger states
+  resume unchanged; P1 CLI flow and historical reference hashes remain identical.
+Verification commands: Scoped pytest, backend ruff/format/mypy/import-linter,
+  P1 reference integration and artifact hashing. Full final CI matrix is lead-owned.
+Open risks / deferred decisions: Independent Gate 2 passed; no specification changes.
+```
+
+## Handoff
+
+Implementation configuration: Astra / High (`gpt-6-astra`, high), as assigned by
+the lead. Independent reviewer configuration: GPT-6 Astra / High. The implementer has not performed Gate 2.
+
+Branch: `task/P3-FIX2-boundary-resume`.
+Worktree: `D:/Codex/.codex/worktrees/p3-fix2-boundary-resume/Living_World`.
+
+### What changed
+
+- `BoundaryLoop.boundary` and `advance()` return deep copies of the internal commit.
+  Tests mutate nested snapshot collections and pending perceptions, then compare
+  six subsequent commits, decisions and checkpoints with an untouched control.
+- Legacy resume derives each actor's most recent committed plan and its started
+  prefix from the verified decision/event history. The checkpoint must contain
+  exactly the complete unstarted suffix, including its original plan identity and
+  creation tick. Missing, truncated, duplicated, consumed or superseded queues fail.
+- An unfinished started intent must equal the saved active intent. Its start tick,
+  elapsed ticks, remaining ticks and route cursor must agree with the current
+  boundary's progress event. Completed or unstarted intents cannot become active.
+  Missing or unexpected active actions fail as well.
+- Validation occurs during ancestry verification before a continuation staging
+  directory is created. The same checks apply to parent checkpoints.
+- Legacy scheduling does not decide while an action is active, so its latest
+  decision is the relevant plan. Deferred triggers leave the suffix intact until
+  idle scheduling, whereas failure/interruption/death discard it at the completed
+  boundary. Tests explicitly preserve all of those distinctions, including a
+  multi-tick invalid attempt with a pending failure.
+
+### Commands and results
+
+Commands run from the task worktree unless otherwise stated. Exit codes refer to
+the named command, not a following shell command. No tests were newly skipped.
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `uv sync --directory backend --locked` | 0 | 26 locked packages installed; Python 3.13.5. Initial sandbox attempt exited 1 on the uv cache lock; authorized elevated retry succeeded. |
+| `uv run --directory backend pytest tests/unit/test_sim_boundaries.py tests/unit/test_legacy_resume_progress.py tests/unit/test_sim_runs.py tests/unit/test_p1_integration.py --basetemp D:/f2-c-1115` | 0 | 59 passed in 260.29 s; no skips. Includes the 1008-tick mechanics and original P1 CLI/replay integrations. |
+| `uv run --directory backend pytest tests/unit/test_legacy_resume_progress.py tests/unit/test_sim_boundaries.py --basetemp D:/f2-d-1115` | 0 | 33 passed in 4.74 s; no skips. Includes three compatibility cases added after the longer suite started; 62 distinct cases across the two successful runs. |
+| `uv run --directory backend ruff check .` | 0 | All checks passed. |
+| `uv run --directory backend ruff format --check .` | 0 | 160 files already formatted. |
+| `uv run --directory backend mypy src` | 0 | 88 source files clean. |
+| `uv run --directory backend lint-imports --no-cache` | 0 | 8 contracts kept, 0 broken; 124 files and 565 dependencies analyzed. |
+| `git -c safe.directory=<worktree> diff --check` | 0 | Clean whitespace. |
+
+Earlier unsuccessful validation attempts are retained as part of the evidence:
+
+- The first targeted pytest invocation (`--basetemp D:/tmp/f2-a-1115`) exited 1
+  during collection: the new test imported `PersistenceError` from a package that
+  does not re-export it. The import was corrected to `persistence._codec`.
+- The next invocation (`--basetemp D:/tmp/f2-b-1115`) exited 1 with 10 passed and
+  49 setup errors because `D:/tmp` did not exist. A fresh short path directly below
+  `D:/` fixed the environment issue. No existing temporary directory was reused or
+  deleted.
+- Initial scoped lint reported import ordering and long-line formatting; the
+  formatter fixed them. After the three additional tests, format checking exited 1
+  for one wrapping difference; formatting and the final check succeeded.
+
+The P1 integration's completed artifacts remain at
+`D:/f2-c-1115/test_default_1008_tick_cli_run0`. A read-only Python command using
+`hashlib.sha256`, `json.loads`, and `canonical_json_bytes` hashed `first`'s final
+checkpoint world and `replay.json` (exit 0). Both match P3 plan section 3.2 exactly:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Canonical final WorldState | `113483069d74936a3fa5ecf0f719405dc7499698fc851cdc4b992a84e25357ed` |
+| `replay.json` bytes | `8e26d853b6bf324fa4a375f0edfca526c09754b78d7eaee9b96c615464dbfb83` |
+
+The integration also asserted original/reexecuted replay byte equality and
+uninterrupted/resumed final checkpoint and event/decision stream equality.
+
+NOT_RUN for this isolated task: full backend pytest/invariant matrix, frontend
+lint/typecheck/build/test:schema/test, type generation and generated-diff check.
+These are assigned to the lead's final integration validation. GitHub Actions:
+NOT_RUN for this task because nothing has been pushed. Baseline CI success is
+a prerequisite checked by the lead, not evidence of this task's cloud CI status.
+
+### Deviations
+
+No scope or format changes. Windows Git branch creation initially required an
+authorized elevated retry for the shared repository ref lock; Git used per-command
+`safe.directory`. No global Git settings changed. These targeted tests do not
+create nested Git repositories, so `core.longpaths` was not needed here.
+
+No real API calls, secret reads, trial authorizations, pushes, merges into main,
+or file/worktree deletions occurred. All failed-run evidence remains untouched.
+
+### Open questions
+
+None. The frozen legacy scheduling semantics support latest-plan ownership;
+there was no need to copy P3 behavior where it differs or request a spec change.
+Gate 2 passed; the independent conclusion and reproduction evidence follow below.
+
+### Required fields
+
+1. `base_commit` / `result_commit`: `ea27c67f326700e71a44c805ed6ca3a97c3d19f8` /
+   `26075c4979df39ceb6c5b9cfcb70cad0cd344203` (includes the reviewed test-fixture correction; original production implementation is `d20378b19db31029141bf8b745addf5b60383e5d`).
+2. `status`: `ACCEPTED`; scoped Gate 1 and independent Gate 2 passed.
+3. `scope_changed`: no.
+4. `human_interventions`: 0; existing task authorization covered worktree,
+   dependency installation and Git operations.
+5. `rework_rounds`: 1, integration-discovered incomplete synthetic storage fixtures; original executor setup corrections are documented above.
+6. `verification`: commands, exit codes, counts and NOT_RUN items above; full
+   combined CI verification belongs to the lead's final integration handoff.
+7. `open_questions`: none; no frozen-spec edits requested.
+
+### Independent Gate 2
+
+PASS on `1452350e84763436e62b54a0c11838dfe3a69658`, implementation `d20378b19db31029141bf8b745addf5b60383e5d`. Reviewer explicitly assigned GPT-6 Astra / High, separate from the author. Reviewed full code/test diff against frozen specifications and actual legacy scheduling. Latest-plan provenance, deferred triggers, complete suffixes, failure/interruption/death cleanup, active progress, ancestry checks before output staging and both nested copy boundaries were confirmed. No findings or rework.
+
+Independent `uv run --directory backend pytest tests/unit/test_sim_boundaries.py tests/unit/test_legacy_resume_progress.py tests/unit/test_sim_runs.py tests/unit/test_p1_integration.py --basetemp D:/r2g2-1115a` exited 0: 62 passed, no skips, 276.20 seconds. Additional independent probes accepted 906 generated boundaries (random/rule policies, three seeds each, nondefault multi-tick settings) and three-hop continuation including a zero-tick hop, and rejected descendant queue/active tampering before output. Scoped Ruff lint/format and whitespace checks passed. Fresh world and replay hashes matched the historical values recorded above. Evidence remains at `D:/r2g2-1115a` and `D:/r2g2-chain-1115a`.
+
+The first review probe omitted required rule_params; the corrected harness passed. Cache/read permission failures were resolved with no-cache or authorized reads. Full backend/invariants, mypy/import-linter, frontend, generation and cloud CI were NOT_RUN by this reviewer; see final integration verification in P3-architecture-fixes.md.
+
+### Central integration verification
+
+Task-level NOT_RUN entries above describe that author/reviewer worktree only. See [the final integration handoff](P3-architecture-fixes.md) for the complete combined checks, reference hashes, final branch identity and remaining limitations.
+
+### Integration rework 1: storage fixture execution history
+
+The lead's first complete integration pytest run reported six failures in
+`backend/tests/unit/persistence/test_storage.py`. The executor reproduced exactly
+those failures before changing anything:
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `uv run --directory backend pytest tests/unit/persistence/test_storage.py --basetemp D:/f2-e-1115` | 1 | 38 passed, 6 failed in 4.53 s; all six failed at the new plan-prefix validation. |
+| `uv run --directory backend pytest tests/unit/persistence/test_storage.py tests/unit/test_legacy_resume_progress.py tests/unit/test_sim_boundaries.py --basetemp D:/f2-f-1115` | 0 | 78 passed in 8.00 s, no skips; includes the new missing-history negative case. |
+| `uv run --directory backend ruff check .` | 0 | All checks passed after the correction. |
+| `uv run --directory backend ruff format --check .` | 0 | 160 files already formatted after the correction. |
+
+Root cause: the shared, hand-built `source_run` fixture committed a tick-zero wait
+decision and a tick-one checkpoint, yet recorded only `world_initialized`. It
+omitted the required wait start/completion events. The analogous continuation
+fixture omitted its second decision's action facts as well. These fixtures could
+exercise the former storage-only checks but do not represent legal legacy
+simulation history. The six failures were not legal-history compatibility failures.
+
+Correction: add explicit `action_started` / `action_succeeded` facts for the fixture's
+committed waits and adjust its event cursors, trace expectations and complete prior
+history. Scripted/recorded variants derive their checkpoint from that corrected
+source. All existing behavioral and negative assertions remain; the source-preservation,
+tail-ignore, trace-identity, ancestor-prefix and publication-failure tests still
+exercise their original behavior. A new negative test reconstructs the incomplete
+old fixture and requires rejection before a staging directory is created.
+
+No production validation was relaxed or changed. No frozen inputs were changed.
+The lead explicitly confirmed this corresponding-unit-test correction is within
+the existing scope. This is not a new human permission request or intervention.
+All failed and successful test directories remain available. The original P1
+reference result remains applicable because this follow-up changes tests only;
+the lead owns final integrated revalidation and the full-suite completion record.
+
+Correction author: the same Astra / High implementation agent. Independent
+Astra / High re-review passed on 26075c4979df39ceb6c5b9cfcb70cad0cd344203 and author tip a7144b14b6d322409c18592b88b76e4cc21e6af1. The original
+task-card Gate 2 status is historical; the final integration handoff owns prior
+review evidence and the new re-review conclusion.
+
+Independent re-review (GPT-6 Astra / High): the exact correction and author handoff were reviewed with no findings. The reviewer confirmed the six original fixtures were impossible under frozen wait scheduling and all original test intentions/assertions remain. Independent pytest on storage, legacy progress and boundary tests with fresh D:/r2g2-storage-1115a exited 0: 78 passed in 8.09 seconds, no skips. Scoped Ruff lint/format and whitespace checks exited 0. No production edits. The lead merged the reviewed test commit directly and reconciled the author's handoff here to preserve the existing independent review records without a documentation merge conflict.
