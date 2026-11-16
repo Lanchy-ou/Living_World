@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import runpy
 import sys
@@ -22,6 +23,7 @@ from living_island.agents.llm.fallback import FrozenRuleFallbackAdapter  # noqa:
 from living_island.agents.types import PolicyConfig  # noqa: E402
 from living_island.contract.p3_save import TrialRegistration  # noqa: E402
 from living_island.memory.p3_types import canonical_bytes, canonical_sha256  # noqa: E402
+from living_island.persistence import p3 as persistence  # noqa: E402
 from living_island.persistence.p3 import (  # noqa: E402
     _VerificationSession,
     read_checkpoint_p3,
@@ -119,12 +121,46 @@ def short_inputs():
     return helper, content, inputs, registration, reader
 
 
-def measure_short(output):
+BASELINE_COMMIT = "ec531c112fd45199f591fd5095f5b6ac4b8e6247"
+
+
+def baseline_session_type():
+    """Execute only the pinned prior cache class for a same-input comparison.
+
+    All surrounding verifier/runtime code stays current. The only production
+    behavior changed by this follow-up is this class's internal representation.
+    The trusted Git source is never unpickled or accepted from an input artifact.
+    """
+    path = "backend/src/living_island/persistence/p3.py"
+    raw = GitSourceReader(ROOT)(BASELINE_COMMIT, path)
+    tree = ast.parse(raw, filename=f"{BASELINE_COMMIT}:{path}")
+    node = next(
+        item
+        for item in tree.body
+        if isinstance(item, ast.ClassDef) and item.name == "_VerificationSession"
+    )
+    namespace = vars(persistence).copy()
+    exec(compile(ast.Module(body=[node], type_ignores=[]), path, "exec"), namespace)
+    return namespace["_VerificationSession"], sha256(raw).hexdigest()
+
+
+def measure_short(output, *, compare_baseline=False):
     helper, content, inputs, registration, reader = short_inputs()
     case = registration.cases[0]
     summaries = []
     expected = None
-    for mode, capacity in (("disabled", 0), ("enabled", 128 * 1024 * 1024)):
+    baseline, baseline_sha256 = baseline_session_type() if compare_baseline else (None, None)
+    capacity = 128 * 1024 * 1024
+    modes = [("disabled", _VerificationSession, 0), ("enabled", _VerificationSession, capacity)]
+    if compare_baseline:
+        modes = [
+            ("disabled", _VerificationSession, 0),
+            ("baseline", baseline, capacity),
+            ("enabled", _VerificationSession, capacity),
+            ("enabled-repeat", _VerificationSession, capacity),
+            ("baseline-repeat", baseline, capacity),
+        ]
+    for mode, factory, capacity in modes:
         root = output / mode
         root.mkdir()
         authority = root / "isolated-fake-authority"
@@ -134,7 +170,7 @@ def measure_short(output):
         provider = helper["TapeBuilder"]()
         config = json.loads(inputs["p3-policy-configs.json"])[0]["config"]["fallback_config"]
         fallback = FrozenRuleFallbackAdapter(PolicyConfig.model_validate(config))
-        session = _VerificationSession(capacity)
+        session = factory(capacity)
         with patch.object(sim, "_VerificationSession", return_value=session):
             start = time.perf_counter()
             result = sim.run_p3(
@@ -180,8 +216,11 @@ def measure_short(output):
                 "authority_accesses_in_reexecution": authority_sentinel.accesses,
             }
         )
-    assert summaries[0]["replay_sha256"] == summaries[1]["replay_sha256"]
+    assert len({summary["replay_sha256"] for summary in summaries}) == 1
     return {
+        "baseline_commit": BASELINE_COMMIT if compare_baseline else None,
+        "baseline_persistence_sha256": baseline_sha256,
+        "baseline_method": "exact prior cache class with current surrounding verifier",
         "horizon": 4,
         "seed": case.seed,
         "llm_actor_ids": case.llm_actor_ids,
@@ -195,7 +234,7 @@ def measure_short(output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=["prefix", "short"])
+    parser.add_argument("mode", choices=["prefix", "short", "clone-short"])
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
@@ -205,7 +244,7 @@ def main():
             raise ValueError("prefix mode requires a retained checkpoint")
         result = measure_prefix(args.checkpoint)
     else:
-        result = measure_short(args.out)
+        result = measure_short(args.out, compare_baseline=args.mode == "clone-short")
     result["argv"] = [sys.executable, *sys.argv]
     result["benchmark_sha256"] = sha256(Path(__file__).read_bytes()).hexdigest()
     (args.out / "result.json").write_text(

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import pickle
 import subprocess
 from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -85,11 +86,18 @@ MODELS: dict[str, type[BaseModel]] = {
 }
 
 
+# Only the existing concrete owner DTOs use the internal serialization fast path.
+# Other BaseModel classes (including local classes/custom pickle hooks) preserve
+# the original model_copy behavior. No serialized payload enters from a caller.
+_SERIALIZED_VERIFICATION_MODELS = frozenset(MODELS.values())
+
+
 class _VerificationSession:
     """Operation-local successful row decodes, never file or lineage acceptance.
 
-    The 128 MiB bound counts retained canonical row bytes, not Python heap. Model
-    graphs and keys add overhead. Reused rows are protected for this operation;
+    The 128 MiB bound counts retained canonical row bytes, not Python heap.
+    Internally encoded payloads (or fallback graphs) and keys add overhead.
+    Reused rows are protected for this operation;
     eviction removes only rows not yet reused. When these cannot make room, new
     rows bypass storage, avoiding a repeated full-prefix scan evicting every hot
     row. Capacity zero affects performance only. No authority state is retained.
@@ -99,7 +107,7 @@ class _VerificationSession:
         if type(max_raw_bytes) is not int or max_raw_bytes < 0:
             raise ValueError("verification cache capacity must be a nonnegative integer")
         self.max_raw_bytes = max_raw_bytes
-        self._rows: OrderedDict[tuple[type[BaseModel], bytes], BaseModel] = OrderedDict()
+        self._rows: OrderedDict[tuple[type[BaseModel], bytes], bytes | BaseModel] = OrderedDict()
         self._cold: OrderedDict[tuple[type[BaseModel], bytes], None] = OrderedDict()
         self.raw_bytes = 0
         self.peak_raw_bytes = 0
@@ -119,6 +127,18 @@ class _VerificationSession:
         if cached is not None:
             self.hits += 1
             self._cold.pop(key, None)
+            if isinstance(cached, bytes):
+                try:
+                    # These bytes are created only by dumps below, never read
+                    # from a source file, accepted from a caller, or persisted.
+                    return cast(T, pickle.loads(cached))
+                except Exception:
+                    # Serialization is an optional optimization. Preserve valid
+                    # decodes if a Python/Pydantic compatibility issue arises.
+                    # Decoder failures remain current and are not caught here.
+                    parsed = decode_model(raw, model, path, line=line)
+                    self._rows[key] = parsed.model_copy(deep=True)
+                    return parsed
             return cast(T, cached.model_copy(deep=True))
         self.misses += 1
         # Preserve the owner's strict scalar, duplicate-key, version, model and
@@ -132,7 +152,15 @@ class _VerificationSession:
                 del self._rows[old_key]
                 self.raw_bytes -= len(old_key[1])
                 self.evictions += 1
-            self._rows[key] = parsed.model_copy(deep=True)
+            stored: bytes | BaseModel
+            if model in _SERIALIZED_VERIFICATION_MODELS:
+                try:
+                    stored = pickle.dumps(parsed, protocol=pickle.HIGHEST_PROTOCOL)
+                except Exception:
+                    stored = parsed.model_copy(deep=True)
+            else:
+                stored = parsed.model_copy(deep=True)
+            self._rows[key] = stored
             self._cold[key] = None
             self.raw_bytes += len(raw)
             self.peak_raw_bytes = max(self.peak_raw_bytes, self.raw_bytes)
