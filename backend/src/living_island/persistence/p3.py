@@ -10,11 +10,12 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from pydantic import BaseModel
 
@@ -82,6 +83,60 @@ MODELS: dict[str, type[BaseModel]] = {
     "llm-calls.jsonl": LLMCallRecordP3,
     "llm-dispatches.jsonl": AttemptDispatch,
 }
+
+
+class _VerificationSession:
+    """Operation-local successful row decodes, never file or lineage acceptance.
+
+    The 128 MiB bound counts retained canonical row bytes, not Python heap. Model
+    graphs and keys add overhead. Reused rows are protected for this operation;
+    eviction removes only rows not yet reused. When these cannot make room, new
+    rows bypass storage, avoiding a repeated full-prefix scan evicting every hot
+    row. Capacity zero affects performance only. No authority state is retained.
+    """
+
+    def __init__(self, max_raw_bytes: int = 128 * 1024 * 1024) -> None:
+        if type(max_raw_bytes) is not int or max_raw_bytes < 0:
+            raise ValueError("verification cache capacity must be a nonnegative integer")
+        self.max_raw_bytes = max_raw_bytes
+        self._rows: OrderedDict[tuple[type[BaseModel], bytes], BaseModel] = OrderedDict()
+        self._cold: OrderedDict[tuple[type[BaseModel], bytes], None] = OrderedDict()
+        self.raw_bytes = 0
+        self.peak_raw_bytes = 0
+        self.hits = 0
+        self.misses = 0
+        self.evictions = 0
+
+    @property
+    def retained_rows(self) -> int:
+        return len(self._rows)
+
+    def decode[T: BaseModel](
+        self, raw: bytes, model: type[T], path: Path, *, line: int | None = None
+    ) -> T:
+        key = (model, raw)
+        cached = self._rows.get(key)
+        if cached is not None:
+            self.hits += 1
+            self._cold.pop(key, None)
+            return cast(T, cached.model_copy(deep=True))
+        self.misses += 1
+        # Preserve the owner's strict scalar, duplicate-key, version, model and
+        # canonical-byte validation. Failures never enter the cache.
+        parsed = decode_model(raw, model, path, line=line)
+        if self.max_raw_bytes and len(raw) <= self.max_raw_bytes:
+            while self.raw_bytes + len(raw) > self.max_raw_bytes:
+                if not self._cold:
+                    return parsed
+                old_key, _ = self._cold.popitem(last=False)
+                del self._rows[old_key]
+                self.raw_bytes -= len(old_key[1])
+                self.evictions += 1
+            self._rows[key] = parsed.model_copy(deep=True)
+            self._cold[key] = None
+            self.raw_bytes += len(raw)
+            self.peak_raw_bytes = max(self.peak_raw_bytes, self.raw_bytes)
+        return parsed
 
 
 class PublicationAuthority(Protocol):
@@ -371,11 +426,17 @@ def read_inputs(
     return files
 
 
-def decode_records[T: BaseModel](raw: bytes, model: type[T], path: Path) -> tuple[T, ...]:
+def decode_records[T: BaseModel](
+    raw: bytes, model: type[T], path: Path, *, verification: _VerificationSession | None = None
+) -> tuple[T, ...]:
     if raw and not raw.endswith(b"\n"):
         raise PersistenceError(path, "JSONL", "committed records must terminate with LF")
     return tuple(
-        decode_model(line, model, path, line=index)
+        (
+            decode_model(line, model, path, line=index)
+            if verification is None
+            else verification.decode(line, model, path, line=index)
+        )
         for index, line in enumerate(raw.splitlines(), 1)
     )
 
@@ -391,13 +452,17 @@ class P3Journal:
         prior_raw: Mapping[str, bytes] | None = None,
         reservation_lookup: Callable[[AttemptDispatch], None] | None = None,
         fault: Fault | None = None,
+        verification: _VerificationSession | None = None,
     ):
+        self.verification = verification
         self.directory, self.run_id = directory, run_id
         self._raw = {name: (prior_raw or {}).get(name, b"") for name in LOG_NAMES}
         self._reservation_lookup, self._fault = reservation_lookup, fault
         self._failed = False
         for name in LOG_NAMES:
-            decode_records(self._raw[name], MODELS[name], directory / name)
+            decode_records(
+                self._raw[name], MODELS[name], directory / name, verification=self.verification
+            )
             if (directory / name).exists():
                 raise PersistenceError(directory / name, "file", "journal suffix must be fresh")
         directory.mkdir(parents=True, exist_ok=True)
@@ -408,7 +473,9 @@ class P3Journal:
         if self._failed:
             raise PersistenceError(self.directory / name, "journal", "previous append failed")
         raw = b"".join(canonical_bytes(record) + b"\n" for record in records)
-        parsed = decode_records(raw, MODELS[name], self.directory / name)
+        parsed = decode_records(
+            raw, MODELS[name], self.directory / name, verification=self.verification
+        )
         if any(getattr(record, "run_id", self.run_id) != self.run_id for record in parsed):
             raise ValueError("journal record has foreign run identity")
         if not raw:
@@ -428,7 +495,10 @@ class P3Journal:
 
     def stage_context(self, record: ContextRecordP3) -> None:
         existing = decode_records(
-            self._raw["contexts-p3.jsonl"], ContextRecordP3, self.directory / "contexts-p3.jsonl"
+            self._raw["contexts-p3.jsonl"],
+            ContextRecordP3,
+            self.directory / "contexts-p3.jsonl",
+            verification=self.verification,
         )
         if any(item.decision_id == record.decision_id for item in existing):
             raise ValueError("context may be staged exactly once per decision")
@@ -439,7 +509,10 @@ class P3Journal:
             raise ValueError("dispatch requires a locked durable reservation verifier")
         self._reservation_lookup(dispatch)
         contexts = decode_records(
-            self._raw["contexts-p3.jsonl"], ContextRecordP3, self.directory / "contexts-p3.jsonl"
+            self._raw["contexts-p3.jsonl"],
+            ContextRecordP3,
+            self.directory / "contexts-p3.jsonl",
+            verification=self.verification,
         )
         if not contexts or contexts[-1] != context:
             raise ValueError("dispatch must follow its durably staged exact context")
@@ -448,6 +521,7 @@ class P3Journal:
             self._raw["llm-dispatches.jsonl"],
             AttemptDispatch,
             self.directory / "llm-dispatches.jsonl",
+            verification=self.verification,
         )
         if dispatch.call_id in {item.call_id for item in existing}:
             raise ValueError("duplicate dispatched call")
@@ -456,6 +530,7 @@ class P3Journal:
             self._raw["llm-calls.jsonl"],
             LLMCallRecordP3,
             self.directory / "llm-calls.jsonl",
+            verification=self.verification,
         )
         if dispatch.attempt_index != len(earlier) or (
             earlier and earlier[-1].call_id not in {call.call_id for call in calls}
@@ -470,6 +545,7 @@ class P3Journal:
             self._raw["llm-dispatches.jsonl"],
             AttemptDispatch,
             self.directory / "llm-dispatches.jsonl",
+            verification=self.verification,
         )
         if (
             not dispatches
@@ -479,7 +555,10 @@ class P3Journal:
             raise ValueError("terminal call must join its durable dispatch")
         _join_call(dispatches[-1], record)
         calls = decode_records(
-            self._raw["llm-calls.jsonl"], LLMCallRecordP3, self.directory / "llm-calls.jsonl"
+            self._raw["llm-calls.jsonl"],
+            LLMCallRecordP3,
+            self.directory / "llm-calls.jsonl",
+            verification=self.verification,
         )
         if record.call_id in {item.call_id for item in calls}:
             raise ValueError("duplicate terminal call")
@@ -493,7 +572,9 @@ class P3Journal:
 
     def append_recorded(self, name: str, raw: bytes) -> None:
         """Copy verified audit bytes without any provider/authority interaction."""
-        records = decode_records(raw, MODELS[name], self.directory / name)
+        records = decode_records(
+            raw, MODELS[name], self.directory / name, verification=self.verification
+        )
         self._append(name, records)
 
     def flush(self) -> None:
@@ -569,17 +650,34 @@ def _join_call(dispatch: AttemptDispatch, call: LLMCallRecordP3) -> None:
 
 
 def _validate_logs(
-    save: SavePackageP3, logs: Mapping[str, bytes], origins: Sequence[ResumeOriginP3]
+    save: SavePackageP3,
+    logs: Mapping[str, bytes],
+    origins: Sequence[ResumeOriginP3],
+    *,
+    verification: _VerificationSession | None = None,
 ) -> None:
     """Validate full committed joins and immutable mirrors, independent of authority."""
-    contexts = decode_records(logs["contexts-p3.jsonl"], ContextRecordP3, Path("contexts-p3.jsonl"))
+    contexts = decode_records(
+        logs["contexts-p3.jsonl"],
+        ContextRecordP3,
+        Path("contexts-p3.jsonl"),
+        verification=verification,
+    )
     decisions = decode_records(
-        logs["decisions-p3.jsonl"], DecisionRecordP3, Path("decisions-p3.jsonl")
+        logs["decisions-p3.jsonl"],
+        DecisionRecordP3,
+        Path("decisions-p3.jsonl"),
+        verification=verification,
     )
     dispatches = decode_records(
-        logs["llm-dispatches.jsonl"], AttemptDispatch, Path("llm-dispatches.jsonl")
+        logs["llm-dispatches.jsonl"],
+        AttemptDispatch,
+        Path("llm-dispatches.jsonl"),
+        verification=verification,
     )
-    calls = decode_records(logs["llm-calls.jsonl"], LLMCallRecordP3, Path("llm-calls.jsonl"))
+    calls = decode_records(
+        logs["llm-calls.jsonl"], LLMCallRecordP3, Path("llm-calls.jsonl"), verification=verification
+    )
     events = _events_from_bytes(
         Path("events.jsonl"), logs["events.jsonl"], save.world.run_id, (), None
     )
@@ -886,6 +984,7 @@ def read_checkpoint_p3(
     source: Path | None = None,
     ancestors: tuple[Path, ...] = (),
     source_reader: SourceReader | None = None,
+    verification: _VerificationSession | None = None,
 ) -> VerifiedP3Checkpoint:
     """Verify a full snapshot and precisely its committed bytes before restoring."""
     directory = path.parent if source is None else source
@@ -953,6 +1052,7 @@ def read_checkpoint_p3(
             candidates[0],
             ancestors=tuple(candidate for candidate in ancestors if candidate != candidates[0]),
             source_reader=source_reader,
+            verification=verification,
         )
         _origin_matches(origin, parent)
         if parent.inputs != inputs or save.world.tick < parent.save.world.tick:
@@ -961,7 +1061,7 @@ def read_checkpoint_p3(
             canonical_sha256(item) for item in parent.origins if item.recovery_mode == "offline"
         }:
             raise ValueError("repeated recovery origin in ancestry")
-        verify_recovery_evidence(directory, origin, parent)
+        verify_recovery_evidence(directory, origin, parent, verification=verification)
         prior, origins = parent.logs, (*parent.origins, origin)
     logs: dict[str, bytes] = {}
     for prefix in save.log_prefixes:
@@ -976,12 +1076,16 @@ def read_checkpoint_p3(
             raise PersistenceError(
                 directory / prefix.name, "sha256", "committed prefix hash mismatch"
             )
-    _validate_logs(save, logs, origins)
+    _validate_logs(save, logs, origins, verification=verification)
     return VerifiedP3Checkpoint(save, raw, logs, inputs, origins)
 
 
 def verify_later_checkpoints(
-    path: Path, *, ancestors: tuple[Path, ...] = (), source_reader: SourceReader
+    path: Path,
+    *,
+    ancestors: tuple[Path, ...] = (),
+    source_reader: SourceReader,
+    verification: _VerificationSession | None = None,
 ) -> None:
     """Refuse corrupt later publications instead of falling back to an older grant.
 
@@ -991,7 +1095,12 @@ def verify_later_checkpoints(
     source = decode_model(read_bytes(path), SavePackageP3, path)
     for candidate in sorted(path.parent.glob("checkpoint-*.json")):
         if candidate.name > path.name:
-            later = read_checkpoint_p3(candidate, ancestors=ancestors, source_reader=source_reader)
+            later = read_checkpoint_p3(
+                candidate,
+                ancestors=ancestors,
+                source_reader=source_reader,
+                verification=verification,
+            )
             if later.save.world.tick <= source.world.tick:
                 raise ValueError("later checkpoint filename/boundary ordering differs")
 
@@ -1017,7 +1126,7 @@ def publish_checkpoint(
         dispatch_record_cursor=prefixes[4].records,
     )
     candidate = SavePackageP3.model_validate(values)
-    _validate_logs(candidate, journal.raw_prefixes(), origins)
+    _validate_logs(candidate, journal.raw_prefixes(), origins, verification=journal.verification)
     journal.flush()
     _fault(fault, "checkpoint:logs_flushed")
     raw = canonical_bytes(candidate)
@@ -1039,7 +1148,11 @@ def publish_checkpoint(
 
 
 def checkpoint_verifier(
-    *, ancestors: tuple[Path, ...] = (), source_reader: SourceReader, horizon: int
+    *,
+    ancestors: tuple[Path, ...] = (),
+    source_reader: SourceReader,
+    horizon: int,
+    verification: _VerificationSession | None = None,
 ) -> Callable[[AllocationHead], VerifiedCheckpoint | None]:
     def verify(head: AllocationHead) -> VerifiedCheckpoint | None:
         from .p3_allocation import VerifiedCheckpoint
@@ -1047,7 +1160,9 @@ def checkpoint_verifier(
         path = Path(head.run_directory) / f"checkpoint-{head.checkpoint_tick:010d}.json"
         if not path.exists():
             return None
-        checkpoint = read_checkpoint_p3(path, ancestors=ancestors, source_reader=source_reader)
+        checkpoint = read_checkpoint_p3(
+            path, ancestors=ancestors, source_reader=source_reader, verification=verification
+        )
         if (
             digest(checkpoint.raw) != head.checkpoint_sha256
             or checkpoint.save.input_manifest_sha256 != head.input_manifest_sha256
@@ -1088,6 +1203,7 @@ def prepare_continuation(
     *,
     offline_origin: ResumeOriginP3 | None = None,
     evidence: Mapping[str, bytes] | None = None,
+    verification: _VerificationSession | None = None,
 ) -> ResumeOriginP3:
     """Copy verified immutable input bytes only after complete source verification."""
     src, dst = source.resolve(), destination.resolve()
@@ -1101,7 +1217,7 @@ def prepare_continuation(
     }:
         raise ValueError("origin evidence byte hashes differ")
     if origin.recovery_mode == "offline":
-        _verify_recovery_artifacts(origin, evidence, checkpoint)
+        _verify_recovery_artifacts(origin, evidence, checkpoint, verification=verification)
     destination.mkdir(parents=True, exist_ok=True)
     for name, raw in checkpoint.inputs.items():
         _create(destination / name, raw)
@@ -1113,12 +1229,20 @@ def prepare_continuation(
 
 
 def candidate_allocation_entries(
-    entries: Sequence[AllocationEntry], logs: Mapping[str, bytes]
+    entries: Sequence[AllocationEntry],
+    logs: Mapping[str, bytes],
+    *,
+    verification: _VerificationSession | None = None,
 ) -> list[AllocationEntry]:
     """Join durable terminal evidence to reserved entries without releasing authority."""
     calls = {
         row.call_id: row
-        for row in decode_records(logs["llm-calls.jsonl"], LLMCallRecordP3, Path("llm-calls.jsonl"))
+        for row in decode_records(
+            logs["llm-calls.jsonl"],
+            LLMCallRecordP3,
+            Path("llm-calls.jsonl"),
+            verification=verification,
+        )
     }
     result = []
     for entry in entries:
@@ -1142,7 +1266,11 @@ def candidate_allocation_entries(
 
 
 def _recovery_entries(
-    checkpoint: VerifiedP3Checkpoint, authority: CaseAllocationP3, artifacts: Mapping[str, bytes]
+    checkpoint: VerifiedP3Checkpoint,
+    authority: CaseAllocationP3,
+    artifacts: Mapping[str, bytes],
+    *,
+    verification: _VerificationSession | None = None,
 ) -> list[AllocationEntry]:
     head = authority.head
     if (
@@ -1184,7 +1312,11 @@ def _recovery_entries(
             if not line.endswith(b"\n"):
                 break
             try:
-                row = decode_model(line[:-1], model, Path(name))
+                row = (
+                    decode_model(line[:-1], model, Path(name))
+                    if verification is None
+                    else verification.decode(line[:-1], model, Path(name))
+                )
             except ValueError as exc:
                 raise ValueError("unverifiable complete orphan call/dispatch row") from exc
             if row.call_id in destination:
@@ -1278,10 +1410,14 @@ def _recovery_entries(
 
 
 def build_recovery_origin(
-    checkpoint: VerifiedP3Checkpoint, authority: CaseAllocationP3, artifacts: Mapping[str, bytes]
+    checkpoint: VerifiedP3Checkpoint,
+    authority: CaseAllocationP3,
+    artifacts: Mapping[str, bytes],
+    *,
+    verification: _VerificationSession | None = None,
 ) -> tuple[ResumeOriginP3, dict[str, bytes]]:
     evidence = {**artifacts, "authority-tail.json": canonical_bytes(authority)}
-    entries = _recovery_entries(checkpoint, authority, evidence)
+    entries = _recovery_entries(checkpoint, authority, evidence, verification=verification)
     origin = complete_origin(checkpoint)
     origin = ResumeOriginP3.model_validate(
         {
@@ -1298,7 +1434,11 @@ def build_recovery_origin(
 
 
 def _verify_recovery_artifacts(
-    origin: ResumeOriginP3, evidence: Mapping[str, bytes], checkpoint: VerifiedP3Checkpoint
+    origin: ResumeOriginP3,
+    evidence: Mapping[str, bytes],
+    checkpoint: VerifiedP3Checkpoint,
+    *,
+    verification: _VerificationSession | None = None,
 ) -> None:
     if origin.recovery_mode == "complete":
         return
@@ -1306,13 +1446,17 @@ def _verify_recovery_artifacts(
     if raw is None:
         raise ValueError("recovery evidence lacks retained pre-latch authority tail")
     authority = decode_model(raw, CaseAllocationP3, Path("authority-tail.json"))
-    entries = _recovery_entries(checkpoint, authority, evidence)
+    entries = _recovery_entries(checkpoint, authority, evidence, verification=verification)
     if entries != origin.recovery_entries:
         raise ValueError("recovery origin entries differ from retained authority/call evidence")
 
 
 def verify_recovery_evidence(
-    directory: Path, origin: ResumeOriginP3, checkpoint: VerifiedP3Checkpoint
+    directory: Path,
+    origin: ResumeOriginP3,
+    checkpoint: VerifiedP3Checkpoint,
+    *,
+    verification: _VerificationSession | None = None,
 ) -> dict[str, bytes]:
     evidence = {}
     for item in origin.orphan_artifacts:
@@ -1321,7 +1465,7 @@ def verify_recovery_evidence(
         if digest(raw) != item.sha256:
             raise ValueError("retained recovery evidence hash mismatch")
         evidence[item.name] = raw
-    _verify_recovery_artifacts(origin, evidence, checkpoint)
+    _verify_recovery_artifacts(origin, evidence, checkpoint, verification=verification)
     return evidence
 
 
@@ -1369,13 +1513,18 @@ def _registered_horizon(checkpoint: VerifiedP3Checkpoint) -> int:
 
 
 def load_trace_p3(
-    path: Path, *, ancestors: tuple[Path, ...] = (), source_reader: SourceReader | None = None
+    path: Path,
+    *,
+    ancestors: tuple[Path, ...] = (),
+    source_reader: SourceReader | None = None,
+    verification: _VerificationSession | None = None,
 ) -> tuple[DecisionTraceP3, VerifiedP3Checkpoint]:
     trace = decode_model(read_bytes(path), DecisionTraceP3, path)
     checkpoint = read_checkpoint_p3(
         path.parent / f"checkpoint-{trace.final_tick:010d}.json",
         ancestors=ancestors,
         source_reader=source_reader,
+        verification=verification,
     )
     save = checkpoint.save
     if trace.final_tick != _registered_horizon(checkpoint):

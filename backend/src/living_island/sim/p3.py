@@ -64,6 +64,7 @@ from living_island.persistence.p3 import (
     P3Journal,
     SourceReader,
     VerifiedP3Checkpoint,
+    _VerificationSession,
     build_recovery_origin,
     candidate_allocation_entries,
     checkpoint_verifier,
@@ -261,11 +262,13 @@ def _finish(
     ancestors: tuple[Path, ...],
     source_reader: SourceReader,
     horizon: int,
+    verification: _VerificationSession,
 ) -> P3RunResult:
     verified = read_checkpoint_p3(
         output / checkpoint_filename(save.world.tick),
         ancestors=ancestors,
         source_reader=source_reader,
+        verification=verification,
     )
     trace = None
     if save.world.tick == horizon:
@@ -289,7 +292,9 @@ def _drive_live(
     observe_initial: bool = False,
 ) -> SavePackageP3:
     def publish() -> SavePackageP3:
-        entries = candidate_allocation_entries(session.snapshot().entries, journal.raw_prefixes())
+        entries = candidate_allocation_entries(
+            session.snapshot().entries, journal.raw_prefixes(), verification=journal.verification
+        )
         ledger = _ledger(inputs.allocation_key, inputs.case.caps, entries)
         if ledger != session.export_ledger():
             raise ValueError("staged budget debits differ from verified terminal evidence")
@@ -347,6 +352,7 @@ def run_p3(
     Enrollment is separate and create-once. Neither an output directory nor a
     checkpoint can initialize an allocation or expand its registered capacity.
     """
+    verification = _VerificationSession()
     inputs = _Inputs.parse(input_files, case_id)
     validate_inputs(input_files, run_id=content.config.meta.run_id, source_reader=source_reader)
     inputs.check_selector(selector, selector_sha256)
@@ -359,7 +365,9 @@ def run_p3(
     count = _length(0, ticks, inputs.case.ticks)
     output = _fresh_output(output)
     pricing = next(iter(inputs.policies.values())).pricing
-    verifier = checkpoint_verifier(source_reader=source_reader, horizon=inputs.case.ticks)
+    verifier = checkpoint_verifier(
+        source_reader=source_reader, horizon=inputs.case.ticks, verification=verification
+    )
     with allocation_store.open_case(inputs.allocation_key, pricing, None, verifier) as session:
         if session.snapshot().caps != inputs.case.caps:
             raise ValueError("enrolled capacity differs from the registered case")
@@ -372,6 +380,7 @@ def run_p3(
             content.config.meta.run_id,
             reservation_lookup=session.verify_reservation,
             fault=fault,
+            verification=verification,
         )
         runtimes = _roster(
             inputs,
@@ -401,7 +410,9 @@ def run_p3(
             observer=on_boundary_committed,
             observe_initial=True,
         )
-        return _finish(save, output, (), source_reader, inputs.case.ticks)
+        return _finish(
+            save, output, (), source_reader, inputs.case.ticks, verification=verification
+        )
 
 
 def _dispatch_tail(source: Path, checkpoint: VerifiedP3Checkpoint) -> bool:
@@ -436,10 +447,15 @@ def resume_p3(
     on_boundary_committed: BoundaryObserver | None = None,
 ) -> P3RunResult:
     """Continue the current authority head; interrupted spend requires offline mode."""
+    verification = _VerificationSession()
     checkpoint = checkpoint.resolve()
     source = checkpoint.parent
-    verify_later_checkpoints(checkpoint, ancestors=ancestors, source_reader=source_reader)
-    verified = read_checkpoint_p3(checkpoint, ancestors=ancestors, source_reader=source_reader)
+    verify_later_checkpoints(
+        checkpoint, ancestors=ancestors, source_reader=source_reader, verification=verification
+    )
+    verified = read_checkpoint_p3(
+        checkpoint, ancestors=ancestors, source_reader=source_reader, verification=verification
+    )
     registration = TrialRegistration.model_validate_json(verified.inputs["trial-registration.json"])
     case_id = next(
         case.case_id
@@ -467,7 +483,10 @@ def resume_p3(
     )
     new_ancestors = (checkpoint, *ancestors)
     verifier = checkpoint_verifier(
-        ancestors=new_ancestors, source_reader=source_reader, horizon=inputs.case.ticks
+        ancestors=new_ancestors,
+        source_reader=source_reader,
+        horizon=inputs.case.ticks,
+        verification=verification,
     )
     pricing = next(iter(inputs.policies.values())).pricing
     offline_mode = offline_recovery or not verified.save.live_enabled
@@ -492,13 +511,20 @@ def resume_p3(
             pending = session.pending_recovery()
             if pending is None:
                 artifacts = {name: (source / name).read_bytes() for name in LOG_NAMES}
-                origin, evidence = build_recovery_origin(verified, session.snapshot(), artifacts)
+                origin, evidence = build_recovery_origin(
+                    verified, session.snapshot(), artifacts, verification=verification
+                )
                 session.latch_recovery(canonical_bytes(origin), evidence, origin.recovery_entries)
             else:
                 origin = ResumeOriginP3.model_validate_json(pending)
                 evidence = session.recovery_evidence()
         origin = prepare_continuation(
-            source, verified, output, offline_origin=origin, evidence=evidence
+            source,
+            verified,
+            output,
+            offline_origin=origin,
+            evidence=evidence,
+            verification=verification,
         )
         live_enabled = verified.save.live_enabled and session.snapshot().status != "offline_only"
         journal = P3Journal(
@@ -507,6 +533,7 @@ def resume_p3(
             prior_raw=verified.logs,
             reservation_lookup=session.verify_reservation,
             fault=fault,
+            verification=verification,
         )
         runtimes = _roster(
             inputs,
@@ -521,7 +548,12 @@ def resume_p3(
             selector_sha256=selector_sha256,
             clock_ms=clock_ms,
         )
-        history = decode_records(verified.logs["events.jsonl"], WorldEvent, source / "events.jsonl")
+        history = decode_records(
+            verified.logs["events.jsonl"],
+            WorldEvent,
+            source / "events.jsonl",
+            verification=verification,
+        )
         loop = P3BoundaryLoop(
             create_engine(content, verified.save.world, history), runtimes, session, verified.save
         )
@@ -538,7 +570,9 @@ def resume_p3(
             fault=fault,
             observer=on_boundary_committed,
         )
-        return _finish(save, output, new_ancestors, source_reader, inputs.case.ticks)
+        return _finish(
+            save, output, new_ancestors, source_reader, inputs.case.ticks, verification=verification
+        )
 
 
 class _RecordedBudget:
@@ -598,14 +632,27 @@ class _RecordedBudget:
 
 
 class _RecordedAudit:
-    def __init__(self, source: VerifiedP3Checkpoint, start: SavePackageP3 | None) -> None:
+    def __init__(
+        self,
+        source: VerifiedP3Checkpoint,
+        start: SavePackageP3 | None,
+        verification: _VerificationSession,
+    ) -> None:
         self.records = decode_records(
-            source.logs["decisions-p3.jsonl"], DecisionRecordP3, Path("decisions-p3.jsonl")
+            source.logs["decisions-p3.jsonl"],
+            DecisionRecordP3,
+            Path("decisions-p3.jsonl"),
+            verification=verification,
         )
         self.contexts = decode_records(
-            source.logs["contexts-p3.jsonl"], ContextRecordP3, Path("contexts-p3.jsonl")
+            source.logs["contexts-p3.jsonl"],
+            ContextRecordP3,
+            Path("contexts-p3.jsonl"),
+            verification=verification,
         )
-        self.events = decode_records(source.logs["events.jsonl"], WorldEvent, Path("events.jsonl"))
+        self.events = decode_records(
+            source.logs["events.jsonl"], WorldEvent, Path("events.jsonl"), verification=verification
+        )
         self._event_rows = source.logs["events.jsonl"].splitlines(keepends=True)
         self._decision_rows = source.logs["decisions-p3.jsonl"].splitlines(keepends=True)
         self._event_cursor = 0 if start is None else start.event_cursor
@@ -618,7 +665,7 @@ class _RecordedAudit:
         ):
             by_decision: dict[str, list[bytes]] = {}
             for row, raw in zip(
-                decode_records(source.logs[name], model, Path(name)),
+                decode_records(source.logs[name], model, Path(name), verification=verification),
                 source.logs[name].splitlines(keepends=True),
                 strict=True,
             ):
@@ -689,16 +736,23 @@ def reexecute_p3(
     retained origin. The result identifies its final segment and ancestor locators.
     A checkpoint resume consumes only decisions after that verified boundary.
     """
+    verification = _VerificationSession()
     source = source.resolve()
     try:
         trace, final = load_trace_p3(
-            source / "decision-trace-p3.json", ancestors=ancestors, source_reader=source_reader
+            source / "decision-trace-p3.json",
+            ancestors=ancestors,
+            source_reader=source_reader,
+            verification=verification,
         )
         initial = (
             None
             if start_checkpoint is None
             else read_checkpoint_p3(
-                start_checkpoint, ancestors=ancestors, source_reader=source_reader
+                start_checkpoint,
+                ancestors=ancestors,
+                source_reader=source_reader,
+                verification=verification,
             )
         )
         if initial is not None:
@@ -743,15 +797,19 @@ def reexecute_p3(
         if initial is None:
             directory.mkdir(parents=True)
             retain_inputs(directory, final.inputs, run_id=trace.run_id, source_reader=source_reader)
-            journal = P3Journal(directory, trace.run_id)
+            journal = P3Journal(directory, trace.run_id, verification=verification)
         else:
             assert start_checkpoint is not None
-            origin = prepare_continuation(start_checkpoint.parent, initial, directory)
+            origin = prepare_continuation(
+                start_checkpoint.parent, initial, directory, verification=verification
+            )
             origins = [*initial.origins, origin]
             replay_ancestors = (start_checkpoint.resolve(), *ancestors)
-            journal = P3Journal(directory, trace.run_id, prior_raw=initial.logs)
+            journal = P3Journal(
+                directory, trace.run_id, prior_raw=initial.logs, verification=verification
+            )
         mirror = _RecordedBudget(final.save, restored)
-        audit = _RecordedAudit(final, restored)
+        audit = _RecordedAudit(final, restored, verification=verification)
         live_enabled = True if restored is None else restored.live_enabled
 
         def build_loop(save: SavePackageP3 | None) -> P3BoundaryLoop:
@@ -814,7 +872,10 @@ def reexecute_p3(
                     raise ReplayDiverged("replay state differs at an origin boundary")
                 previous_path = directory / checkpoint_filename(save.world.tick)
                 previous = read_checkpoint_p3(
-                    previous_path, ancestors=replay_ancestors, source_reader=source_reader
+                    previous_path,
+                    ancestors=replay_ancestors,
+                    source_reader=source_reader,
+                    verification=verification,
                 )
                 segment += 1
                 directory = output / f"segment-{segment:04d}"
@@ -825,13 +886,16 @@ def reexecute_p3(
                     directory,
                     offline_origin=origin,
                     evidence=evidence,
+                    verification=verification,
                 )
                 replay_ancestors = (previous_path, *replay_ancestors)
                 origins.append(origin)
                 mirror.import_origin(origin)
                 if origin.recovery_mode == "offline":
                     live_enabled = False
-                journal = P3Journal(directory, trace.run_id, prior_raw=previous.logs)
+                journal = P3Journal(
+                    directory, trace.run_id, prior_raw=previous.logs, verification=verification
+                )
                 loop = build_loop(save)
                 save = publish()
             if save.world.tick == trace.final_tick:
@@ -846,7 +910,14 @@ def reexecute_p3(
         audit.finish()
         if pending_origins or canonical_bytes(save) != final.raw:
             raise ReplayDiverged("final recorded world/runtime/budget/checkpoint bytes differ")
-        result = _finish(save, directory, replay_ancestors, source_reader, trace.final_tick)
+        result = _finish(
+            save,
+            directory,
+            replay_ancestors,
+            source_reader,
+            trace.final_tick,
+            verification=verification,
+        )
         if result.trace != trace:
             raise ReplayDiverged("final replay trace differs from source")
         return result
@@ -1085,6 +1156,7 @@ def export_p3_replay(
     The destination is create-once; a missing intermediate checkpoint refuses
     publication instead of filling the gap from another output directory.
     """
+    verification = _VerificationSession()
     source, output = source.resolve(), output.resolve()
     if output.exists():
         raise ValueError("P3 replay destination must be a fresh file")
@@ -1094,12 +1166,17 @@ def export_p3_replay(
         return source_reader(commit, path)
 
     trace, final = load_trace_p3(
-        source / "decision-trace-p3.json", ancestors=ancestors, source_reader=archived
+        source / "decision-trace-p3.json",
+        ancestors=ancestors,
+        source_reader=archived,
+        verification=verification,
     )
     content = load_run_content(
         source, expected_config_hash=trace.config_hash, expected_map_hash=trace.map_hash
     )
-    events = decode_records(final.logs["events.jsonl"], WorldEvent, source / "events.jsonl")
+    events = decode_records(
+        final.logs["events.jsonl"], WorldEvent, source / "events.jsonl", verification=verification
+    )
     event_counts = Counter(event.tick for event in events)
     final_lines = {name: raw.splitlines(keepends=True) for name, raw in final.logs.items()}
     # Resolve the same nearest-first chain as checkpoint verification. A clean
@@ -1133,7 +1210,10 @@ def export_p3_replay(
             directory for directory, lower, upper in reversed(segments) if lower <= tick <= upper
         )
         checkpoint = read_checkpoint_p3(
-            directory / checkpoint_filename(tick), ancestors=ancestors, source_reader=archived
+            directory / checkpoint_filename(tick),
+            ancestors=ancestors,
+            source_reader=archived,
+            verification=verification,
         )
         if checkpoint.inputs != final.inputs:
             raise ValueError("P3 replay frame inputs differ from the final trace")
