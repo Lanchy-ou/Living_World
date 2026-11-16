@@ -166,6 +166,9 @@ def source_inputs(include_tape, *, edge=False):
     if edge:
         case["caps"] = dict.fromkeys(("attempts", "input_tokens", "output_tokens", "micro_cny"), 0)
         registration["aggregate_caps"] = case["caps"]
+        case["llm_actor_ids"] = []
+        for actor in case["policy_templates"]:
+            actor["config"]["policy_id"] = "rule-based-v0"
     commit = committed_head()
     pins = {p["path"]: p for p in registration["input_pins"]}
     for path in [SELF, *([TAPE] if include_tape else [])]:
@@ -299,7 +302,11 @@ def main():
         "live_authority_accesses": 0,
     }
     if args.edge:
-        manifest["features"] = ["death", "stale cognitive cursor", "zero-call budget fallback"]
+        manifest["features"] = [
+            "death",
+            "stale cognitive cursor",
+            "zero-call deliberate rule-primary decision",
+        ]
     (FIXTURES / f"{name}-manifest.json").write_bytes(canonical_bytes(manifest))
     print(json.dumps(manifest), flush=True)
     return 0
