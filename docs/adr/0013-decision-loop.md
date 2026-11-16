@@ -161,6 +161,9 @@ parts; it does not rely on a provider-side session. Parts, in order:
   policy, D7) does not enter the day log.
 - The prefix and the day log are stable between turns, so prompt caching
   covers most of each request. Only the current state is new.
+- **[Owner]** The long-term memories in the fixed prefix are chosen by a
+  harness-side model call (context management) from the memory index (ADR
+  0012 D2), not by fixed code rules and not by the resident.
 
 **[Owner]** The working context grows naturally. It is not compressed to a short
 length during the waking period. Long-context effects of the model (missed
@@ -192,6 +195,28 @@ by turn reason:
 | New sighting | Beliefs and skills about what was seen |
 
 A memory already recalled in this waking period is not appended again.
+
+**[Owner]** Recall by recipe is part of the memory system, not a choice of the
+resident, so it does not conflict with D1: people do not choose what comes to
+mind either. A resident can also try to recall something on purpose during the
+day, and not everything can be recalled.
+
+**[Owner]** Deliberate recall:
+
+- The resident states what it tries to remember. Recall stays in the
+  resident's mind and never reaches the world.
+- Each long-term record has a strength, computed from how recently and how
+  often it was used and from its confidence. Using a record strengthens it;
+  unused records weaken, and consolidation may forget weak ones.
+- Only records above a strength threshold can be reached. A harness-side model
+  call picks the relevant ones from the reachable part of the index, at most N
+  per recall. They are appended to the day log like recipe recall.
+- Recipe recall works from cues (a person present, a verb in use) and may reach
+  weaker records linked to that cue, so meeting someone can bring back a faded
+  memory.
+
+The strength formula, the threshold, N and the number of recalls per turn are
+spec values (Q5).
 
 ### D6. Intentions are optional
 
@@ -275,9 +300,10 @@ world's per-session turn cap is unchanged.
 | ID | Question |
 |---|---|
 | Q1 | The wording of the world-entry templates, which perceptions become observation entries, and how large an entry may be. |
-| Q2 | Selection rules for the fixed prefix at waking. |
+| Q2 | Whether the prefix selection is a separate call at waking or the last step of consolidation, and how much the prefix may hold. |
 | Q3 | An operator-level run budget or kill switch for live runs, given no per-resident limit. |
 | Q4 | The guard near the context window: what it drops or summarizes first, and at what threshold. It may not change world state. |
-| Q5 | May the model ask for a recall itself (a memory lookup that never reaches the world)? That would make one turn more than one model call. |
+| Q5 | The strength formula, the threshold, N, and how many recalls one turn may make. A recall never reaches the world, but it makes one turn more than one model call. |
 | Q6 | The closed vocabulary of notification classes, and how long a mute list lasts. |
 | Q7 | Request format: the provider's tool-calling messages or structured JSON output. If the provider returns a separate reasoning channel, it is recorded; whether it may be sent back in later requests depends on the provider. Both are decided by a live check. |
+| Q8 | Later direction, not in the first version: residents with different memory ability, for example a different recall reach or result count, as a trait. |

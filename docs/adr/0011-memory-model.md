@@ -13,7 +13,7 @@
   `ExperienceRecord` capture becomes the day log of the working context.
 - Owner decisions taken in discussion on 2026-11-15/16 are marked **[Owner]**.
   D6 and the forgetting rule of D4 follow the owner's architecture discussion
-  of 2026-11-16. D7 is a draft marked **Needs discussion**.
+  of 2026-11-16. D7 was confirmed in the memory discussion of the same day.
 
 ## Context
 
@@ -44,7 +44,7 @@ kind. Dialogue working state belongs to the decision loop (ADR 0013 D9).
 ### D2. Common envelope
 
 Every long-term record carries `id`, `owner_id`, `kind`, `created_tick`,
-`updated_tick`, `sources`, `confidence`, `last_used_tick`, an optional
+`updated_tick`, `sources`, `confidence`, `last_used_tick`, `use_count`, an optional
 `supersedes` reference, and its content: structured fields, natural-language
 text, or both. All values are strings or integers.
 
@@ -58,8 +58,12 @@ consolidation index (ADR 0012 D2).
 instrument and input slot predicates, target predicate, and the expected
 phenomenon, plus success and failure counts. It is the resident's guess, never
 the true rule. It may be incomplete or wrong, for example when taught by a liar.
-Teaching passes this structure; evaluation compares it with the true rules
-(ADR 0014).
+Evaluation compares it with the true rules (ADR 0014).
+
+**[Owner]** Residents pass knowledge only by speech; P3.5 has no writing or
+other medium. A taught skill reaches the listener as heard words. The
+listener's consolidation may turn them into a skill hypothesis with a `told`
+source (ADR 0012 D2), which may be incomplete or misunderstood.
 
 **[Owner]** Skill predicates are written in what the resident can perceive: the
 coarse descriptors of apparent values (ADR 0007 D4), for example "looks very
@@ -117,15 +121,15 @@ memory.
 
 ### D7. Formation per kind
 
-> **Needs discussion (owner, 2026-11-16).** Draft for the dedicated memory
-> discussion; it links this ADR with ADR 0012 and ADR 0013 D5.
+**[Owner]** How each kind is formed and recalled. This links this ADR with ADR
+0012 and ADR 0013 D5.
 
 | Kind | During the day (mechanical, ADR 0012 D1) | At consolidation (model, ADR 0012 D2) | Recalled when (ADR 0013 D5) |
 |---|---|---|---|
-| Episodic | None; the day log holds the day | Keep important experiences; abstract repeated ones into beliefs or skills | By recall recipe |
-| Belief | None | Add, revise, change confidence | By recall recipe |
+| Episodic | None; the day log holds the day | Keep important experiences; abstract repeated ones into beliefs or skills | By recall recipe, or deliberate recall (ADR 0013 D5) |
+| Belief | None | Add, revise, change confidence | By recall recipe, or deliberate recall (ADR 0013 D5) |
 | Social | Transfer counters (who gave what to whom), never changed by the model | Update impression and trust | The resident meets or hears the person |
-| Skill | Evidence counts from attempts and phenomena, never changed by the model | Create or refine hypotheses | The verb is used or considered |
+| Skill | Evidence counts from attempts and phenomena, never changed by the model | Create or refine hypotheses, including from what others said | The verb is used or considered |
 | Commitment | Written when accepted in dialogue; never deleted by the model | Mark kept, broken or expired | The other party is present, or the due time is near |
 | Intention | Written by the resident at any turn | Kept or dropped | Shown at every turn |
 | Personality | None | At most one step per trait | Fixed prefix |
@@ -152,4 +156,3 @@ memory.
 | Q2 | The initial personality trait set and drift ranges. |
 | Q3 | How trust maps to the default confidence of told claims. |
 | Q4 | Is a commitment to oneself the same kind as an intention, or separate? |
-| Q5 | Formation per kind (D7): confirm or change the draft table. |

@@ -36,8 +36,8 @@ new work; do not silently restart deferred trials or merge parked candidates.
 P3.5 is in design. ADRs 0007–0014 are proposed, not effective, and the P3 specs
 stay in force until the P3.5 specs replace them.
 
-- [P3.5 plan](docs/plans/p3.5-implementation-plan-v0.1.md) (system index, naming
-  rules, deferred P3 work)
+- [P3.5 plan](docs/plans/p3.5-implementation-plan-v0.1.md) (system index,
+  milestones M11–M15, acceptance runs, deferred P3 work)
 - [P3.5 design review brief](docs/tasks/p3.5/P3.5-00-review-brief.md)
 
 ## Source of truth order

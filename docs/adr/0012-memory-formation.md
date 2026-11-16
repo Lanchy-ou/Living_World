@@ -52,11 +52,11 @@ metric (ADR 0014 D2) could not tell the two apart.
 ### D2. Consolidation at loss of consciousness
 
 > **Needs discussion (owner, 2026-11-16).** The direction below is decided.
-> Still open: the change-set schema, merge and forgetting rules (Q6), how much of a day becomes
-> episodic memory (Q4), formation per memory kind (ADR 0011 D7), the
-> consolidation window (Q3) and failure recovery (D5, Q5). The earlier conflict with the P3 capacity
-> limits E-01/E-02 of `resident-experience-v0.1.md` no longer arises: a raw day
-> log does not persist as long-term memory (ADR 0011 D6).
+> Still open: the change-set schema, merge and forgetting rules (Q6), how
+> much of a day becomes episodic memory (Q4), the consolidation window (Q3)
+> and failure recovery (D5, Q5). The earlier conflict with the P3 capacity
+> limits E-01/E-02 of `resident-experience-v0.1.md` no longer arises: a raw
+> day log does not persist as long-term memory (ADR 0011 D6).
 
 **[Owner]** LLM formation happens in one place: consolidation, a workflow that
 runs when the resident loses consciousness (sleep, fainting, and later

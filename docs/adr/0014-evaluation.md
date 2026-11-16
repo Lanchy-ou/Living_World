@@ -58,7 +58,10 @@ Views:
 
 Memory on/off comparisons run several seeds per arm, because model output varies
 between runs. Derived chance rolls (ADR 0009 D1) give both arms the same luck
-for the same events, which reduces the number of seeds needed. Cost is measured
+for the same events, which reduces the number of seeds needed. **[Owner]** The
+M15 acceptance runs use 5 residents, 7 game days and 3 seeds per arm, and are
+judged by occurrence and traceability, not by rate thresholds
+([P3.5 plan](../plans/p3.5-implementation-plan-v0.1.md) §4.1). Cost is measured
 in full even though P3.5 sets no limit (ADR 0012 D4).
 
 Actions made by the fallback policy (ADR 0013 D7) never count as discovered,
@@ -114,7 +117,7 @@ registration or content, not engine or assembler code:
 | ID | Question |
 |---|---|
 | Q1 | Exact metric definitions, for example what counts as "acted on" a belief. |
-| Q2 | Number of seeds per arm for memory on/off comparisons. |
+| Q2 | The minimum occurrence count of each capability for M15 acceptance. |
 | Q3 | Inspection artifact size limits and sharding for long runs with many residents. |
 | Q4 | P3.5 drops the P3 trial caps (ADR 0012 D4). Do exploration runs still need a trial registration (for reproducibility only), or none? |
 | Q5 | Measures for the two experimental questions of D2, for example what counts as a repeated action or missed information. |
