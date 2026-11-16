@@ -17,11 +17,16 @@ Actual browser checks passed for these synthetic fixtures, stale/dead and
 nondecision states, zero-call records, literal imported HTML, source navigation,
 malformed/unrelated sidecar refusal and ordinary legacy replay imports.
 
-Integrated full checks, independent final Gate 2 and the explicit 1,008-tick V-04
-proof remain pending. The first long fake authoring attempt was stopped at a
-published tick-21 boundary for an independently authorized performance fix; all
-artifacts remain retained and the attempt is not counted as passing. Exact
-versions and verification evidence are recorded in [P3-07-report.md](P3-07-report.md).
+The integrated repository checks passed at `74fed10` (1,880 backend tests,
+24 existing skips, frontend/schema checks, generated-file stability and all eight
+historical hashes). Final task Gate 2 and the explicit 1,008-tick V-04 proof remain
+pending. After the owner requested a faster approach, generation C was stopped
+at checkpoint 132, unpassed; all interrupted attempts remain retained. A bounded
+private-context prototype improved full warm checkpoint verification by about
+4.2x, but capacity pressure and actual simulation timing still require independent
+verification before any long restart. These are performance findings, not changes
+to acceptance limits. Exact versions and results are in
+[P3-07-report.md](P3-07-report.md).
 
 ## Limits and next steps
 

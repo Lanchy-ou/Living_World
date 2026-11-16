@@ -2,6 +2,58 @@
 
 Status: IN_PROGRESS. This report is not M10 acceptance or live-trial authorization.
 
+## Owner-directed execution adjustment
+
+On 2026-11-16 the owner reported that the long verification took too much time
+and requested an adjusted approach and a plain-language explanation. The actual
+deliverables are the resident identity/goal/experience panel, a view of the
+evidence behind each decision, and an offline evaluation report. Those features
+and their ordinary automated/browser checks are implemented. The outstanding
+1,008-tick fake run checks long-duration record/replay consistency; it is not a
+real-model behavioral trial.
+
+At source freeze `74fed105a0723fc91932a34f35a00bfe3a493770`, all repository command
+checks passed: 1,880 backend tests, 24 existing skips, 164 frontend tests, 17 schema
+checks, the other static/build/generation checks and eight historical hashes.
+The independent consolidated review found no new implementation issues. Final
+task Gate 2 remains pending the long proof and final handoff. Complete command
+evidence is `p307-gate1-74fed10-complete.json` in the chat evidence directory.
+
+Generation C was deliberately stopped after 12,309.486 seconds, preserving
+checkpoint 132 with 395 decisions and 396 fake calls. Its automatic fixture-commit
+and proof worker was stopped first. Exact PIDs, parents, creation times and task
+commands were checked before targeted termination; no unrelated process or file
+was removed. The original wrapper exit record is retained. This interrupted run
+is **not passed**, has no tape and has no completed long proof. Its disposition
+is `D:/p307-v04-generation-c-check/disposition.json`. All three interrupted
+authoring attempts remain retained. There is no active automatic long restart.
+
+A bounded read-only checkpoint-132 diagnosis found that all 1,582 retained row
+decodes hit the cache, but full context graphs were still reconstructed and
+intrinsic hashes repeatedly computed. An external prototype preserved the
+surrounding validation function bodies and returned equal verified checkpoints:
+two warm complete verifications took 6.79/7.10 seconds before and 1.64/1.65 seconds
+with private context facts. This approximately 4.2x result is feasibility evidence,
+not a production result or full-horizon forecast. A separate compression probe
+also identified a possible way to keep later rows within bounded memory while
+still comparing their complete current bytes. Cold timings were not controlled
+comparisons, and no cold speedup is claimed.
+
+The existing independently authorized P3-PERF-U1 task now owns this bounded
+follow-up. Its internal representation and capacity design must be documented;
+all current-byte, source, relationship, authority and recovery checks remain.
+The public independent-copy contract and every frozen format remain unchanged.
+The sequence is focused tests, preserved-prefix capacity measurements, a short
+actual M6 equivalence test, affected regressions and independent Gate 2. Local
+integration remains conditional on that independent review. A new 1,008-tick run
+must wait for a reasoned execution-time range and explicit stop conditions;
+another small benchmark improvement alone does not justify a blind restart.
+
+The M10 preparation plan separately lists the prescribed seed/cap/control matrix,
+exact future dispatch-packet fields and pending U1 integration. It is not a grant
+or live dispatch request. New real trials, unavailable original M9 source-run
+compatibility, U1 downstream integration and owner M10 acceptance remain pending.
+
 ## Execution baseline and authority
 
 The owner accepted P3-06 at `5d9eb1862df307a586635441a139c731d9e2e417` and authorized its publication and conditional merge. PR [#3](https://github.com/Lanchy-ou/Living_World/pull/3) retained that exact head. GitHub [CI run 43788061888](https://github.com/Lanchy-ou/Living_World/actions/runs/43788061888) completed backend, frontend and contract jobs successfully before merge. The head was rechecked immediately before an expected-head guarded merge.
@@ -35,12 +87,12 @@ The upstream task owns the evaluation registration specification, open-question 
 | P3-06 publication, exact-head and GitHub checks | PASS before merge, as recorded above. |
 | P3-07 locked backend setup | PASS: 26 locked packages installed. |
 | P3-07 locked frontend setup | PASS: 173 packages, pnpm 10.34.9. |
-| P3-07 backend implementation and focused tests | PASS after review rework at `a1278858e86d3e7b6da2a66ee12a72316030e18c`: 103 tests, 275.76 seconds, no skips; integrated full checks pending. |
+| P3-07 backend implementation and integrated tests | PASS at `74fed105a0723fc91932a34f35a00bfe3a493770`: 1,880 passed, 24 existing skips, zero failures. The separately reopened performance follow-up requires new affected verification. |
 | Frontend lint/typecheck/build/tests/schema | PASS at `97fb75a336ff48aab596eee26f5548aa4c447ccf`: 164 tests and 17 schema tests. Three unused-disable warnings in generated P3 types; no lint errors. |
 | Actual browser inspection | PASS: six positive, nine negative and two source-navigation checks in Chrome 157.0.8103.78; details below. |
-| Independent P3-07 Gate 2 | NOT_RUN: final integrated candidate pending. |
-| Complete repository checks, generation drift and eight historical hashes | NOT_RUN on the P3-07 result. |
-| Registered V-04 long fake and raising-sentinel replay | NOT_RUN: explicit offline fixture/proof pending. |
+| Independent P3-07 Gate 2 | Backend, UI, prior PERF and integrated consolidation reviews PASS for their stated scope; final task disposition PENDING long proof, new PERF follow-up and final handoff. |
+| Complete repository checks, generation drift and eight historical hashes | PASS at `74fed10`: all 14 non-pytest commands exited zero, both generators produced no diff, and all eight fresh historical hashes matched. |
+| Registered V-04 long fake and raising-sentinel replay | NOT_COMPLETE: C deliberately stopped at checkpoint 132 under owner execution adjustment; no frozen tape or complete proof. A/B interruptions also retained. |
 | New real development/acceptance trials | NOT_RUN: no dispatch approval; multi-seed U1 upstream correction pending. |
 | M10 owner acceptance | NOT_RUN: not requested until the required evidence is ready. |
 

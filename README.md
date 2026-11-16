@@ -168,3 +168,17 @@ Committed local browser examples are listed in
 Each identifies its replay, complete inspection-file set, per-file hashes and
 retained source archive. They are synthetic offline fixtures, not real-model trial
 results. Existing P1/P2 replay imports require no inspection files.
+
+Load the exported replay in the viewer, choose **Open inspection…**, then select
+all JSON files in the corresponding inspection directory together: `index.json`,
+the trace and registration, and every decision/sample shard. After verification,
+select a resident and seek to a tick to inspect identity, goals, recent experience
+and linked evidence. **Decision debug** shows the committed decision's delivered
+context, provider projection, retrieval manifest, attempts, errors and usage.
+
+The panels label the resident, selected tick and last observed cognition. A tick
+without a new decision keeps the last committed decision visible; stopped or
+older cognition is marked explicitly. Source links navigate to the recorded
+decision or event. Missing usage and cost remain **Unknown**. Imported speech and
+other text display literally. Legacy replays remain usable without inspection
+files.
