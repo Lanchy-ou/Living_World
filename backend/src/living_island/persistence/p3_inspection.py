@@ -50,6 +50,7 @@ from living_island.persistence.content import load_run_content
 from living_island.persistence.p3 import (
     SourceReader,
     VerifiedP3Checkpoint,
+    _VerificationSession,
     decode_records,
     git_source_reader,
     load_trace_p3,
@@ -243,10 +244,13 @@ def verify_inspection_source(
     source_reader: SourceReader | None = None,
 ) -> VerifiedInspection:
     source = source.resolve()
+    verification = _VerificationSession()
     reader = cache(source_reader or GitSourceReader(repository))
     trace_path = source / "decision-trace-p3.json"
     trace_bytes = trace_path.read_bytes()
-    trace, final = load_trace_p3(trace_path, ancestors=ancestors, source_reader=reader)
+    trace, final = load_trace_p3(
+        trace_path, ancestors=ancestors, source_reader=reader, verification=verification
+    )
     for name, committed in final.logs.items():
         actual = (source / name).read_bytes()
         # Continuations store only a suffix, whose start is fixed by the nearest origin.
@@ -291,11 +295,21 @@ def verify_inspection_source(
         )
     ):
         raise ValueError("replay metadata differs from retained effective world configuration")
-    records = decode_records(final.logs["decisions-p3.jsonl"], DecisionRecordP3, source)
-    contexts = decode_records(final.logs["contexts-p3.jsonl"], ContextRecordP3, source)
-    dispatches = decode_records(final.logs["llm-dispatches.jsonl"], AttemptDispatch, source)
-    calls = decode_records(final.logs["llm-calls.jsonl"], LLMCallRecordP3, source)
-    events = decode_records(final.logs["events.jsonl"], WorldEvent, source)
+    records = decode_records(
+        final.logs["decisions-p3.jsonl"], DecisionRecordP3, source, verification=verification
+    )
+    contexts = decode_records(
+        final.logs["contexts-p3.jsonl"], ContextRecordP3, source, verification=verification
+    )
+    dispatches = decode_records(
+        final.logs["llm-dispatches.jsonl"], AttemptDispatch, source, verification=verification
+    )
+    calls = decode_records(
+        final.logs["llm-calls.jsonl"], LLMCallRecordP3, source, verification=verification
+    )
+    events = decode_records(
+        final.logs["events.jsonl"], WorldEvent, source, verification=verification
+    )
     if list(events) != replay.events:
         raise ValueError("replay objective events differ from committed prefix")
     by_dispatch = {d.call_id: d for d in dispatches}
@@ -340,7 +354,10 @@ def verify_inspection_source(
     for tick in range(trace.final_tick + 1):
         directory = next(d for d, lower, upper in reversed(segments) if lower <= tick <= upper)
         checkpoint = read_checkpoint_p3(
-            directory / f"checkpoint-{tick:010d}.json", ancestors=ancestors, source_reader=reader
+            directory / f"checkpoint-{tick:010d}.json",
+            ancestors=ancestors,
+            source_reader=reader,
+            verification=verification,
         )
         if checkpoint.inputs != final.inputs:
             raise ValueError("boundary inputs differ from completed lineage")
