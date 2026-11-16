@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import type { DragEvent } from "react";
 import { LoadControls } from "./controls/LoadControls.tsx";
 import { PlaybackBar } from "./controls/PlaybackBar.tsx";
@@ -6,41 +6,67 @@ import { ErrorDetails } from "./debug/ErrorDetails.tsx";
 import { eventInvolvesResident, isFailureEvent } from "./panels/eventView.ts";
 import { Hud } from "./panels/Hud.tsx";
 import { DRAWER_TABS, DRAWER_TITLES } from "./panels/drawerTabs.ts";
-import type { DrawerTab } from "./panels/drawerTabs.ts";
 import { InfoDrawer } from "./panels/InfoDrawer.tsx";
+import type { InfoDrawerTab } from "./panels/InfoDrawer.tsx";
 import { ResidentPanel } from "./panels/ResidentPanel.tsx";
 import { Roster } from "./panels/Roster.tsx";
 import { residentSprite } from "./render/assets/residentArt.ts";
 import { MapCanvas } from "./render/MapCanvas.tsx";
 import { SpriteCanvas } from "./render/SpriteCanvas.tsx";
-import { createReplayLoadCoordinator } from "./replay/loadCoordinator.ts";
-import { EXAMPLE_NAME, loadExample, loadFromFile } from "./replay/loader.ts";
+import { EXAMPLE_NAME, getValidator, loadExample } from "./replay/loader.ts";
 import { ReplayStore } from "./replay/store.ts";
 import type { ReplayError, WorldEvent } from "./replay/types.ts";
 import { useReplayState } from "./replay/useStore.ts";
+import { CharacterInspection } from "./p3/CharacterInspection.tsx";
+import { InspectionImport, InspectionNotice } from "./p3/InspectionImport.tsx";
+import type { ReplayFileSource } from "./p3/inspection.ts";
+import { createInspectionImport, createReplayWithSource } from "./p3/loadState.ts";
+import type { InspectionState } from "./p3/loadState.ts";
 import "./App.css";
 
 // One store per page. The viewer is read-only: it displays recorded frames and sends no commands.
 const store = new ReplayStore();
+const DecisionInspection = lazy(async () => {
+  const { DecisionInspection } = await import("./p3/DecisionInspection.tsx");
+  return { default: DecisionInspection };
+});
 
 export default function App() {
-  const { bundle, fileName } = useReplayState(store);
+  const { bundle, fileName, currentTick, selectedResidentId } = useReplayState(store);
   const [error, setError] = useState<{ error: ReplayError; fileName: string | null } | null>(null);
   // Which on-demand detail view is open, if any. Display state only.
-  const [drawer, setDrawer] = useState<DrawerTab | null>(null);
+  const [drawer, setDrawer] = useState<InfoDrawerTab | null>(null);
+  const [replaySource, setReplaySource] = useState<ReplayFileSource | null>(null);
+  const [inspectionState, setInspectionState] = useState<InspectionState>({ status: "idle" });
+  const [inspectionImport] = useState(() => createInspectionImport(
+    async (files, replay, signal) => (await import("./p3/schemas.ts")).loadInspection(files, replay, signal),
+    setInspectionState,
+  ));
+  const inspection = inspectionState.status === "ready" ? inspectionState.value : null;
 
-  const [requestLoad] = useState(() =>
-    createReplayLoadCoordinator({
-      onLoad: (nextBundle, name) => {
+  const [replayLoad] = useState(() =>
+    createReplayWithSource(
+      (text) => getValidator().validateText(text),
+      (nextBundle, name, bytes) => {
         setError(null);
+        inspectionImport.reset();
+        setDrawer((open) => open === "inspection" ? null : open);
         store.load(nextBundle, name);
+        const acceptedBundle = store.getState().bundle;
+        setReplaySource(acceptedBundle !== null && bytes !== null ? { bundle: acceptedBundle, bytes } : null);
       },
-      onError: (loadError, name) => setError({ error: loadError, fileName: name }),
-    }),
+      (loadError, name) => setError({ error: loadError, fileName: name }),
+    ),
   );
 
   function onFile(file: File) {
-    void requestLoad(file.name, () => loadFromFile(file));
+    void replayLoad.file(file);
+  }
+
+  function onInspectionFiles(files: File[]) {
+    if (replaySource === null || replaySource.bundle !== bundle) return;
+    setDrawer((open) => open === "inspection" ? null : open);
+    void inspectionImport.select(files, replaySource);
   }
 
   function onDrop(e: DragEvent<HTMLElement>) {
@@ -59,6 +85,15 @@ export default function App() {
     if (hidden) store.setFilters({ residentId: null, failuresOnly: false });
     store.selectEvent(event);
     setDrawer("events");
+  }
+
+  function showDecision(id: string) {
+    const ref = inspection?.decisionRefsById.get(id);
+    if (ref === undefined) return;
+    store.pause();
+    store.selectResident(ref.actor_id);
+    store.seek(ref.tick);
+    setDrawer("inspection");
   }
 
   useEffect(() => {
@@ -85,9 +120,18 @@ export default function App() {
   const load = (
     <LoadControls
       onFile={onFile}
-      onExample={() => void requestLoad(EXAMPLE_NAME, loadExample)}
+      onExample={() => void replayLoad.example(EXAMPLE_NAME, loadExample)}
       fileName={fileName}
     />
+  );
+  const navigation = inspection === null ? null : { inspection, onDecision: showDecision, onShowEvent: showEvent };
+  const inspectionTab = bundle === null || navigation === null ? undefined : (
+    <Suspense fallback={<p role="status">Opening decision debug…</p>}>
+      <DecisionInspection
+        {...navigation} actor={selectedResidentId} tick={currentTick}
+        residents={bundle.residents} onActor={(id) => store.selectResident(id)}
+      />
+    </Suspense>
   );
 
   return (
@@ -98,7 +142,10 @@ export default function App() {
           Living Island
         </h1>
         <Hud store={store} />
-        <div className="topbar-actions">{load}</div>
+        <div className="topbar-actions">
+          {load}
+          {replaySource !== null && <InspectionImport onFiles={onInspectionFiles} />}
+        </div>
       </header>
 
       <div className={`stage${drawer !== null ? " has-drawer" : ""}`}>
@@ -121,12 +168,21 @@ export default function App() {
           <>
             <MapCanvas store={store} />
             <Roster store={store} />
-            <ResidentPanel store={store} onShowEvent={showEvent} />
+            <ResidentPanel
+              store={store} onShowEvent={showEvent}
+              renderInspection={navigation === null ? undefined : ({ id, tick, alive }) => (
+                <CharacterInspection {...navigation} actor={id} tick={tick} alive={alive} />
+              )}
+            />
             {drawer !== null && (
-              <InfoDrawer store={store} tab={drawer} onTab={setDrawer} onClose={() => setDrawer(null)} />
+              <InfoDrawer
+                store={store} tab={drawer} onTab={setDrawer}
+                onClose={() => setDrawer(null)} inspection={inspectionTab}
+              />
             )}
           </>
         )}
+        <InspectionNotice state={inspectionState} onDismiss={inspectionImport.reset} />
         {error !== null && (
           <div className="error-layer">
             <ErrorDetails error={error.error} fileName={error.fileName} onDismiss={() => setError(null)} />
@@ -150,6 +206,15 @@ export default function App() {
                 {DRAWER_TITLES[t]}
               </button>
             ))}
+            {navigation !== null && (
+              <button
+                type="button" className={`text-button${drawer === "inspection" ? " active" : ""}`}
+                aria-pressed={drawer === "inspection"}
+                onClick={() => setDrawer(drawer === "inspection" ? null : "inspection")}
+              >
+                Decision debug
+              </button>
+            )}
           </div>
         </footer>
       )}

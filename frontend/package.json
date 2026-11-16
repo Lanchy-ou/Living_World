@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "gen:types": "json2ts --input src/api/generated/contract.schema.json --output src/api/generated/contract.ts && json2ts --input src/api/generated/replay.schema.json --output src/api/generated/replay.ts",
     "test:schema": "node tests/replay-schema.smoke.mjs",
-    "test": "node --test \"tests/*.test.mjs\""
+    "test": "node --test \"tests/*.test.mjs\"",
+    "gen:p3-types": "json2ts --input src/p3/generated/index.schema.json --output src/p3/generated/index.ts && json2ts --input src/p3/generated/decision.schema.json --output src/p3/generated/decision.ts && json2ts --input src/p3/generated/sample.schema.json --output src/p3/generated/sample.ts && json2ts --input src/p3/generated/trace.schema.json --output src/p3/generated/trace.ts && json2ts --input src/p3/generated/registration.schema.json --output src/p3/generated/registration.ts"
   },
   "dependencies": {
     "react": "^19.3.1",

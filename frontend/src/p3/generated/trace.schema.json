@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "LogPrefix": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "records": {
+          "minimum": 0,
+          "title": "Records",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "records",
+        "sha256"
+      ],
+      "title": "LogPrefix",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "trace_schema_version": {
+      "const": "0.2",
+      "title": "Trace Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "config_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "map_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Map Hash",
+      "type": "string"
+    },
+    "final_tick": {
+      "minimum": 0,
+      "title": "Final Tick",
+      "type": "integer"
+    },
+    "input_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Manifest Sha256",
+      "type": "string"
+    },
+    "final_checkpoint_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Final Checkpoint Sha256",
+      "type": "string"
+    },
+    "log_prefixes": {
+      "items": {
+        "$ref": "#/$defs/LogPrefix"
+      },
+      "title": "Log Prefixes",
+      "type": "array"
+    },
+    "final_world_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Final World Sha256",
+      "type": "string"
+    },
+    "final_runtime_states_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Final Runtime States Sha256",
+      "type": "string"
+    },
+    "final_budget_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Final Budget Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "trace_schema_version",
+    "run_id",
+    "config_hash",
+    "map_hash",
+    "final_tick",
+    "input_manifest_sha256",
+    "final_checkpoint_sha256",
+    "log_prefixes",
+    "final_world_sha256",
+    "final_runtime_states_sha256",
+    "final_budget_sha256"
+  ],
+  "title": "DecisionTraceP3",
+  "type": "object"
+}

@@ -18,10 +18,12 @@ through tick 1,008 and signed off M7 on 2026-11-11. P2 is complete.
 
 ## Current phase and entry points
 
-P3 reached M9 on 2026-11-14 with acceptance of the one-resident integration.
-[P3-06](docs/tasks/p3/P3-06.md) (three-resident isolation and interaction)
-and [P3-07](docs/tasks/p3/P3-07.md) (evaluation, inspection, and M10) are pending
-in this repository. Follow their task cards for current status.
+P3 is closed as a delivered resident-agent foundation under the owner's
+2026-11-16 scope decision. P3-06 offline isolation/interaction proofs and P3-07
+reporting, character inspection and decision-debug features are included.
+Long-duration proof, new live multi-resident evaluation and full original M10
+acceptance are deferred, not passed. See the [closeout and P3.5 handoff](docs/tasks/p3/P3-closeout.md)
+for retained evidence, unmerged follow-ups and known limits.
 
 - [P3 implementation plan](docs/plans/p3-implementation-plan-v0.1.md)
 - P3 specifications for [resident experience](docs/spec/resident-experience-v0.1.md),
@@ -109,3 +111,74 @@ For P3 comparisons and fallback, use the frozen `rule-based-v0` baseline from
 `0.1`, canteen enabled, cue enabled, fruit carry target 2 and failed-target retry
 36 ticks. Keep the seed, content pin and policy configuration hash in each comparison
 manifest.
+
+## P3 offline evaluation and inspection
+
+`scripts/p3_experiments.py` reads completed, retained P3 records. It does not run
+live models, load credentials or open the live allocation authority. Use fresh
+output directories and supply every required ancestor checkpoint for a continued
+run with repeated `--ancestor` arguments. The source run is never rewritten.
+
+For an existing completed source run and its exact exported replay:
+
+```sh
+uv run --directory backend python ../scripts/p3_experiments.py inspect --source-run ../runs/p3/completed-case --replay ../runs/p3/completed-case/replay.json --out ../runs/p3/completed-case-inspection --recorded-out ../runs/p3/completed-case-recorded
+```
+
+Replace the example paths with retained artifacts. Inspection writes an independent
+versioned index, decision/sample shards, exact trace and canonical registration.
+The optional recorded proof uses raising provider and authority sentinels. A missing
+boundary, wrong identity or damaged committed reference refuses export.
+
+The `validate` and `report` commands take `--registration` and `--receipts`; `report`
+also requires a fresh `--out` directory. Reports keep missing cases and invalid pairs
+visible, separate technical checks from descriptive behavior, and retain exact
+fractions and unknown usage. Allocation arithmetic deduplicates copied reservations;
+it does not turn a supplied allocation list into proof of a spending grant. Missing
+immutable issuance evidence remains an explicit failure, without consulting a live
+ledger. These offline commands do not perform M10 owner acceptance.
+
+For an explicitly supplied offline evidence archive, `validate` and `report` can
+instead read a closed manifest covering multiple registered runs and archived
+issuance snapshots:
+
+```sh
+uv run --directory backend python ../scripts/p3_experiments.py report --evidence-manifest ../runs/p3/archived-evidence/manifest.json --trusted-owner-evidence-sha256 OWNER_APPROVED_ARCHIVE_SHA256 --out ../runs/p3/archive-report
+```
+
+Replace `OWNER_APPROVED_ARCHIVE_SHA256` with the independently supplied,
+owner-approved SHA-256 of the complete canonical manifest. Computing a digest
+from an untrusted archive does not approve that archive. Every member is explicitly
+located and hashed inside the archive; embedded original authority paths are
+compared as identity strings and are never followed. The report verifies the
+supplied historical snapshot, not today's available budget, and creates no grant.
+Missing expected allocations retain an unknown total and a separate known charge
+subtotal. Missing historical run files cannot be reconstructed from receipts.
+The current registration 0.1 multi-seed limitation still applies; multiple archive
+members are not a way to split or bypass a required development/acceptance matrix.
+
+The P3 schemas and types are generated separately:
+
+```sh
+uv run --directory backend python ../scripts/gen_p3_inspection_types.py
+```
+
+Committed local browser examples are listed in
+`backend/tests/fixtures/p3/evaluation/ui-manifest.json` and `ui-edge-manifest.json`.
+Each identifies its replay, complete inspection-file set, per-file hashes and
+retained source archive. They are synthetic offline fixtures, not real-model trial
+results. Existing P1/P2 replay imports require no inspection files.
+
+Load the exported replay in the viewer, choose **Open inspection…**, then select
+all JSON files in the corresponding inspection directory together: `index.json`,
+the trace and registration, and every decision/sample shard. After verification,
+select a resident and seek to a tick to inspect identity, goals, recent experience
+and linked evidence. **Decision debug** shows the committed decision's delivered
+context, provider projection, retrieval manifest, attempts, errors and usage.
+
+The panels label the resident, selected tick and last observed cognition. A tick
+without a new decision keeps the last committed decision visible; stopped or
+older cognition is marked explicitly. Source links navigate to the recorded
+decision or event. Missing usage and cost remain **Unknown**. Imported speech and
+other text display literally. Legacy replays remain usable without inspection
+files.
