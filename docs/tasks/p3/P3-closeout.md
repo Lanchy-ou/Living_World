@@ -83,3 +83,20 @@ was rewritten.
 6. verification: exact-source prior checks and independent release review above;
    release PR must pass standard GitHub CI. No real API or new long simulation.
 7. open_questions: deferred table above, carried to P3.5 without claiming completion.
+
+## Release CI dependency correction
+
+The first PR #4 CI run 43842754855 passed frontend and contract jobs, but backend
+reported 1879 passed / 24 skipped / one failure: the accounting archive pins
+historical implementation ff52774076218a98df9426873a9633255fba93d9, whose original
+commits existed locally but were absent from the published cherry-picked history.
+The source-identity validator correctly refused the unavailable revision.
+
+An independently reviewed ancestry-only merge retains that immutable source.
+All four newly reachable commits are patch-equivalent to changes already in the
+release (`git cherry` marks each with `-`). The merge preserves the exact tree
+1f47c0bf60c0983e10342c8129c6373a649d8be9; no fixture, registration, source, or
+validation was changed. The parked candidate124e751 is not an ancestor of this
+historical source and remains excluded. Full-history CI can now verify the
+original pin. The failed run remains visible; the updated PR must pass CI before
+main merge.
