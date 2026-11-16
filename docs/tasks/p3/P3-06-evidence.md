@@ -242,14 +242,28 @@ upstream analysis, or documentation. Code disposition: **PASS** at
   `test_ex09_completed_evidence_survives_real_byte_eviction_and_pure_reexecution`, and
   `test_cg01_03_and_12_exact_goal_evidence_replay` (5 passed, 1.50 seconds).
 - Scope review confirmed 12 permitted new test/fixture files, no production, script,
-  or frozen-spec changes, and no actionable code finding. Final documentation review
-  follows the complete executor record; this is not owner acceptance.
+  or frozen-spec changes, and no actionable code finding. This is not owner acceptance.
 
 The successful independent command from `backend` was
 `.venv/Scripts/python.exe -B -m pytest tests/p3/test_three_residents.py tests/p3/test_social_evidence.py tests/p3/test_extension_ports.py --basetemp D:/p306g2-579384ef -q -p no:cacheprovider`.
 Its process-local environment set bytecode suppression, safe.directory for the task
 worktree, and core.longpaths=true. The reviewer did not claim a successful uv wrapper
 invocation for that run.
+
+Final overall Gate 2: **PASS** at handoff commit
+`0916a4b017248f23becf1cbd90fa33f8ae17b4bd`. The independent reviewer read the final
+persisted logs/exit records, recomputed the disjoint 1,772-node union, verified the
+1,748-pass/24-existing-skip total and exclusion of the interrupted run, and checked
+the seven handoff fields and scope. Only the two allowed task documents differ from
+the reviewed code commit. No actionable finding remains.
+
+After that handoff commit, the executor repeated
+`uv run --directory backend python ../scripts/gen_types.py` (exit 0), full
+`git diff --exit-code` (exit 0), and baseline-to-HEAD `git diff --check` (exit 0).
+Worktree status was clean. The reviewer independently confirmed the resulting clean
+diff; it did not claim to rerun the generator. The delivery tip adds only this final
+review/check record. Task status remains **READY_FOR_REVIEW**, with owner acceptance
+and main merge outstanding.
 
 ### Environment and retained diagnostic evidence
 
