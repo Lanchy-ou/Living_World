@@ -14,7 +14,9 @@ import tomllib
 from dataclasses import asdict, replace
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -23,12 +25,14 @@ from scripts.p2_experiments import _limits_of, load_case  # noqa: E402
 from scripts.p3_trials import CaseReceipt, _world  # noqa: E402
 
 from living_island.agents.llm.fallback import FrozenRuleFallbackAdapter  # noqa: E402
-from living_island.agents.p3.types import ContextProfile  # noqa: E402
+from living_island.agents.p3.types import CaseAllocationP3, ContextProfile  # noqa: E402
 from living_island.analysis.compare import death_categories, run_scalars  # noqa: E402
 from living_island.analysis.metrics import compute_run  # noqa: E402
 from living_island.analysis.p3 import (  # noqa: E402
     RULE_TREE,
     AllocationEvidence,
+    ExpectedAllocation,
+    VerifiedIssuance,
     allocation_accounting,
     evaluate_cognition,
     matched_comparison,
@@ -37,7 +41,22 @@ from living_island.analysis.p3 import (  # noqa: E402
 from living_island.analysis.validity import assess_validity as evaluate_legacy  # noqa: E402
 from living_island.contract.p3_inspection import canonical_bytes, canonical_sha256  # noqa: E402
 from living_island.contract.p3_save import ImplementationPin, TrialRegistration  # noqa: E402
+from living_island.persistence._codec import decode_model  # noqa: E402
 from living_island.persistence.content import load_run_content  # noqa: E402
+from living_island.persistence.p3 import read_checkpoint_p3  # noqa: E402
+from living_island.persistence.p3_allocation import (  # noqa: E402
+    _ORIGINAL_SMOKE_CASE,
+    _ORIGINAL_SMOKE_CHARGED,
+    _ORIGINAL_SMOKE_REGISTRATION,
+    _PRIOR_REPLACEMENT_CHARGED,
+    _PRIOR_REPLACEMENT_REGISTRATION,
+    REPLACEMENT_SMOKE_CAPS,
+    REPLACEMENT_SMOKE_CASE,
+    U4_SMOKE_CAPS,
+    U4_SMOKE_CASE,
+    _Pilot,
+    _ReplacementSmoke,
+)
 from living_island.persistence.p3_inspection import (  # noqa: E402
     GitSourceReader,
     VerifiedInspection,
@@ -49,6 +68,289 @@ from living_island.persistence.trace import load_trace  # noqa: E402
 from living_island.sim.p3 import reexecute_p3  # noqa: E402
 from living_island.sim.runner import reexecute  # noqa: E402
 from living_island.world.content import build_world_content  # noqa: E402
+
+
+class _ArchiveModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class ArchiveArtifact(_ArchiveModel):
+    path: str
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class ArchiveRun(_ArchiveModel):
+    directory: str
+    original_run_directory: str
+    ancestors: list[str]
+
+
+class ArchiveCase(_ArchiveModel):
+    case_id: str
+    receipts: list[str]
+    runs: list[ArchiveRun]
+
+
+class ArchiveRegistration(_ArchiveModel):
+    registration: str
+    repository_path: str
+    cases: list[ArchiveCase]
+
+
+class ArchiveReplacement(_ArchiveModel):
+    record: str
+    guard: str
+
+
+class EvidenceManifest(_ArchiveModel):
+    evidence_manifest_version: Literal["0.1"]
+    artifacts: list[ArchiveArtifact]
+    registrations: list[ArchiveRegistration] = Field(min_length=1)
+    pilot: str | None
+    cr007: ArchiveReplacement | None
+    cr008: ArchiveReplacement | None
+    allocations: list[str]
+
+
+def _relative_member(value: str) -> Path:
+    # POSIX-only archive members also reject Windows drives and UNC spellings.
+    if not value or "\\" in value or ":" in value or value.startswith("/"):
+        raise ValueError("archive member must be a relative POSIX path")
+    if any(ord(c) < 32 or c in '<>"|?*' for c in value):
+        raise ValueError("archive member is not a portable locator")
+    if any(part in ("", ".", "..") or part.endswith((".", " ")) for part in value.split("/")):
+        raise ValueError("archive member traversal or empty component")
+    return Path(*value.split("/"))
+
+
+class ArchiveReader:
+    """Read an explicitly supplied immutable archive; embedded paths stay inert."""
+
+    def __init__(self, path: Path, trusted_digest: str | None):
+        raw = path.read_bytes()
+        self.manifest = decode_model(raw, EvidenceManifest, path)
+        self.digest = sha256(raw).hexdigest()
+        self.trusted = trusted_digest is not None
+        if trusted_digest is not None and trusted_digest != self.digest:
+            raise ValueError("external owner-approved evidence digest mismatch")
+        self.base = path.resolve().parent
+        self.members: dict[str, ArchiveArtifact] = {}
+        resolved_members: set[Path] = set()
+        portable_names: set[str] = set()
+        file_ids: set[tuple[int, int]] = set()
+        for artifact in self.manifest.artifacts:
+            if artifact.path in self.members:
+                raise ValueError("duplicate archive artifact locator")
+            resolved = self.locate(artifact.path)
+            info = resolved.stat()
+            identity = (info.st_dev, info.st_ino)
+            if (
+                resolved in resolved_members
+                or artifact.path.casefold() in portable_names
+                or identity in file_ids
+            ):
+                raise ValueError("duplicate resolved archive member/alias")
+            resolved_members.add(resolved)
+            portable_names.add(artifact.path.casefold())
+            file_ids.add(identity)
+            self.members[artifact.path] = artifact
+            self.read(artifact.path)
+        for entry in self.manifest.registrations:
+            _relative_member(entry.repository_path)
+            self.file(entry.registration)
+            for case in entry.cases:
+                if len(case.receipts) != len(set(case.receipts)):
+                    raise ValueError("duplicate case receipt locator")
+                for receipt in case.receipts:
+                    self.file(receipt)
+                for run in case.runs:
+                    self.run(run)
+        for name in [self.manifest.pilot, *self.manifest.allocations]:
+            if name is not None:
+                self.file(name)
+        for link in (self.manifest.cr007, self.manifest.cr008):
+            if link is not None:
+                self.file(link.record)
+                self.file(link.guard)
+
+    def locate(self, member: str) -> Path:
+        relative = _relative_member(member)
+        path = self.base
+        for part in relative.parts:
+            path = path / part
+            if path.is_symlink() or path.is_junction():
+                raise ValueError("archive member symlink/junction is not permitted")
+        resolved = path.resolve(strict=True)
+        if resolved == self.base or self.base not in resolved.parents:
+            raise ValueError("archive member escapes its root (including symlinks)")
+        return resolved
+
+    def file(self, member: str) -> Path:
+        if member not in self.members:
+            raise ValueError(f"missing hashed archive member:{member}")
+        path = self.locate(member)
+        if not path.is_file():
+            raise ValueError("archive artifact is not a file")
+        return path
+
+    def read(self, member: str) -> bytes:
+        raw = self.file(member).read_bytes()
+        if sha256(raw).hexdigest() != self.members[member].sha256:
+            raise ValueError(f"archive artifact hash mismatch:{member}")
+        return raw
+
+    def model[T: BaseModel](self, member: str, model: type[T]) -> T:
+        return decode_model(self.read(member), model, self.file(member))
+
+    def tree(self, member: str) -> Path:
+        directory = self.locate(member)
+        if not directory.is_dir():
+            raise ValueError("archive run locator is not a directory")
+        for path in directory.rglob("*"):
+            relative = path.relative_to(self.base).as_posix()
+            self.locate(relative)
+            if path.is_file():
+                self.read(relative)
+        return directory
+
+    def run(self, run: ArchiveRun) -> tuple[Path, tuple[Path, ...]]:
+        directory = self.tree(run.directory)
+        ancestors = []
+        if len(run.ancestors) != len(set(run.ancestors)):
+            raise ValueError("duplicate ancestor locator")
+        for member in run.ancestors:
+            ancestor = self.file(member)
+            self.tree(_relative_member(member).parent.as_posix())
+            ancestors.append(ancestor)
+        return directory, tuple(ancestors)
+
+
+def _snapshot_charged(snapshot: CaseAllocationP3) -> tuple[int, int, int, int]:
+    entries = snapshot.entries
+    return (
+        len(entries),
+        sum(e.debit.input_charged if e.debit else e.reservation.input_reserved for e in entries),
+        sum(e.debit.output_charged if e.debit else e.reservation.output_reserved for e in entries),
+        sum(e.debit.money_charged if e.debit else e.reservation.money_reserved for e in entries),
+    )
+
+
+def _completed_predecessor(snapshot: CaseAllocationP3) -> None:
+    if (
+        snapshot.status != "complete"
+        or snapshot.head is None
+        or snapshot.head.checkpoint_tick != 24
+        or snapshot.head.reservation_cursor != len(snapshot.entries)
+        or snapshot.prepared_head is not None
+        or snapshot.pending_recovery_sha256 is not None
+        or any(e.debit is None or e.state == "reserved" for e in snapshot.entries)
+    ):
+        raise ValueError("replacement predecessor must be settled and complete at tick24")
+
+
+def archive_issuance(
+    archive: ArchiveReader,
+) -> tuple[VerifiedIssuance | None, dict[str, list[CaseAllocationP3]]]:
+    """Verify frozen issuance snapshots without constructing or opening an authority."""
+    manifest = archive.manifest
+    snapshots: dict[str, list[CaseAllocationP3]] = {}
+    for member in manifest.allocations:
+        snapshot = archive.model(member, CaseAllocationP3)
+        copies = snapshots.setdefault(snapshot.allocation_key, [])
+        for other in copies:
+            if (other.registration_sha256, other.case_id, other.caps) != (
+                snapshot.registration_sha256,
+                snapshot.case_id,
+                snapshot.caps,
+            ):
+                raise ValueError("conflicting allocation snapshot identities")
+            if other.status == snapshot.status == "complete" and other != snapshot:
+                raise ValueError("competing completed allocation snapshots")
+            for first, second in zip(other.entries, snapshot.entries, strict=False):
+                if first != second:
+                    raise ValueError("conflicting copied reservation evidence")
+        if snapshot not in copies:
+            copies.append(snapshot)
+    if manifest.pilot is None:
+        if manifest.cr007 is not None or manifest.cr008 is not None:
+            raise ValueError("replacement evidence requires its pilot snapshot")
+        return None, snapshots
+    pilot = archive.model(manifest.pilot, _Pilot)
+    bindings = {}
+    slots: dict[str, list[str]] = {}
+    for slot in pilot.slots:
+        name = f"{slot.purpose}:{slot.seed}"
+        slots[name] = []
+        if slot.binding is not None:
+            if slot.binding.state != "issued":
+                raise ValueError("pilot binding has not reached issued state")
+            bindings[slot.binding.allocation_key] = slot.binding
+            slots[name].append(slot.binding.allocation_key)
+    smoke = slots["smoke:1292387875"]
+    for ordinal, link, case_id, caps in (
+        (1, manifest.cr007, REPLACEMENT_SMOKE_CASE, REPLACEMENT_SMOKE_CAPS),
+        (2, manifest.cr008, U4_SMOKE_CASE, U4_SMOKE_CAPS),
+    ):
+        if link is None:
+            continue
+        if len(smoke) != ordinal:
+            raise ValueError("replacement chain is missing its approved predecessor")
+        record = archive.model(link.record, _ReplacementSmoke)
+        guard = archive.model(link.guard, _ReplacementSmoke)
+        if record != guard or record.binding.state != "issued":
+            raise ValueError("replacement issued record/guard mismatch")
+        previous_key = smoke[-1]
+        matching = [
+            row
+            for row in snapshots.get(previous_key, [])
+            if canonical_sha256(row) == record.original_allocation_sha256
+        ]
+        if len(matching) != 1:
+            raise ValueError("missing exact replacement predecessor snapshot/hash")
+        previous = matching[0]
+        _completed_predecessor(previous)
+        expected_registration = (
+            _ORIGINAL_SMOKE_REGISTRATION if ordinal == 1 else _PRIOR_REPLACEMENT_REGISTRATION
+        )
+        expected_case = _ORIGINAL_SMOKE_CASE if ordinal == 1 else REPLACEMENT_SMOKE_CASE
+        expected_charged = (
+            tuple(_ORIGINAL_SMOKE_CHARGED.values()) if ordinal == 1 else _PRIOR_REPLACEMENT_CHARGED
+        )
+        if (previous.registration_sha256, previous.case_id, _snapshot_charged(previous)) != (
+            expected_registration,
+            expected_case,
+            expected_charged,
+        ):
+            raise ValueError(
+                "replacement predecessor differs from frozen approved identity/charges"
+            )
+        binding = record.binding
+        if (
+            record.authority_root != pilot.authority_root
+            or record.original_allocation_key != previous_key
+            or binding.case_id != case_id
+            or binding.caps != caps
+            or binding.registration_sha256 == previous.registration_sha256
+            or binding.allocation_key in bindings
+            or any(b.registration_sha256 == binding.registration_sha256 for b in bindings.values())
+        ):
+            raise ValueError("replacement authorization identity/caps mismatch")
+        bindings[binding.allocation_key] = binding
+        smoke.append(binding.allocation_key)
+    for key, binding in bindings.items():
+        for snapshot in snapshots.get(key, []):
+            if (snapshot.registration_sha256, snapshot.case_id, snapshot.caps) != (
+                binding.registration_sha256,
+                binding.case_id,
+                binding.caps,
+            ):
+                raise ValueError("issued binding differs from archived allocation")
+    issuance = (
+        VerifiedIssuance(archive.digest, tuple((slot, tuple(keys)) for slot, keys in slots.items()))
+        if archive.trusted
+        else None
+    )
+    return issuance, snapshots
 
 
 class RaisingSentinel:
@@ -172,6 +474,9 @@ def _receipt(
     repository: Path,
     registration_path: Path,
     reader: GitSourceReader,
+    *,
+    registration_relative: str | None = None,
+    receipt_candidates: list[Path] | None = None,
 ) -> CaseReceipt:
     receipt = CaseReceipt.model_validate_json(path.read_bytes())
     if (receipt.case_id, receipt.registration_sha256, receipt.status) != (
@@ -187,10 +492,15 @@ def _receipt(
         registration.implementation_commit,
         receipt.executed_commit,
     )
-    for candidate in [
-        *path.parent.glob("*.json"),
-        *(path.parent / "lineage" / case_id).rglob("previous.json"),
-    ]:
+    candidates = (
+        receipt_candidates
+        if receipt_candidates is not None
+        else [
+            *path.parent.glob("*.json"),
+            *(path.parent / "lineage" / case_id).rglob("previous.json"),
+        ]
+    )
+    for candidate in candidates:
         if candidate == path:
             continue
         raw = json.loads(candidate.read_bytes())
@@ -206,7 +516,10 @@ def _receipt(
             or other.allocation_key != receipt.allocation_key
         ):
             raise ValueError("competing completed receipt lineages for one allocation")
-    relative = registration_path.resolve().relative_to(repository.resolve()).as_posix()
+    relative = (
+        registration_relative
+        or registration_path.resolve().relative_to(repository.resolve()).as_posix()
+    )
     archived = TrialRegistration.model_validate_json(reader(receipt.registration_commit, relative))
     if archived != registration:
         raise ValueError("receipt registration commit does not contain the exact registration")
@@ -221,9 +534,14 @@ def _receipt(
 
 
 def _control(
-    case: Any, receipt: CaseReceipt, proof: Path | None, repository: Path
+    case: Any,
+    receipt: CaseReceipt,
+    proof: Path | None,
+    repository: Path,
+    *,
+    source: Path | None = None,
 ) -> dict[str, Any]:
-    source = Path(receipt.run_directory)
+    source = Path(receipt.run_directory) if source is None else source
     policy = case.policy_config
     parameters = policy.rule_params
     if (
@@ -299,38 +617,97 @@ def evaluate_registration(
     repository: Path,
     output: Path | None,
     ancestors: tuple[Path, ...] = (),
+    archive: ArchiveReader | None = None,
+    archive_entry: ArchiveRegistration | None = None,
+    allocation_sink: list[AllocationEvidence] | None = None,
+    verified_sink: dict[str, VerifiedInspection] | None = None,
 ) -> dict[str, Any]:
     reader = GitSourceReader(repository)
     registration = TrialRegistration.model_validate_json(registration_path.read_bytes())
     registration_source(registration, repository, reader)
     results: dict[str, dict[str, Any]] = {}
     allocations = []
+    expected = [
+        ExpectedAllocation(
+            canonical_sha256(registration), case.case_id, registration.purpose, case.seed, case.caps
+        )
+        for case in registration.cases
+    ]
     if output is not None:
         output.mkdir(parents=True, exist_ok=False)
     for case in [*registration.cases, *registration.controls]:
         try:
+            if archive is None:
+                receipt_path = receipts / f"{case.case_id}.json"
+                candidates = None
+                relative = None
+                archive_runs = []
+            else:
+                assert archive_entry is not None
+                members = [c for c in archive_entry.cases if c.case_id == case.case_id]
+                if not members:
+                    raise ValueError("missing archived case/receipt/run evidence")
+                receipt_names = list(dict.fromkeys(n for c in members for n in c.receipts))
+                candidates = [archive.file(n) for n in receipt_names]
+                retained = [archive.model(n, CaseReceipt) for n in receipt_names]
+                if any(
+                    (r.registration_sha256, r.case_id)
+                    != (canonical_sha256(registration), case.case_id)
+                    for r in retained
+                ):
+                    raise ValueError("foreign receipt in archived case")
+                complete = [i for i, r in enumerate(retained) if r.status == "complete"]
+                if not complete:
+                    raise ValueError("missing or incomplete matching case receipt")
+                receipt_path = candidates[complete[0]]
+                relative = archive_entry.repository_path
+                archive_runs = [r for c in members for r in c.runs]
             receipt = _receipt(
-                receipts / f"{case.case_id}.json",
+                receipt_path,
                 registration,
                 case.case_id,
                 repository,
                 registration_path,
                 reader,
+                registration_relative=relative,
+                receipt_candidates=candidates,
             )
-            source = Path(receipt.run_directory)
+            if archive is None:
+                source = Path(receipt.run_directory)
+                case_ancestors = ancestors
+            else:
+                matching_runs = [
+                    r for r in archive_runs if r.original_run_directory == receipt.run_directory
+                ]
+                if not matching_runs:
+                    raise ValueError("missing explicit archived completed run locator")
+                source, case_ancestors = archive.run(matching_runs[0])
+                trace_name = (
+                    "decision-trace.json"
+                    if case in registration.controls
+                    else "decision-trace-p3.json"
+                )
+                for run in matching_runs:
+                    copied, _ = archive.run(run)
+                    if (
+                        sha256((copied / trace_name).read_bytes()).hexdigest()
+                        != receipt.trace_sha256
+                    ):
+                        raise ValueError("competing completed archived run lineages")
             if case in registration.controls:
                 results[case.case_id] = _control(
                     case,
                     receipt,
                     None if output is None else output / f"{case.case_id}-recorded",
                     repository,
+                    source=source,
                 )
                 continue
             verified = verify_inspection_source(
                 source,
                 source / "replay.json",
                 repository=repository,
-                ancestors=ancestors,
+                ancestors=case_ancestors,
                 source_reader=reader,
             )
             if verified.registration != registration or verified.trace.final_tick != case.ticks:
@@ -345,6 +722,14 @@ def evaluate_registration(
             )
             if receipt.allocation_key != expected_key:
                 raise ValueError("receipt selects a different registered case")
+            if verified_sink is not None:
+                prior = verified_sink.get(expected_key)
+                if prior is not None and (
+                    prior.trace_bytes != verified.trace_bytes
+                    or prior.final.raw != verified.final.raw
+                ):
+                    raise ValueError("competing completed source lineages across registrations")
+                verified_sink[expected_key] = verified
             metrics = evaluate_cognition(
                 verified.decisions,
                 verified.samples,
@@ -397,7 +782,7 @@ def evaluate_registration(
                     source,
                     output / f"{case.case_id}-recorded",
                     repository=repository,
-                    ancestors=ancestors,
+                    ancestors=case_ancestors,
                     reader=reader,
                 )
                 item["PV-06"] = "PASS"
@@ -417,7 +802,9 @@ def evaluate_registration(
                 "missing_sources": [str(exc)],
                 "metrics": None,
             }
-    accounting = allocation_accounting(allocations)
+    if allocation_sink is not None:
+        allocation_sink.extend(allocations)
+    accounting = allocation_accounting(allocations, expected=expected)
     comparison = (
         matched_comparison(registration, results) if registration.purpose == "acceptance" else None
     )
@@ -443,14 +830,237 @@ def evaluate_registration(
     }
 
 
+def evaluate_archive(
+    manifest_path: Path, *, trusted_owner_digest: str | None, repository: Path, output: Path | None
+) -> dict[str, Any]:
+    archive = ArchiveReader(manifest_path, trusted_owner_digest)
+    issuance, snapshots = archive_issuance(archive)
+    reader = GitSourceReader(repository)
+    if output is not None:
+        output.mkdir(parents=True, exist_ok=False)
+    expected: dict[str, ExpectedAllocation] = {}
+    case_info: dict[str, Any] = {}
+    allocations: list[AllocationEvidence] = []
+    verified: dict[str, VerifiedInspection] = {}
+    reports = []
+    errors: list[str] = []
+    run_locators = [
+        run for entry in archive.manifest.registrations for case in entry.cases for run in case.runs
+    ]
+    for index, entry in enumerate(archive.manifest.registrations):
+        registration = archive.model(entry.registration, TrialRegistration)
+        digest = canonical_sha256(registration)
+        case_ids = {case.case_id for case in [*registration.cases, *registration.controls]}
+        if any(case.case_id not in case_ids for case in entry.cases):
+            raise ValueError("archive contains an unregistered case")
+        for case in registration.cases:
+            item = ExpectedAllocation(
+                digest, case.case_id, registration.purpose, case.seed, case.caps
+            )
+            prior = expected.setdefault(item.allocation_key, item)
+            if prior != item:
+                raise ValueError("conflicting archived registration case identity")
+            case_info[item.allocation_key] = case
+        try:
+            if registration.purpose in ("development", "acceptance"):
+                raise ValueError(
+                    "P305-U1_REQUIRED: registration0.1 matrix is unsupported; "
+                    "split registrations cannot substitute"
+                )
+            report = evaluate_registration(
+                archive.file(entry.registration),
+                archive.base,
+                repository=repository,
+                output=None if output is None else output / f"registration-{index:04d}",
+                archive=archive,
+                archive_entry=entry,
+                allocation_sink=allocations,
+                verified_sink=verified,
+            )
+            # Issuance and charge completeness are evaluated once across the whole
+            # supplied archive, never independently as fresh per-registration grants.
+            report.pop("accounting")
+            report["technical"] = (
+                "PASS"
+                if all(row["technical"] == "PASS" for row in report["cases"].values())
+                else "FAIL"
+            )
+            reports.append(report)
+        except (OSError, ValueError) as exc:
+            errors.append(str(exc))
+            reports.append(
+                {
+                    "registration_sha256": digest,
+                    "technical": "FAIL",
+                    "cases_expected": len(case_ids),
+                    "cases": {
+                        case_id: {
+                            "technical": "FAIL",
+                            "case_id": case_id,
+                            "metrics": None,
+                            "missing_sources": [str(exc)],
+                        }
+                        for case_id in sorted(case_ids)
+                    },
+                }
+            )
+    # The complete pilot inventory determines every issued obligation, including
+    # bindings whose registration or execution artifacts were omitted.
+    binding_by_key = {}
+    if archive.manifest.pilot is not None:
+        pilot = archive.model(archive.manifest.pilot, _Pilot)
+        for slot in pilot.slots:
+            if slot.binding is not None:
+                binding_by_key[slot.binding.allocation_key] = (
+                    slot.purpose,
+                    slot.seed,
+                    slot.binding,
+                )
+        for link in (archive.manifest.cr007, archive.manifest.cr008):
+            if link is not None:
+                binding = archive.model(link.record, _ReplacementSmoke).binding
+                binding_by_key[binding.allocation_key] = ("smoke", 1292387875, binding)
+        for key, (purpose, seed, binding) in binding_by_key.items():
+            item = ExpectedAllocation(
+                binding.registration_sha256, binding.case_id, purpose, seed, binding.caps
+            )
+            if key in expected and expected[key] != item:
+                raise ValueError("issued binding differs from registered case")
+            if key not in expected:
+                errors.append(f"missing issued registration/case:{key}")
+                expected[key] = item
+            if key not in snapshots:
+                errors.append(f"missing issued allocation snapshot:{key}")
+    for key, copies in snapshots.items():
+        item = expected.get(key)
+        if item is None:
+            raise ValueError("allocation snapshot has no registered or issued case")
+        if item.purpose == "fake" and key in binding_by_key:
+            raise ValueError("fake case cannot consume a live slot")
+        for snapshot in copies:
+            if (snapshot.registration_sha256, snapshot.case_id, snapshot.caps) != (
+                item.registration_sha256,
+                item.case_id,
+                item.caps,
+            ):
+                raise ValueError("allocation snapshot differs from expected case")
+            source_verified = verified.get(key)
+            complete_trace = None
+            try:
+                if snapshot.head is None:
+                    raise ValueError("allocation snapshot has no committed head")
+                matches = [
+                    run
+                    for run in run_locators
+                    if run.original_run_directory == snapshot.head.run_directory
+                ]
+                if not matches:
+                    raise ValueError("missing explicit archive locator for allocation head")
+                for run in matches:
+                    directory, ancestors = archive.run(run)
+                    path = directory / f"checkpoint-{snapshot.head.checkpoint_tick:010d}.json"
+                    checkpoint = read_checkpoint_p3(path, ancestors=ancestors, source_reader=reader)
+                    head = snapshot.head
+                    if (
+                        sha256(checkpoint.raw).hexdigest() != head.checkpoint_sha256
+                        or checkpoint.save.input_manifest_sha256 != head.input_manifest_sha256
+                        or checkpoint.save.run_budget.allocation_key != key
+                        or checkpoint.save.run_budget.caps != snapshot.caps
+                        or len(checkpoint.save.allocation_entries) != head.reservation_cursor
+                        or snapshot.entries[: head.reservation_cursor]
+                        != checkpoint.save.allocation_entries
+                    ):
+                        raise ValueError("archived allocation head/entries differ from checkpoint")
+                if snapshot.status == "complete":
+                    case = case_info.get(key)
+                    if (
+                        case is None
+                        or snapshot.head.checkpoint_tick != case.ticks
+                        or snapshot.prepared_head is not None
+                        or snapshot.pending_recovery_sha256 is not None
+                        or snapshot.head.reservation_cursor != len(snapshot.entries)
+                    ):
+                        raise ValueError(
+                            "completed allocation differs from registered horizon/settlement"
+                        )
+                    if source_verified is None:
+                        raise ValueError(
+                            "complete snapshot lacks source-verified receipt/run lineage"
+                        )
+                    if (
+                        snapshot.head.checkpoint_sha256
+                        != sha256(source_verified.final.raw).hexdigest()
+                        or snapshot.entries != source_verified.final.save.allocation_entries
+                    ):
+                        raise ValueError("competing completed allocation/source lineages")
+                    complete_trace = sha256(source_verified.trace_bytes).hexdigest()
+                else:
+                    errors.append(f"incomplete archived allocation:{key}")
+            except (OSError, ValueError) as exc:
+                errors.append(f"allocation {key}: {exc}")
+            allocations.append(
+                AllocationEvidence(
+                    item.registration_sha256,
+                    item.case_id,
+                    item.purpose,
+                    item.seed,
+                    item.caps,
+                    tuple(snapshot.entries),
+                    complete_trace,
+                )
+            )
+    accounting = allocation_accounting(
+        allocations, expected=list(expected.values()), issuance=issuance
+    )
+    if errors:
+        accounting["technical"] = accounting["arithmetic_status"] = "FAIL"
+        accounting["errors"].extend(errors)
+        accounting["cost_ceiling_micro_cny"] = None
+        accounting["evidence_complete"] = False
+    passed = accounting["technical"] == "PASS" and all(r["technical"] == "PASS" for r in reports)
+    return {
+        "report_schema_version": "0.1",
+        "technical": "PASS" if passed else "FAIL",
+        "owner_acceptance": "NOT_REQUESTED",
+        "m10_status": "NOT_EVALUATED",
+        "evidence_manifest_sha256": archive.digest,
+        "trust_anchor": {
+            "expected_owner_approved_sha256": trusted_owner_digest,
+            "status": "MATCHED_EXTERNAL_DIGEST" if archive.trusted else "MISSING",
+            "assumption": (
+                "Operator supplies an independently obtained owner-approved manifest digest; "
+                "the archive does not authenticate itself or create any grant."
+            ),
+        },
+        "registrations": reports,
+        "allocations_expected": len(expected),
+        "accounting": accounting,
+        "live_provider_calls": 0,
+        "live_authority_accesses": 0,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", type=Path, default=ROOT)
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("validate", "report"):
         command = commands.add_parser(name)
-        command.add_argument("--registration", type=Path, required=True)
-        command.add_argument("--receipts", type=Path, required=True)
+        choice = command.add_mutually_exclusive_group(required=True)
+        choice.add_argument("--registration", type=Path)
+        choice.add_argument(
+            "--evidence-manifest",
+            type=Path,
+            help="Closed relative-path archive manifest for cross-registration offline accounting",
+        )
+        command.add_argument("--receipts", type=Path)
+        command.add_argument(
+            "--trusted-owner-evidence-sha256",
+            help=(
+                "Independently obtained owner-approved digest of the whole canonical manifest; "
+                "no default, no self-authentication or grant creation"
+            ),
+        )
         command.add_argument("--ancestor", type=Path, action="append", default=[])
         if name == "report":
             command.add_argument("--out", type=Path, required=True)
@@ -488,13 +1098,27 @@ def main(argv: list[str] | None = None) -> int:
                     reader=reader,
                 )
         else:
-            result = evaluate_registration(
-                args.registration,
-                args.receipts,
-                repository=args.repository,
-                output=getattr(args, "out", None),
-                ancestors=tuple(args.ancestor),
-            )
+            if args.evidence_manifest is not None:
+                if args.receipts is not None or args.ancestor:
+                    raise ValueError("archive members supply explicit receipts and ancestors")
+                result = evaluate_archive(
+                    args.evidence_manifest,
+                    trusted_owner_digest=args.trusted_owner_evidence_sha256,
+                    repository=args.repository,
+                    output=getattr(args, "out", None),
+                )
+            else:
+                if args.receipts is None:
+                    raise ValueError("--receipts is required with --registration")
+                if args.trusted_owner_evidence_sha256 is not None:
+                    raise ValueError("external digest requires --evidence-manifest")
+                result = evaluate_registration(
+                    args.registration,
+                    args.receipts,
+                    repository=args.repository,
+                    output=getattr(args, "out", None),
+                    ancestors=tuple(args.ancestor),
+                )
             result["command"] = [
                 sys.executable,
                 str(Path(__file__).resolve()),
@@ -510,6 +1134,21 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "status": "FAIL",
                     "error": str(exc),
+                    **(
+                        {
+                            "accounting": {
+                                "technical": "FAIL",
+                                "arithmetic_status": "FAIL",
+                                "issuance_proof": "MISSING",
+                                "cost_ceiling_micro_cny": None,
+                                "known_subtotal_micro_cny": 0,
+                                "evidence_complete": False,
+                                "missing_sources": [str(exc)],
+                            }
+                        }
+                        if args.command in ("validate", "report")
+                        else {}
+                    ),
                     "live_provider_calls": 0,
                     "live_authority_accesses": 0,
                 }

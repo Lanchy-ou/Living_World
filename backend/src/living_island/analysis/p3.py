@@ -391,20 +391,36 @@ def matched_comparison(
 
 
 @dataclass(frozen=True)
-class AllocationEvidence:
+class ExpectedAllocation:
     registration_sha256: str
     case_id: str
     purpose: str
     seed: int
     caps: BudgetCaps
-    entries: tuple[AllocationEntry, ...]
-    completed_trace_sha256: str | None
 
     @property
     def allocation_key(self) -> str:
         return canonical_sha256(
             {"registration_sha256": self.registration_sha256, "case_id": self.case_id}
         )
+
+
+@dataclass(frozen=True)
+class AllocationEvidence(ExpectedAllocation):
+    entries: tuple[AllocationEntry, ...]
+    completed_trace_sha256: str | None
+
+
+@dataclass(frozen=True)
+class VerifiedIssuance:
+    """Read-only facts from an externally anchored archive, never a spending grant.
+
+    The I/O boundary verifies canonical owner snapshots and all predecessor links.
+    Pure arithmetic cannot authenticate an arbitrary caller-supplied key mapping.
+    """
+
+    owner_evidence_sha256: str
+    slots: tuple[tuple[str, tuple[str, ...]], ...]
 
 
 SLOTS = (
@@ -421,6 +437,8 @@ def allocation_accounting(
     evidence: Sequence[AllocationEvidence],
     *,
     authorizations: Mapping[str, Sequence[str]] | None = None,
+    expected: Sequence[ExpectedAllocation] = (),
+    issuance: VerifiedIssuance | None = None,
 ) -> dict[str, Any]:
     """Deduplicate retained evidence; explicit immutable approval mirrors are required.
 
@@ -428,6 +446,20 @@ def allocation_accounting(
     CR-008 allocation keys in issuance order. It is never a grant or live lookup.
     """
     known_slots = {f"{purpose}:{seed}" for purpose, seed, _ in SLOTS}
+    if issuance is not None:
+        if authorizations is not None:
+            raise ValueError("raw authorization mappings cannot accompany verified issuance")
+        authorizations = dict(issuance.slots)
+        if len(issuance.slots) != len(known_slots) or set(authorizations) != known_slots:
+            raise ValueError("verified issuance must describe all six slots")
+        anchor = issuance.owner_evidence_sha256
+        if len(anchor) != 64 or any(c not in "0123456789abcdef" for c in anchor):
+            raise ValueError("verified issuance requires its external digest anchor")
+    inventory: dict[str, ExpectedAllocation] = {}
+    for item in expected:
+        previous = inventory.setdefault(item.allocation_key, item)
+        if previous != item:
+            raise ValueError("conflicting expected allocation identity")
     if authorizations is not None and set(authorizations) - known_slots:
         raise ValueError("unknown authorization slot")
     grouped: dict[str, AllocationEvidence] = {}
@@ -443,6 +475,13 @@ def allocation_accounting(
             item.seed,
         ):
             raise ValueError("conflicting allocation metadata")
+        expected_item = inventory.get(key)
+        if expected_item is not None and (
+            expected_item.purpose,
+            expected_item.seed,
+            expected_item.caps,
+        ) != (item.purpose, item.seed, item.caps):
+            raise ValueError("allocation differs from expected registration")
         grouped[key] = item
         if item.completed_trace_sha256 is not None:
             if key in completed and completed[key] != item.completed_trace_sha256:
@@ -492,10 +531,33 @@ def allocation_accounting(
                 "unknown_usage_count": sum(
                     e.debit is not None and e.debit.usage_unknown for e in mine
                 ),
+                "unsettled_count": sum(e.debit is None for e in mine),
+                "reported_usage": usage_summary([e.debit for e in mine if e.debit is not None]),
+                "evidence_status": "COMPLETE" if key in completed else "INCOMPLETE",
+                "missing_sources": [] if key in completed else ["verified completed lineage"],
             }
         )
+    missing = set(inventory) - set(completed)
+    for key in sorted(missing):
+        errors.append(f"missing verified allocation completion:{key}")
+        if key not in grouped:
+            item = inventory[key]
+            rows.append(
+                {
+                    "allocation_key": key,
+                    "case_id": item.case_id,
+                    "registration_sha256": item.registration_sha256,
+                    "charged": None,
+                    "unknown_usage_count": None,
+                    "unsettled_count": None,
+                    "reported_usage": None,
+                    "evidence_status": "MISSING",
+                    "missing_sources": ["verified allocation/receipt/run evidence"],
+                }
+            )
     live = {k: v for k, v in grouped.items() if v.purpose != "fake"}
-    if live and authorizations is None:
+    live_required = bool(live) or any(item.purpose != "fake" for item in inventory.values())
+    if live_required and issuance is None:
         errors.append("missing immutable authorization evidence")
     slots = []
     authorized_keys: set[str] = set()
@@ -519,6 +581,8 @@ def allocation_accounting(
             caps = tuple(bound.caps.model_dump().values())
             if index == 0 and caps != approved_caps:
                 errors.append(f"original slot caps differ:{key}")
+            if issuance is not None and index == 1 and caps != (34, 1114112, 69632, 2785280):
+                errors.append(f"CR-007 caps differ:{key}")
             if index == 2 and caps != (34, 1114112, 69275, 3000000):
                 errors.append(f"CR-008 caps differ:{key}")
             stage_envelope = envelope if index == 2 else approved_caps
@@ -530,7 +594,14 @@ def allocation_accounting(
                 errors.append(f"linked replacement lacks completed predecessor:{key}")
             earlier = [a + b for a, b in zip(earlier, totals[key], strict=True)]
         slots.append(
-            {"slot": slot, "allocation_keys": keys, "approved_micro_cny": approved_caps[3]}
+            {
+                "slot": slot,
+                "allocation_keys": keys,
+                "approved_micro_cny": approved_caps[3],
+                "issuance_status": ("ISSUED" if keys else "UNISSUED")
+                if issuance is not None
+                else "UNKNOWN",
+            }
         )
     for key in live:
         if key not in authorized_keys:
@@ -539,7 +610,7 @@ def allocation_accounting(
     if total > 150000000:
         errors.append("aggregate CNY150 ceiling exceeded")
     return {
-        "technical": "FAIL" if errors or live else "PASS",
+        "technical": "FAIL" if errors or (live_required and issuance is None) else "PASS",
         "arithmetic_status": "FAIL"
         if any(
             not e.startswith("missing immutable authorization")
@@ -547,10 +618,25 @@ def allocation_accounting(
             for e in errors
         )
         else "PASS",
-        "issuance_proof": "MISSING" if live else "NOT_APPLICABLE",
+        "issuance_proof": "VERIFIED_ARCHIVE"
+        if issuance is not None
+        else ("MISSING" if live_required else "NOT_APPLICABLE"),
+        "owner_evidence_sha256": None if issuance is None else issuance.owner_evidence_sha256,
         "errors": errors,
         "allocations": rows,
         "slots": slots,
-        "cost_ceiling_micro_cny": total,
+        "cost_ceiling_micro_cny": None
+        if (missing or (live_required and issuance is None) or authorized_keys - set(completed))
+        else total,
+        "known_subtotal_micro_cny": total,
+        "evidence_complete": not missing
+        and (not live_required or issuance is not None)
+        and not (authorized_keys - set(completed)),
         "approved_ceiling_micro_cny": 150000000,
+        "scope": (
+            "Conservative charges in the supplied evidence snapshot; "
+            "not current spendable balance or new authorization. "
+            "UNISSUED applies only at that anchored snapshot."
+        ),
+        "actual_supplier_bill_micro_cny": None,
     }
