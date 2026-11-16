@@ -56,8 +56,8 @@ The harness is a role, not a new package. Module boundaries are unchanged:
 
 **[Owner]** A turn returns one next action (a kernel action or `act`, ADR 0007
 D2). At a turn that comes while an action is running (D3), it may instead return
-`continue`. A turn may also update the resident's intention (D6) and cite
-memory IDs (D10).
+`continue`. A turn may also update the resident's intention (D6), give the new
+action a mute list (D3) and cite memory IDs (D10).
 
 - The world holds no queue of the resident's future actions. A multi-step plan
   exists only as the intention in the resident's memory. The resident chooses
@@ -91,18 +91,36 @@ notification arrives while an action is running:
   urgent need) is a world rule, not a notification.
 - The world clock stays frozen while a model call is outstanding, as in v1.
 
-> **Needs discussion (owner, 2026-11-16).** Which notifications give a turn
-> (the turn policy) is agent-side, deterministic and versioned: it models when
-> a resident notices something, never what it does. Current draft: every
-> notification class gives a turn in the first version, and the list is
-> narrowed only after measurement (Q6).
+**[Owner]** The resident chooses what not to be disturbed by. An action may
+carry an optional mute list: the notification classes that should not give a
+turn while that action runs. Nothing muted means every notification gives a
+turn.
+
+- The harness applies the list deterministically; the world never sees it. A
+  muted notification is still written to the day log, so the resident sees it
+  at its next turn. Muting changes when the resident learns something, never
+  whether it does.
+- The list is part of the recorded model output, so replay applies it without
+  a model call.
+- A notification class added later gives a turn by default, because no
+  earlier choice muted it.
+
+**[Owner]** One notification cannot be muted: hunger or thirst reaching the
+critical band. It only gives the resident a turn; the resident still decides
+whether to stop. Hard stops (fainting, exhaustion, death) are separate: the
+world ends the action whatever the mute list says.
+
+> **Needs discussion (owner, 2026-11-16).** Current draft: a mute list lasts
+> for one action and is cleared when that action ends. The closed vocabulary
+> of notification classes is Q6.
 
 ### D4. Waking-period working context
 
-> **Needs discussion (owner, 2026-11-16).** The direction below is decided.
-> Still open: what a day-log entry holds and how a perception becomes a short
-> deterministic observation entry (Q1), what enters the fixed prefix (Q2), the
-> guard near the context window (Q4), and how detailed the day log is, which
+> **Needs discussion (owner, 2026-11-16).** The direction below is decided,
+> and so is the day-log entry format. Still open: the template wording and
+> which perceptions become observation entries (Q1), what enters the fixed
+> prefix (Q2), the guard near the context window (Q4), and how detailed the
+> day log is, which
 > decides how large the context grows (ADR 0014 D2). Measured P3 request
 > (offline, steady state, upper-bound tokens): action schema 55% (sent twice;
 > P3.5 sends it once, ADR 0007 D7), tile lists 19%, recalled experience 20%
@@ -125,6 +143,22 @@ parts; it does not rely on a provider-side session. Parts, in order:
 
 - Dynamic world state is never kept as standing instructions. Only the current
   state shows it, and only as the resident perceives it now.
+- The system instructions say how to interact (action format, verbs, innate
+  drives), never how the world works: residents start with no recipes (ADR 0007
+  D3).
+
+**[Owner]** Day-log entries have fixed formats:
+
+- World entries are rendered by fixed templates from what the world reported
+  to this resident: action results, notifications, speech heard (verbatim) and
+  observations. A change of state is logged as an entry ("you feel hungry");
+  the full state appears only in the current state.
+- Resident entries are the model's adopted responses, appended exactly as
+  returned. The harness never shortens, rewrites or summarizes them; the
+  response schema fixes only their shape.
+- Every raw response, including one that failed to parse, is recorded in the
+  audit. A response that was not adopted (retried, or replaced by the fallback
+  policy, D7) does not enter the day log.
 - The prefix and the day log are stable between turns, so prompt caching
   covers most of each request. Only the current state is new.
 
@@ -240,10 +274,10 @@ world's per-session turn cap is unchanged.
 
 | ID | Question |
 |---|---|
-| Q1 | What a day-log entry holds, how a perception becomes a deterministic observation entry, and how large it may be. |
+| Q1 | The wording of the world-entry templates, which perceptions become observation entries, and how large an entry may be. |
 | Q2 | Selection rules for the fixed prefix at waking. |
 | Q3 | An operator-level run budget or kill switch for live runs, given no per-resident limit. |
 | Q4 | The guard near the context window: what it drops or summarizes first, and at what threshold. It may not change world state. |
 | Q5 | May the model ask for a recall itself (a memory lookup that never reaches the world)? That would make one turn more than one model call. |
-| Q6 | The turn policy: which notifications give a turn, and whether a resident may choose what can disturb it (for example, "only if someone talks to me"). |
-| Q7 | Request format: the provider's tool-calling messages or structured JSON output. Decided by a live check. |
+| Q6 | The closed vocabulary of notification classes, and how long a mute list lasts. |
+| Q7 | Request format: the provider's tool-calling messages or structured JSON output. If the provider returns a separate reasoning channel, it is recorded; whether it may be sent back in later requests depends on the provider. Both are decided by a live check. |

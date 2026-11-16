@@ -76,6 +76,9 @@ ActIntent {
 - `gather`, `eat`, `drink`, `fill_canteen`, `rest` and `sleep` become rules.
   **[Owner]** Rest and sleep are rules. So the effect vocabulary must include a
   bounded operation that changes the actor's own physiology.
+  **[Owner]** The resident chooses how long to sleep, as a parameter of its
+  sleep action, within bounds the world sets. The world wakes it at that time
+  unless something wakes it earlier (ADR 0013 D3).
 - `talk` and `give` stay kernel actions. Speech carries information, not a
   physical change, and has hearing range, dialogue sessions and reply checks.
   `give` moves ownership between two residents.
@@ -254,3 +257,4 @@ ActIntent {
 | Q9 | The equivalence projection and seed set for the v1 compatibility pack. |
 | Q10 | Can a resident speak during a timed action without stopping it (for example, answer while gathering)? |
 | Q11 | The full list of hard stops, their priority, and how a stop chosen by the resident is reported in the result. |
+| Q12 | The bounds on a chosen sleep length, and its parameter shape (a length, or a wake-up time). |

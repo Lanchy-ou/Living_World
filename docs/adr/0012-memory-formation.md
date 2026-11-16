@@ -41,13 +41,20 @@ resident directly experienced, so they need no interpretation:
 Mechanical writes are the input of consolidation and its safety net: when
 consolidation fails, they are not lost (D5).
 
+**[Owner]** Hard facts are written by code and never decided by the model:
+commitments (who promised what to whom, and any due time), transfers (who gave
+what to whom) and skill evidence (attempts and the phenomena seen).
+Consolidation may read and cite them, and may mark a commitment kept, broken or
+expired, but may not delete or change them. Otherwise a promise that a
+consolidation call left out would look like a broken one, and the commitment
+metric (ADR 0014 D2) could not tell the two apart.
+
 ### D2. Consolidation at loss of consciousness
 
 > **Needs discussion (owner, 2026-11-16).** The direction below is decided.
-> Still open: how the related long-term memories are selected, the change-set
-> schema, how importance is judged, merge and forgetting rules (Q6), how much
-> of a day becomes episodic memory (Q4), formation per memory kind (ADR 0011
-> D7) and failure recovery (D5, Q5). The earlier conflict with the P3 capacity
+> Still open: the change-set schema, merge and forgetting rules (Q6), how much of a day becomes
+> episodic memory (Q4), formation per memory kind (ADR 0011 D7), the
+> consolidation window (Q3) and failure recovery (D5, Q5). The earlier conflict with the P3 capacity
 > limits E-01/E-02 of `resident-experience-v0.1.md` no longer arises: a raw day
 > log does not persist as long-term memory (ADR 0011 D6).
 
@@ -69,24 +76,49 @@ long-term memories, the model proposes changes, for example:
 - merge, drop or forget details that do not matter.
 
 - **Reads**: the waking period's working context (ADR 0013 D4), the mechanical
-  writes of D1, and related long-term memories, including records marked
-  `needs_review`. **[Owner]** The first version reads the whole waking period,
-  as long as it fits the model's context window. Layered consolidation is
-  evaluated later.
+  writes of D1, and the existing long-term memories the model chooses.
+  **[Owner]** The first version reads the whole waking period, as long as it
+  fits the model's context window. Layered consolidation is evaluated later.
+- **[Owner]** The model chooses which existing long-term memories to read. It
+  first sees an index of the resident's long-term store and names the records
+  it wants, then reads those in full and writes the change set. Both steps are
+  recorded model calls, so replay needs no new call.
 - **Writes**: one change set of closed operations: add, update, merge,
   supersede, change confidence, forget, and adjust a personality trait within
-  bounds (ADR 0011 D5).
+  bounds (ADR 0011 D5). The hard facts of D1 are out of its reach, except the
+  status of a commitment.
+
+**[Owner]** The index has one line per record: ID, kind, a one-line gist and
+confidence. Consolidation writes the gist whenever it creates or changes a
+record (ADR 0011 D2). Two kinds of record are always included without being
+chosen, because the change set must handle them: open commitments and records
+marked `needs_review`. The model may still miss an old memory that today's
+experience contradicts; evaluation counts contradictory pairs in the long-term
+store.
+
+**[Owner]** The model judges what is worth keeping; code never scores
+importance. The consolidation prompt gives guidance aimed at the P3.5 goals:
+keep where resources are, who said what and whether it was believed, what was
+promised, what was tried and with what result, and how impressions of others
+changed; routine steps and repeated identical actions may be forgotten. Its
+wording is exploration-lane work (ADR 0014 D4). Evaluation checks whether kept
+memories are later used.
 
 **[Owner]** The model proposes; code validates and commits. The validator
 checks:
 
 - provenance: every new or changed record cites sources that were in the input
-  (day-log entry IDs, memory IDs). A change set citing anything else is
-  rejected whole;
-- ownership: it changes only the consolidating resident's records;
+  (day-log entry IDs, memory IDs). An operation citing anything else fails;
+- ownership: it changes only the consolidating resident's records, and no
+  hard fact (D1);
 - format: closed operations, the common envelope (ADR 0011 D2) and the capacity
   of each kind;
 - version: it applies to the memory-store version it was built from.
+
+**[Owner]** An operation that fails a check is dropped, together with any
+operation that depends on it (for example, a merge into a dropped record). The
+rest of the change set is committed. Dropped operations are recorded in the
+audit.
 
 **[Owner]** The validator never reads world state or the objective event log. A
 belief that is wrong but sincerely held is kept: code never corrects a resident
@@ -95,6 +127,26 @@ with hidden truth.
 After the change set is committed, the working context of that waking period is
 closed (ADR 0011 D6). The next waking period starts a new one from the updated
 memory.
+
+**[Owner]** The world does not pause for consolidation, and sleep can be
+interrupted. The resident chooses how long it sleeps (ADR 0007 D2). A normal
+sleep is long enough for consolidation to finish and the working context to be
+closed.
+
+> **Needs discussion (owner, 2026-11-16).** Current draft of the mechanism,
+> which keeps replay exact: consolidation takes effect at a fixed tick, K ticks
+> after the resident loses consciousness (K is a spec value). The world keeps
+> running in between. If the model has not answered by tick K, the simulation
+> waits at that tick, as it waits for decision calls, so a replay applies the
+> result at the same tick. If the resident wakes before tick K, because it
+> chose a short sleep (a nap) or because something woke it, the result is not
+> applied: the resident keeps its open working context and consolidates at the
+> next loss of consciousness. A nap rests the body but does not clear the
+> mind. A faint lasts at least K ticks, so fainting always ends in
+> consolidation.
+
+**[Owner]** Residents are not told that a nap does not clear the mind. They
+learn it, or fail to, from experience.
 
 ### D3. Mental fatigue
 
@@ -125,12 +177,12 @@ adjust.
 
 ### D5. Recording, replay and failure
 
-Each consolidation is one recorded model call (input manifest, prompt version,
-model, raw output), plus the validator's verdict and the committed change set,
-hashed like a P3 decision. Replay applies the recorded change set without a
+Each consolidation is two recorded model calls, selection and change set
+(input manifest, prompt version, model, raw output for each), plus the
+validator's verdict and the committed change set, hashed like a P3 decision. Replay applies the recorded change set without a
 model call.
 
-Failure (current draft, Q5): a failed or rejected consolidation is retried a
+Failure (current draft, Q5): a consolidation with no valid output is retried a
 bounded number of times. If it still fails, the waking period's working
 context stays pending and is consolidated at the next loss of consciousness,
 together with the new one. After repeated failures only the mechanical writes
@@ -144,14 +196,19 @@ together with the new one. After repeated failures only the mechanical writes
   debug view of ADR 0014.
 - A resident can hold wrong beliefs indefinitely; only its own later experience
   or what others tell it can change them.
+- Whether residents learn to sleep long enough is observable behaviour, and a
+  learning signal that evaluation can use.
+- Consolidation revises only the old memories it chose to read, so an old
+  belief it did not pick survives that night unchanged, even if the day
+  contradicted it.
 
 ## Open questions
 
 | ID | Question |
 |---|---|
-| Q1 | The mental fatigue formula and its maximum (world rule, shared with ADR 0010). |
+| Q1 | The mental fatigue formula and its maximum (world rule, shared with ADR 0010), including how much a nap lowers it. |
 | Q2 | Does fainting or intoxication degrade consolidation (for example, memory gaps)? Deferred after the first version. |
-| Q3 | Does the world clock freeze during a consolidation call, as during decision calls, or does the resident stay unconscious until it finishes while the world ticks? |
+| Q3 | The consolidation window K (a spec value). |
 | Q4 | How much of a day becomes episodic memory: a bound per consolidation, or only the capacity of each kind (ADR 0011 Q1)? |
 | Q5 | Failure recovery: retry count, how many pending waking periods may be combined, and when the rest counts as forgotten. |
-| Q6 | The change-set schema, how importance is judged, and the rules for merging and forgetting. |
+| Q6 | The change-set schema and the rules for merging and forgetting. |

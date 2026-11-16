@@ -48,6 +48,10 @@ Every long-term record carries `id`, `owner_id`, `kind`, `created_tick`,
 `supersedes` reference, and its content: structured fields, natural-language
 text, or both. All values are strings or integers.
 
+**[Owner]** Every record also carries a one-line gist, written by consolidation
+whenever it creates or changes the record. The gist is the record's line in the
+consolidation index (ADR 0012 D2).
+
 ### D3. Skills are structured hypotheses
 
 **[Owner]** A skill has the same shape as a world rule (ADR 0008 D3): verb,
@@ -107,7 +111,9 @@ memory.
 - The long-term store supports recall, adding, merging, revision, confidence
   changes and forgetting. It is a set of typed records, not one free-text file.
 - **[Owner]** A resident can never reach the audit through memory: not world
-  truth, not a closed working context, not a forgotten record.
+  truth, not a closed working context, not a forgotten record. The first
+  version has no retrieval of the audit in any form, including cue-triggered
+  recall of a forgotten experience; adding one later is a new decision.
 
 ### D7. Formation per kind
 
@@ -118,9 +124,9 @@ memory.
 |---|---|---|---|
 | Episodic | None; the day log holds the day | Keep important experiences; abstract repeated ones into beliefs or skills | By recall recipe |
 | Belief | None | Add, revise, change confidence | By recall recipe |
-| Social | Counters (who gave what to whom) | Update impression and trust | The resident meets or hears the person |
-| Skill | Evidence counts from attempts and phenomena | Create or refine hypotheses | The verb is used or considered |
-| Commitment | Written when accepted in dialogue | Mark kept, broken or expired | The other party is present, or the due time is near |
+| Social | Transfer counters (who gave what to whom), never changed by the model | Update impression and trust | The resident meets or hears the person |
+| Skill | Evidence counts from attempts and phenomena, never changed by the model | Create or refine hypotheses | The verb is used or considered |
+| Commitment | Written when accepted in dialogue; never deleted by the model | Mark kept, broken or expired | The other party is present, or the due time is near |
 | Intention | Written by the resident at any turn | Kept or dropped | Shown at every turn |
 | Personality | None | At most one step per trait | Fixed prefix |
 
