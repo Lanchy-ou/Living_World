@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Icon } from "../controls/icons.tsx";
 import { APPLE_KEY, CANTEEN_KEY, objectSprite } from "../render/assets/objectArt.ts";
 import type { PixelSprite } from "../render/assets/pixels.ts";
@@ -29,6 +30,7 @@ interface Props {
   store: ReplayStore;
   /** Opens the events view on one recorded event. */
   onShowEvent: (event: WorldEvent) => void;
+  renderInspection?: (selection: { id: string; tick: number; alive: boolean }) => ReactNode;
 }
 
 /**
@@ -36,7 +38,7 @@ interface Props {
  * inventory and this tick's events. It floats over the map, so opening it never resizes the
  * map or moves the camera.
  */
-export function ResidentPanel({ store, onShowEvent }: Props) {
+export function ResidentPanel({ store, onShowEvent, renderInspection }: Props) {
   const { bundle, currentTick, selectedResidentId, camera } = useReplayState(store);
   if (bundle === null || selectedResidentId === null) return null;
   const view = residentView(bundle, currentTick, selectedResidentId);
@@ -139,6 +141,8 @@ export function ResidentPanel({ store, onShowEvent }: Props) {
           </p>
         )}
       </section>
+
+      {renderInspection?.({ id: view.id, tick: currentTick, alive: view.alive })}
 
       <section className="tick-events" aria-label="Events this tick">
         <h3>
