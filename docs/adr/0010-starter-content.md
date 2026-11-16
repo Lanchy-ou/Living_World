@@ -40,6 +40,12 @@ About 8 materials and 10 rules. Exact values are open question Q1.
 - World rules: fruit regrowth, fruit decay, fire burning out, tool wear.
 - **[Owner]** The unique canteen stays. Craftable containers are added
   alongside it.
+- **[Owner]** At least one starter rule goes against common sense through a
+  deceptive appearance (ADR 0007 D4). For example, a vine that looks strong
+  snaps under load, while dry grass twisted into cord holds. The model may
+  already know how stone, wood and vine combine, so a first success on an
+  ordinary recipe can come from prior knowledge. Learning from life on the
+  island is best shown on a rule like this (ADR 0014 D2).
 
 ### D3. Balance constraints
 
@@ -50,6 +56,12 @@ About 8 materials and 10 rules. Exact values are open question Q1.
 - Hard constraint: no content may provide food or water cheaper than the
   baseline unless the owner approves it. Craftable containers fall under this
   constraint because they let residents carry more water (open question Q3).
+- **[Owner]** Two goals sit beside the survival constraint. Survival leaves
+  spare time in a day for exploring, crafting and talking. Each craftable item
+  gives a benefit the resident can perceive, for example a stone axe that cuts
+  faster. Both are tuned through where materials lie, crafting cost, durability
+  and effect, within the survival constraint. Time use is measured (ADR 0014
+  D1); how much spare time is enough is Q6.
 
 ### D4. Separation from the engine
 
@@ -71,3 +83,4 @@ About 8 materials and 10 rules. Exact values are open question Q1.
 | Q3 | Craftable container capacity and cost, so carried water does not undercut the canteen and spring balance. |
 | Q4 | Where new materials appear on the map, and whether the default map changes. |
 | Q5 | Does the starter pack replace `content/worlds/default.toml`, or sit beside it? |
+| Q6 | How much spare time a day should leave beyond survival, and how the benefit of each craftable item is checked. |

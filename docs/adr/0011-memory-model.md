@@ -14,6 +14,8 @@
 - Owner decisions taken in discussion on 2026-11-15/16 are marked **[Owner]**.
   D6 and the forgetting rule of D4 follow the owner's architecture discussion
   of 2026-11-16. D7 was confirmed in the memory discussion of the same day.
+  The source and time rules of D2 and D4 follow an external review that the
+  owner accepted on the same day.
 
 ## Context
 
@@ -52,6 +54,10 @@ text, or both. All values are strings or integers.
 whenever it creates or changes the record. The gist is the record's line in the
 consolidation index (ADR 0012 D2).
 
+**[Owner]** A record about the world may also carry `about_tick`: the tick or
+tick range its content describes, separate from when the record was written
+(D4).
+
 ### D3. Skills are structured hypotheses
 
 **[Owner]** A skill has the same shape as a world rule (ADR 0008 D3): verb,
@@ -83,6 +89,22 @@ rules; that mapping exists only in `analysis`.
 - **[Owner]** Residents may lie. The world never checks the truth of speech, so
   told memories rely on trust, and trust is updated when a told claim is
   contradicted by observation.
+- **[Owner]** A source is never relabelled. What was told stays told: if B says
+  "I gave you two fruits yesterday", consolidation may turn this into a belief
+  and the resident may fully believe it, but the record keeps its `told` source
+  from B and never becomes `observed`. An `observed` source cites a day-log
+  entry of the resident's own perception, never speech alone. If the resident
+  later sees for itself, the record gains an `observed` source that cites that
+  entry, and the `told` source stays (ADR 0012 D2 checks this).
+- **[Owner]** Observations are dated. A later observation that differs from an
+  earlier one is a change in the world, not a contradiction: "fruit on the
+  north tree yesterday" and "no fruit there today" are both true. Consolidation
+  keeps three things apart: stable knowledge ("the north tree bears fruit"),
+  dated observations (with `about_tick`, D2) and guesses ("there may still be
+  fruit", an `inferred` record with lower confidence). This is a matter of
+  sources and time, not of more memory kinds. Trust in a speaker falls only
+  when a claim is contradicted at the time it describes, never because the
+  world changed later.
 - A new record that contradicts an old one supersedes it. The old record stays
   as history the resident can still recall ("I used to think the north tree had
   fruit"). Records derived from it are marked `needs_review`, not deleted, and
@@ -130,7 +152,7 @@ memory.
 | Belief | None | Add, revise, change confidence | By recall recipe, or deliberate recall (ADR 0013 D5) |
 | Social | Transfer counters (who gave what to whom), never changed by the model | Update impression and trust | The resident meets or hears the person |
 | Skill | Evidence counts from attempts and phenomena, never changed by the model | Create or refine hypotheses, including from what others said | The verb is used or considered |
-| Commitment | Written when accepted in dialogue; never deleted by the model | Mark kept, broken or expired | The other party is present, or the due time is near |
+| Commitment | Written when an agreement with structured terms is accepted (ADR 0007 D10); never deleted by the model | Mark kept, broken or expired | The other party is present, or the due time is near |
 | Intention | Written by the resident at any turn | Kept or dropped | Shown at every turn |
 | Personality | None | At most one step per trait | Fixed prefix |
 

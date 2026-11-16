@@ -18,6 +18,8 @@
   formats, algorithms and numbers it did not fix are open questions, not owner
   decisions.
 - D3 and D4 are marked **Needs discussion** for their details.
+- The utterance of D2, the entry types of D4 and the commitment rule of D9
+  follow an external review that the owner accepted on 2026-11-16.
 
 ## Context
 
@@ -59,6 +61,11 @@ D2). At a turn that comes while an action is running (D3), it may instead return
 `continue`. A turn may also update the resident's intention (D6), give the new
 action a mute list (D3) and cite memory IDs (D10).
 
+**[Owner]** A turn may also carry one utterance (ADR 0007 D10). Speech is not
+an action and does not stop the running one: a resident answers while it keeps
+working. For example, A is chopping a tree and B asks to borrow the axe; A's
+turn is `continue` plus "after I finish this tree", and the chopping goes on.
+
 - The world holds no queue of the resident's future actions. A multi-step plan
   exists only as the intention in the resident's memory. The resident chooses
   every step again, with the latest result in view.
@@ -84,7 +91,8 @@ notification arrives while an action is running:
 | Notification | Speech heard, a new sighting, a need crossing a band, process progress | The world reports it; the action keeps running |
 
 - At a turn during a running action, the resident either continues (no world
-  effect, no ticks) or chooses another action. Choosing another action stops
+  effect and no ticks, apart from delivering any utterance) or chooses another
+  action. Choosing another action stops
   the running one, and the rule's `on_interrupt` applies (ADR 0007 D6). This
   replaces the v1 soft interrupts and deferred triggers for P3.5.
 - An unconscious resident cannot take a turn. Waking (for example because of an
@@ -153,6 +161,10 @@ parts; it does not rely on a provider-side session. Parts, in order:
   to this resident: action results, notifications, speech heard (verbatim) and
   observations. A change of state is logged as an entry ("you feel hungry");
   the full state appears only in the current state.
+- **[Owner]** Every entry carries its type (own action result, own perception,
+  speech heard, recall, own response) and the tick it describes. Code can then
+  tell what the resident perceived from what it was told, which the
+  consolidation validator checks (ADR 0012 D2).
 - Resident entries are the model's adopted responses, appended exactly as
   returned. The harness never shortens, rewrites or summarizes them; the
   response schema fixes only their shape.
@@ -259,9 +271,15 @@ not capped.
 
 The turns of a conversation are in the day log. Each open dialogue session
 also has a small working state in the resident's runtime: participants, open
-requests and whose reply is due. It is released when the session ends.
-Commitments made in dialogue are written mechanically (ADR 0012 D1). The
+requests and whose reply is due. It is released when the session ends. The
 world's per-session turn cap is unchanged.
+
+**[Owner]** Only an accepted agreement with structured terms becomes a
+commitment, written mechanically (ADR 0007 D10, ADR 0012 D1). The record is
+kept by code, but whether the resident remembers it the next day depends on
+the morning prefix and on recall (D4, D5). A resident can therefore forget a
+promise, and evaluation can still tell a forgotten promise from one that was
+never made.
 
 ### D10. Tracing every piece of context
 

@@ -15,7 +15,8 @@
   The 2026-11-16 decisions answer the first design review (near-miss
   phenomena, process materials, compatibility pack scope) and apply the owner's
   architecture discussion of the same day (no world soft interrupts, one action
-  per turn; ADR 0013 D1–D3).
+  per turn; ADR 0013 D1–D3). D10 records owner decisions on an external review
+  of the same day (speech during actions, watching, agreements).
 
 ## Context
 
@@ -55,8 +56,8 @@ prompt prefix.
 
 ### D2. Kernel actions plus one generic action
 
-- Kernel actions with engine semantics: `move_to`, `talk`, `give`, `pick_up`,
-  `drop`, `wait`, `inspect`, `contribute`.
+- Kernel actions with engine semantics: `move_to`, `give`, `pick_up`, `drop`,
+  `wait`, `inspect`, `contribute`.
 - One generic action, `act`, resolved against the rule library:
 
 ```text
@@ -79,9 +80,10 @@ ActIntent {
   **[Owner]** The resident chooses how long to sleep, as a parameter of its
   sleep action, within bounds the world sets. The world wakes it at that time
   unless something wakes it earlier (ADR 0013 D3).
-- `talk` and `give` stay kernel actions. Speech carries information, not a
-  physical change, and has hearing range, dialogue sessions and reply checks.
-  `give` moves ownership between two residents.
+- **[Owner]** Speech is not an action. v1 `talk` becomes an optional utterance
+  that any turn may carry next to its action, so speaking never stops what the
+  body is doing (D10). `give` stays a kernel action and moves ownership between
+  two residents (ADR 0008 D6).
 
 ### D3. Capability exposure
 
@@ -163,7 +165,8 @@ ActIntent {
 ### D7. Model-facing form
 
 - **[Owner]** One turn returns one next action, or `continue` at a turn during a
-  running action, plus an optional intention update (ADR 0013 D2). The world
+  running action, plus an optional utterance (D10) and an optional intention
+  update (ADR 0013 D2). The world
   holds no queue of future actions; this replaces the P3 plan of
   1..`max_plan_actions` intents. There is no tool loop inside one request:
   results arrive only after the world has advanced, so the action–result loop
@@ -199,7 +202,8 @@ ActIntent {
   after v1 code is gone.
 - The rule-based policy runs on v2 through two adapters: a perception adapter
   (v2 perception to the v1 shape it reads) and an intent adapter (its v1
-  intents to v2). It stays the baseline and fallback policy.
+  intents to v2; a v1 `talk` becomes an utterance with a `wait` of the v1
+  `talk_ticks`). It stays the baseline and fallback policy.
 - v2 has no soft interrupts and no world-side plan queue, so the rule-based
   policy reproduces v1 behaviour on its own side: it keeps its v1 queue and
   stops its running action wherever v1 would have interrupted it (the v1 table
@@ -231,6 +235,39 @@ ActIntent {
 6. A proposed rule is data. It passes the same validator as an authored rule,
    is inactive until approved, and its proposal is a recorded LLM call.
 
+### D10. Speech, watching and agreements
+
+**[Owner]** Speech runs alongside actions. An utterance is an optional part of
+any turn, next to its action or `continue` (ADR 0013 D2). A resident can answer
+while it keeps gathering or walking, and the running action is not stopped.
+Utterances keep the v1 speech features: hearing range, dialogue sessions, the
+per-session turn cap and reply checks (`world-rules-v0.1.md` §4.2).
+
+**[Owner]** Residents can learn by watching. Within perception range a
+resident sees another resident's attempts as the world shows them: who acted,
+the verb, the visible items used and the phenomena visible from where it
+stands. It never sees the matched rule, true values or the actor's own
+`on_use` feedback. Which phenomena are visible to watchers is declared in the
+phenomenon vocabulary (Q4).
+
+**[Owner]** Formal agreements carry structured terms. The words of an utterance
+stay free, but an utterance may also carry terms: who promises, to whom, what,
+and an optional due time. "What" comes from a small closed set that the
+objective log can check: give an item, return an item, be at a place,
+contribute to a process entity. The terms become an agreement only when the
+other party answers with an explicit acceptance. This generalizes the v1
+`request` and `accept`/`refuse` speech acts, which carry only an item request.
+As in v1, accepting moves nothing; the promised act is done separately.
+
+- The objective event log records the accepted agreement as a fact. The world
+  never enforces it.
+- The commitment memory is written mechanically from the accepted terms (ADR
+  0012 D1). Words without terms are only words: they reach the listener's day
+  log like any speech and may become a belief or an intention at
+  consolidation, but they are not commitments for code or evaluation.
+- Whether an agreement was kept, broken or expired is judged from objective
+  events (ADR 0014 D2), never from what the residents say about it.
+
 ## Consequences
 
 - Content can grow without protocol, schema or prompt-prefix changes.
@@ -241,6 +278,9 @@ ActIntent {
   substantially.
 - v1 runs no longer replay on the current code base, only from the archive tag.
 - The frontend must render v2 events and process entities.
+- Dialogue and work overlap, so cooperation does not stall at every reply.
+- Only agreements with structured terms can be checked. A promise made only in
+  words may still matter to the residents, but evaluation cannot count it.
 
 ## Open questions
 
@@ -249,12 +289,13 @@ ActIntent {
 | Q1 | Where exactly does innate survival instinct end and a learned recipe begin? Is "eat when hungry" a known way to eat any edible-looking item, or only a drive that leads to trying? |
 | Q2 | How much tick cost does an attempt have, and does it differ by verb? |
 | Q3 | The verb vocabulary for the first version: which verbs, and how many? |
-| Q4 | The phenomenon vocabulary and how property comparisons produce phenomena. |
+| Q4 | The phenomenon vocabulary, how property comparisons produce phenomena, and which phenomena watchers see (D10). |
 | Q5 | Deceptive appearances: is the apparent value fixed per material, per instance, or can it change (for example, rot)? Does `inspect` see through it? |
-| Q6 | Does a resident observe phenomena from another resident's attempt (learning by watching)? |
+| Q6 | Resolved by the owner, 2026-11-16: residents learn by watching within perception range (D10). |
 | Q7 | Physiology effects from rules: which needs, and what per-rule bounds? |
-| Q8 | Process entities: ownership, decay, and whether other residents may take outputs. |
+| Q8 | Process entities: decay. Ownership restricts nothing, so any resident may take outputs (ADR 0008 D6). |
 | Q9 | The equivalence projection and seed set for the v1 compatibility pack. |
-| Q10 | Can a resident speak during a timed action without stopping it (for example, answer while gathering)? |
+| Q10 | Resolved by the owner, 2026-11-16: a resident speaks during a timed action without stopping it (D10). |
 | Q11 | The full list of hard stops, their priority, and how a stop chosen by the resident is reported in the result. |
 | Q12 | The bounds on a chosen sleep length, and its parameter shape (a length, or a wake-up time). |
+| Q13 | Agreement terms (D10): the exact term kinds, the due-time form, how a return is matched to the item lent, and whether the receiving party also gets a mechanical record. |

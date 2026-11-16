@@ -13,6 +13,9 @@
   the owner's architecture discussion of 2026-11-16; details it did not fix are
   open questions, not owner decisions.
 - D2 is marked **Needs discussion** for its details.
+- The agreement rule of D1, the source-kind check of D2 and the guidance on
+  dated observations follow an external review that the owner accepted on
+  2026-11-16.
 - "Consolidation" replaces the earlier term "compaction": the step maintains
   long-term memory, it does not just shorten the day.
 
@@ -35,7 +38,9 @@ resident directly experienced, so they need no interpretation:
 - day-log entries of the working context (ADR 0013 D4), which replace P3
   episodic capture as the raw record of the day;
 - skill evidence counts from attempts and observed phenomena;
-- a commitment when the resident accepts a request in dialogue;
+- a commitment when an agreement with structured terms is accepted (ADR 0007
+  D10). A promise made only in words is not written here; consolidation may
+  still keep it as a belief or an intention;
 - social fact counters (who gave what to whom).
 
 Mechanical writes are the input of consolidation and its safety net: when
@@ -94,13 +99,17 @@ record (ADR 0011 D2). Two kinds of record are always included without being
 chosen, because the change set must handle them: open commitments and records
 marked `needs_review`. The model may still miss an old memory that today's
 experience contradicts; evaluation counts contradictory pairs in the long-term
-store.
+store (claims that cannot both hold, not dated observations of a world that
+changed, ADR 0011 D4).
 
 **[Owner]** The model judges what is worth keeping; code never scores
 importance. The consolidation prompt gives guidance aimed at the P3.5 goals:
 keep where resources are, who said what and whether it was believed, what was
 promised, what was tried and with what result, and how impressions of others
-changed; routine steps and repeated identical actions may be forgotten. Its
+changed; routine steps and repeated identical actions may be forgotten. It also
+asks the model to keep stable knowledge, dated observations and guesses apart,
+and to treat a later different observation as a change, not as a lie (ADR 0011
+D4). Its
 wording is exploration-lane work (ADR 0014 D4). Evaluation checks whether kept
 memories are later used.
 
@@ -109,6 +118,11 @@ checks:
 
 - provenance: every new or changed record cites sources that were in the input
   (day-log entry IDs, memory IDs). An operation citing anything else fails;
+- **[Owner]** source kind: each source kind matches what it cites. An
+  `observed` source cites an entry of the resident's own perception; a record
+  built only from speech stays `told`; existing sources are only added to,
+  never relabelled (ADR 0011 D4). Day-log entries carry their type (ADR 0013
+  D4), so this needs no world state;
 - ownership: it changes only the consolidating resident's records, and no
   hard fact (D1);
 - format: closed operations, the common envelope (ADR 0011 D2) and the capacity

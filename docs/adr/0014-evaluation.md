@@ -11,7 +11,10 @@
 - Owner decisions taken in discussion on 2026-11-16 are marked **[Owner]**.
   Later review answers that touch evaluation are recorded in ADRs 0009, 0012
   and 0013 and referenced here. The two experimental questions of D2 follow the
-  owner's architecture discussion of 2026-11-16.
+  owner's architecture discussion of 2026-11-16. Learning paths, memory off,
+  agreement checks, counterfactual probes, the "no difference" result and the
+  time-use view follow an external review that the owner accepted on the same
+  day.
 
 ## Context
 
@@ -44,6 +47,7 @@ Views:
 | Comparison | Two runs side by side, for example memory on and off |
 | Cost | Calls, tokens, cache hit rate, latency and fallback rate per resident and day; token share per context section (instructions, schema, current state, day log, recalled memories), from the context manifest (ADR 0013 D10); context size per turn over the day, and fallback rate against context size (ADR 0013 D8) |
 | Rules and attempts | Rule use, and where unmatched attempts cluster |
+| Time use | **[Owner]** The share of each resident-day spent on survival, exploring, crafting and talking (ADR 0010 D3) |
 
 ### D2. Emergence metrics
 
@@ -52,9 +56,20 @@ Views:
 | Capability | Measured as |
 |---|---|
 | Information spreads | Claim chains from an utterance through listeners' told memories and retellings: hop count, and whether each listener believed it (high confidence or acted on it) or doubted it |
-| Rules are discovered and taught | Residents' skill hypotheses compared with the true rules: coverage per rule, accuracy, and whether each was found or taught |
+| Rules are discovered and taught | Residents' skill hypotheses compared with the true rules: coverage per rule, accuracy, and how each was first reached (below) |
 | Artifacts persist and are used | Artifacts used as instrument or input by a resident other than the maker |
-| Commitments hold across days | Commitments spanning at least one sleep, and whether they were kept, broken or expired |
+| Commitments hold across days | Agreements with structured terms (ADR 0007 D10) spanning at least one sleep, and whether each was kept, broken or expired, judged from objective events (transfers, positions, contributions and their ticks), never from what residents say |
+
+**[Owner]** The model may know a recipe before it lives on the island, so
+evaluation records how each resident first succeeded with a rule:
+
+- right on the first attempt, which may be prior knowledge;
+- after its own failed attempts;
+- after being told by another resident;
+- with a memory from an earlier day in its context.
+
+Only the last three count as learned on the island. The strongest evidence is
+a rule that goes against common sense (ADR 0010 D2).
 
 Memory on/off comparisons run several seeds per arm, because model output varies
 between runs. Derived chance rolls (ADR 0009 D1) give both arms the same luck
@@ -63,6 +78,26 @@ M15 acceptance runs use 5 residents, 7 game days and 3 seeds per arm, and are
 judged by occurrence and traceability, not by rate thresholds
 ([P3.5 plan](../plans/p3.5-implementation-plan-v0.1.md) §4.1). Cost is measured
 in full even though P3.5 sets no limit (ADR 0012 D4).
+
+**[Owner]** Memory off removes memory across waking periods only: no
+consolidation, no long-term memories in the morning prefix, and recall that
+returns nothing, so nothing from an earlier waking period reaches the resident.
+The working context of the current waking period stays, because a resident
+cannot act without it. Hard facts (ADR 0012 D1) are still written for
+evaluation but never shown to the resident. Personality stays at its base
+values.
+
+**[Owner]** "No difference observed" is a valid result. If the two arms do not
+differ, the report says so and gives a diagnosis, for example memories that
+were never recalled, a world too simple to need them, or prior knowledge that
+was enough.
+
+**[Owner]** A memory in a context shows only that the resident could see it.
+To test whether it changed a choice, evaluation runs counterfactual probes on a
+few key turns: the recorded context of that turn with one memory removed is
+sent to the model several times, and the choices are compared with those made
+with the memory present. Probes are new model calls, recorded in a separate
+experiment record; they never enter a run or its replay. Their design is Q6.
 
 Actions made by the fallback policy (ADR 0013 D7) never count as discovered,
 taught or acted-on: metrics read the policy tag in the objective log and skip
@@ -116,8 +151,9 @@ registration or content, not engine or assembler code:
 
 | ID | Question |
 |---|---|
-| Q1 | Exact metric definitions, for example what counts as "acted on" a belief. |
+| Q1 | Exact metric definitions, for example what counts as "acted on" a belief, and which actions count as survival, exploring, crafting or talking. |
 | Q2 | The minimum occurrence count of each capability for M15 acceptance. |
 | Q3 | Inspection artifact size limits and sharding for long runs with many residents. |
 | Q4 | P3.5 drops the P3 trial caps (ADR 0012 D4). Do exploration runs still need a trial registration (for reproducibility only), or none? |
 | Q5 | Measures for the two experimental questions of D2, for example what counts as a repeated action or missed information. |
+| Q6 | Counterfactual probes: how key turns are chosen, how many samples each side needs, and when a choice counts as changed. |

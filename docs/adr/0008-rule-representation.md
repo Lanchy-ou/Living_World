@@ -98,8 +98,13 @@ single-tile structures only.
 
 **[Owner]** An entity may record an `owner_id` (the maker, or the recipient of a
 `give`), separate from where it is or who holds it. The world records ownership
-as a fact and exposes it in events; whether ownership restricts any action is
-open question Q3.
+as a fact and exposes it in events.
+
+**[Owner]** Ownership restricts nothing. Any resident may pick up, use or take
+an item that another resident owns, including the outputs of a process entity;
+the world never refuses it. Taking without consent is a social act that others
+may see (ADR 0007 D10), not a physical impossibility. This replaces the v1 rule
+of no theft (`world-rules-v0.1.md` §4.2) for P3.5.
 
 ### D7. Validation and conservation
 
@@ -129,6 +134,6 @@ later:
 |---|---|
 | Q1 | The first property and component vocabularies (shared with ADR 0010). |
 | Q2 | Do success chances depend on inputs or skill (for example, a harder head raises the chance), or are they fixed per rule? |
-| Q3 | Does ownership restrict anything (for example, may a resident pick up an item owned by someone else), or is it only a recorded fact? |
+| Q3 | Resolved by the owner, 2026-11-16: ownership is only a recorded fact and restricts nothing (D6). |
 | Q4 | How is matter measured for conservation: unit count, or a mass value per archetype? |
 | Q5 | When several outputs inherit from inputs, which properties are inherited and which come from the archetype? |
