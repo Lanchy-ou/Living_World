@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from scripts.p2_experiments import _limits_of, load_case  # noqa: E402
-from scripts.p3_trials import CaseReceipt  # noqa: E402
+from scripts.p3_trials import CaseReceipt, _world  # noqa: E402
 
 from living_island.agents.llm.fallback import FrozenRuleFallbackAdapter  # noqa: E402
 from living_island.agents.p3.types import ContextProfile  # noqa: E402
@@ -45,6 +45,7 @@ from living_island.persistence.p3_inspection import (  # noqa: E402
     resolve_selector,
     verify_inspection_source,
 )
+from living_island.persistence.trace import load_trace  # noqa: E402
 from living_island.sim.p3 import reexecute_p3  # noqa: E402
 from living_island.sim.runner import reexecute  # noqa: E402
 from living_island.world.content import build_world_content  # noqa: E402
@@ -62,9 +63,14 @@ class RaisingSentinel:
 
 
 def _git(repository: Path, *arguments: str) -> bytes:
-    return subprocess.check_output(
-        ["git", "-c", f"safe.directory={repository.as_posix()}", *arguments], cwd=repository
-    )
+    try:
+        return subprocess.check_output(
+            ["git", "-c", f"safe.directory={repository.as_posix()}", *arguments],
+            cwd=repository,
+            stderr=subprocess.PIPE,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise ValueError("historical Git identity check refused") from exc
 
 
 def _inventory(repository: Path, commit: str) -> list[str]:
@@ -174,6 +180,32 @@ def _receipt(
         "complete",
     ):
         raise ValueError("missing or incomplete matching case receipt")
+    _git(
+        repository,
+        "merge-base",
+        "--is-ancestor",
+        registration.implementation_commit,
+        receipt.executed_commit,
+    )
+    for candidate in [
+        *path.parent.glob("*.json"),
+        *(path.parent / "lineage" / case_id).rglob("previous.json"),
+    ]:
+        if candidate == path:
+            continue
+        raw = json.loads(candidate.read_bytes())
+        if not isinstance(raw, dict) or raw.get("receipt_schema_version") != "0.1":
+            continue
+        other = CaseReceipt.model_validate(raw)
+        if (other.registration_sha256, other.case_id, other.status) == (
+            receipt.registration_sha256,
+            case_id,
+            "complete",
+        ) and (
+            other.trace_sha256 != receipt.trace_sha256
+            or other.allocation_key != receipt.allocation_key
+        ):
+            raise ValueError("competing completed receipt lineages for one allocation")
     relative = registration_path.resolve().relative_to(repository.resolve()).as_posix()
     archived = TrialRegistration.model_validate_json(reader(receipt.registration_commit, relative))
     if archived != registration:
@@ -192,6 +224,31 @@ def _control(
     case: Any, receipt: CaseReceipt, proof: Path | None, repository: Path
 ) -> dict[str, Any]:
     source = Path(receipt.run_directory)
+    policy = case.policy_config
+    parameters = policy.rule_params
+    if (
+        policy.policy_id != "rule-based-v0"
+        or policy.script_sha256 is not None
+        or policy.source_trace_sha256 is not None
+        or parameters is None
+        or (
+            parameters.canteen_use,
+            parameters.cue_use,
+            parameters.fruit_carry_target,
+            parameters.failed_target_retry_ticks,
+        )
+        != ("enabled", "enabled", 2, 36)
+        or any(case.caps.model_dump().values())
+        or receipt.allocation_key is not None
+    ):
+        raise ValueError("matched control must use the frozen base rule identity and zero caps")
+    expected_world = _world(repository, case.seed)
+    actual_world = load_trace(source).content
+    if (actual_world.config_hash, actual_world.map_hash) != (
+        expected_world.config_hash,
+        expected_world.map_hash,
+    ):
+        raise ValueError("matched control does not use the frozen M6 world inputs")
     loaded = load_case(
         source,
         cli_exit_code=receipt.exit_code,
@@ -216,7 +273,7 @@ def _control(
         raise ValueError("matched control source is not the frozen P2 rule tree")
     if sha256((source / "decision-trace.json").read_bytes()).hexdigest() != receipt.trace_sha256:
         raise ValueError("matched control trace differs from receipt")
-    if load_run_content(source).config.meta.seed != case.seed:
+    if actual_world.config.meta.seed != case.seed:
         raise ValueError("matched control seed differs")
     if proof is not None:
         reexecute(source, proof)
@@ -295,7 +352,11 @@ def evaluate_registration(
                 expected_tick=case.ticks,
                 recovery_debits=verified.final.save.run_budget.recovery_debits,
             )
-            content = load_run_content(source)
+            content = load_run_content(
+                source,
+                expected_config_hash=verified.trace.config_hash,
+                expected_map_hash=verified.trace.map_hash,
+            )
             physical = physical_metrics(
                 verified.replay, [d.record for d in verified.decisions], _limits_of(content)
             )
@@ -371,6 +432,8 @@ def evaluate_registration(
         "registration_sha256": canonical_sha256(registration),
         "technical": "PASS" if passed else "FAIL",
         "owner_acceptance": "NOT_REQUESTED",
+        "m10_status": "NOT_EVALUATED",
+        "technical_scope": "Offline source, recorded proof and headless inspection; UI pending.",
         "cases_expected": len(registration.cases) + len(registration.controls),
         "cases": results,
         "accounting": accounting,

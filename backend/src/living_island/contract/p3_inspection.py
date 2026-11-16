@@ -125,6 +125,8 @@ class P3InspectionIndex(P3Model):
         actors = [a.actor_id for a in self.actors]
         if not actors or actors != sorted(set(actors)):
             raise ValueError("inspection actors must be sorted unique and nonempty")
+        if len(self.samples) != len(actors) * (self.final_tick + 1):
+            raise ValueError("inspection sample cardinality differs from registered boundaries")
         expected = [(tick, actor) for tick in range(self.final_tick + 1) for actor in actors]
         if [(s.tick, s.actor_id) for s in self.samples] != expected:
             raise ValueError("inspection needs every actor at every saved boundary")

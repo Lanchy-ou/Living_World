@@ -82,12 +82,15 @@ def test_export_exact_deterministic_shards_and_complete_samples(inspected):
 
 
 @pytest.mark.parametrize(
-    "mutation", ["version", "missing", "duplicate", "foreign", "filename", "ordinal"]
+    "mutation",
+    ["version", "missing", "duplicate", "foreign", "filename", "ordinal", "huge-horizon"],
 )
 def test_index_refuses_corrupt_membership(inspected, mutation):
     root, _, _, _, verified = inspected
     index = export_inspection(verified, root / f"mutation-{mutation}").model_dump(mode="json")
-    if mutation == "version":
+    if mutation == "huge-horizon":
+        index["final_tick"] = 10**18
+    elif mutation == "version":
         index["inspection_schema_version"] = "9"
     elif mutation == "missing":
         index["samples"].pop()
@@ -341,3 +344,49 @@ def test_same_boundary_continuations_use_nearest_first_locators(tmp_path):
     assert all(s.latest_perception_tick == s.tick - 1 for s in verified.samples)
     index = export_inspection(verified, tmp_path / "inspection")
     assert len(index.samples) == 9
+
+
+def test_cli_refuses_competing_completed_receipts_before_artifact_use(tmp_path):
+    from scripts import p3_trials
+    from scripts.p3_experiments import _receipt
+
+    from living_island.persistence.p3_inspection import GitSourceReader
+
+    head = p3_trials.git(ROOT, "rev-parse", "HEAD").decode().strip()
+    registration = p3_trials.build_registration(
+        ROOT, head, purpose="fake", registration_id="p307-receipts"
+    )
+    case_id = registration.cases[0].case_id
+    from living_island.contract.p3_inspection import canonical_sha256
+
+    registration_hash = canonical_sha256(registration)
+    receipt = {
+        "receipt_schema_version": "0.1",
+        "registration_sha256": registration_hash,
+        "registration_commit": head,
+        "executed_commit": head,
+        "case_id": case_id,
+        "command": ["offline-fixture"],
+        "status": "complete",
+        "exit_code": 0,
+        "trace_sha256": "a" * 64,
+        "failure": None,
+        "run_directory": str(tmp_path / "absent-source"),
+        "allocation_key": canonical_sha256(
+            {"registration_sha256": registration_hash, "case_id": case_id}
+        ),
+    }
+    primary = tmp_path / f"{case_id}.json"
+    primary.write_bytes(canonical_bytes(receipt))
+    (tmp_path / "competing.json").write_bytes(
+        canonical_bytes({**receipt, "trace_sha256": "b" * 64})
+    )
+    with pytest.raises(ValueError, match="competing completed receipt"):
+        _receipt(
+            primary,
+            registration,
+            case_id,
+            ROOT,
+            tmp_path / "registration.json",
+            GitSourceReader(ROOT),
+        )

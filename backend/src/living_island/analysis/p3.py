@@ -28,6 +28,7 @@ from living_island.contract.replay import ReplayBundle
 from .compare import DIRECTION, death_categories, run_scalars
 from .data import RunData, RunLimits
 from .metrics import compute_run, number
+from .validity import frame_problems
 
 RULE_TREE = "837f2f90f6b242477e43c25aec9b359ec51ba331"
 WORLD_COMMIT = "7c13d78ffd7d89006f6008c8a09f37ae97c253db"
@@ -306,6 +307,9 @@ class AcceptedPlanView:
 def physical_metrics(
     replay: ReplayBundle, records: Sequence[DecisionRecordP3], limits: RunLimits
 ) -> dict[str, Any]:
+    violations = frame_problems(tuple(replay.frames), tuple(replay.events), limits)
+    if violations:
+        raise ValueError(f"P3 replay violates frozen physical invariants: {violations}")
     # RunData is a read-only indexing container. Its legacy annotation predates
     # structural plan views; no DecisionRecord is fabricated or serialized here.
     plans = tuple(AcceptedPlanView(r.actor_id, r.tick, r.decision_ordinal, r.plan) for r in records)
@@ -326,6 +330,10 @@ def matched_comparison(
     omitted = []
     pairs = []
     controls = {c.paired_case_id: c for c in registration.controls}
+    if len(controls) != len(registration.controls):
+        raise ValueError("duplicate registered control pairing")
+    if set(controls) - {case.case_id for case in registration.cases}:
+        raise ValueError("control references an unregistered P3 case")
     for case in registration.cases:
         control = controls.get(case.case_id)
         p3 = cases.get(case.case_id)
@@ -463,6 +471,8 @@ def allocation_accounting(
             sum(e.debit.output_charged if e.debit else e.reservation.output_reserved for e in mine),
             sum(e.debit.money_charged if e.debit else e.reservation.money_reserved for e in mine),
         )
+        if item.purpose == "fake" and (item.caps.micro_cny != 0 or charged[3] != 0):
+            errors.append(f"fake allocation must have zero money:{key}")
         totals[key] = charged
         caps = tuple(item.caps.model_dump().values())
         if any(a > b for a, b in zip(charged, caps, strict=True)):
