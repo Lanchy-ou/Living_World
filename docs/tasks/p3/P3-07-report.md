@@ -8,6 +8,8 @@ The owner accepted P3-06 at `5d9eb1862df307a586635441a139c731d9e2e417` and autho
 
 P3-07 execution baseline: `34df3deb2abbf816926de89a7e3187aa0ec587b4`, fetched from origin/main after that merge. The accepted P3-06 commit is an ancestor. Worktree: `D:/Codex/.codex/worktrees/p3-07-offline/Living_World`; branch: `task/P3-07-offline-inspection`. The earlier worktrees and historical evidence are preserved.
 
+The subsequent [main push CI run 43789848036](https://github.com/Lanchy-ou/Living_World/actions/runs/43789848036) also completed all three jobs successfully.
+
 The owner authorized offline implementation, independent review and browser checks. P3-07 is to remain local and READY_FOR_REVIEW when complete: no automatic push or merge. No real model calls, key reads or new live budget authorizations are permitted. Historic smoke accounting is not a fresh spending grant.
 
 ## Serial execution and file ownership
@@ -33,14 +35,91 @@ The upstream task owns the evaluation registration specification, open-question 
 | P3-06 publication, exact-head and GitHub checks | PASS before merge, as recorded above. |
 | P3-07 locked backend setup | PASS: 26 locked packages installed. |
 | P3-07 locked frontend setup | PASS: 173 packages, pnpm 10.34.9. |
-| P3-07 backend implementation and focused tests | IN_PROGRESS. |
-| Frontend checks, browser inspection and independent Gate 2 | NOT_RUN: implementation pending. |
+| P3-07 backend implementation and focused tests | PASS at backend freeze `a70aa23045ecfda8da6e0883f8af1265a16ae531`; integrated full checks pending. |
+| Frontend lint/typecheck/build/tests/schema | PASS at `97fb75a336ff48aab596eee26f5548aa4c447ccf`: 164 tests and 17 schema tests. Three unused-disable warnings in generated P3 types; no lint errors. |
+| Actual browser inspection | PASS: six positive, nine negative and two source-navigation checks in Chrome 157.0.8103.78; details below. |
+| Independent P3-07 Gate 2 | NOT_RUN: final integrated candidate pending. |
 | Complete repository checks, generation drift and eight historical hashes | NOT_RUN on the P3-07 result. |
 | Registered V-04 long fake and raising-sentinel replay | NOT_RUN: explicit offline fixture/proof pending. |
 | New real development/acceptance trials | NOT_RUN: no dispatch approval; multi-seed U1 upstream correction pending. |
 | M10 owner acceptance | NOT_RUN: not requested until the required evidence is ready. |
 
 Each completed verification will record exact commands, exits, counts, versions and artifact identities. Existing skips, environmental failures and unexecuted checks are reported separately.
+
+### Completed serial implementation and browser evidence
+
+Backend/export/generator work froze at `a70aa23045ecfda8da6e0883f8af1265a16ae531`
+before the Sol / High UI implementation began. UI source froze at
+`97fb75a336ff48aab596eee26f5548aa4c447ccf`. Both are local P3-07 commits.
+The new report separates VM metrics, technical validity, allocation arithmetic
+and missing immutable issuance evidence. A caller-supplied slot mapping is not
+proof of authorization; issuance provenance remains MISSING/technical FAIL until
+appropriate immutable evidence is supplied through an approved interface. No live
+authority is consulted to fill this gap.
+
+The executor used a fresh headless Chrome profile and local Vite server, selecting
+actual files through the browser's file inputs. Committed `ui-manifest.json` and
+`ui-edge-manifest.json` identify all source archives, replay and inspection bytes.
+Evidence is retained at:
+
+- `D:/p307-browser-positive-a/result.json`: character provenance, literal imported
+  HTML, same-boundary completion/replanning, unknown usage/latency/cost,
+  nondecision state, stale/dead residents and zero-call decisions.
+- `D:/p307-browser-negative-a/result.json`: unknown version, wrong run/config/map,
+  missing/duplicate/damaged shards and unrelated replay reject; rejection clears
+  stale inspection while replay remains usable. A legacy replay without a sidecar
+  imports and advances normally. No remote network requests were observed.
+- `D:/p307-browser-sources-a/result.json`: accepted decision and objective event
+  links seek their committed source tick and identifier.
+
+Screenshots and DOM assertions accompany each result. The executor visually
+inspected character/debug layouts, the literal `<img ...>` speech and the Unknown
+usage/cost fields. Imported markup created no image or JavaScript dialog. Browser
+checks observed no uncaught runtime exception. These are synthetic fixture checks,
+not real-model behavioral evidence.
+
+### Separate U1 review result
+
+The approved upstream implementation is local at
+`69d1f53bfb0c385e0a48cf253968ab6d8e798c7d`. Independent Gate 2 passed; final report:
+`D:/u1g2probe-pbs6p86w/P305-U1-Gate2-final-review.md`, SHA-256
+`817c8f8628515167deb6988b65f31c378bb2c1d17a76b6de77b9b423ba40ca26`.
+Its full backend suite passed 1,793 tests with 24 existing skips; frontend and
+generation checks passed. Original M9 source-run compatibility is explicitly
+NOT_RUN because only receipts/preflight evidence remain at the known historical
+locations. No missing history was reconstructed. U1 has not been integrated into
+P3-07, pushed or merged, and its approval is not a live dispatch grant.
+
+### Long-proof performance observation
+
+The explicit V-04 generation started from clean production sources at
+`b5dfb5736eb63948b7e8f416c1bfa716ea758574`. Its durable evidence lives in
+`D:/p307-v04-generation-a-check/`, with source artifacts in
+`D:/p307-v04-generation-a/`. The owner approved the separately proposed
+P3-PERF-U1 persistence optimization and conditional local integration after
+independent Gate 2 on 2026-11-16. The authoring process was then stopped at its
+identified process ID, with checkpoint 21 the latest published boundary observed.
+`disposition.json` records the interruption, `tape_written:false` and `passed:false`.
+Every source artifact and log remains intact. This is not a completed V-04 proof
+or a passed replay; a fresh run will follow the reviewed optimization.
+
+A read-only profile of committed checkpoint 10 took 13.870 seconds on this
+Windows host: 6.983 seconds in retained-input reading (including 105 cold Git
+source reads) and 6.683 seconds in complete committed-log validation. The profile
+is retained as `checkpoint10-profile.txt` in the chat's visualization evidence
+directory. A normal run already caches Git blobs; repeated typed/canonical log
+validation remains substantial. Concurrent checks and profiler overhead make this
+a diagnostic observation, not a controlled performance benchmark or an ETA.
+
+No runtime checks were removed or bypassed. The approved separate upstream
+optimization will reuse successfully validated immutable row decodes within one
+verification session, while still re-reading/hashing source bytes, checking every
+cross-record link and preventing mutable-object cache contamination. It needs its
+own scoped implementation, corruption/continuation tests and independent review;
+it is tracked as P3-PERF-U1, rather than an undeclared P3-07 runtime expansion.
+The owner permits local integration only after independent Gate 2; no push or
+main merge is authorized. P305-U1 source ownership was explicitly frozen/released
+at `3c04d44d524461c142c3a2469c9a2ede39605c00` before this new writer starts.
 
 ## M10 pending evidence
 

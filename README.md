@@ -19,9 +19,11 @@ through tick 1,008 and signed off M7 on 2026-11-11. P2 is complete.
 ## Current phase and entry points
 
 P3 reached M9 on 2026-11-14 with acceptance of the one-resident integration.
-[P3-06](docs/tasks/p3/P3-06.md) (three-resident isolation and interaction)
-and [P3-07](docs/tasks/p3/P3-07.md) (evaluation, inspection, and M10) are pending
-in this repository. Follow their task cards for current status.
+The owner accepted [P3-06](docs/tasks/p3/P3-06.md) offline validation, which merged
+through PR #3 on 2026-11-16. [P3-07](docs/tasks/p3/P3-07.md) is implementing offline
+evaluation and character inspection; M10 and new real trials remain pending.
+See the [P3-07 evidence report](docs/tasks/p3/P3-07-report.md) for current results
+and explicit NOT_RUN items.
 
 - [P3 implementation plan](docs/plans/p3-implementation-plan-v0.1.md)
 - P3 specifications for [resident experience](docs/spec/resident-experience-v0.1.md),
@@ -109,3 +111,41 @@ For P3 comparisons and fallback, use the frozen `rule-based-v0` baseline from
 `0.1`, canteen enabled, cue enabled, fruit carry target 2 and failed-target retry
 36 ticks. Keep the seed, content pin and policy configuration hash in each comparison
 manifest.
+
+## P3 offline evaluation and inspection
+
+`scripts/p3_experiments.py` reads completed, retained P3 records. It does not run
+live models, load credentials or open the live allocation authority. Use fresh
+output directories and supply every required ancestor checkpoint for a continued
+run with repeated `--ancestor` arguments. The source run is never rewritten.
+
+For an existing completed source run and its exact exported replay:
+
+```sh
+uv run --directory backend python ../scripts/p3_experiments.py inspect --source-run ../runs/p3/completed-case --replay ../runs/p3/completed-case/replay.json --out ../runs/p3/completed-case-inspection --recorded-out ../runs/p3/completed-case-recorded
+```
+
+Replace the example paths with retained artifacts. Inspection writes an independent
+versioned index, decision/sample shards, exact trace and canonical registration.
+The optional recorded proof uses raising provider and authority sentinels. A missing
+boundary, wrong identity or damaged committed reference refuses export.
+
+The `validate` and `report` commands take `--registration` and `--receipts`; `report`
+also requires a fresh `--out` directory. Reports keep missing cases and invalid pairs
+visible, separate technical checks from descriptive behavior, and retain exact
+fractions and unknown usage. Allocation arithmetic deduplicates copied reservations;
+it does not turn a supplied allocation list into proof of a spending grant. Missing
+immutable issuance evidence remains an explicit failure, without consulting a live
+ledger. These offline commands do not perform M10 owner acceptance.
+
+The P3 schemas and types are generated separately:
+
+```sh
+uv run --directory backend python ../scripts/gen_p3_inspection_types.py
+```
+
+Committed local browser examples are listed in
+`backend/tests/fixtures/p3/evaluation/ui-manifest.json` and `ui-edge-manifest.json`.
+Each identifies its replay, complete inspection-file set, per-file hashes and
+retained source archive. They are synthetic offline fixtures, not real-model trial
+results. Existing P1/P2 replay imports require no inspection files.
