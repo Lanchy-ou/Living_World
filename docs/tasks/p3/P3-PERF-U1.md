@@ -39,14 +39,18 @@ allocation state, acceptance result or provider object is retained.
 
 The key is the exact model class and the complete current canonical row bytes.
 A miss calls the unchanged generic `decode_model`; only success can be stored.
-The cache stores its own deep copy and returns an independent deep copy on hits.
+The follow-up stores an internal serialized copy for existing owner DTOs and
+returns independent deserialized graphs on hits. Other BaseModel types and
+serialization failures retain the original deep-copy behavior. No external
+serialized payload is accepted or persisted.
 Changing a valid row produces a miss; even a hit only supplies a DTO to the full
 existing joins. Checkpoint/input/source reads and hashes are not memoized by this
 session. Legacy event sequence validation remains unchanged on every checkpoint.
 
 The default bound is **134,217,728 canonical row bytes (128 MiB)**. It is not a
 Python heap bound. There is a finite number of retained nonempty canonical rows
-within that payload bound, and all retained model graphs leave scope together.
+within that payload bound; all retained payloads or fallback graphs leave scope
+together.
 The host had about 2.5 GiB free physical memory at the capacity decision. The
 checkpoint-10 measurement retained 8.29 MB of canonical rows and about 55 MB of
 traced Python allocations, with about 106 MB peak including verification
@@ -110,3 +114,46 @@ measurements do not attest completion or acceptance of the 1,008-tick proof.
    historical artifact hashes, frontend checks, independent Gate 2 and full V-04
    NOT_RUN here and explicitly delegated/coordinated with the parent task.
 7. `open_questions`: none; no M10 or owner acceptance claim.
+
+## Handoff: encode-once follow-up
+
+### What changed
+
+Within the approved private cache representation, existing owner DTOs encode once
+and hits decode only internal payloads into independent graphs. Raw-byte admission,
+protection/eviction/counters and surrounding checks are unchanged. Non-owner/local
+models and encoding failures retain deep-copy storage; load compatibility failures
+fall back without masking normal decoder errors. Added six tests and a source-pinned
+five-mode actual M6 comparison helper. See [follow-up evidence](P3-PERF-U1-clone-evidence.md).
+
+### Commands and results
+
+Locked dependencies/static/import checks PASS. Dedicated 29 tests PASS; affected
+338 passed in 863.60s (0:14:23), exit 0. Actual four-tick M6 and all direct
+source/recorded/export byte comparisons PASS, raising sentinels zero. Prior/new actual-run median reduction
+14.25% in the author run and 7.32% in the separate independent run; committed-code
+checkpoint median reduction 15.21%.
+These observations are distinct and are not full V-04 completion or throughput.
+
+### Deviations and open questions
+
+No scope deviation or frozen contract changes. Serialization remains internal and
+operation-local; its raw-byte bound is explicitly not a total heap limit. Routine
+lint and local permission/read-only Git preflights are described in the evidence.
+No new owner permission was required within the already approved cache/copy scope.
+Independent nonauthor Gate 2 and conditional parent integration are still required.
+
+### Required fields
+
+1. `base_commit` / `result_commit`: `ec531c112fd45199f591fd5095f5b6ac4b8e6247` /
+   `e6536fdb52de2df1792a44f87723ba573489cc20` (production/tests/helper). The
+   subsequent evidence-only commit is reported separately in the handoff.
+2. `status`: `READY_FOR_REVIEW`; no Gate 2, integration, V-04 or M10 acceptance claim.
+3. `scope_changed`: no; same owner-approved operation-local exact-row cache/copy scope.
+4. `human_interventions`: 0 additional approvals; existing owner authorization applies.
+5. `rework_rounds`: 0 independent-review code revisions; executor preflights and
+   reviewer-requested prefix-driver provenance are noted in the evidence.
+6. `verification`: 29 dedicated and 338 affected tests PASS; locked/static/import
+   checks PASS; actual M6 and committed-code checkpoint comparisons PASS. Parent
+   owns full integrated/frontend/generator/historical checks and full V-04 proof.
+7. `open_questions`: none about formats or world rules; independent review pending.

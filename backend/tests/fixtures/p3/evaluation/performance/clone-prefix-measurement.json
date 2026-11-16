@@ -1,0 +1,168 @@
+{
+  "authority_accesses": 0,
+  "baseline_commit": "ec531c112fd45199f591fd5095f5b6ac4b8e6247",
+  "baseline_persistence_sha256": "42ac37393c4e768e67b3ad953fba0db92dac6320a5e5acb0f0c3ee31c201fcc3",
+  "checkpoint": "D:\\p307-v04-generation-a\\source\\checkpoint-0000000010.json",
+  "checkpoint_sha256": "0b3c1b556e28eee56b5c73c23a980d5f9fbabd864b26b6dfac8ad39a76db72fc",
+  "driver_provenance": {
+    "argv": [
+      "D:/Codex/.codex/worktrees/p3-perf-u1/Living_World/backend/.venv/Scripts/python.exe",
+      "-B",
+      "D:/Codex/.codex/visualizations/2026/11/15/01a1e002-e2a9-74c2-90cb-1f8758b358ad/perf-clone-diagnostic/measure_production_prefix.py"
+    ],
+    "candidate_commit": "e6536fdb52de2df1792a44f87723ba573489cc20",
+    "driver_path": "D:/Codex/.codex/visualizations/2026/11/15/01a1e002-e2a9-74c2-90cb-1f8758b358ad/perf-clone-diagnostic/measure_production_prefix.py",
+    "driver_sha256": "ff35c19c53bdc0fbba9eb540c0c98205693714952695c104075af655f044c947",
+    "execution_exit_code": 0,
+    "provenance_recorded_after_successful_run": true,
+    "source_git_warmup": "one uncached verification with shared reader, then one cache fill per implementation",
+    "timed_protocol": "eight alternating-order paired whole-checkpoint verifications; gc.collect before each, equality/counters checked after timing"
+  },
+  "encoded_payload_bytes": 8802845,
+  "medians": {
+    "baseline": {
+      "cpu_seconds": 0.8125,
+      "wall_seconds": 0.8117095999998583
+    },
+    "encoded": {
+      "cpu_seconds": 0.6953125,
+      "wall_seconds": 0.6882565500002329
+    }
+  },
+  "provider_accesses": 0,
+  "rounds": [
+    {
+      "cpu_seconds": 0.6875,
+      "hit_delta": 118,
+      "mode": "baseline",
+      "round": 0,
+      "wall_seconds": 0.7028531000000839
+    },
+    {
+      "cpu_seconds": 0.65625,
+      "hit_delta": 118,
+      "mode": "encoded",
+      "round": 0,
+      "wall_seconds": 0.661872200000289
+    },
+    {
+      "cpu_seconds": 0.65625,
+      "hit_delta": 118,
+      "mode": "encoded",
+      "round": 1,
+      "wall_seconds": 0.652626600000076
+    },
+    {
+      "cpu_seconds": 0.796875,
+      "hit_delta": 118,
+      "mode": "baseline",
+      "round": 1,
+      "wall_seconds": 0.8078286999998454
+    },
+    {
+      "cpu_seconds": 0.8125,
+      "hit_delta": 118,
+      "mode": "baseline",
+      "round": 2,
+      "wall_seconds": 0.8111097999999402
+    },
+    {
+      "cpu_seconds": 0.671875,
+      "hit_delta": 118,
+      "mode": "encoded",
+      "round": 2,
+      "wall_seconds": 0.6832977999997638
+    },
+    {
+      "cpu_seconds": 0.6875,
+      "hit_delta": 118,
+      "mode": "encoded",
+      "round": 3,
+      "wall_seconds": 0.6849114000001464
+    },
+    {
+      "cpu_seconds": 0.796875,
+      "hit_delta": 118,
+      "mode": "baseline",
+      "round": 3,
+      "wall_seconds": 0.7979417999999896
+    },
+    {
+      "cpu_seconds": 0.828125,
+      "hit_delta": 118,
+      "mode": "baseline",
+      "round": 4,
+      "wall_seconds": 0.8244607000001452
+    },
+    {
+      "cpu_seconds": 0.71875,
+      "hit_delta": 118,
+      "mode": "encoded",
+      "round": 4,
+      "wall_seconds": 0.7105172999999922
+    },
+    {
+      "cpu_seconds": 0.703125,
+      "hit_delta": 118,
+      "mode": "encoded",
+      "round": 5,
+      "wall_seconds": 0.6973007999999936
+    },
+    {
+      "cpu_seconds": 0.875,
+      "hit_delta": 118,
+      "mode": "baseline",
+      "round": 5,
+      "wall_seconds": 0.8665524000002733
+    },
+    {
+      "cpu_seconds": 0.84375,
+      "hit_delta": 118,
+      "mode": "baseline",
+      "round": 6,
+      "wall_seconds": 0.8457939999998416
+    },
+    {
+      "cpu_seconds": 0.703125,
+      "hit_delta": 118,
+      "mode": "encoded",
+      "round": 6,
+      "wall_seconds": 0.6916017000003194
+    },
+    {
+      "cpu_seconds": 0.703125,
+      "hit_delta": 118,
+      "mode": "encoded",
+      "round": 7,
+      "wall_seconds": 0.7019129999998768
+    },
+    {
+      "cpu_seconds": 0.8125,
+      "hit_delta": 118,
+      "mode": "baseline",
+      "round": 7,
+      "wall_seconds": 0.8123093999997764
+    }
+  ],
+  "source_preserved": true,
+  "stats": {
+    "baseline": {
+      "evictions": 0,
+      "hits": 944,
+      "max_raw_bytes": 134217728,
+      "misses": 118,
+      "peak_raw_bytes": 8289078,
+      "raw_bytes": 8289078,
+      "retained_rows": 118
+    },
+    "encoded": {
+      "evictions": 0,
+      "hits": 944,
+      "max_raw_bytes": 134217728,
+      "misses": 118,
+      "peak_raw_bytes": 8289078,
+      "raw_bytes": 8289078,
+      "retained_rows": 118
+    }
+  }
+}
