@@ -123,3 +123,21 @@ def test_exact_shard_limit(monkeypatch, inspected):
     monkeypatch.setattr(exporter, "SHARD_LIMIT", size - 1)
     with pytest.raises(ValueError, match="V-06"):
         exporter.checked_shard_bytes(shard)
+
+
+def test_recorded_proof_has_zero_external_access(inspected):
+    from scripts.p3_experiments import recorded_proof
+
+    from living_island.persistence.p3_inspection import GitSourceReader
+
+    root, source, _, _, verified = inspected
+    proof = recorded_proof(
+        verified,
+        source,
+        root / "recorded",
+        repository=ROOT,
+        ancestors=(),
+        reader=GitSourceReader(ROOT),
+    )
+    assert proof["status"] == "PASS"
+    assert proof["provider_accesses"] == proof["authority_accesses"] == 0

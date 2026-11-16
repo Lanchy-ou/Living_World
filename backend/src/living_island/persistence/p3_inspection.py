@@ -82,13 +82,31 @@ def resolve_selector(
     source_reader: SourceReader,
 ) -> RetrievalSelector | None:
     """Resolve only the reviewed fixed helper, never a registered executable path."""
+    module = next(m for m in implementation.modules if m.role == "selector")
+    pins = {pin.path: pin.sha256 for pin in module.files}
+    inputs = {pin.path: pin.sha256 for pin in registration.input_pins}
+    registered = {
+        p.path: p.sha256 for p in [*registration.implementation_pins, *registration.input_pins]
+    }
+    pure_dependencies = (
+        *SELECTOR_DEPENDENCIES,
+        "backend/src/living_island/agents/p3/context.py",
+        "backend/src/living_island/agents/p3/cognition.py",
+        "backend/src/living_island/memory/experience.py",
+    )
+    for path in pure_dependencies:
+        source = source_reader(implementation.code_commit, path)
+        digest = sha256(source).hexdigest()
+        if registered.get(path) != digest or (repository / path).read_bytes() != source:
+            raise ValueError(
+                "installed pure assembly implementation differs from registered source"
+            )
+        if path in SELECTOR_DEPENDENCIES and pins.get(path) != digest:
+            raise ValueError("selector role lacks its exact production dependency pins")
     if profile.retrieval_profile == "recent-relevant-v0":
         return None
     if registration.purpose != "fake" or registration.fake_fixture_id != "vf-20":
         raise ValueError("alternate selector requires the registered VF-20 fake fixture")
-    module = next(m for m in implementation.modules if m.role == "selector")
-    pins = {pin.path: pin.sha256 for pin in module.files}
-    inputs = {pin.path: pin.sha256 for pin in registration.input_pins}
     for path in (SELECTOR_HELPER, *SELECTOR_DEPENDENCIES):
         source = source_reader(implementation.code_commit, path)
         digest = sha256(source).hexdigest()

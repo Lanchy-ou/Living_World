@@ -151,7 +151,7 @@ def recorded_proof(
         "status": "PASS",
         "provider_accesses": provider.accesses,
         "authority_accesses": authority.accesses,
-        "trace_sha256": sha256((output / "decision-trace-p3.json").read_bytes()).hexdigest(),
+        "trace_sha256": sha256((result.output / "decision-trace-p3.json").read_bytes()).hexdigest(),
         "final_world_sha256": verified.trace.final_world_sha256,
         "final_runtime_states_sha256": verified.trace.final_runtime_states_sha256,
         "final_budget_sha256": verified.trace.final_budget_sha256,

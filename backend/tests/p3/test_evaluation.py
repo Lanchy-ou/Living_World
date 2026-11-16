@@ -208,3 +208,166 @@ def test_unknown_authorization_slot_and_uncompleted_predecessor_refuse():
     assert report["arithmetic_status"] == "FAIL"
     assert any("completed predecessor" in e for e in report["errors"])
     assert report["issuance_proof"] == "MISSING"
+
+
+def test_vm04_terminal_repeats_same_boundary_revision_and_retired_incomplete():
+    from test_cognition import perception
+
+    from living_island.agents.p3.cognition import (
+        advance_goal_evidence,
+        apply_goal_change,
+        initial_goal_state,
+    )
+    from living_island.agents.p3.types import GoalChange
+    from living_island.analysis.p3 import goal_metrics
+    from living_island.memory.p3_types import OwnedIntentRef
+    from living_island.world.protocol import (
+        ActionFeedback,
+        ActionIntent,
+        BoundaryPerceptionDelivery,
+    )
+
+    first = GoalChange.model_validate(
+        {
+            "operation": "revise",
+            "expected_goal_id": None,
+            "proposal": {
+                "text": "Wait once",
+                "completion": {
+                    "kind": "own_action_success",
+                    "action_type": "wait",
+                    "target": None,
+                    "parameters": {},
+                },
+            },
+        }
+    )
+    initial = initial_goal_state()
+    created = apply_goal_change(initial, first, actor_id="ella", tick=0)
+    intent = ActionIntent.model_validate(
+        {
+            "intent_id": "ella:p000000:i0",
+            "plan_id": "ella:p000000",
+            "actor_id": "ella",
+            "action_type": "wait",
+            "target": None,
+            "parameters": {},
+            "reason": None,
+        }
+    )
+    reference = OwnedIntentRef(
+        intent=intent,
+        decision_id="r:d:ella:000000",
+        decision_ordinal=0,
+        committed_tick=0,
+        goal_id="ella:g000000",
+    )
+    feedback = ActionFeedback(
+        intent_id=intent.intent_id,
+        status="success",
+        failure_code=None,
+        interruption_reason=None,
+        visible_effects=[],
+    )
+    delivery = BoundaryPerceptionDelivery(
+        delivery_id="r:perception:0000000001:ella",
+        actor_id="ella",
+        observed_tick=1,
+        decision_triggers=["PLAN_FINISHED"],
+        perception=perception(1, feedback=feedback.model_dump(mode="json")),
+    )
+    complete = advance_goal_evidence(delivery, [reference], created, run_id="r")
+    second = GoalChange.model_validate(
+        {
+            "operation": "revise",
+            "expected_goal_id": "ella:g000000",
+            "proposal": {
+                "text": "Unverifiable receiving goal",
+                "completion": {"kind": "unverifiable"},
+            },
+        }
+    )
+    next_goal = apply_goal_change(complete, second, actor_id="ella", tick=1)
+    abandon = GoalChange(operation="abandon", expected_goal_id="ella:g000001", proposal=None)
+    empty = apply_goal_change(next_goal, abandon, actor_id="ella", tick=2)
+
+    def row(ordinal, tick, goals, change, intents):
+        return SimpleNamespace(
+            record=SimpleNamespace(
+                actor_id="ella",
+                tick=tick,
+                run_id="r",
+                decision_id=f"r:d:ella:{ordinal:06d}",
+                decision_ordinal=ordinal,
+                accepted_delta=SimpleNamespace(goal_change=change),
+                plan=SimpleNamespace(intents=intents),
+            ),
+            context=SimpleNamespace(request=SimpleNamespace(context=SimpleNamespace(goals=goals))),
+        )
+
+    decisions = [
+        row(0, 0, initial, first, [intent]),
+        row(1, 1, complete, second, []),
+        row(2, 2, next_goal, abandon, []),
+    ]
+    samples = [
+        SimpleNamespace(actor_id="ella", tick=0, goals=initial),
+        SimpleNamespace(actor_id="ella", tick=2, goals=next_goal),
+        SimpleNamespace(actor_id="ella", tick=3, goals=empty),
+    ]
+    result = goal_metrics(decisions, samples)
+    assert result["goal_completion_share"] == fraction(1, 2)
+    assert result["retired_incomplete_count"] == 1
+    assert result["active_incomplete_count"] == result["evidence_violations"] == 0
+    # Three terminal observations of the same ID still count once.
+    terminal = [SimpleNamespace(actor_id="ella", tick=tick, goals=complete) for tick in (1, 2, 3)]
+    assert goal_metrics(decisions, terminal)["completed_count"] == 1
+    bad = complete.model_copy(
+        update={
+            "current": complete.current.model_copy(
+                update={
+                    "evidence": complete.current.evidence.model_copy(
+                        update={"delivery_id": "foreign"}
+                    )
+                }
+            )
+        }
+    )
+    assert (
+        goal_metrics(decisions, [SimpleNamespace(actor_id="ella", tick=3, goals=bad)])[
+            "evidence_violations"
+        ]
+        == 1
+    )
+
+
+def test_vm06_registered_pairs_and_zero_pairs():
+    from living_island.analysis.compare import DIRECTION
+    from living_island.analysis.p3 import RULE_TREE, matched_comparison
+
+    cases = [SimpleNamespace(case_id=f"p{s}", seed=s, ticks=144) for s in (1, 2, 3)]
+    controls = [SimpleNamespace(case_id=f"c{s}", paired_case_id=f"p{s}") for s in (1, 2, 3)]
+    registration = SimpleNamespace(cases=cases, controls=controls)
+    arms = {}
+    for seed, deaths in [(1, 0), (2, 2), (3, 1)]:
+        common = {
+            "technical": "PASS",
+            "seed": seed,
+            "ticks": 144,
+            "rule_tree": RULE_TREE,
+            "world_inputs": ["config", "map"],
+        }
+        arms[f"p{seed}"] = {**common, "scalars": {**dict.fromkeys(DIRECTION, 0), "deaths": deaths}}
+        arms[f"c{seed}"] = {**common, "scalars": {**dict.fromkeys(DIRECTION, 0), "deaths": 1}}
+    arms["c3"]["technical"] = "FAIL"
+    report = matched_comparison(registration, arms)
+    assert report["pairs_expected"] == 3 and report["pairs_used"] == 2
+    assert report["technical"] == "FAIL"
+    deaths = report["scalars"]["deaths"]
+    assert (deaths["median"], deaths["min"], deaths["max"]) == (0, -1, 1)
+    assert (deaths["favorable"], deaths["unfavorable"], deaths["tied"]) == (1, 1, 0)
+    empty = matched_comparison(registration, {})
+    assert empty["pairs_used"] == 0 and empty["technical"] == "FAIL"
+    assert empty["scalars"]["deaths"]["median"] is None
+    assert empty["scalars"]["deaths"]["favorable"] == 0
+    assert "favorable" not in empty["scalars"]["movement_ticks"]
