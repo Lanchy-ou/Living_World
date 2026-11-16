@@ -46,6 +46,7 @@ from living_island.contract.replay import ReplayBundle
 from living_island.events import WorldEvent
 from living_island.memory.experience import capture_accepted_decision, ingest_experience
 from living_island.memory.p3_types import RetrievalSelector
+from living_island.persistence.content import load_run_content
 from living_island.persistence.p3 import (
     SourceReader,
     VerifiedP3Checkpoint,
@@ -127,6 +128,7 @@ def resolve_selector(
 
 @dataclass(frozen=True)
 class VerifiedInspection:
+    source_directories: tuple[Path, ...]
     trace: DecisionTraceP3
     trace_bytes: bytes
     registration: TrialRegistration
@@ -260,6 +262,23 @@ def verify_inspection_source(
         trace.final_tick,
     ):
         raise ValueError("replay run/config/map/horizon differs from committed source")
+    content = load_run_content(
+        source, expected_config_hash=trace.config_hash, expected_map_hash=trace.map_hash
+    )
+    config = content.config
+    if (
+        replay.world_id != config.meta.world_id
+        or replay.map.rows != list(content.map_rows)
+        or replay.map.width != config.map.width
+        or replay.map.height != config.map.height
+        or replay.condition_bounds.min_value != config.needs.min_value
+        or replay.condition_bounds.max_value != config.needs.max_value
+        or any(
+            getattr(replay.clock, name) != getattr(config.time, name)
+            for name in ("tick_minutes", "start_hour", "day_start_hour", "day_end_hour")
+        )
+    ):
+        raise ValueError("replay metadata differs from retained effective world configuration")
     records = decode_records(final.logs["decisions-p3.jsonl"], DecisionRecordP3, source)
     contexts = decode_records(final.logs["contexts-p3.jsonl"], ContextRecordP3, source)
     dispatches = decode_records(final.logs["llm-dispatches.jsonl"], AttemptDispatch, source)
@@ -360,7 +379,15 @@ def verify_inspection_source(
             for decision in by_tick[tick]:
                 latest[decision.record.actor_id] = decision.record.decision_id
     return VerifiedInspection(
-        trace, trace_bytes, registration, replay, replay_bytes, final, decisions, tuple(samples)
+        tuple(dict.fromkeys([source, *(p.parent.resolve() for p in ancestors)])),
+        trace,
+        trace_bytes,
+        registration,
+        replay,
+        replay_bytes,
+        final,
+        decisions,
+        tuple(samples),
     )
 
 
@@ -373,6 +400,11 @@ def checked_shard_bytes(shard: DecisionInspection | ResidentInspection) -> bytes
 
 def export_inspection(verified: VerifiedInspection, output: Path) -> P3InspectionIndex:
     """Publish index last; every shard is checked before creating the fresh directory."""
+    resolved = output.resolve()
+    if any(
+        resolved == source or source in resolved.parents for source in verified.source_directories
+    ):
+        raise ValueError("inspection output must not modify any source directory")
     if output.exists():
         raise ValueError("inspection output must be a fresh directory")
     files: dict[str, bytes] = {}
