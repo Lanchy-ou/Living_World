@@ -98,6 +98,8 @@ def short_inputs():
     _, original_files, original, reader = helper["inputs"](include_tape=False)
     value = original.model_dump(mode="json")
     value["registration_id"] = "p3-perf-u1-short-m6"
+    value["fake_fixture_id"] = "perf-short"
+    value["cases"][0]["case_id"] = f"{value['registration_id']}.s{value['cases'][0]['seed']}"
     value["cases"][0]["ticks"] = 4
     path = Path(__file__).resolve().relative_to(ROOT).as_posix()
     raw = reader(original.implementation_commit, path)
