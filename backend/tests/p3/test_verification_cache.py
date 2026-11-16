@@ -129,7 +129,7 @@ def test_invalid_rows_never_cached_and_diagnostics_stay_current(archive, mutatio
     session.decode(raw, ContextRecordP3, Path("good"))
     value = json.loads(raw)
     if mutation == "version":
-        value["context_schema_version"] = "9.9"
+        value["context_record_version"] = "9.9"
         bad = canonical_bytes(value)
     elif mutation == "duplicate":
         bad = b'{"run_id":"duplicate",' + raw[1:]
