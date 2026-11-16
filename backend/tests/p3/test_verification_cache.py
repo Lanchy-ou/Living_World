@@ -15,7 +15,7 @@ from test_recovery import attempt, authority_for
 from test_reexecution import LocalProvider, Sentinel, execute
 
 from living_island.agents.p3.types import AllocationHead, ContextRecordP3
-from living_island.memory.p3_types import canonical_bytes
+from living_island.memory.p3_types import build_decision_id, canonical_bytes
 from living_island.persistence.p3 import (
     MODELS,
     _validate_logs,
@@ -328,11 +328,14 @@ def test_cached_context_replaced_by_valid_foreign_request_still_fails_join(archi
     rows = verified.logs["contexts-p3.jsonl"].splitlines()
     value = json.loads(rows[0])
     value["run_id"] = "foreign"
+    value["decision_id"] = build_decision_id(
+        "foreign", value["request"]["actor_id"], value["request"]["decision_ordinal"]
+    )
     changed = canonical_bytes(value)
     # This new canonical owner DTO is valid in isolation and enters the cache.
     cache.decode(changed, ContextRecordP3, Path("foreign"))
     logs = {**verified.logs, "contexts-p3.jsonl": b"\n".join([changed, *rows[1:]]) + b"\n"}
-    with pytest.raises(ValueError, match="metadata differs"):
+    with pytest.raises(ValueError, match="contexts and committed decisions"):
         _validate_logs(verified.save, logs, (), verification=cache)
 
 
