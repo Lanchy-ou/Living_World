@@ -390,3 +390,401 @@ def test_cli_refuses_competing_completed_receipts_before_artifact_use(tmp_path):
             tmp_path / "registration.json",
             GitSourceReader(ROOT),
         )
+
+
+ACCOUNTING_FIXTURE = ROOT / "backend/tests/fixtures/p3/evaluation/accounting"
+
+
+def accounting_archive(tmp_path):
+    """Relocate an actual committed four-tick fake run; never read live authority."""
+    import tarfile
+    from pathlib import Path
+
+    from scripts.p3_trials import CaseReceipt, git
+
+    from living_island.contract.p3_inspection import canonical_sha256
+
+    archive = tmp_path / "archive"
+    source = archive / "source"
+    source.mkdir(parents=True)
+    provenance = json.loads((ACCOUNTING_FIXTURE / "provenance.json").read_bytes())
+    for name, digest in provenance["files"].items():
+        assert sha256((ACCOUNTING_FIXTURE / name).read_bytes()).hexdigest() == digest
+    with tarfile.open(ACCOUNTING_FIXTURE / "source.tar.gz", "r:gz") as tar:
+        for member in tar.getmembers():
+            assert member.isfile() and Path(member.name).name == member.name
+            stream = tar.extractfile(member)
+            assert stream is not None
+            (source / member.name).write_bytes(stream.read())
+    for name in ("registration.json", "fake-allocation.json", "unissued-pilot.json"):
+        (archive / name).write_bytes((ACCOUNTING_FIXTURE / name).read_bytes())
+    registration = json.loads((archive / "registration.json").read_bytes())
+    snapshot = json.loads((archive / "fake-allocation.json").read_bytes())
+    relative = (ACCOUNTING_FIXTURE / "registration.json").relative_to(ROOT).as_posix()
+    commit = git(ROOT, "log", "-1", "--format=%H", "--", relative).decode().strip()
+    receipt = CaseReceipt(
+        receipt_schema_version="0.1",
+        registration_sha256=canonical_sha256(registration),
+        registration_commit=commit,
+        executed_commit=provenance["implementation_commit"],
+        case_id=registration["cases"][0]["case_id"],
+        command=["retained-offline-perf-fixture"],
+        status="complete",
+        exit_code=0,
+        trace_sha256=sha256((source / "decision-trace-p3.json").read_bytes()).hexdigest(),
+        failure=None,
+        run_directory=provenance["original_run_directory"],
+        allocation_key=snapshot["allocation_key"],
+    )
+    (archive / "receipt.json").write_bytes(canonical_bytes(receipt))
+    manifest = {
+        "evidence_manifest_version": "0.1",
+        "artifacts": [],
+        "registrations": [
+            {
+                "registration": "registration.json",
+                "repository_path": relative,
+                "cases": [
+                    {
+                        "case_id": receipt.case_id,
+                        "receipts": ["receipt.json"],
+                        "runs": [
+                            {
+                                "directory": "source",
+                                "original_run_directory": receipt.run_directory,
+                                "ancestors": [],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+        "pilot": "unissued-pilot.json",
+        "cr007": None,
+        "cr008": None,
+        "allocations": ["fake-allocation.json"],
+    }
+    path = archive / "manifest.json"
+    rewrite_manifest(path, manifest)
+    return path, manifest
+
+
+def rewrite_manifest(path, manifest):
+    manifest["artifacts"] = [
+        {
+            "path": p.relative_to(path.parent).as_posix(),
+            "sha256": sha256(p.read_bytes()).hexdigest(),
+        }
+        for p in sorted(path.parent.rglob("*"))
+        if p.is_file() and p != path
+    ]
+    path.write_bytes(canonical_bytes(manifest))
+    return sha256(path.read_bytes()).hexdigest()
+
+
+def archive_sentinels(monkeypatch):
+    from scripts import p3_trials
+
+    from living_island.agents.llm import provider
+    from living_island.persistence import p3_allocation
+    from living_island.sim import p3
+
+    def denied(*args, **kwargs):
+        raise AssertionError("offline archive touched a provider/live authority/lock/grant")
+
+    for name in ("live_locations", "_live_store", "initialize_authority", "enroll_registration"):
+        monkeypatch.setattr(p3_trials, name, denied)
+    for name in ("AllocationStore", "_ProcessLock", "initialize_pilot"):
+        monkeypatch.setattr(p3_allocation, name, denied)
+    monkeypatch.setattr(p3, "AllocationStore", denied)
+    monkeypatch.setattr(provider.DeepSeekResponsesAdapter, "complete", denied)
+
+
+def test_actual_archived_fake_report_external_anchor_and_source_preservation(
+    tmp_path, monkeypatch, capsys
+):
+    from scripts.p3_experiments import main
+
+    path, manifest = accounting_archive(tmp_path)
+    archive_sentinels(monkeypatch)
+    before = {
+        p.relative_to(path.parent): p.read_bytes() for p in path.parent.rglob("*") if p.is_file()
+    }
+    digest = sha256(path.read_bytes()).hexdigest()
+    assert (
+        main(
+            [
+                "report",
+                "--evidence-manifest",
+                str(path),
+                "--trusted-owner-evidence-sha256",
+                digest,
+                "--out",
+                str(tmp_path / "report"),
+            ]
+        )
+        == 0
+    )
+    report = json.loads(capsys.readouterr().out)
+    assert json.loads((tmp_path / "report/report.json").read_bytes()) == report
+    assert report["technical"] == report["accounting"]["technical"] == "PASS"
+    assert report["accounting"]["issuance_proof"] == "VERIFIED_ARCHIVE"
+    assert report["accounting"]["cost_ceiling_micro_cny"] == 0
+    assert all(s["issuance_status"] == "UNISSUED" for s in report["accounting"]["slots"])
+    assert report["accounting"]["allocations"][0]["charged"]["attempts"] == 12
+    assert report["live_authority_accesses"] == report["live_provider_calls"] == 0
+    assert (
+        next(iter(report["registrations"][0]["cases"].values()))["recorded_proof"][
+            "provider_accesses"
+        ]
+        == 0
+    )
+    assert before == {
+        p.relative_to(path.parent): p.read_bytes() for p in path.parent.rglob("*") if p.is_file()
+    }
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "wrong-anchor",
+        "missing-anchor",
+        "changed-bytes",
+        "version",
+        "duplicate-json",
+        "extra-field",
+        "missing-registration",
+        "missing-receipt",
+        "missing-checkpoint",
+        "missing-allocation",
+        "early-end",
+        "receipt-conflict",
+    ],
+)
+def test_archive_refuses_incomplete_or_untrusted_evidence(tmp_path, monkeypatch, capsys, mutation):
+    from scripts.p3_experiments import main
+
+    path, manifest = accounting_archive(tmp_path)
+    archive_sentinels(monkeypatch)
+    anchor = sha256(path.read_bytes()).hexdigest()
+    if mutation == "wrong-anchor":
+        anchor = "0" * 64
+    elif mutation == "changed-bytes":
+        (path.parent / "source/prompt.txt").write_bytes(b"changed")
+    elif mutation == "version":
+        manifest["evidence_manifest_version"] = "9.9"
+        anchor = rewrite_manifest(path, manifest)
+    elif mutation == "extra-field":
+        manifest["self_approved_digest"] = anchor
+        anchor = rewrite_manifest(path, manifest)
+    elif mutation == "duplicate-json":
+        path.write_bytes(b'{"evidence_manifest_version":"0.1",' + path.read_bytes()[1:])
+        anchor = sha256(path.read_bytes()).hexdigest()
+    elif mutation.startswith("missing-") and mutation != "missing-anchor":
+        target = {
+            "missing-registration": "registration.json",
+            "missing-receipt": "receipt.json",
+            "missing-checkpoint": "source/checkpoint-0000000004.json",
+            "missing-allocation": "fake-allocation.json",
+        }[mutation]
+        (
+            path.parent / target
+        ).unlink()  # One explicit fixture file, never a source or recursive deletion.
+    elif mutation == "early-end":
+        value = json.loads((path.parent / "receipt.json").read_bytes())
+        value.update(status="failed", exit_code=1, trace_sha256=None, failure="early end")
+        (path.parent / "receipt.json").write_bytes(canonical_bytes(value))
+        anchor = rewrite_manifest(path, manifest)
+    elif mutation == "receipt-conflict":
+        value = json.loads((path.parent / "receipt.json").read_bytes())
+        value["trace_sha256"] = "0" * 64
+        (path.parent / "fork.json").write_bytes(canonical_bytes(value))
+        manifest["registrations"][0]["cases"][0]["receipts"].append("fork.json")
+        anchor = rewrite_manifest(path, manifest)
+    args = ["validate", "--evidence-manifest", str(path)]
+    if mutation != "missing-anchor":
+        args += ["--trusted-owner-evidence-sha256", anchor]
+    assert main(args) == 1
+    captured = capsys.readouterr()
+    report = json.loads(captured.out or captured.err)
+    assert report.get("technical", report.get("status")) == "FAIL"
+    assert report["accounting"]["technical"] == "FAIL"
+    assert report["accounting"]["cost_ceiling_micro_cny"] is None
+
+
+@pytest.mark.parametrize(
+    "member",
+    [
+        "../escape",
+        "/absolute",
+        "D:/drive",
+        "//host/share",
+        "source\\prompt.txt",
+        "source/../prompt.txt",
+        "source//prompt.txt",
+        "source/prompt.txt.",
+        "source/prompt.txt ",
+    ],
+)
+def test_archive_unsafe_locator_refused(tmp_path, member):
+    from scripts.p3_experiments import ArchiveReader
+
+    path, manifest = accounting_archive(tmp_path)
+    manifest["artifacts"][0]["path"] = member
+    path.write_bytes(canonical_bytes(manifest))
+    with pytest.raises((ValueError, OSError)):
+        ArchiveReader(path, sha256(path.read_bytes()).hexdigest())
+
+
+def test_archive_alias_and_unlisted_ancestor_refused(tmp_path):
+    from scripts.p3_experiments import ArchiveReader
+
+    path, manifest = accounting_archive(tmp_path)
+    row = next(a for a in manifest["artifacts"] if a["path"] == "receipt.json")
+    manifest["artifacts"].append({**row, "path": "RECEIPT.json"})
+    path.write_bytes(canonical_bytes(manifest))
+    with pytest.raises((ValueError, OSError)):
+        ArchiveReader(path, sha256(path.read_bytes()).hexdigest())
+    manifest["artifacts"].pop()
+    manifest["registrations"][0]["cases"][0]["runs"][0]["ancestors"] = ["../escape.json"]
+    path.write_bytes(canonical_bytes(manifest))
+    with pytest.raises(ValueError):
+        ArchiveReader(path, sha256(path.read_bytes()).hexdigest())
+
+
+def test_missing_paid_case_never_reports_passing_zero_cost(tmp_path, monkeypatch, capsys):
+    from scripts.p3_experiments import main
+
+    archive_sentinels(monkeypatch)
+    registration = ROOT / "content/experiments/p3/development/p3-smoke-r1.json"
+    assert (
+        main(
+            [
+                "validate",
+                "--registration",
+                str(registration),
+                "--receipts",
+                str(tmp_path / "absent"),
+            ]
+        )
+        == 1
+    )
+    report = json.loads(capsys.readouterr().out)
+    accounting = report["accounting"]
+    assert accounting["technical"] == accounting["arithmetic_status"] == "FAIL"
+    assert accounting["issuance_proof"] == "MISSING"
+    assert accounting["cost_ceiling_micro_cny"] is None
+    assert accounting["known_subtotal_micro_cny"] == 0
+    assert accounting["allocations"][0]["charged"] is None
+    assert accounting["allocations"][0]["missing_sources"]
+    assert all(s["issuance_status"] == "UNKNOWN" for s in accounting["slots"])
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "head-hash",
+        "head-manifest",
+        "head-original-path",
+        "head-cursor",
+        "entry-debit",
+        "incomplete",
+        "receipt-allocation",
+    ],
+)
+def test_archive_snapshot_receipt_checkpoint_bridge(tmp_path, monkeypatch, mutation):
+    from scripts.p3_experiments import evaluate_archive
+
+    path, manifest = accounting_archive(tmp_path)
+    archive_sentinels(monkeypatch)
+    snapshot_path = path.parent / "fake-allocation.json"
+    snapshot = json.loads(snapshot_path.read_bytes())
+    if mutation == "head-hash":
+        snapshot["head"]["checkpoint_sha256"] = "0" * 64
+    elif mutation == "head-manifest":
+        snapshot["head"]["input_manifest_sha256"] = "0" * 64
+    elif mutation == "head-original-path":
+        snapshot["head"]["run_directory"] = "Z:/never-follow-this-authority-path"
+    elif mutation == "head-cursor":
+        snapshot["head"]["reservation_cursor"] -= 1
+    elif mutation == "entry-debit":
+        snapshot["entries"][-1]["debit"]["input_charged"] += 1
+    elif mutation == "incomplete":
+        snapshot["status"] = "running"
+    else:
+        receipt_path = path.parent / "receipt.json"
+        receipt = json.loads(receipt_path.read_bytes())
+        receipt["allocation_key"] = "0" * 64
+        receipt_path.write_bytes(canonical_bytes(receipt))
+    snapshot_path.write_bytes(canonical_bytes(snapshot))
+    digest = rewrite_manifest(path, manifest)
+    try:
+        report = evaluate_archive(path, trusted_owner_digest=digest, repository=ROOT, output=None)
+    except ValueError as exc:
+        assert "conflicting copied reservation" in str(exc)
+    else:
+        assert report["technical"] == report["accounting"]["technical"] == "FAIL"
+        assert report["accounting"]["cost_ceiling_micro_cny"] is None
+        assert report["accounting"]["errors"]
+
+
+def test_archive_output_and_duplicate_registration_refused(tmp_path):
+    from scripts.p3_experiments import evaluate_archive
+
+    path, manifest = accounting_archive(tmp_path)
+    with pytest.raises(ValueError, match="outside the immutable archive"):
+        evaluate_archive(
+            path,
+            trusted_owner_digest=sha256(path.read_bytes()).hexdigest(),
+            repository=ROOT,
+            output=path.parent / "report",
+        )
+    manifest["registrations"].append(manifest["registrations"][0])
+    digest = rewrite_manifest(path, manifest)
+    with pytest.raises(ValueError, match="duplicate archived registration"):
+        evaluate_archive(path, trusted_owner_digest=digest, repository=ROOT, output=None)
+
+
+def test_archive_directory_link_escape_refused(tmp_path):
+    import os
+    import subprocess
+
+    from scripts.p3_experiments import ArchiveReader
+
+    path, manifest = accounting_archive(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.json").write_bytes(b"outside")
+    link = path.parent / "linked"
+    if os.name == "nt":
+        subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(outside)], check=True, capture_output=True
+        )
+    else:
+        link.symlink_to(outside, target_is_directory=True)
+    manifest["artifacts"].append(
+        {"path": "linked/secret.json", "sha256": sha256(b"outside").hexdigest()}
+    )
+    path.write_bytes(canonical_bytes(manifest))
+    with pytest.raises(ValueError, match="symlink/junction"):
+        ArchiveReader(path, sha256(path.read_bytes()).hexdigest())
+
+
+def test_missing_registration_path_has_unknown_total(tmp_path, capsys):
+    from scripts.p3_experiments import main
+
+    assert (
+        main(
+            [
+                "validate",
+                "--registration",
+                str(tmp_path / "missing.json"),
+                "--receipts",
+                str(tmp_path / "missing-receipts"),
+            ]
+        )
+        == 1
+    )
+    report = json.loads(capsys.readouterr().err)
+    assert report["accounting"]["technical"] == "FAIL"
+    assert report["accounting"]["cost_ceiling_micro_cny"] is None

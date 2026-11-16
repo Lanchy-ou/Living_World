@@ -26,6 +26,7 @@ from scripts.p3_trials import CaseReceipt, _world  # noqa: E402
 
 from living_island.agents.llm.fallback import FrozenRuleFallbackAdapter  # noqa: E402
 from living_island.agents.p3.types import CaseAllocationP3, ContextProfile  # noqa: E402
+from living_island.analysis.canon import canonical_bytes_of_data  # noqa: E402
 from living_island.analysis.compare import death_categories, run_scalars  # noqa: E402
 from living_island.analysis.metrics import compute_run  # noqa: E402
 from living_island.analysis.p3 import (  # noqa: E402
@@ -39,7 +40,7 @@ from living_island.analysis.p3 import (  # noqa: E402
     physical_metrics,
 )
 from living_island.analysis.validity import assess_validity as evaluate_legacy  # noqa: E402
-from living_island.contract.p3_inspection import canonical_bytes, canonical_sha256  # noqa: E402
+from living_island.contract.p3_inspection import canonical_sha256  # noqa: E402
 from living_island.contract.p3_save import ImplementationPin, TrialRegistration  # noqa: E402
 from living_island.persistence._codec import decode_model  # noqa: E402
 from living_island.persistence.content import load_run_content  # noqa: E402
@@ -834,6 +835,10 @@ def evaluate_archive(
     manifest_path: Path, *, trusted_owner_digest: str | None, repository: Path, output: Path | None
 ) -> dict[str, Any]:
     archive = ArchiveReader(manifest_path, trusted_owner_digest)
+    if output is not None and (
+        output.resolve() == archive.base or archive.base in output.resolve().parents
+    ):
+        raise ValueError("report output must be outside the immutable archive")
     issuance, snapshots = archive_issuance(archive)
     reader = GitSourceReader(repository)
     if output is not None:
@@ -844,12 +849,20 @@ def evaluate_archive(
     verified: dict[str, VerifiedInspection] = {}
     reports = []
     errors: list[str] = []
+    if not archive.trusted:
+        errors.append("missing independently supplied owner-approved evidence digest")
     run_locators = [
         run for entry in archive.manifest.registrations for case in entry.cases for run in case.runs
     ]
+    registration_identities: set[str] = set()
     for index, entry in enumerate(archive.manifest.registrations):
         registration = archive.model(entry.registration, TrialRegistration)
         digest = canonical_sha256(registration)
+        if digest in registration_identities:
+            raise ValueError("duplicate archived registration identity")
+        registration_identities.add(digest)
+        if len(entry.cases) != len({case.case_id for case in entry.cases}):
+            raise ValueError("duplicate archived case identity")
         case_ids = {case.case_id for case in [*registration.cases, *registration.controls]}
         if any(case.case_id not in case_ids for case in entry.cases):
             raise ValueError("archive contains an unregistered case")
@@ -1012,6 +1025,8 @@ def evaluate_archive(
     accounting = allocation_accounting(
         allocations, expected=list(expected.values()), issuance=issuance
     )
+    if not archive.trusted:
+        accounting["issuance_proof"] = "MISSING"
     if errors:
         accounting["technical"] = accounting["arithmetic_status"] = "FAIL"
         accounting["errors"].extend(errors)
@@ -1125,7 +1140,7 @@ def main(argv: list[str] | None = None) -> int:
                 *(sys.argv[1:] if argv is None else argv),
             ]
             if args.command == "report":
-                (args.out / "report.json").write_bytes(canonical_bytes(result))
+                (args.out / "report.json").write_bytes(canonical_bytes_of_data(result))
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 1 if result.get("technical") == "FAIL" else 0
     except (OSError, ValueError) as exc:
