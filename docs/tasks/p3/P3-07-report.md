@@ -2,6 +2,39 @@
 
 Status: IN_PROGRESS. This report is not M10 acceptance or live-trial authorization.
 
+## Current delivery: feature preview, further testing deferred
+
+The owner subsequently asked whether more testing was needed and preferred not
+to continue unnecessary testing. The coordinator explained that the implemented
+features already have passing automated/browser evidence for preview, while the
+long proof remains necessary for formal acceptance. No new test, benchmark,
+simulation or long run is to start under this preview-first disposition. The
+already-running bounded short M6 command completed; no test process remains.
+
+The additional P3-PERF-U1 candidate is parked, **IN_PROGRESS and unintegrated**,
+at `5139e85b6e2d314dd6af89fe11e90032a44eb3cc`, with code candidate
+`124e751f8433ff19c5b9bddcec2db71b3cd4b591`. Its production prefix measurement was
+about 3.16x faster, but the already-started actual four-tick comparison improved
+only about 5.6% (14.517 to 13.703 seconds median). All five short modes retained
+exact artifacts and zero provider/authority sentinel accesses. This is not a
+reason to restart V-04. The 36 focused passes preceded a final conservative
+accounting/helper adjustment; final focused/static/import/heap/affected checks
+and independent Gate 2 remain NOT_RUN. No claim of a reviewed production fix is
+made, and none of this parked code is in the P3-07 preview.
+
+The local preview serves the previously built P3-07 UI and its already committed
+`p307-ui` sample through the normal replay/inspection import interfaces. It uses
+fixed test data and no backend simulation or model service. The small convenience
+launcher is external to the repository; no product code or fixture was changed.
+Local URL: `http://127.0.0.1:5189/demo` while its local server is running. This
+preview is not a new browser acceptance test or public deployment.
+
+The P3-07 implementation remains the tested `74fed10` content; subsequent local
+commits update documentation only. Full-task status remains **IN_PROGRESS**,
+not READY_FOR_REVIEW or M10 accepted. Long proof, final Gate 2, U1 integration,
+missing historical source compatibility and separately approved live trials
+remain open. No additional testing is implied by providing this preview.
+
 ## Owner-directed execution adjustment
 
 On 2026-11-16 the owner reported that the long verification took too much time

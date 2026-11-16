@@ -28,6 +28,12 @@ verification before any long restart. These are performance findings, not change
 to acceptance limits. Exact versions and results are in
 [P3-07-report.md](P3-07-report.md).
 
+The owner has now deferred additional testing and prioritized previewing the
+implemented features. The later performance candidate remains isolated: its
+warm-prefix improvement translated to only about 5.6% in the already-running
+short actual simulation, so it was not integrated and no long run was restarted.
+Further checks and formal acceptance remain explicit pending work.
+
 ## Limits and next steps
 
 The 0.1 multi-seed registration defect has a separate, independently reviewed 0.2
