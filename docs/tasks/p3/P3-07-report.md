@@ -183,6 +183,71 @@ exercise the full offline path with raising external-port sentinels. Canonical
 synthetic snapshots cover six-slot and CR-007/008 rules; they do not replace or
 reconstruct missing historical M9 run evidence. This is one review rework round.
 
+## Completed first integrated check and interrupted authoring
+
+At clean freeze `443b1626c16265c1b9dc74ff9d9602001a2953e7`, the complete backend
+test tree passed in three disjoint partitions: 993 legacy tests plus three
+existing skips, 15 one-resident tests, and 866 remaining P3 tests plus 21 existing
+skips. Total: **1,874 passed, 24 skipped, zero failures**. The three P2 skips
+require the existing long-run opt-in. The 21 P3 skips require
+`P305_U4_RETAINED_RUN` to locate the original retained M9 source; they are not
+failed checks and are not tests requesting new real model calls. Those original
+source files remain unavailable. Evidence: `p307-gate1-443b162-complete.json` in
+the chat evidence directory, with exact argv, fresh bases and exit records linked.
+
+All 14 non-pytest checks at that same freeze exited zero, including locked setup,
+backend static checks, frontend lint/typecheck/build, 164 frontend tests, 17 schema
+checks, both formal generators and a clean generation diff. The three generated
+ESLint warnings remain informational. Fresh P1 and P2 runs matched all eight
+historical hashes (`p307-p1-integrated-hashes.json` and
+`p307-p2-integrated-hashes.json`). These results attest this freeze; the following
+cache integration requires its own final checks.
+
+Generation B used the exact same freeze and retained outputs in
+`D:/p307-v04-generation-b/` and `D:/p307-v04-generation-b-check/`. On 2026-11-16 at
+04:54 UTC, its recorded process IDs and the remaining P3 test wrapper no longer
+existed; neither had written a completion exit record. The cause was not
+established. The latest published V-04 boundary was tick 35, with no tape or proof.
+New disposition files record these interruptions; no artifacts were removed or
+overwritten. The interrupted P3 partition was rerun completely at the unchanged
+freeze in `D:/p307-p3-remaining-b-check/` (866 passed, 21 existing skips,
+1,358.73 pytest seconds, exit zero). Its incomplete predecessor is not counted.
+Generation B remains **NOT_COMPLETE**, rather than a behavioral failure or a
+completed long proof. Hidden local Windows process creation now separates long
+verification workers from the tool-host process lifetime; no scheduled task,
+service or persistent machine setting was created.
+
+## Reviewed cache follow-up within the approved upstream scope
+
+The approved P3-PERF-U1 follow-up preserves the exact 128 MiB raw-byte admission
+bound, protected-row policy and every current-byte/source/relationship/authority
+check. Only validated concrete owner DTOs use an internally encoded, operation-local
+copy representation; it is never read from external input or persisted. Other
+models retain the former deep-copy path, and compatibility failures fall back.
+No saved schema, world behavior, provider, budget or inspection format changed.
+
+Candidate `f3bcf77e1d3c3be375d633fb33bf317df7ebf2b2` contains tested code
+`e6536fdb52de2df1792a44f87723ba573489cc20` and evidence-only follow-up. The executor
+passed 29 dedicated tests and all 338 affected regressions (863.60 seconds,
+zero skips/failures), static/import checks and an actual five-mode short M6
+comparison. The independent reviewer passed 33 tests and separately compared all
+22 source/recorded files and replay exports across five modes, with zero external
+provider/authority sentinel accesses. Final review SHA-256:
+`627ff4a52578f406d1ec2da26dc4df22a38980a84a0bd586839e1dc95eee3882`, report
+`gate2-clone-followup/P3-PERF-U1-clone-Gate2-review.md` in the chat evidence directory.
+
+The committed checkpoint benchmark measured a 15.21% median reduction. Actual
+four-tick measurements differed by host conditions: 14.25% executor, 7.32%
+independent reviewer. They are separate measurements, not pooled values or V-04
+throughput estimates. Earlier prototype timing/memory evidence is explicitly
+separate in [the upstream follow-up report](P3-PERF-U1-clone-evidence.md).
+
+After final independent PASS, the two upstream commits were cherry-picked locally
+without conflict through `5738788a1eaf9debc8242d05d763ae23273c1a29`. Neither branch
+was pushed and main was not merged. A fresh final integrated check and V-04
+generation C follow this documentation freeze. No frozen tape exists yet, so no
+golden result was regenerated to conceal a mismatch.
+
 ## M10 pending evidence
 
 - Independently reviewed offline evaluation, export, character view and debug view.
