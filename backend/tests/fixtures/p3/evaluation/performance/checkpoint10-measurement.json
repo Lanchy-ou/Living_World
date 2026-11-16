@@ -1,0 +1,58 @@
+{
+  "all_log_rows": 225,
+  "all_row_raw_bytes": 8334174,
+  "argv": [
+    "D:\\Codex\\.codex\\worktrees\\p3-perf-u1\\Living_World\\backend\\.venv\\Scripts\\python.exe",
+    "tests/fixtures/p3/evaluation/performance/benchmark.py",
+    "prefix",
+    "--checkpoint",
+    "D:/p307-v04-generation-a/source/checkpoint-0000000010.json",
+    "--out",
+    "D:/p307-perf-prefix-b"
+  ],
+  "authority_accesses": 0,
+  "benchmark_sha256": "245bbea53831c7e7ae55a4ed4dbd50a5966f91fb8fa6f4771374557c75e26abb",
+  "checkpoint": "D:\\p307-v04-generation-a\\source\\checkpoint-0000000010.json",
+  "checkpoint_sha256": "0b3c1b556e28eee56b5c73c23a980d5f9fbabd864b26b6dfac8ad39a76db72fc",
+  "instrumented_current_bytes": 54989865,
+  "instrumented_peak_bytes": 106058894,
+  "largest_row_bytes": 162259,
+  "measurements": [
+    {
+      "evictions": 0,
+      "hits": 0,
+      "max_raw_bytes": 0,
+      "misses": 118,
+      "mode": "disabled",
+      "peak_raw_bytes": 0,
+      "raw_bytes": 0,
+      "retained_rows": 0,
+      "seconds": 2.4332566000011866
+    },
+    {
+      "evictions": 0,
+      "hits": 0,
+      "max_raw_bytes": 134217728,
+      "misses": 118,
+      "mode": "cold",
+      "peak_raw_bytes": 8289078,
+      "raw_bytes": 8289078,
+      "retained_rows": 118,
+      "seconds": 2.897691300000588
+    },
+    {
+      "evictions": 0,
+      "hits": 118,
+      "max_raw_bytes": 134217728,
+      "misses": 118,
+      "mode": "warm",
+      "peak_raw_bytes": 8289078,
+      "raw_bytes": 8289078,
+      "retained_rows": 118,
+      "seconds": 0.7815426000015577
+    }
+  ],
+  "provider_accesses": 0,
+  "source_git_warmup_seconds": 8.328689299996768,
+  "source_preserved": true
+}
