@@ -15,8 +15,8 @@ intents; the frontend only displays state and sends commands.
   `balance-notes-v0.1.md`, `agent-interface-v0.1.md`, `p1-replay-frontend-v0.1.md`,
   `rule-policy-v0.1.md`, `p2-experiments-v0.1.md`, `frontend-design-v0.1.md`,
   `open-questions.md`).
-- Implementation plans: `docs/plans/p1-implementation-plan-v0.1.md` and
-  `docs/plans/p2-implementation-plan-v0.1.md` (tasks, milestones and change requests).
+- Implementation plans: `docs/plans/` (P1, P2, P3 and P3.5 plans: tasks, milestones
+  and change requests).
 - Decisions: `docs/adr/`. Task briefs and handoffs: `docs/tasks/<phase>/` (e.g. `docs/tasks/p1/`).
 
 ## Current phase and entry points
@@ -32,6 +32,13 @@ new work; do not silently restart deferred trials or merge parked candidates.
   [LLM decisions and recovery](docs/spec/llm-decision-v0.1.md), and
   [evaluation and inspection](docs/spec/p3-evaluation-v0.1.md)
 - [M9 acceptance and evidence](docs/tasks/p3/M9-evidence.md)
+
+P3.5 is in design. ADRs 0007–0014 are proposed, not effective, and the P3 specs
+stay in force until the P3.5 specs replace them.
+
+- [P3.5 plan](docs/plans/p3.5-implementation-plan-v0.1.md) (system index, naming
+  rules, deferred P3 work)
+- [P3.5 design review brief](docs/tasks/p3.5/P3.5-00-review-brief.md)
 
 ## Source of truth order
 
