@@ -50,6 +50,7 @@ from living_island.memory.p3_types import (
 from living_island.memory.p3_types import (
     canonical_sha256 as canonical_sha256,
 )
+from living_island.world.protocol import ActionPlan as ActionPlan
 from living_island.world.protocol import NonNegInt, Sha256Hex
 
 SHARD_LIMIT = 2_097_152

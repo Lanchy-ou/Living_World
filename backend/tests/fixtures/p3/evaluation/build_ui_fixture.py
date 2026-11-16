@@ -30,6 +30,7 @@ from living_island.persistence.p3_inspection import (  # noqa: E402
     verify_inspection_source,
 )
 from living_island.sim.p3 import export_p3_replay, run_p3  # noqa: E402
+from living_island.world.content import build_world_content, map_bytes_from_rows  # noqa: E402
 
 SELF = "backend/tests/fixtures/p3/evaluation/build_ui_fixture.py"
 TAPE = "backend/tests/fixtures/p3/evaluation/ui-tape.json.gz"
@@ -136,7 +137,7 @@ class Builder:
         return result
 
 
-def source_inputs(include_tape):
+def source_inputs(include_tape, *, edge=False):
     content = tiny_content(
         [
             "~~~~~~~~~~~",
@@ -150,13 +151,21 @@ def source_inputs(include_tape):
         {"ella": (2, 3), "mia": (3, 3), "ryan": (8, 4)},
         day_radius_tiles=10,
     )
+    if edge:
+        effective = content.config.model_dump(mode="json")
+        effective["needs"].update(initial_satiety=0, initial_hydration=0, initial_health=1)
+        content = build_world_content(effective, map_bytes_from_rows(content.map_rows))
     files, reader = pinned_inputs(content, fixture=False)
     registration = json.loads(files["trial-registration.json"])
-    registration["registration_id"] = "p307-ui"
-    registration["fake_fixture_id"] = "p307-ui"
+    name = "p307-ui-edge" if edge else "p307-ui"
+    registration["registration_id"] = name
+    registration["fake_fixture_id"] = name
     case = registration["cases"][0]
-    case["case_id"] = f"p307-ui.s{case['seed']}"
+    case["case_id"] = f"{name}.s{case['seed']}"
     case["ticks"] = 4
+    if edge:
+        case["caps"] = dict.fromkeys(("attempts", "input_tokens", "output_tokens", "micro_cny"), 0)
+        registration["aggregate_caps"] = case["caps"]
     commit = committed_head()
     pins = {p["path"]: p for p in registration["input_pins"]}
     for path in [SELF, *([TAPE] if include_tape else [])]:
@@ -196,16 +205,21 @@ def source_inputs(include_tape):
 
 
 def main():
+    global TAPE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=["generate-tape", "publish"])
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--edge", action="store_true")
     args = parser.parse_args()
+    name = "ui-edge" if args.edge else "ui"
+    if args.edge:
+        TAPE = "backend/tests/fixtures/p3/evaluation/ui-edge-tape.json.gz"
     if args.out.exists():
         raise ValueError("fresh fixture source output required")
     include_tape = args.mode == "publish"
     if not include_tape and (ROOT / TAPE).exists():
         raise ValueError("closed UI tape already exists")
-    content, files, registration, reader, fallback = source_inputs(include_tape)
+    content, files, registration, reader, fallback = source_inputs(include_tape, edge=args.edge)
     provider = (
         TapeProvider(FakeTape.model_validate_json(gzip.decompress((ROOT / TAPE).read_bytes())))
         if include_tape
@@ -229,7 +243,9 @@ def main():
         source_reader=reader,
     )
     if not include_tape:
-        tape = FakeTape(fake_schema_version="0.1", fixture_id="p307-ui", steps=provider.steps)
+        tape = FakeTape(
+            fake_schema_version="0.1", fixture_id=registration.fake_fixture_id, steps=provider.steps
+        )
         with (ROOT / TAPE).open("xb") as stream:
             stream.write(gzip.compress(canonical_bytes(tape), mtime=0))
         print(
@@ -242,7 +258,7 @@ def main():
     replay = source / "replay.json"
     export_p3_replay(source, replay, source_reader=reader)
     verified = verify_inspection_source(source, replay, repository=ROOT, source_reader=reader)
-    destination = FIXTURES / "ui"
+    destination = FIXTURES / name
     index = export_inspection(verified, destination)
     (destination / "replay.json").write_bytes(replay.read_bytes())
     archive = io.BytesIO()
@@ -255,20 +271,20 @@ def main():
             info.mode = 0o644
             tar.addfile(info, io.BytesIO(raw))
     compressed = gzip.compress(archive.getvalue(), mtime=0)
-    (FIXTURES / "ui-source.tar.gz").write_bytes(compressed)
+    (FIXTURES / f"{name}-source.tar.gz").write_bytes(compressed)
     manifest = {
-        "fixture_id": "p307-ui",
+        "fixture_id": registration.fake_fixture_id,
         "implementation_commit": registration.implementation_commit,
         "index_sha256": canonical_sha256(index),
         "source_archive_sha256": sha256(compressed).hexdigest(),
         "registration_sha256": canonical_sha256(registration),
         "tape_sha256": sha256((ROOT / TAPE).read_bytes()).hexdigest(),
-        "replay": "ui/replay.json",
+        "replay": f"{name}/replay.json",
         "inspection_files": [
-            f"ui/{p.name}" for p in sorted(destination.iterdir()) if p.name != "replay.json"
+            f"{name}/{p.name}" for p in sorted(destination.iterdir()) if p.name != "replay.json"
         ],
         "files": {
-            f"ui/{p.name}": sha256(p.read_bytes()).hexdigest()
+            f"{name}/{p.name}": sha256(p.read_bytes()).hexdigest()
             for p in sorted(destination.iterdir())
         },
         "features": [
@@ -282,7 +298,9 @@ def main():
         "live_provider_calls": 0,
         "live_authority_accesses": 0,
     }
-    (FIXTURES / "ui-manifest.json").write_bytes(canonical_bytes(manifest))
+    if args.edge:
+        manifest["features"] = ["death", "stale cognitive cursor", "zero-call budget fallback"]
+    (FIXTURES / f"{name}-manifest.json").write_bytes(canonical_bytes(manifest))
     print(json.dumps(manifest), flush=True)
     return 0
 

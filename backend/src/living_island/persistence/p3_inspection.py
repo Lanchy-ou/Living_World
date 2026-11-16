@@ -247,6 +247,18 @@ def verify_inspection_source(
     trace_path = source / "decision-trace-p3.json"
     trace_bytes = trace_path.read_bytes()
     trace, final = load_trace_p3(trace_path, ancestors=ancestors, source_reader=reader)
+    for name, committed in final.logs.items():
+        actual = (source / name).read_bytes()
+        # Continuations store only a suffix, whose start is fixed by the nearest origin.
+        inherited = (
+            0
+            if not final.origins
+            else next(p.records for p in final.origins[-1].log_prefixes if p.name == name)
+        )
+        suffix = b"".join(committed.splitlines(keepends=True)[inherited:])
+        if actual != suffix:
+            extra = max(0, actual.count(b"\n") - suffix.count(b"\n"))
+            raise ValueError(f"uncommitted/orphan source tail: {name}; extra_records={extra}")
     registration = TrialRegistration.model_validate_json(final.inputs["trial-registration.json"])
     profile = ContextProfile.model_validate_json(final.inputs["context-profile.json"])
     implementation = ImplementationPin.model_validate_json(final.inputs["implementation.json"])

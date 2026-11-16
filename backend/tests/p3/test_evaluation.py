@@ -371,3 +371,64 @@ def test_vm06_registered_pairs_and_zero_pairs():
     assert empty["scalars"]["deaths"]["median"] is None
     assert empty["scalars"]["deaths"]["favorable"] == 0
     assert "favorable" not in empty["scalars"]["movement_ticks"]
+
+
+def test_vm01_complete_attempt_denominators_and_zero_call_llm():
+    from living_island.agents.p3.cognition import initial_goal_state
+    from living_island.agents.p3.types import GoalChange
+
+    initial = initial_goal_state()
+    shards = []
+    for ordinal, (policy, status) in enumerate(
+        [
+            ("llm-v0", "ok"),
+            ("llm-v0", "ok"),
+            ("rule-based-v0", "error"),
+            ("sim-fallback-wait", "error"),
+        ]
+    ):
+        call_id = f"call-{ordinal}"
+        record = SimpleNamespace(
+            policy_id="llm-v0",
+            effective_policy_id=policy,
+            status=status,
+            call_ids=[call_id],
+            detail_code=None,
+            actor_id="ella",
+            tick=ordinal,
+            run_id="r",
+            decision_id=f"r:d:ella:{ordinal:06d}",
+            decision_ordinal=ordinal,
+            accepted_delta=SimpleNamespace(
+                goal_change=GoalChange(operation="continue", expected_goal_id=None, proposal=None)
+            ),
+            plan=SimpleNamespace(intents=[]),
+        )
+        manifest = SimpleNamespace(experiences=[], static_tiles=[], evicted_record_count=0)
+        call = SimpleNamespace(
+            call_id=call_id,
+            debit=debit(call_id, unknown=ordinal == 0),
+            result=SimpleNamespace(latency_ms=10),
+            validation_error="PARSE_ERROR" if ordinal == 2 else None,
+        )
+        shards.append(
+            SimpleNamespace(
+                record=record,
+                calls=[call],
+                context=SimpleNamespace(
+                    request=SimpleNamespace(context=SimpleNamespace(goals=initial)),
+                    assembly=SimpleNamespace(manifest=manifest),
+                ),
+            )
+        )
+    samples = [SimpleNamespace(tick=4, actor_id="ella", goals=initial)]
+    report = evaluate_cognition(shards, samples, llm_actor_ids=["ella"], expected_tick=4)
+    metric = report["metrics"]
+    assert metric["rejection_share"] == fraction(1, 4)
+    assert metric["usage"]["unknown_usage_share"] == fraction(1, 4)
+    assert metric["v05"] == "FAIL"
+    shards[-1].record.call_ids = []
+    shards[-1].calls = []
+    revised = evaluate_cognition(shards, samples, llm_actor_ids=["ella"])["metrics"]
+    assert revised["llm_accepted_share"] == fraction(2, 4)
+    assert revised["rejection_share"] == fraction(1, 3)

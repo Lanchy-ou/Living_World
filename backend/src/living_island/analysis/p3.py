@@ -13,6 +13,7 @@ from fractions import Fraction
 from typing import Any, cast
 
 from living_island.contract.p3_inspection import (
+    ActionPlan,
     AllocationEntry,
     BudgetCaps,
     CallDebit,
@@ -299,7 +300,7 @@ class AcceptedPlanView:
     actor_id: str
     tick: int
     decision_ordinal: int
-    plan: Any
+    plan: ActionPlan
 
 
 def physical_metrics(
