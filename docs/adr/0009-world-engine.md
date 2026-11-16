@@ -11,6 +11,8 @@
 - Supersedes on acceptance: the settlement, timing and resource-dynamics parts of
   `world-rules-v0.1.md`.
 - Owner decisions taken in discussion on 2026-11-15/16 are marked **[Owner]**.
+  The D2 change to interruption follows the owner's architecture discussion of
+  2026-11-16 (ADR 0013 D3).
 
 ## Context
 
@@ -58,8 +60,12 @@ Further settlement rules:
 
 ### D2. Processes
 
-- Personal timed actions keep the v1 model: duration, progress, interruption at
-  documented boundaries, and the rule's `on_interrupt`.
+- Personal timed actions keep the v1 duration and progress.
+- **[Owner]** Only hard stops end an action from the world side (ADR 0007 D6).
+  Speech, sightings and need thresholds are reported as notifications, not
+  acted on; the resident decides at its turn (ADR 0013 D3). A stop, by the
+  world or by the resident choosing another action, takes effect at a tick
+  boundary and applies the rule's `on_interrupt`.
 - Process entities hold progress that outlives one actor or accepts several
   contributors. `contribute` adds work until the rule's `work_ticks` total is
   reached (ADR 0007 D6).
@@ -104,7 +110,7 @@ Further settlement rules:
 
 | ID | Question |
 |---|---|
-| Q1 | The tick phase order for world rules relative to actor settlement and physiology. |
+| Q1 | The tick phase order for world rules relative to actor settlement, physiology and hard stops. |
 | Q2 | Is specificity "number of predicates" good enough, or should content declare explicit priorities? |
 | Q3 | Do failed chance rolls consume inputs, part of them, or none? |
 | Q4 | Can a process entity be abandoned, and does its progress decay? |

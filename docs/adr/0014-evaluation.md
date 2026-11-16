@@ -10,7 +10,8 @@
 - Supersedes on acceptance: `p3-evaluation-v0.1.md` for new work.
 - Owner decisions taken in discussion on 2026-11-16 are marked **[Owner]**.
   Later review answers that touch evaluation are recorded in ADRs 0009, 0012
-  and 0013 and referenced here.
+  and 0013 and referenced here. The two experimental questions of D2 follow the
+  owner's architecture discussion of 2026-11-16.
 
 ## Context
 
@@ -37,11 +38,11 @@ Views:
 
 | View | Shows |
 |---|---|
-| Decision inspector | Context sections with sources, the model request and response, the world result, and the memories written afterwards |
+| Decision inspector | The turn reason, context sections with sources, the model request and response, the world result, and the memories written afterwards |
 | Memory browser | A resident's memories by kind, supersession chains, `needs_review` records, personality over time |
 | Emergence metrics | The four capabilities (D2), with drill-down to instances |
 | Comparison | Two runs side by side, for example memory on and off |
-| Cost | Calls, tokens, cache hit rate, latency and fallback rate per resident and day; token share per context section (instructions, schema, perception parts, day log, recalled memories), from the context manifest (ADR 0013 D7) |
+| Cost | Calls, tokens, cache hit rate, latency and fallback rate per resident and day; token share per context section (instructions, schema, current state, day log, recalled memories), from the context manifest (ADR 0013 D10); context size per turn over the day, and fallback rate against context size (ADR 0013 D8) |
 | Rules and attempts | Rule use, and where unmatched attempts cluster |
 
 ### D2. Emergence metrics
@@ -60,19 +61,33 @@ between runs. Derived chance rolls (ADR 0009 D1) give both arms the same luck
 for the same events, which reduces the number of seeds needed. Cost is measured
 in full even though P3.5 sets no limit (ADR 0012 D4).
 
-Actions made by the fallback policy (ADR 0013 D4) never count as discovered,
+Actions made by the fallback policy (ADR 0013 D7) never count as discovered,
 taught or acted-on: metrics read the policy tag in the objective log and skip
 them.
+
+**[Owner]** Two experimental questions are evaluated, not assumed (exact
+measures are Q5):
+
+- Does a growing working context change behaviour observably (repeated actions,
+  missed information, invalid output and fallback), and how does that relate to
+  context size, time awake and the fatigue band? (ADR 0013 D4, ADR 0012 D3)
+- Does consolidation improve continuity across days (commitments kept, beliefs
+  and skills carried over), form knowledge, and still forget what does not
+  matter? (ADR 0012 D2)
+
+Long-context effects depend on the model, so the model ID is an experimental
+condition: runs with different models are not comparisons of the same
+residents.
 
 ### D3. Extension points as acceptance tests
 
 Each extension point has a synthetic test proving that an addition needs only
 registration or content, not engine or assembler code:
 
-- a test memory kind is stored, compacted and assembled into context;
+- a test memory kind is stored, consolidated and assembled into context;
 - a test rule pack is settled by the engine, and the validator rejects a rule
   that breaks conservation;
-- a test assembly recipe is selected by its trigger.
+- a test recall recipe is selected by its turn reason.
 
 ### D4. Strict lane and exploration lane
 
@@ -80,7 +95,7 @@ registration or content, not engine or assembler code:
 
 | | Strict lane | Exploration lane |
 |---|---|---|
-| Covers | Protocol, engine, rule validator, persistence and replay, memory provenance checks, metric definitions | Prompt wording, compaction prompt, recipe weights, content values, dashboard layout |
+| Covers | Protocol, engine, rule validator, persistence and replay, memory provenance checks, metric definitions | Prompt wording, consolidation prompt, recall recipes, day-log detail, turn-policy narrowing, content values, dashboard layout |
 | Process | Spec and Gates 1–3 | No Gate 2 |
 | Branch | `task/P3.5-…` | `explore/<slug>` |
 | Runs | `runs/` | `runs/explore/` |
@@ -102,3 +117,4 @@ registration or content, not engine or assembler code:
 | Q2 | Number of seeds per arm for memory on/off comparisons. |
 | Q3 | Inspection artifact size limits and sharding for long runs with many residents. |
 | Q4 | P3.5 drops the P3 trial caps (ADR 0012 D4). Do exploration runs still need a trial registration (for reproducibility only), or none? |
+| Q5 | Measures for the two experimental questions of D2, for example what counts as a repeated action or missed information. |

@@ -13,7 +13,9 @@
   unchanged as the v1 record.
 - Owner decisions taken in discussion on 2026-11-15/16 are marked **[Owner]**.
   The 2026-11-16 decisions answer the first design review (near-miss
-  phenomena, process materials, compatibility pack scope).
+  phenomena, process materials, compatibility pack scope) and apply the owner's
+  architecture discussion of the same day (no world soft interrupts, one action
+  per turn; ADR 0013 D1–D3).
 
 ## Context
 
@@ -128,9 +130,18 @@ ActIntent {
 
 ### D6. Multi-tick processes
 
-- Personal timed actions keep the v1 model: duration, progress, interruption.
-  A rule declares `on_interrupt`: keep progress, lose progress, or produce a
-  partial output.
+- Personal timed actions keep the v1 duration and progress.
+- **[Owner]** The world no longer interrupts an action because the resident
+  hears speech, sees something new or crosses a need threshold (the v1 soft
+  interrupts of `world-rules-v0.1.md` §4.3). It reports these as notifications
+  and the action keeps running; the resident decides at its turn whether to
+  continue or change (ADR 0013 D3). Only hard stops end an action from the
+  world side: physical facts such as death, fainting, exhaustion, missing
+  inputs or target, or a blocked path. An unconscious resident cannot take a
+  turn, so waking (for example because of an urgent need) is a world rule.
+- A rule declares `on_interrupt`: keep progress, lose progress, or produce a
+  partial output. It applies to a hard stop and to a resident stopping its own
+  action by choosing another.
 - Process entities are world objects for transformations that outlive one actor
   (a burning fire, something drying) or accept several contributors.
 - **[Owner]** Cooperation is in the first version: residents `contribute` work
@@ -148,8 +159,12 @@ ActIntent {
 
 ### D7. Model-facing form
 
-- One decision returns one structured plan of 1..`max_plan_actions` intents, as
-  in P3. No multi-turn tool loop.
+- **[Owner]** One turn returns one next action, or `continue` at a turn during a
+  running action, plus an optional intention update (ADR 0013 D2). The world
+  holds no queue of future actions; this replaces the P3 plan of
+  1..`max_plan_actions` intents. There is no tool loop inside one request:
+  results arrive only after the world has advanced, so the action–result loop
+  runs across ticks.
 - The schema is generated from the protocol version, the verb vocabulary and
   the reference kinds only. Rule library contents never enter the schema.
   CI keeps the P3 drift check against the protocol models.
@@ -182,6 +197,12 @@ ActIntent {
 - The rule-based policy runs on v2 through two adapters: a perception adapter
   (v2 perception to the v1 shape it reads) and an intent adapter (its v1
   intents to v2). It stays the baseline and fallback policy.
+- v2 has no soft interrupts and no world-side plan queue, so the rule-based
+  policy reproduces v1 behaviour on its own side: it keeps its v1 queue and
+  stops its running action wherever v1 would have interrupted it (the v1 table
+  of `world-rules-v0.1.md` §4.3 becomes part of that policy). The compatibility
+  rules declare `on_interrupt` to match v1 (progress lost, completed movement
+  kept), so the equivalence projection still matches.
 - **[Owner]** v1 recorded runs are archived: the last v1 commit is tagged and
   old runs replay from that tag. The v2 code base keeps no v1 engine. Unknown
   versions are still refused, with no implicit migration.
@@ -213,7 +234,8 @@ ActIntent {
 - Discovery is slower and costs more ticks. Phenomena-only feedback and
   deceptive appearances make learning harder by design.
 - The world gains process entities, input reservation and a phenomenon
-  generator. The engine changes substantially.
+  generator, and loses its soft-interrupt table. The engine changes
+  substantially.
 - v1 runs no longer replay on the current code base, only from the archive tag.
 - The frontend must render v2 events and process entities.
 
@@ -230,3 +252,5 @@ ActIntent {
 | Q7 | Physiology effects from rules: which needs, and what per-rule bounds? |
 | Q8 | Process entities: ownership, decay, and whether other residents may take outputs. |
 | Q9 | The equivalence projection and seed set for the v1 compatibility pack. |
+| Q10 | Can a resident speak during a timed action without stopping it (for example, answer while gathering)? |
+| Q11 | The full list of hard stops, their priority, and how a stop chosen by the resident is reported in the result. |

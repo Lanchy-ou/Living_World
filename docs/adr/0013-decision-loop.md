@@ -4,87 +4,186 @@
 - Date: 2026-11-16.
 - Baseline: `3f25930` (`task/P3.5-RR-01-world-adrs`).
 - Phase: P3.5, system 7 of 8 ([plan index](../plans/p3.5-implementation-plan-v0.1.md)).
-- Scope: how a decision's context is assembled, when the model is called, how
+- Scope: who decides what in the loop between a resident and the world, when a
+  resident gets a turn, how the waking-period context is assembled, how
   dialogue is handled, and how the result reaches the world. Memory kinds are
-  ADR 0011; compaction is ADR 0012; the action shape is ADR 0007.
+  ADR 0011; consolidation is ADR 0012; the action shape is ADR 0007.
 - Spec to be written: `docs/spec/decision-loop-v0.1.md`.
 - Supersedes on acceptance: `resident-cognition-v0.1.md` and
-  `llm-decision-v0.1.md` for new work.
+  `llm-decision-v0.1.md` for new work, and the plan-queue and replanning parts
+  of `agent-interface-v0.1.md` (AG-02, AG-03, §3.2).
 - Owner decisions taken in discussion on 2026-11-15/16 are marked **[Owner]**.
-- D1 is marked **Needs discussion**: not ready for acceptance.
+  D1–D4 follow the owner's architecture discussion of 2026-11-16 (agent
+  harness, decision loop, memory). That discussion fixed directions only;
+  formats, algorithms and numbers it did not fix are open questions, not owner
+  decisions.
+- D3 and D4 are marked **Needs discussion** for their details.
 
 ## Context
 
 P3 builds a `DecisionContextP3` per decision from perception, identity, goals and
 retrieved experience, projected into a bounded provider request with mandatory and
-optional parts. P3.5 replaces per-decision retrieval of raw experience with a
-waking-period context, and adds the memory kinds of ADR 0011.
+optional parts. One decision returns a plan of up to five intents, which the
+runtime executes in order without asking the model again. The world interrupts
+a running action when the resident hears speech, sees something new or crosses
+an urgent need threshold, discards the rest of the plan and asks for a new one
+(`world-rules-v0.1.md` §4.3, §4.4; `agent-interface-v0.1.md` AG-02, AG-03).
+
+In that design the world and the plan queue decide, on the resident's behalf,
+when to stop and when to think again. P3.5 wants residents that are autonomous
+agents acting in a world with rules and feedback, not rule-driven characters
+that a model assists now and then.
 
 ## Decision
 
-### D1. Waking-period context
+### D1. Roles
 
-> **Needs discussion (owner, 2026-11-16).** Together with compaction (ADR 0012
-> D2) this is the core of P3.5 and gets a dedicated discussion before
-> acceptance. Topics: what a day-log entry holds, how a perception becomes a
-> short deterministic change summary (Q1), what enters the fixed prefix (Q2),
-> and how the P3 token distribution informs the budget. Measured P3 request
+**[Owner]** The resident decides what it does, and whether it continues,
+changes or drops its plan after feedback. The world only settles what an action
+does.
+
+| Role | Owns | Code |
+|---|---|---|
+| World engine | Physical rules, time, settlement, results and reports | `world` |
+| Resident (the model) | Observing, thinking, choosing the next action, interpreting results, keeping or changing its own plans | Model output, through `agents` |
+| Harness | Context assembly, model calls, parsing, recording; when a resident gets a turn; passing intents to the world | `agents` (context, calls, records) and `sim` (scheduling, delivery to the world) |
+| Memory system | Working context, long-term store, formation and forgetting (ADR 0011, 0012) | `agents`, `memory` |
+
+The harness is a role, not a new package. Module boundaries are unchanged:
+`sim` stays the only coordinator between `agents` and `world`.
+
+### D2. One action per turn
+
+**[Owner]** A turn returns one next action (a kernel action or `act`, ADR 0007
+D2). At a turn that comes while an action is running (D3), it may instead return
+`continue`. A turn may also update the resident's intention (D6) and cite
+memory IDs (D10).
+
+- The world holds no queue of the resident's future actions. A multi-step plan
+  exists only as the intention in the resident's memory. The resident chooses
+  every step again, with the latest result in view.
+- The loop has the shape of tool calling (action, result, next action), but it
+  runs across ticks: all residents settle together at tick boundaries, so a
+  result arrives only after the world has advanced. Each turn is one model
+  call; there is no tool loop inside one request.
+- The rule-based policy may keep its own internal queue. Like any policy, it
+  returns one action per turn.
+
+### D3. Turns: hard stops and notifications
+
+**[Owner]** The harness decides when a resident gets a turn. The resident
+decides what to do with it. The world reports what happened; it never decides
+that a resident should stop or replan.
+
+A resident gets a turn when it wakes, when its action ends, and when a
+notification arrives while an action is running:
+
+| | Examples | Effect on the running action |
+|---|---|---|
+| Hard stop | Death, fainting, exhaustion, inputs or target gone, path blocked | The world ends the action and reports the result |
+| Notification | Speech heard, a new sighting, a need crossing a band, process progress | The world reports it; the action keeps running |
+
+- At a turn during a running action, the resident either continues (no world
+  effect, no ticks) or chooses another action. Choosing another action stops
+  the running one, and the rule's `on_interrupt` applies (ADR 0007 D6). This
+  replaces the v1 soft interrupts and deferred triggers for P3.5.
+- An unconscious resident cannot take a turn. Waking (for example because of an
+  urgent need) is a world rule, not a notification.
+- The world clock stays frozen while a model call is outstanding, as in v1.
+
+> **Needs discussion (owner, 2026-11-16).** Which notifications give a turn
+> (the turn policy) is agent-side, deterministic and versioned: it models when
+> a resident notices something, never what it does. Current draft: every
+> notification class gives a turn in the first version, and the list is
+> narrowed only after measurement (Q6).
+
+### D4. Waking-period working context
+
+> **Needs discussion (owner, 2026-11-16).** The direction below is decided.
+> Still open: what a day-log entry holds and how a perception becomes a short
+> deterministic observation entry (Q1), what enters the fixed prefix (Q2), the
+> guard near the context window (Q4), and how detailed the day log is, which
+> decides how large the context grows (ADR 0014 D2). Measured P3 request
 > (offline, steady state, upper-bound tokens): action schema 55% (sent twice;
 > P3.5 sends it once, ADR 0007 D7), tile lists 19%, recalled experience 20%
-> (half of it metadata), needs, inventory and feedback under 1%. The text below
-> is the current draft.
+> (half of it metadata), needs, inventory and feedback under 1%.
 
-**[Owner]** The context is organized by waking period, not by decision. It is
-append-only, so a stable prefix can use prompt caching:
+**[Owner]** Each resident has one working context per waking period, from
+waking to loss of consciousness. The harness rebuilds every request from stored
+parts; it does not rely on a provider-side session. Parts, in order:
 
-1. **Fixed prefix**, built at waking: system instructions, identity and
-   personality, and long-term memories selected for the day (beliefs,
-   impressions, skills, commitments, intention).
-2. **Day log**, append-only: every delivered perception summary, decision and
-   feedback of this waking period, in order.
-3. **Current turn**: the trigger, current perception and any memories recalled
-   for this decision, appended as new day-log entries rather than rewriting
-   the prefix.
+1. **Fixed prefix**, built at waking: system instructions, short action
+   descriptions, identity, personality and behaviour constraints, and long-term
+   memories selected for the day. The response schema goes in the provider's
+   structured-output field, not here (ADR 0007 D7).
+2. **Day log**, append-only: the resident's own actions and their results,
+   speech heard and said, notable observations (new sightings, changes),
+   explorations, and memories recalled during the day (D5), in order.
+3. **Current state**, replaced at every turn: the latest perception, body state
+   (need and fatigue bands), inventory, the running action and its progress,
+   the current intention, and the reason for this turn.
 
-The budget follows the mental fatigue band (ADR 0012 D3). Compaction at loss of
-consciousness ends the waking period.
+- Dynamic world state is never kept as standing instructions. Only the current
+  state shows it, and only as the resident perceives it now.
+- The prefix and the day log are stable between turns, so prompt caching
+  covers most of each request. Only the current state is new.
 
-### D2. Recipes per trigger
+**[Owner]** The working context grows naturally. It is not compressed to a short
+length during the waking period. Long-context effects of the model (missed
+details, repetition, weaker attention) are accepted as part of a resident's
+limited cognition. They are measured (ADR 0014 D2), not assumed. Context
+length is never an input to world rules: mental fatigue is computed from world
+quantities only (ADR 0012 D3).
 
-The recipe decides which long-term memories are recalled into the current turn:
+**[Owner]** An engineering guard keeps every request within the model's
+context window, so a long day cannot stop the run. The guard acts on the agent
+side only and never changes world state; for example, it cannot make a
+resident sleep. Its behaviour is Q4.
 
-| Trigger | Recalled memories |
+Consolidation at loss of consciousness closes the working context (ADR 0012
+D2). The next waking period starts a new one from the updated memory.
+
+### D5. Recall
+
+Long-term memories enter the working context in two ways: selected at waking
+into the fixed prefix (Q2), and recalled at a turn and appended to the day log.
+Recall decides what the resident remembers, never what it does. Current recipes
+by turn reason:
+
+| Turn reason | Recalled memories |
 |---|---|
-| Plan finished | Intention, current goal |
-| Addressed by a resident | Impression of the speaker, commitments to them, related beliefs |
-| Action failed | Skills for the verb, the observed phenomena |
-| Urgent need | Known food and water beliefs |
+| Action ended | Skills for the verb, the observed phenomena |
+| Spoken to | Impression of the speaker, commitments to them, related beliefs |
+| Need band crossed | Known food and water beliefs |
+| New sighting | Beliefs and skills about what was seen |
 
-### D3. Plans are optional
+A memory already recalled in this waking period is not appended again.
+
+### D6. Intentions are optional
 
 **[Owner]** No mandatory day plan. The resident may write an intention (ADR 0011
-D1) at any level of detail, or none. The loop uses an intention when one exists
-and asks the model at the next trigger otherwise.
+D1) at any level of detail, or none. The current intention is shown at every
+turn and changed only by the resident. It never drives an action by itself.
 
-### D4. When the model is called
+### D7. Model calls and fallback
 
-**[Owner]** Residents are LLM-driven: the model decides at every decision
-boundary. P3.5 sets no call or token limit (ADR 0012 D4). The rule-based policy
-stays only as the fallback for provider failures, as in P3.
+**[Owner]** Residents are LLM-driven: the model takes every turn. P3.5 sets no
+call or token limit (ADR 0012 D4). The rule-based policy stays only as the
+fallback for provider failures, as in P3.
 
-**[Owner]** Fallback actions stay out of the resident's mind. A plan made by the
-fallback policy, and the feedback from it, is written neither to memory nor to
-the day log the model sees. The objective event log still records the actions,
-tagged with the fallback policy, and evaluation excludes them from discovery and
-teaching metrics. The world state they cause (a new position, a drunk serving)
-is visible in later perception like any other change.
+**[Owner]** Fallback actions stay out of the resident's mind. An action chosen
+by the fallback policy, and the feedback from it, is written neither to memory
+nor to the day log the model sees. The objective event log still records the
+actions, tagged with the fallback policy, and evaluation excludes them from
+discovery and teaching metrics. The world state they cause (a new position, a
+drunk serving) is visible in later perception like any other change.
 
 The P3 per-request input limit (B-05, 32768 tokens) does not apply to P3.5. The
 limit is the provider model's context window (owner: DeepSeek V4.1, 1M tokens;
 pinned with provider evidence before use). Token use per section is monitored,
 not capped.
 
-### D4a. Provider stability
+### D8. Provider stability
 
 **[Owner]** Fallback is a last resort, so the provider path must be stable:
 
@@ -94,20 +193,18 @@ not capped.
 - Errors are classified (timeout, rate limit, server error, invalid output) and
   retried with bounded backoff; the counts and limits are spec values.
 - The fallback rate per resident and day is a first-class metric in the cost
-  view, so instability is visible at once.
+  view, so instability is visible at once. It is also reported against context
+  length, because long-context effects may show up as invalid output.
 
-### D5. Dialogue
+### D9. Dialogue
 
-Each open dialogue session has a working memory in the resident's runtime state:
-participants, turns so far and open requests. It is released when the session
-ends. Commitments made in dialogue are written mechanically (ADR 0012 D1). The
+The turns of a conversation are in the day log. Each open dialogue session
+also has a small working state in the resident's runtime: participants, open
+requests and whose reply is due. It is released when the session ends.
+Commitments made in dialogue are written mechanically (ADR 0012 D1). The
 world's per-session turn cap is unchanged.
 
-### D6. Output
-
-One decision returns one structured plan (ADR 0007 D7).
-
-### D7. Tracing every piece of context
+### D10. Tracing every piece of context
 
 **[Owner]** Everything that enters a context can be traced to its source:
 
@@ -127,10 +224,13 @@ One decision returns one structured plan (ADR 0007 D7).
 
 ## Consequences
 
-- An append-only day log makes most of each request a cached prefix, which
-  keeps uncapped calls affordable.
+- The model is called once per turn, after every action and at notifications,
+  so there are more calls per day than in P3. An append-only day log makes most
+  of each request a cached prefix, which keeps uncapped calls affordable.
 - Decisions see the full waking period, so per-decision retrieval of raw
   experience is no longer needed; recall is for long-term kinds only.
+- The world no longer has soft interrupts, and the runtime no longer has a plan
+  queue. Both become resident choices.
 - Uncapped calls make an operator-level safety limit a separate question.
 - A resident may notice changes it has no memory of causing (after a fallback
   stretch). This is accepted in exchange for keeping fallback knowledge out of
@@ -140,7 +240,10 @@ One decision returns one structured plan (ADR 0007 D7).
 
 | ID | Question |
 |---|---|
-| Q1 | How a perception is summarized into a day-log entry, and how large it may be. |
+| Q1 | What a day-log entry holds, how a perception becomes a deterministic observation entry, and how large it may be. |
 | Q2 | Selection rules for the fixed prefix at waking. |
 | Q3 | An operator-level run budget or kill switch for live runs, given no per-resident limit. |
-| Q4 | What happens when a waking period reaches the model's context limit before fatigue forces fainting. |
+| Q4 | The guard near the context window: what it drops or summarizes first, and at what threshold. It may not change world state. |
+| Q5 | May the model ask for a recall itself (a memory lookup that never reaches the world)? That would make one turn more than one model call. |
+| Q6 | The turn policy: which notifications give a turn, and whether a resident may choose what can disturb it (for example, "only if someone talks to me"). |
+| Q7 | Request format: the provider's tool-calling messages or structured JSON output. Decided by a live check. |
