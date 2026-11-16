@@ -35,7 +35,7 @@ The upstream task owns the evaluation registration specification, open-question 
 | P3-06 publication, exact-head and GitHub checks | PASS before merge, as recorded above. |
 | P3-07 locked backend setup | PASS: 26 locked packages installed. |
 | P3-07 locked frontend setup | PASS: 173 packages, pnpm 10.34.9. |
-| P3-07 backend implementation and focused tests | PASS at backend freeze `a70aa23045ecfda8da6e0883f8af1265a16ae531`; integrated full checks pending. |
+| P3-07 backend implementation and focused tests | PASS after review rework at `a1278858e86d3e7b6da2a66ee12a72316030e18c`: 103 tests, 275.76 seconds, no skips; integrated full checks pending. |
 | Frontend lint/typecheck/build/tests/schema | PASS at `97fb75a336ff48aab596eee26f5548aa4c447ccf`: 164 tests and 17 schema tests. Three unused-disable warnings in generated P3 types; no lint errors. |
 | Actual browser inspection | PASS: six positive, nine negative and two source-navigation checks in Chrome 157.0.8103.78; details below. |
 | Independent P3-07 Gate 2 | NOT_RUN: final integrated candidate pending. |
@@ -66,7 +66,7 @@ Evidence is retained at:
   HTML, same-boundary completion/replanning, unknown usage/latency/cost,
   nondecision state, stale/dead residents and zero-call decisions.
 - `D:/p307-browser-negative-a/result.json`: unknown version, wrong run/config/map,
-  missing/duplicate/damaged shards and unrelated replay reject; rejection clears
+  missing/duplicate file members, damaged shards and unrelated replay reject; rejection clears
   stale inspection while replay remains usable. A legacy replay without a sidecar
   imports and advances normally. No remote network requests were observed.
 - `D:/p307-browser-sources-a/result.json`: accepted decision and objective event
@@ -77,6 +77,18 @@ inspected character/debug layouts, the literal `<img ...>` speech and the Unknow
 usage/cost fields. Imported markup created no image or JavaScript dialog. Browser
 checks observed no uncaught runtime exception. These are synthetic fixture checks,
 not real-model behavioral evidence.
+
+The independent UI-only Gate 2 also passed: 10 focused tests and nine actual
+browser scenarios, including a separate missing-sample refusal, with five
+screenshots inspected and no runtime exceptions or dialogs. Its generic omitted
+file check omitted `trace.json`; the separate probe verifies a sample shard is
+also required. Report: `p307-gate2-ui/P3-07-UI-Gate2-review.md` in the chat evidence
+directory, SHA-256
+`13aae6574a9e255c3c12242c90c887cc8ac42cbc155d70bbbf6643c72452fd4b`.
+This review covers frozen frontend `97fb75a`; final full-task Gate 2 remains pending.
+Registration 0.2 parsing and per-case configuration joins are downstream work after
+the separate U1 is accepted for integration; this candidate's generated schema and
+UI deliberately remain on the current 0.1 contract.
 
 ### Separate U1 review result
 
@@ -120,6 +132,56 @@ it is tracked as P3-PERF-U1, rather than an undeclared P3-07 runtime expansion.
 The owner permits local integration only after independent Gate 2; no push or
 main merge is authorized. P305-U1 source ownership was explicitly frozen/released
 at `3c04d44d524461c142c3a2469c9a2ede39605c00` before this new writer starts.
+
+The separate candidate `ec531c112fd45199f591fd5095f5b6ac4b8e6247` passed
+independent Gate 2. The reviewer reran 28 tests and a four-tick M6 comparison:
+34.800252 seconds uncached versus 16.252358 seconds cached, with all 22 retained
+source/recorded files and replay bytes equal, and zero replay provider/authority
+sentinel accesses. Report: `D:/perfg2-short-15adc0b5/P3-PERF-U1-Gate2-review.md`,
+SHA-256 `4ddaba84866f761a6fa904d1c0d7aff6d91d865ce84273c4028bb4136d91d9e6`.
+The six approved commits were then cherry-picked locally, without conflict,
+through P3-07 commit `e2bed8ba71f72a597670c3ea29cde50a4dc70d4e`. No remote branch
+was pushed and main was not changed. Full integrated verification remains pending.
+
+### Review rework and final backend freeze
+
+An independent backend advisory review identified two incomplete report paths:
+the single-registration CLI cannot yet consume immutable issuance archives across
+all slots/replacement runs, and missing receipts incorrectly leave an empty
+accounting subset with a zero cost and a passing sub-status. Overall case validity
+already failed closed, but those accounting outputs needed correction. Serial
+backend rework after the UI freeze added a closed archive manifest with an
+externally supplied owner-approved digest, explicit contained file/hash bindings,
+frozen pilot/replacement/predecessor validation and relocated source verification.
+It retains missing expected allocations as unknown totals with a separate known
+subtotal. Embedded original authority/run paths remain comparison strings; no live
+authority path is followed, grant created or frozen format changed. The two fixes
+now pass executor tests; final independent execution remains pending.
+The advisory report is retained in the chat evidence directory as
+`P307-backend-advisory-review.md`, SHA-256
+`0532ca4e32f278539f5722a4038fe2043b6d83aef1944aaf0d9f147e767940c0`.
+Its offline reproducer confirms both findings. The reviewer reported no further
+actionable metric/export findings against pre-rework `e2bed8ba`; this advisory
+review does not replace final Gate 2.
+
+The final backend freeze is `a1278858e86d3e7b6da2a66ee12a72316030e18c`.
+Command: `uv run --directory backend pytest tests/p3/test_evaluation.py
+tests/p3/test_inspection.py tests/p3/test_compatibility.py --basetemp
+D:/p307-6619ebaee3c1 -q -ra`: 103 passed in 275.76 seconds, exit 0, no skips.
+The additional archive/owner-focused selection passed 18 tests in 29.46 seconds.
+Ruff lint/format (176 files), mypy (91 files), all eight import contracts and both
+formal generators passed with no generated diff. After tests completed, three
+owned files were normalized to exact committed LF bytes; 163 executing source,
+script and fixture files were compared with their Git blobs with zero mismatches.
+
+The first actual positive report test exposed tuple-valued frozen P2 physical
+summaries that the P3 DTO encoder could not serialize. Report JSON now uses the
+existing P2 canonical data encoder; metric arithmetic and inspection serialization
+are unchanged. The initial failure remains at `D:/p307-4a06360263c7`; a regression
+asserts the complete emitted report bytes. Actual fake archive/source/replay tests
+exercise the full offline path with raising external-port sentinels. Canonical
+synthetic snapshots cover six-slot and CR-007/008 rules; they do not replace or
+reconstruct missing historical M9 run evidence. This is one review rework round.
 
 ## M10 pending evidence
 

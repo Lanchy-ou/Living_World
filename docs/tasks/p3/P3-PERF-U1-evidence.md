@@ -142,3 +142,18 @@ candidate is `4dda1241d73934e9e0646690123a6d80852b11c9`. Later changes only add 
 handoff and the measured JSON evidence. The parent may integrate locally only
 after the independent nonauthor Gate 2 passes. This author has not integrated,
 pushed, or merged the branch.
+
+## Parent integration record
+
+After this author handoff, the independent reviewer passed candidate
+`ec531c112fd45199f591fd5095f5b6ac4b8e6247`: 28 independently rerun tests and an
+actual four-tick disabled/enabled M6 comparison, with identical source/recorded
+and replay bytes and zero replay provider/authority sentinel accesses. Report:
+`D:/perfg2-short-15adc0b5/P3-PERF-U1-Gate2-review.md`, SHA-256
+`4ddaba84866f761a6fa904d1c0d7aff6d91d865ce84273c4028bb4136d91d9e6`.
+
+The parent then exercised the owner's conditional local-integration permission,
+cherry-picking the six upstream commits without conflict through P3-07 commit
+`e2bed8ba71f72a597670c3ea29cde50a4dc70d4e`. This was local integration only;
+there was no push or main merge. The original upstream branch and evidence remain
+preserved. See [P3-07 report](P3-07-report.md) for subsequent integrated verification.

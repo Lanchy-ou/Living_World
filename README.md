@@ -138,6 +138,25 @@ it does not turn a supplied allocation list into proof of a spending grant. Miss
 immutable issuance evidence remains an explicit failure, without consulting a live
 ledger. These offline commands do not perform M10 owner acceptance.
 
+For an explicitly supplied offline evidence archive, `validate` and `report` can
+instead read a closed manifest covering multiple registered runs and archived
+issuance snapshots:
+
+```sh
+uv run --directory backend python ../scripts/p3_experiments.py report --evidence-manifest ../runs/p3/archived-evidence/manifest.json --trusted-owner-evidence-sha256 OWNER_APPROVED_ARCHIVE_SHA256 --out ../runs/p3/archive-report
+```
+
+Replace `OWNER_APPROVED_ARCHIVE_SHA256` with the independently supplied,
+owner-approved SHA-256 of the complete canonical manifest. Computing a digest
+from an untrusted archive does not approve that archive. Every member is explicitly
+located and hashed inside the archive; embedded original authority paths are
+compared as identity strings and are never followed. The report verifies the
+supplied historical snapshot, not today's available budget, and creates no grant.
+Missing expected allocations retain an unknown total and a separate known charge
+subtotal. Missing historical run files cannot be reconstructed from receipts.
+The current registration 0.1 multi-seed limitation still applies; multiple archive
+members are not a way to split or bypass a required development/acceptance matrix.
+
 The P3 schemas and types are generated separately:
 
 ```sh
