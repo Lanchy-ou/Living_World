@@ -8,7 +8,7 @@
   The rule format is ADR 0008; the engine is ADR 0009.
 - Spec to be written: `docs/spec/starter-content-v0.1.md`.
 - Supersedes on acceptance: `balance-notes-v0.1.md` for new content.
-- Owner decisions taken in discussion on 2026-11-15 are marked **[Owner]**.
+- Owner decisions taken in discussion on 2026-11-15/16 are marked **[Owner]**.
 
 ## Context
 
@@ -25,7 +25,11 @@ for a specific recipe.
 - **v1 compatibility pack**: the 11 v1 actions expressed as v2 rules on the
   default map. It is the balance baseline and the equivalence check for
   ADR 0007 D8.
-- **Starter pack**: the compatibility pack plus the first crafting content.
+- **Starter pack**: the compatibility pack plus the first crafting content and
+  every mechanic v1 does not have (mental fatigue and fainting, fruit decay,
+  tool wear, fire). **[Owner]** These enter only after the compatibility pack
+  passes the equivalence check (ADR 0007 D8); the compatibility pack never
+  contains them.
 
 ### D2. First starter content (small and complete)
 

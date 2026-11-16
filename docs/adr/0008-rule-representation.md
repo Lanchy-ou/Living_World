@@ -8,7 +8,7 @@
   Execution is ADR 0009; concrete content is ADR 0010; the action shape is ADR 0007.
 - Spec to be written: `docs/spec/rule-representation-v0.1.md`.
 - Supersedes on acceptance: the entity and resource parts of `world-rules-v0.1.md`.
-- Owner decisions taken in discussion on 2026-11-15 are marked **[Owner]**.
+- Owner decisions taken in discussion on 2026-11-15/16 are marked **[Owner]**.
 
 ## Context
 
@@ -76,6 +76,11 @@ Fields: `id`, `trigger`, `inputs`, `instruments`, `conditions`, `work_ticks`,
 set component state, move, and a bounded change to the actor's own needs
 (needed because rest and sleep are rules, ADR 0007 D2).
 
+**[Owner]** Need changes are bounded per tick, not per application: a rule's
+total need change divided by its `work_ticks` may not exceed the per-need rate
+limit. Otherwise a one-tick "nap" repeated ten times would restore more than ten
+ticks of sleep.
+
 ### D4. One format for actor and world rules
 
 `trigger` is `verb:<verb>` for actions, `every:<ticks>` for periodic world
@@ -107,7 +112,7 @@ later:
 4. Anything that appears from nothing (fruit regrowth) must be a declared
    source with a bounded rate.
 5. No chain of rules multiplies matter in a cycle.
-6. Need effects are bounded per rule.
+6. Need effects are bounded per tick of work (D3).
 
 ## Consequences
 

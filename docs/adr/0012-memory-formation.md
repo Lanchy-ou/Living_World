@@ -9,6 +9,7 @@
   ADR 0011; the daytime context is ADR 0013.
 - Spec to be written: `docs/spec/memory-formation-v0.1.md`.
 - Owner decisions taken in discussion on 2026-11-15/16 are marked **[Owner]**.
+- D2 is marked **Needs discussion**: not ready for acceptance.
 
 ## Context
 
@@ -30,6 +31,14 @@ Done at every boundary, with no model call:
 - social fact counters (who gave what to whom).
 
 ### D2. Compaction at loss of consciousness
+
+> **Needs discussion (owner, 2026-11-16).** Compaction and the waking-period
+> context (ADR 0013 D1) are the core of P3.5 and get a dedicated discussion
+> before this ADR is accepted. Topics: what compaction reads and writes, what
+> happens to raw episodic records when compaction fails repeatedly (the "never
+> evicted" rule below conflicts with the P3 capacity limits E-01/E-02 of
+> `resident-experience-v0.1.md`), and how much raw experience is kept after
+> compaction (Q4). The text below is the current draft.
 
 **[Owner]** LLM formation happens in one place: compaction, when the resident
 loses consciousness (sleep, fainting, and later intoxication). The world reports
@@ -60,6 +69,13 @@ utterances heard and new sightings). It never depends on token counts.
 
 **[Owner]** No per-resident call or token limit in P3.5. Every formation call is
 still recorded like a decision call.
+
+**[Owner]** P3.5 runs also have no run-level cap. For P3.5 work this supersedes
+the P3 trial caps and registration rule of `llm-decision-v0.1.md` §4 ("no
+unlimited live trial") and the M8 CNY150 ceiling, which stay in force for P3
+runs. Instead, input and output tokens of every call are recorded and shown per
+section in the cost view (ADR 0014 D1), so the owner can see where tokens go and
+adjust.
 
 ### D5. Recording and replay
 

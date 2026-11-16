@@ -9,6 +9,8 @@
 - Spec to be written: `docs/spec/evaluation-v0.1.md`.
 - Supersedes on acceptance: `p3-evaluation-v0.1.md` for new work.
 - Owner decisions taken in discussion on 2026-11-16 are marked **[Owner]**.
+  Later review answers that touch evaluation are recorded in ADRs 0009, 0012
+  and 0013 and referenced here.
 
 ## Context
 
@@ -39,7 +41,7 @@ Views:
 | Memory browser | A resident's memories by kind, supersession chains, `needs_review` records, personality over time |
 | Emergence metrics | The four capabilities (D2), with drill-down to instances |
 | Comparison | Two runs side by side, for example memory on and off |
-| Cost | Calls, tokens, cache hit rate and latency per resident and day |
+| Cost | Calls, tokens, cache hit rate, latency and fallback rate per resident and day; token share per context section (instructions, schema, perception parts, day log, recalled memories), from the context manifest (ADR 0013 D7) |
 | Rules and attempts | Rule use, and where unmatched attempts cluster |
 
 ### D2. Emergence metrics
@@ -54,8 +56,13 @@ Views:
 | Commitments hold across days | Commitments spanning at least one sleep, and whether they were kept, broken or expired |
 
 Memory on/off comparisons run several seeds per arm, because model output varies
-between runs. Cost is measured in full even though P3.5 sets no limit
-(ADR 0012 D4).
+between runs. Derived chance rolls (ADR 0009 D1) give both arms the same luck
+for the same events, which reduces the number of seeds needed. Cost is measured
+in full even though P3.5 sets no limit (ADR 0012 D4).
+
+Actions made by the fallback policy (ADR 0013 D4) never count as discovered,
+taught or acted-on: metrics read the policy tag in the objective log and skip
+them.
 
 ### D3. Extension points as acceptance tests
 
@@ -94,4 +101,4 @@ registration or content, not engine or assembler code:
 | Q1 | Exact metric definitions, for example what counts as "acted on" a belief. |
 | Q2 | Number of seeds per arm for memory on/off comparisons. |
 | Q3 | Inspection artifact size limits and sharding for long runs with many residents. |
-| Q4 | Whether exploration runs may use live model calls without a registered trial. |
+| Q4 | P3.5 drops the P3 trial caps (ADR 0012 D4). Do exploration runs still need a trial registration (for reproducibility only), or none? |

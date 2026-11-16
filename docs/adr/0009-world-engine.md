@@ -10,7 +10,7 @@
 - Spec to be written: `docs/spec/world-engine-v0.1.md`.
 - Supersedes on acceptance: the settlement, timing and resource-dynamics parts of
   `world-rules-v0.1.md`.
-- Owner decisions taken in discussion on 2026-11-15 are marked **[Owner]**.
+- Owner decisions taken in discussion on 2026-11-15/16 are marked **[Owner]**.
 
 ## Context
 
@@ -25,16 +25,36 @@ byte-identical deterministic replay.
 
 ### D1. Deterministic settlement
 
-1. Select candidate rules by trigger (`verb:<verb>`), then filter by predicates
-   and conditions.
-2. If several rules match, choose the most specific (most predicates), then the
-   lowest `rule_id` in byte order.
-3. If none match, settle as a no-match attempt: phenomena only, plus an
-   objective `attempt_unmatched` event (ADR 0007 D5).
-4. Inputs are reserved at start and validated again at completion.
-5. Conflicts between actors keep the v1 order: ascending actor ID.
-6. Success chances draw from the seeded world RNG only, one draw per settled
-   chance roll, in settlement order. No other randomness exists in settlement.
+**[Owner]** Items first, then conditions:
+
+1. Select candidate rules by trigger (`verb:<verb>`).
+2. Keep the candidates whose item predicates (target, instruments, inputs)
+   match. Conditions (actor state, surroundings, time) are not checked yet.
+3. Among the remaining candidates whose conditions hold, choose the most
+   specific (most item predicates plus conditions), then the lowest `rule_id`
+   in byte order, and settle it.
+4. If candidates remain but none has its conditions met, settle as unmet: no
+   effect, the most specific candidate's `unmet` phenomenon (ADR 0007 D5), and
+   that `rule_id` in the objective log.
+5. If no candidate remains, settle as a no-match attempt: phenomena only, plus
+   an objective `attempt_unmatched` event (ADR 0007 D5).
+
+Example: rule A turns clay into pottery when heated next to a fire; rule B turns
+heated clay into dried clay anywhere. Heating clay next to a fire gives pottery
+(A has the same item predicate plus a condition, so it is more specific). Away from a fire it gives dried clay (B). If B did not
+exist, it would give A's `unmet` phenomenon.
+
+Further settlement rules:
+
+6. Inputs are reserved at start and validated again at completion.
+7. Conflicts between actors keep the v1 order: ascending actor ID, and the v1
+   completion shuffle on its own stream (`world-rules-v0.1.md` §5.6), unchanged.
+8. **[Owner]** Success chances do not use the v1 stream. Each roll is derived
+   from the run seed and the roll's identity (tick, `rule_id`, intent or entity
+   ID), not from its position in one shared sequence. One actor's extra attempt
+   then never shifts the luck of other events, so runs that differ only in agent
+   behaviour (for example memory on and off) see the same luck for the same
+   events. This follows v1 §5.6: new randomness gets its own named stream.
 
 ### D2. Processes
 
@@ -73,7 +93,10 @@ byte-identical deterministic replay.
 - The engine becomes a generic interpreter of a closed rule language; per-recipe
   code is forbidden and tested against (ADR 0010 D4).
 - Rule specificity ordering must be documented with test vectors, because two
-  overlapping rules are a likely content mistake.
+  overlapping rules are a likely content mistake. The clay example in D1 is the
+  first vector.
+- Derived chance rolls need a fixed derivation function and test vectors in the
+  spec, so any implementation reproduces the same rolls.
 - Snapshots grow with the number of artifacts and processes; the storage plan
   is a separate discussion.
 

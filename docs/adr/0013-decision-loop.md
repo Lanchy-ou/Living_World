@@ -11,6 +11,7 @@
 - Supersedes on acceptance: `resident-cognition-v0.1.md` and
   `llm-decision-v0.1.md` for new work.
 - Owner decisions taken in discussion on 2026-11-15/16 are marked **[Owner]**.
+- D1 is marked **Needs discussion**: not ready for acceptance.
 
 ## Context
 
@@ -22,6 +23,16 @@ waking-period context, and adds the memory kinds of ADR 0011.
 ## Decision
 
 ### D1. Waking-period context
+
+> **Needs discussion (owner, 2026-11-16).** Together with compaction (ADR 0012
+> D2) this is the core of P3.5 and gets a dedicated discussion before
+> acceptance. Topics: what a day-log entry holds, how a perception becomes a
+> short deterministic change summary (Q1), what enters the fixed prefix (Q2),
+> and how the P3 token distribution informs the budget. Measured P3 request
+> (offline, steady state, upper-bound tokens): action schema 55% (sent twice;
+> P3.5 sends it once, ADR 0007 D7), tile lists 19%, recalled experience 20%
+> (half of it metadata), needs, inventory and feedback under 1%. The text below
+> is the current draft.
 
 **[Owner]** The context is organized by waking period, not by decision. It is
 append-only, so a stable prefix can use prompt caching:
@@ -61,6 +72,30 @@ and asks the model at the next trigger otherwise.
 boundary. P3.5 sets no call or token limit (ADR 0012 D4). The rule-based policy
 stays only as the fallback for provider failures, as in P3.
 
+**[Owner]** Fallback actions stay out of the resident's mind. A plan made by the
+fallback policy, and the feedback from it, is written neither to memory nor to
+the day log the model sees. The objective event log still records the actions,
+tagged with the fallback policy, and evaluation excludes them from discovery and
+teaching metrics. The world state they cause (a new position, a drunk serving)
+is visible in later perception like any other change.
+
+The P3 per-request input limit (B-05, 32768 tokens) does not apply to P3.5. The
+limit is the provider model's context window (owner: DeepSeek V4.1, 1M tokens;
+pinned with provider evidence before use). Token use per section is monitored,
+not capped.
+
+### D4a. Provider stability
+
+**[Owner]** Fallback is a last resort, so the provider path must be stable:
+
+- The request schema passes an offline check against the provider's documented
+  structured-output limits before any live run (the M9 smoke failed every call
+  on a hosted schema rejection).
+- Errors are classified (timeout, rate limit, server error, invalid output) and
+  retried with bounded backoff; the counts and limits are spec values.
+- The fallback rate per resident and day is a first-class metric in the cost
+  view, so instability is visible at once.
+
 ### D5. Dialogue
 
 Each open dialogue session has a working memory in the resident's runtime state:
@@ -72,6 +107,24 @@ world's per-session turn cap is unchanged.
 
 One decision returns one structured plan (ADR 0007 D7).
 
+### D7. Tracing every piece of context
+
+**[Owner]** Everything that enters a context can be traced to its source:
+
+- Each assembled context has a manifest: for every section and entry, the
+  memory, day-log entry or perception it came from, by ID, and its size in
+  tokens. It holds references only, never copies.
+- Day-log entries, memories and fixed-prefix parts are stored once, by content
+  hash. A decision record stores its manifest, the new entries and the model
+  output. The exact request bytes are rebuilt deterministically and checked
+  against the recorded request hash. P3 stored the full context several times
+  per decision (about 190 KB each); with an append-only day log that would grow
+  with the square of the day length.
+- The model output may cite the memory IDs that a speech act or action relies
+  on (optional field, agent side only, never sent to the world). Evaluation
+  checks citations against the manifest, because a model's own citation can be
+  wrong.
+
 ## Consequences
 
 - An append-only day log makes most of each request a cached prefix, which
@@ -79,6 +132,9 @@ One decision returns one structured plan (ADR 0007 D7).
 - Decisions see the full waking period, so per-decision retrieval of raw
   experience is no longer needed; recall is for long-term kinds only.
 - Uncapped calls make an operator-level safety limit a separate question.
+- A resident may notice changes it has no memory of causing (after a fallback
+  stretch). This is accepted in exchange for keeping fallback knowledge out of
+  the resident.
 
 ## Open questions
 

@@ -11,7 +11,9 @@
 - Supersedes on acceptance: the action, perception and feedback parts of
   `interface-contract-v0.1.md` and `agent-interface-v0.1.md`, which stay
   unchanged as the v1 record.
-- Owner decisions taken in discussion on 2026-11-15 are marked **[Owner]**.
+- Owner decisions taken in discussion on 2026-11-15/16 are marked **[Owner]**.
+  The 2026-11-16 decisions answer the first design review (near-miss
+  phenomena, process materials, compatibility pack scope).
 
 ## Context
 
@@ -79,7 +81,9 @@ ActIntent {
 ### D3. Capability exposure
 
 - The model-facing schema lists the verb vocabulary and reference kinds only.
-- The world never lists rules and never tracks what a resident knows.
+- The world never lists rules and never tracks which rules a resident knows.
+  (It still keeps v1-style exposure receipts, which record what was shown to a
+  resident, not what the resident concluded.)
 - Known recipes are assembled by `agents` from the resident's own memory.
 - **[Owner]** Residents start with no recipes. Survival instinct (eating,
   drinking and sleeping when in need), curiosity and willingness to try are
@@ -110,6 +114,12 @@ ActIntent {
   or which condition failed. Phenomena are produced deterministically from a
   closed phenomenon vocabulary and property comparisons, for example "leaves a
   dent" or "does not cut".
+- **[Owner]** A near miss may look different from a useless attempt. When the
+  items fit a rule but its conditions are unmet, the resident sees that rule's
+  `unmet` phenomenon (for example "the clay hardens slightly"), which may differ
+  from the phenomena of an attempt no rule fits. This hint is intentional: it
+  gives discovery a gradient. It names no rule and no missing condition. The
+  selection order is ADR 0009 D1.
 - Every attempt costs ticks.
 - The objective event log records the matched `rule_id` on success and failure,
   and records `attempt_unmatched` with a normalized attempt descriptor (verb plus
@@ -125,6 +135,12 @@ ActIntent {
   (a burning fire, something drying) or accept several contributors.
 - **[Owner]** Cooperation is in the first version: residents `contribute` work
   to a process entity until the rule's required total is reached.
+- **[Owner]** A process entity holds its materials like a container. Any
+  resident may put materials into it (for example branches into a construction
+  site, or fuel into a fire) with the kernel item-transfer actions, which accept
+  a process entity as target. Contributed work counts only while the materials
+  the rule requires are present. Materials are consumed when the process
+  completes, or as the rule declares (fuel burning down).
 - Inputs are reserved when an action starts, so one item cannot be consumed by
   two actions. Conflicts keep the v1 deterministic order (actor ID order plus the
   seeded RNG).
@@ -137,6 +153,15 @@ ActIntent {
 - The schema is generated from the protocol version, the verb vocabulary and
   the reference kinds only. Rule library contents never enter the schema.
   CI keeps the P3 drift check against the protocol models.
+- **[Owner]** The response schema is sent once, in the provider's
+  structured-output field. The system message keeps the instructions and the
+  short verb descriptions, but no second copy of the schema. P3 sent both
+  (`resident-cognition-v0.1.md`, "Render exactly two ordered messages"); the
+  copy in the system message was about 27% of every request (offline
+  measurement, 2026-11-16). DeepSeek expands the structured-output schema into
+  the prompt itself (the P3 token counter already charges it), so the model
+  still sees it. A live check before the first P3.5 run confirms that
+  single-copy requests are accepted and parse as often as P3's.
 - Known recipes and observed phenomena go into the context built from memory.
 
 ### D8. Migration
@@ -146,8 +171,17 @@ ActIntent {
   and rules. Equivalence is checked on a projection (per-tick physical state and
   key facts) for a fixed seed set, because event types change and byte equality
   is not possible.
-- The rule-based policy runs on v2 through an intent adapter and stays the
-  baseline and fallback policy.
+- **[Owner]** The compatibility pack contains v1 mechanics only. New mechanics
+  (mental fatigue and fainting, tool wear, fruit decay, crafting) enter through
+  the starter pack, after the equivalence check passes. The compatibility pack
+  then stays as a permanent regression baseline.
+- Before the v1 engine is removed, the expected projections are generated from
+  the v1 engine at the archive tag and committed as test fixtures. The
+  equivalence check compares v2 against these fixtures, so it keeps running
+  after v1 code is gone.
+- The rule-based policy runs on v2 through two adapters: a perception adapter
+  (v2 perception to the v1 shape it reads) and an intent adapter (its v1
+  intents to v2). It stays the baseline and fallback policy.
 - **[Owner]** v1 recorded runs are archived: the last v1 commit is tagged and
   old runs replay from that tag. The v2 code base keeps no v1 engine. Unknown
   versions are still refused, with no implicit migration.

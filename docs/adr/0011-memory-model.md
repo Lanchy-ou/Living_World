@@ -53,6 +53,15 @@ the true rule. It may be incomplete or wrong, for example when taught by a liar.
 Teaching passes this structure; evaluation compares it with the true rules
 (ADR 0014).
 
+**[Owner]** Skill predicates are written in what the resident can perceive: the
+coarse descriptors of apparent values (ADR 0007 D4), for example "looks very
+hard, sharp edge", never true integer values such as `hardness_min = 4`. A
+resident can then apply a skill to a new item it sees, and can be fooled by a
+deceptive appearance, as intended. Mechanical evidence counting (ADR 0012 D1)
+matches attempts against the descriptors the resident was shown. Evaluation
+maps descriptor predicates to true property ranges when it compares skills with
+rules; that mapping exists only in `analysis`.
+
 ### D4. Provenance, confidence and supersession
 
 - Sources: `observed` (episodic record IDs), `told` (utterance ID and speaker),
@@ -76,7 +85,8 @@ outside its range. Every change cites the experiences that caused it.
 
 - Memory becomes several typed stores with one envelope, instead of one buffer.
 - Skills and rules share a vocabulary, so changes to ADR 0008 vocabularies
-  affect memory.
+  affect memory. Skills use the descriptor side of each property, so the
+  descriptor bands of the vocabulary are part of the memory contract too.
 - Supersession chains and `needs_review` add bookkeeping but keep the
   resident's history inspectable.
 
