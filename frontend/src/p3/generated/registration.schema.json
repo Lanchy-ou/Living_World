@@ -1,0 +1,395 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "BudgetCaps": {
+      "additionalProperties": false,
+      "properties": {
+        "attempts": {
+          "minimum": 0,
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "input_tokens": {
+          "minimum": 0,
+          "title": "Input Tokens",
+          "type": "integer"
+        },
+        "output_tokens": {
+          "minimum": 0,
+          "title": "Output Tokens",
+          "type": "integer"
+        },
+        "micro_cny": {
+          "minimum": 0,
+          "title": "Micro Cny",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "attempts",
+        "input_tokens",
+        "output_tokens",
+        "micro_cny"
+      ],
+      "title": "BudgetCaps",
+      "type": "object"
+    },
+    "ControlCase": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "paired_case_id": {
+          "title": "Paired Case Id",
+          "type": "string"
+        },
+        "seed": {
+          "maximum": 4294967295,
+          "minimum": 1,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "ticks": {
+          "minimum": 1,
+          "title": "Ticks",
+          "type": "integer"
+        },
+        "policy_config": {
+          "$ref": "#/$defs/PolicyConfig"
+        },
+        "caps": {
+          "$ref": "#/$defs/BudgetCaps"
+        }
+      },
+      "required": [
+        "case_id",
+        "paired_case_id",
+        "seed",
+        "ticks",
+        "policy_config",
+        "caps"
+      ],
+      "title": "ControlCase",
+      "type": "object"
+    },
+    "InputPin": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "title": "InputPin",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "PolicyConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "policy_id": {
+          "enum": [
+            "random-v0",
+            "scripted-v0",
+            "recorded-v0",
+            "rule-based-v0"
+          ],
+          "title": "Policy Id",
+          "type": "string"
+        },
+        "seed": {
+          "maximum": 4294967295,
+          "minimum": 1,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "max_plan_actions": {
+          "minimum": 1,
+          "title": "Max Plan Actions",
+          "type": "integer"
+        },
+        "map_width": {
+          "minimum": 1,
+          "title": "Map Width",
+          "type": "integer"
+        },
+        "map_height": {
+          "minimum": 1,
+          "title": "Map Height",
+          "type": "integer"
+        },
+        "script_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Script Sha256"
+        },
+        "source_trace_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Trace Sha256"
+        },
+        "rule_params": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuleParams"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "policy_id",
+        "seed",
+        "max_plan_actions",
+        "map_width",
+        "map_height",
+        "script_sha256",
+        "source_trace_sha256"
+      ],
+      "title": "PolicyConfig",
+      "type": "object"
+    },
+    "RuleParams": {
+      "additionalProperties": false,
+      "properties": {
+        "rule_params_version": {
+          "const": "0.1",
+          "title": "Rule Params Version",
+          "type": "string"
+        },
+        "canteen_use": {
+          "enum": [
+            "enabled",
+            "restricted"
+          ],
+          "title": "Canteen Use",
+          "type": "string"
+        },
+        "cue_use": {
+          "enum": [
+            "enabled",
+            "ignored"
+          ],
+          "title": "Cue Use",
+          "type": "string"
+        },
+        "fruit_carry_target": {
+          "minimum": 1,
+          "title": "Fruit Carry Target",
+          "type": "integer"
+        },
+        "failed_target_retry_ticks": {
+          "minimum": 1,
+          "title": "Failed Target Retry Ticks",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rule_params_version",
+        "canteen_use",
+        "cue_use",
+        "fruit_carry_target",
+        "failed_target_retry_ticks"
+      ],
+      "title": "RuleParams",
+      "type": "object"
+    },
+    "TrialCase": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "seed": {
+          "maximum": 4294967295,
+          "minimum": 1,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "ticks": {
+          "minimum": 1,
+          "title": "Ticks",
+          "type": "integer"
+        },
+        "llm_actor_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Llm Actor Ids",
+          "type": "array"
+        },
+        "policy_templates": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "type": "object"
+          },
+          "title": "Policy Templates",
+          "type": "array"
+        },
+        "caps": {
+          "$ref": "#/$defs/BudgetCaps"
+        }
+      },
+      "required": [
+        "case_id",
+        "seed",
+        "ticks",
+        "llm_actor_ids",
+        "policy_templates",
+        "caps"
+      ],
+      "title": "TrialCase",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "registration_schema_version": {
+      "const": "0.1",
+      "title": "Registration Schema Version",
+      "type": "string"
+    },
+    "registration_id": {
+      "pattern": "^[a-z0-9-]+$",
+      "title": "Registration Id",
+      "type": "string"
+    },
+    "purpose": {
+      "enum": [
+        "smoke",
+        "development",
+        "acceptance",
+        "fake"
+      ],
+      "title": "Purpose",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "implementation_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Implementation Commit",
+      "type": "string"
+    },
+    "implementation_pins": {
+      "items": {
+        "$ref": "#/$defs/InputPin"
+      },
+      "title": "Implementation Pins",
+      "type": "array"
+    },
+    "world_pin_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "World Pin Commit",
+      "type": "string"
+    },
+    "world_config_path": {
+      "title": "World Config Path",
+      "type": "string"
+    },
+    "world_map_path": {
+      "title": "World Map Path",
+      "type": "string"
+    },
+    "world_config_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "World Config Sha256",
+      "type": "string"
+    },
+    "world_map_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "World Map Sha256",
+      "type": "string"
+    },
+    "input_pins": {
+      "items": {
+        "$ref": "#/$defs/InputPin"
+      },
+      "title": "Input Pins",
+      "type": "array"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/TrialCase"
+      },
+      "minItems": 1,
+      "title": "Cases",
+      "type": "array"
+    },
+    "controls": {
+      "items": {
+        "$ref": "#/$defs/ControlCase"
+      },
+      "title": "Controls",
+      "type": "array"
+    },
+    "aggregate_caps": {
+      "$ref": "#/$defs/BudgetCaps"
+    },
+    "fake_fixture_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Fake Fixture Id"
+    }
+  },
+  "required": [
+    "registration_schema_version",
+    "registration_id",
+    "purpose",
+    "revision",
+    "implementation_commit",
+    "implementation_pins",
+    "world_pin_commit",
+    "world_config_path",
+    "world_map_path",
+    "world_config_sha256",
+    "world_map_sha256",
+    "input_pins",
+    "cases",
+    "controls",
+    "aggregate_caps",
+    "fake_fixture_id"
+  ],
+  "title": "TrialRegistration",
+  "type": "object"
+}

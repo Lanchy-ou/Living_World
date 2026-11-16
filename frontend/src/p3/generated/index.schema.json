@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "InspectionActor": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "identity": {
+          "$ref": "#/$defs/ResidentIdentity"
+        }
+      },
+      "required": [
+        "actor_id",
+        "identity"
+      ],
+      "title": "InspectionActor",
+      "type": "object"
+    },
+    "InspectionDecisionRef": {
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "ordinal": {
+          "minimum": 0,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "shard": {
+          "$ref": "#/$defs/ShardRef"
+        }
+      },
+      "required": [
+        "decision_id",
+        "actor_id",
+        "tick",
+        "ordinal",
+        "shard"
+      ],
+      "title": "InspectionDecisionRef",
+      "type": "object"
+    },
+    "InspectionSampleRef": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "shard": {
+          "$ref": "#/$defs/ShardRef"
+        }
+      },
+      "required": [
+        "actor_id",
+        "tick",
+        "shard"
+      ],
+      "title": "InspectionSampleRef",
+      "type": "object"
+    },
+    "ResidentIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "identity_schema_version": {
+          "const": "0.1",
+          "title": "Identity Schema Version",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "profile_id": {
+          "title": "Profile Id",
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Values",
+          "type": "array"
+        },
+        "initial_direction": {
+          "title": "Initial Direction",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "identity_schema_version",
+        "actor_id",
+        "display_name",
+        "profile_id",
+        "values",
+        "initial_direction",
+        "source_sha256"
+      ],
+      "title": "ResidentIdentity",
+      "type": "object"
+    },
+    "ShardRef": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file",
+        "sha256"
+      ],
+      "title": "ShardRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "inspection_schema_version": {
+      "const": "0.1",
+      "title": "Inspection Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "config_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "map_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Map Hash",
+      "type": "string"
+    },
+    "final_tick": {
+      "minimum": 0,
+      "title": "Final Tick",
+      "type": "integer"
+    },
+    "replay_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Replay Sha256",
+      "type": "string"
+    },
+    "trace_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Trace Sha256",
+      "type": "string"
+    },
+    "registration_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Registration Sha256",
+      "type": "string"
+    },
+    "actors": {
+      "items": {
+        "$ref": "#/$defs/InspectionActor"
+      },
+      "title": "Actors",
+      "type": "array"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/InspectionDecisionRef"
+      },
+      "title": "Decisions",
+      "type": "array"
+    },
+    "samples": {
+      "items": {
+        "$ref": "#/$defs/InspectionSampleRef"
+      },
+      "title": "Samples",
+      "type": "array"
+    }
+  },
+  "required": [
+    "inspection_schema_version",
+    "run_id",
+    "config_hash",
+    "map_hash",
+    "final_tick",
+    "replay_sha256",
+    "trace_sha256",
+    "registration_sha256",
+    "actors",
+    "decisions",
+    "samples"
+  ],
+  "title": "P3InspectionIndex",
+  "type": "object"
+}

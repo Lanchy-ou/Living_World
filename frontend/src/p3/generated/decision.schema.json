@@ -1,0 +1,3542 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "AcceptedDecisionData": {
+      "additionalProperties": false,
+      "properties": {
+        "plan": {
+          "$ref": "#/$defs/ActionPlan"
+        },
+        "goal_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Goal Id"
+        }
+      },
+      "required": [
+        "plan",
+        "goal_id"
+      ],
+      "title": "AcceptedDecisionData",
+      "type": "object"
+    },
+    "ActionFeedback": {
+      "additionalProperties": false,
+      "properties": {
+        "intent_id": {
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "success",
+            "failure",
+            "interrupted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "failure_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "DEAD",
+                "EXHAUSTED",
+                "INVALID_TARGET",
+                "PATH_BLOCKED",
+                "NO_PATH",
+                "OUT_OF_REACH",
+                "RESOURCE_TAKEN",
+                "INVENTORY_FULL",
+                "NO_ITEM",
+                "NO_NEED",
+                "NO_WATER",
+                "ALREADY_FULL",
+                "OUT_OF_HEARING",
+                "INVALID_SPEECH_ACT",
+                "INVALID_REPLY",
+                "DIALOGUE_LIMIT",
+                "ITEM_TAKEN"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Failure Code"
+        },
+        "interruption_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "DEATH",
+                "URGENT_NEED",
+                "DIRECT_SPEECH",
+                "NEW_SIGHT"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Interruption Reason"
+        },
+        "visible_effects": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Visible Effects",
+          "type": "array"
+        }
+      },
+      "required": [
+        "intent_id",
+        "status",
+        "failure_code",
+        "interruption_reason",
+        "visible_effects"
+      ],
+      "title": "ActionFeedback",
+      "type": "object"
+    },
+    "ActionIntent": {
+      "additionalProperties": false,
+      "properties": {
+        "intent_id": {
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "plan_id": {
+          "title": "Plan Id",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "action_type": {
+          "enum": [
+            "move_to",
+            "gather",
+            "eat",
+            "drink",
+            "fill_canteen",
+            "rest",
+            "sleep",
+            "talk",
+            "give",
+            "pick_up",
+            "wait"
+          ],
+          "title": "Action Type",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "entity": "#/$defs/EntityTarget",
+                  "resident": "#/$defs/ResidentTarget",
+                  "tile": "#/$defs/TileTarget"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TileTarget"
+                },
+                {
+                  "$ref": "#/$defs/EntityTarget"
+                },
+                {
+                  "$ref": "#/$defs/ResidentTarget"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        },
+        "parameters": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmptyParameters"
+            },
+            {
+              "$ref": "#/$defs/DrinkParameters"
+            },
+            {
+              "$ref": "#/$defs/TalkParameters"
+            },
+            {
+              "$ref": "#/$defs/ItemTransferParameters"
+            }
+          ],
+          "title": "Parameters"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "intent_id",
+        "plan_id",
+        "actor_id",
+        "action_type",
+        "target",
+        "parameters",
+        "reason"
+      ],
+      "title": "ActionIntent",
+      "type": "object"
+    },
+    "ActionPlan": {
+      "additionalProperties": false,
+      "description": "1..agents.max_plan_actions intents; the configured upper bound is checked by agents.",
+      "properties": {
+        "plan_id": {
+          "title": "Plan Id",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "created_at_tick": {
+          "minimum": 0,
+          "title": "Created At Tick",
+          "type": "integer"
+        },
+        "intents": {
+          "items": {
+            "$ref": "#/$defs/ActionIntent"
+          },
+          "minItems": 1,
+          "title": "Intents",
+          "type": "array"
+        }
+      },
+      "required": [
+        "plan_id",
+        "actor_id",
+        "created_at_tick",
+        "intents"
+      ],
+      "title": "ActionPlan",
+      "type": "object"
+    },
+    "AttemptDispatch": {
+      "additionalProperties": false,
+      "properties": {
+        "dispatch_schema_version": {
+          "const": "0.1",
+          "title": "Dispatch Schema Version",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "decision_ordinal": {
+          "minimum": 0,
+          "title": "Decision Ordinal",
+          "type": "integer"
+        },
+        "attempt_index": {
+          "minimum": 0,
+          "title": "Attempt Index",
+          "type": "integer"
+        },
+        "request_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Request Sha256",
+          "type": "string"
+        },
+        "context_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Context Sha256",
+          "type": "string"
+        },
+        "projection_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Projection Sha256",
+          "type": "string"
+        },
+        "provider_request_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Provider Request Sha256",
+          "type": "string"
+        },
+        "provider_request": {
+          "$ref": "#/$defs/ProviderRequest"
+        },
+        "wire_request": {
+          "$ref": "#/$defs/WireRequest"
+        },
+        "wire_body_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Wire Body Sha256",
+          "type": "string"
+        },
+        "allocation_key": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Allocation Key",
+          "type": "string"
+        },
+        "reservation_ordinal": {
+          "minimum": 0,
+          "title": "Reservation Ordinal",
+          "type": "integer"
+        },
+        "prompt_version": {
+          "title": "Prompt Version",
+          "type": "string"
+        },
+        "action_schema_version": {
+          "title": "Action Schema Version",
+          "type": "string"
+        },
+        "adapter_id": {
+          "title": "Adapter Id",
+          "type": "string"
+        },
+        "adapter_version": {
+          "title": "Adapter Version",
+          "type": "string"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "input_reserved": {
+          "minimum": 0,
+          "title": "Input Reserved",
+          "type": "integer"
+        },
+        "output_reserved": {
+          "minimum": 0,
+          "title": "Output Reserved",
+          "type": "integer"
+        },
+        "money_reserved": {
+          "minimum": 0,
+          "title": "Money Reserved",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "dispatch_schema_version",
+        "run_id",
+        "decision_id",
+        "call_id",
+        "actor_id",
+        "tick",
+        "decision_ordinal",
+        "attempt_index",
+        "request_sha256",
+        "context_sha256",
+        "projection_sha256",
+        "provider_request_sha256",
+        "provider_request",
+        "wire_request",
+        "wire_body_sha256",
+        "allocation_key",
+        "reservation_ordinal",
+        "prompt_version",
+        "action_schema_version",
+        "adapter_id",
+        "adapter_version",
+        "model_id",
+        "input_reserved",
+        "output_reserved",
+        "money_reserved"
+      ],
+      "title": "AttemptDispatch",
+      "type": "object"
+    },
+    "CallDebit": {
+      "additionalProperties": false,
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "input_reserved": {
+          "minimum": 0,
+          "title": "Input Reserved",
+          "type": "integer"
+        },
+        "output_reserved": {
+          "minimum": 0,
+          "title": "Output Reserved",
+          "type": "integer"
+        },
+        "money_reserved": {
+          "minimum": 0,
+          "title": "Money Reserved",
+          "type": "integer"
+        },
+        "input_reported": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Input Reported"
+        },
+        "output_reported": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Output Reported"
+        },
+        "input_charged": {
+          "minimum": 0,
+          "title": "Input Charged",
+          "type": "integer"
+        },
+        "output_charged": {
+          "minimum": 0,
+          "title": "Output Charged",
+          "type": "integer"
+        },
+        "money_charged": {
+          "minimum": 0,
+          "title": "Money Charged",
+          "type": "integer"
+        },
+        "usage_unknown": {
+          "title": "Usage Unknown",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "call_id",
+        "input_reserved",
+        "output_reserved",
+        "money_reserved",
+        "input_reported",
+        "output_reported",
+        "input_charged",
+        "output_charged",
+        "money_charged",
+        "usage_unknown"
+      ],
+      "title": "CallDebit",
+      "type": "object"
+    },
+    "CognitiveDelta": {
+      "additionalProperties": false,
+      "properties": {
+        "delta_schema_version": {
+          "const": "0.1",
+          "title": "Delta Schema Version",
+          "type": "string"
+        },
+        "goal_change": {
+          "$ref": "#/$defs/GoalChange"
+        }
+      },
+      "required": [
+        "delta_schema_version",
+        "goal_change"
+      ],
+      "title": "CognitiveDelta",
+      "type": "object"
+    },
+    "Commitment": {
+      "additionalProperties": false,
+      "properties": {
+        "goal_id": {
+          "title": "Goal Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "completion": {
+          "discriminator": {
+            "mapping": {
+              "own_action_success": "#/$defs/OwnActionSuccessPredicate",
+              "unverifiable": "#/$defs/UnverifiablePredicate"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/OwnActionSuccessPredicate"
+            },
+            {
+              "$ref": "#/$defs/UnverifiablePredicate"
+            }
+          ],
+          "title": "Completion"
+        },
+        "status": {
+          "enum": [
+            "intended",
+            "attempted",
+            "observed_complete"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "created_at_tick": {
+          "minimum": 0,
+          "title": "Created At Tick",
+          "type": "integer"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoalEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "goal_id",
+        "text",
+        "completion",
+        "status",
+        "created_at_tick",
+        "evidence"
+      ],
+      "title": "Commitment",
+      "type": "object"
+    },
+    "ContextAssembly": {
+      "additionalProperties": false,
+      "properties": {
+        "assembly_schema_version": {
+          "const": "0.1",
+          "title": "Assembly Schema Version",
+          "type": "string"
+        },
+        "context": {
+          "$ref": "#/$defs/DecisionContextP3"
+        },
+        "context_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Context Sha256",
+          "type": "string"
+        },
+        "provider_projection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProviderProjection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "projection_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Projection Sha256"
+        },
+        "manifest": {
+          "$ref": "#/$defs/InclusionManifest"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "const": "MANDATORY_OVERSIZE",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Error"
+        }
+      },
+      "required": [
+        "assembly_schema_version",
+        "context",
+        "context_sha256",
+        "provider_projection",
+        "projection_sha256",
+        "manifest",
+        "error"
+      ],
+      "title": "ContextAssembly",
+      "type": "object"
+    },
+    "ContextRecordP3": {
+      "additionalProperties": false,
+      "properties": {
+        "context_record_version": {
+          "const": "0.1",
+          "title": "Context Record Version",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/DecisionRequestP3"
+        },
+        "assembly": {
+          "$ref": "#/$defs/ContextAssembly"
+        },
+        "provider_request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProviderRequest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "context_record_version",
+        "run_id",
+        "decision_id",
+        "request",
+        "assembly",
+        "provider_request"
+      ],
+      "title": "ContextRecordP3",
+      "type": "object"
+    },
+    "Coord": {
+      "additionalProperties": false,
+      "description": "A tile coordinate ``{x, y}``; (0,0) is top left.",
+      "properties": {
+        "x": {
+          "minimum": 0,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "minimum": 0,
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "Coord",
+      "type": "object"
+    },
+    "CueImpression": {
+      "additionalProperties": false,
+      "properties": {
+        "cue_id": {
+          "title": "Cue Id",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "detail_level": {
+          "enum": [
+            "distant",
+            "near"
+          ],
+          "title": "Detail Level",
+          "type": "string"
+        },
+        "direction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Direction"
+        }
+      },
+      "required": [
+        "cue_id",
+        "position",
+        "detail_level",
+        "direction"
+      ],
+      "title": "CueImpression",
+      "type": "object"
+    },
+    "DecisionContextP3": {
+      "additionalProperties": false,
+      "properties": {
+        "context_schema_version": {
+          "const": "0.2",
+          "title": "Context Schema Version",
+          "type": "string"
+        },
+        "perception": {
+          "$ref": "#/$defs/Perception"
+        },
+        "identity": {
+          "$ref": "#/$defs/ResidentIdentity"
+        },
+        "goals": {
+          "$ref": "#/$defs/GoalState"
+        },
+        "recalled_experience": {
+          "items": {
+            "$ref": "#/$defs/ExperienceRecord"
+          },
+          "title": "Recalled Experience",
+          "type": "array"
+        },
+        "owned_intents": {
+          "items": {
+            "$ref": "#/$defs/OwnedIntentRef"
+          },
+          "title": "Owned Intents",
+          "type": "array"
+        }
+      },
+      "required": [
+        "context_schema_version",
+        "perception",
+        "identity",
+        "goals",
+        "recalled_experience",
+        "owned_intents"
+      ],
+      "title": "DecisionContextP3",
+      "type": "object"
+    },
+    "DecisionProposal": {
+      "additionalProperties": false,
+      "properties": {
+        "proposal_schema_version": {
+          "const": "0.1",
+          "title": "Proposal Schema Version",
+          "type": "string"
+        },
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/P3IntentTemplate"
+          },
+          "minItems": 1,
+          "title": "Actions",
+          "type": "array"
+        },
+        "cognitive_delta": {
+          "$ref": "#/$defs/CognitiveDelta"
+        }
+      },
+      "required": [
+        "proposal_schema_version",
+        "actions",
+        "cognitive_delta"
+      ],
+      "title": "DecisionProposal",
+      "type": "object"
+    },
+    "DecisionRecordP3": {
+      "additionalProperties": false,
+      "properties": {
+        "record_schema_version": {
+          "const": "0.2",
+          "title": "Record Schema Version",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "decision_ordinal": {
+          "minimum": 0,
+          "title": "Decision Ordinal",
+          "type": "integer"
+        },
+        "policy_id": {
+          "enum": [
+            "llm-v0",
+            "rule-based-v0"
+          ],
+          "title": "Policy Id",
+          "type": "string"
+        },
+        "effective_policy_id": {
+          "enum": [
+            "llm-v0",
+            "rule-based-v0",
+            "sim-fallback-wait"
+          ],
+          "title": "Effective Policy Id",
+          "type": "string"
+        },
+        "triggers": {
+          "items": {
+            "enum": [
+              "ACTION_FAILED",
+              "ACTION_INTERRUPTED",
+              "URGENT_NEED",
+              "DIRECT_SPEECH",
+              "NEW_SIGHT",
+              "UTTERANCE_HEARD",
+              "REPLY_REQUIRED",
+              "WOKE",
+              "PLAN_FINISHED"
+            ],
+            "type": "string"
+          },
+          "title": "Triggers",
+          "type": "array"
+        },
+        "request_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Request Sha256",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "error"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "error_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "INVALID_CONTEXT",
+                "INVALID_PLAN",
+                "INVALID_DELTA",
+                "PARSE_ERROR",
+                "TIMEOUT",
+                "BUDGET",
+                "PROVIDER_ERROR",
+                "REPLAY_DIVERGED"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Error Kind"
+        },
+        "detail_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "MANDATORY_OVERSIZE",
+                "INPUT_LIMIT",
+                "OUTPUT_LIMIT",
+                "INVALID_JSON",
+                "INVALID_ACTION",
+                "INVALID_COGNITION",
+                "ATTEMPT_TIMEOUT",
+                "DECISION_TIMEOUT",
+                "ADMISSION_DENIED",
+                "PROVIDER_REJECTED",
+                "INTERRUPTED_CALL",
+                "RECOVERY_OFFLINE"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Detail Code"
+        },
+        "plan": {
+          "$ref": "#/$defs/ActionPlan"
+        },
+        "substituted": {
+          "title": "Substituted",
+          "type": "boolean"
+        },
+        "llm_call_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Llm Call Id"
+        },
+        "context_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Context Sha256",
+          "type": "string"
+        },
+        "projection_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Projection Sha256"
+        },
+        "accepted_delta": {
+          "$ref": "#/$defs/CognitiveDelta"
+        },
+        "call_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Call Ids",
+          "type": "array"
+        },
+        "state_before_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "State Before Sha256",
+          "type": "string"
+        },
+        "state_after_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "State After Sha256",
+          "type": "string"
+        },
+        "fallback_error": {
+          "anyOf": [
+            {
+              "const": "INVALID_PLAN",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fallback Error"
+        },
+        "policy_private_after": {
+          "$ref": "#/$defs/P3PolicyPrivateState"
+        },
+        "budget_debits": {
+          "items": {
+            "$ref": "#/$defs/CallDebit"
+          },
+          "title": "Budget Debits",
+          "type": "array"
+        }
+      },
+      "required": [
+        "record_schema_version",
+        "run_id",
+        "decision_id",
+        "tick",
+        "actor_id",
+        "decision_ordinal",
+        "policy_id",
+        "effective_policy_id",
+        "triggers",
+        "request_sha256",
+        "status",
+        "error_kind",
+        "detail_code",
+        "plan",
+        "substituted",
+        "llm_call_id",
+        "context_sha256",
+        "projection_sha256",
+        "accepted_delta",
+        "call_ids",
+        "state_before_sha256",
+        "state_after_sha256",
+        "fallback_error",
+        "policy_private_after",
+        "budget_debits"
+      ],
+      "title": "DecisionRecordP3",
+      "type": "object"
+    },
+    "DecisionRequestP3": {
+      "additionalProperties": false,
+      "properties": {
+        "request_schema_version": {
+          "const": "0.2",
+          "title": "Request Schema Version",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "decision_ordinal": {
+          "minimum": 0,
+          "title": "Decision Ordinal",
+          "type": "integer"
+        },
+        "triggers": {
+          "items": {
+            "enum": [
+              "ACTION_FAILED",
+              "ACTION_INTERRUPTED",
+              "URGENT_NEED",
+              "DIRECT_SPEECH",
+              "NEW_SIGHT",
+              "UTTERANCE_HEARD",
+              "REPLY_REQUIRED",
+              "WOKE",
+              "PLAN_FINISHED"
+            ],
+            "type": "string"
+          },
+          "title": "Triggers",
+          "type": "array"
+        },
+        "context": {
+          "$ref": "#/$defs/DecisionContextP3"
+        }
+      },
+      "required": [
+        "request_schema_version",
+        "actor_id",
+        "tick",
+        "decision_ordinal",
+        "triggers",
+        "context"
+      ],
+      "title": "DecisionRequestP3",
+      "type": "object"
+    },
+    "DecisionSourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "const": "decision",
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "decision_ordinal": {
+          "minimum": 0,
+          "title": "Decision Ordinal",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_kind",
+        "run_id",
+        "decision_id",
+        "decision_ordinal"
+      ],
+      "title": "DecisionSourceRef",
+      "type": "object"
+    },
+    "DeliverySourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "const": "delivery",
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "delivery_id": {
+          "title": "Delivery Id",
+          "type": "string"
+        },
+        "field": {
+          "enum": [
+            "own_state",
+            "visible_entities",
+            "transient_sightings",
+            "environmental_cues",
+            "heard_utterances",
+            "last_action_feedback"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Index"
+        }
+      },
+      "required": [
+        "source_kind",
+        "run_id",
+        "delivery_id",
+        "field",
+        "index"
+      ],
+      "title": "DeliverySourceRef",
+      "type": "object"
+    },
+    "DrinkParameters": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "enum": [
+            "spring",
+            "canteen"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "title": "DrinkParameters",
+      "type": "object"
+    },
+    "EmptyParameters": {
+      "additionalProperties": false,
+      "description": "``{}`` parameters for move_to, gather, eat, fill_canteen, rest, sleep, wait.",
+      "properties": {},
+      "title": "EmptyParameters",
+      "type": "object"
+    },
+    "EntityTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "entity",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "EntityTarget",
+      "type": "object"
+    },
+    "EnvironmentalCue": {
+      "additionalProperties": false,
+      "properties": {
+        "cue_id": {
+          "title": "Cue Id",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "detail_level": {
+          "enum": [
+            "distant",
+            "near"
+          ],
+          "title": "Detail Level",
+          "type": "string"
+        },
+        "physical_description": {
+          "title": "Physical Description",
+          "type": "string"
+        },
+        "direction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Direction"
+        }
+      },
+      "required": [
+        "cue_id",
+        "position",
+        "detail_level",
+        "physical_description",
+        "direction"
+      ],
+      "title": "EnvironmentalCue",
+      "type": "object"
+    },
+    "ExperienceInclusion": {
+      "additionalProperties": false,
+      "properties": {
+        "experience_id": {
+          "title": "Experience Id",
+          "type": "string"
+        },
+        "retrieved": {
+          "title": "Retrieved",
+          "type": "boolean"
+        },
+        "projected": {
+          "title": "Projected",
+          "type": "boolean"
+        },
+        "omission": {
+          "anyOf": [
+            {
+              "enum": [
+                "retrieval_limit",
+                "projection_bytes",
+                "mandatory_oversize"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Omission"
+        }
+      },
+      "required": [
+        "experience_id",
+        "retrieved",
+        "projected",
+        "omission"
+      ],
+      "title": "ExperienceInclusion",
+      "type": "object"
+    },
+    "ExperiencePayload": {
+      "additionalProperties": false,
+      "properties": {
+        "information_kind": {
+          "enum": [
+            "delivered",
+            "interpretation"
+          ],
+          "title": "Information Kind",
+          "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "const": "unassessed",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confidence"
+        },
+        "data": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OwnStateData"
+            },
+            {
+              "$ref": "#/$defs/VisibleEntity"
+            },
+            {
+              "$ref": "#/$defs/TransientSighting"
+            },
+            {
+              "$ref": "#/$defs/EnvironmentalCue"
+            },
+            {
+              "$ref": "#/$defs/HeardUtterance"
+            },
+            {
+              "$ref": "#/$defs/FeedbackData"
+            },
+            {
+              "$ref": "#/$defs/AcceptedDecisionData"
+            }
+          ],
+          "title": "Data"
+        }
+      },
+      "required": [
+        "information_kind",
+        "confidence",
+        "data"
+      ],
+      "title": "ExperiencePayload",
+      "type": "object"
+    },
+    "ExperienceRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "experience_id": {
+          "title": "Experience Id",
+          "type": "string"
+        },
+        "owner_id": {
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 0,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "observed_tick": {
+          "minimum": 0,
+          "title": "Observed Tick",
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "own_state",
+            "entity_seen",
+            "transient_seen",
+            "cue_seen",
+            "heard_speech",
+            "action_feedback",
+            "accepted_decision"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "source": {
+          "discriminator": {
+            "mapping": {
+              "decision": "#/$defs/DecisionSourceRef",
+              "delivery": "#/$defs/DeliverySourceRef"
+            },
+            "propertyName": "source_kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/DeliverySourceRef"
+            },
+            {
+              "$ref": "#/$defs/DecisionSourceRef"
+            }
+          ],
+          "title": "Source"
+        },
+        "payload": {
+          "$ref": "#/$defs/ExperiencePayload"
+        }
+      },
+      "required": [
+        "experience_id",
+        "owner_id",
+        "sequence",
+        "observed_tick",
+        "kind",
+        "source",
+        "payload"
+      ],
+      "title": "ExperienceRecord",
+      "type": "object"
+    },
+    "FailedTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "enum": [
+                "move_to",
+                "gather",
+                "eat",
+                "drink",
+                "fill_canteen",
+                "rest",
+                "sleep",
+                "talk",
+                "give",
+                "pick_up",
+                "wait"
+              ],
+              "type": "string"
+            },
+            {
+              "const": "request",
+              "type": "string"
+            }
+          ],
+          "title": "Action"
+        },
+        "target": {
+          "discriminator": {
+            "mapping": {
+              "entity": "#/$defs/EntityTarget",
+              "resident": "#/$defs/ResidentTarget",
+              "self": "#/$defs/SelfTarget",
+              "tile": "#/$defs/TileTarget"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SelfTarget"
+            },
+            {
+              "$ref": "#/$defs/TileTarget"
+            },
+            {
+              "$ref": "#/$defs/EntityTarget"
+            },
+            {
+              "$ref": "#/$defs/ResidentTarget"
+            }
+          ],
+          "title": "Target"
+        },
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "retry_after_tick": {
+          "minimum": 1,
+          "title": "Retry After Tick",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "action",
+        "target",
+        "code",
+        "retry_after_tick"
+      ],
+      "title": "FailedTarget",
+      "type": "object"
+    },
+    "FeedbackData": {
+      "additionalProperties": false,
+      "properties": {
+        "feedback": {
+          "$ref": "#/$defs/ActionFeedback"
+        },
+        "owned_intent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OwnedIntentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "feedback",
+        "owned_intent"
+      ],
+      "title": "FeedbackData",
+      "type": "object"
+    },
+    "GoalChange": {
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "enum": [
+            "continue",
+            "revise",
+            "abandon"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "expected_goal_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Expected Goal Id"
+        },
+        "proposal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoalProposal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "operation",
+        "expected_goal_id",
+        "proposal"
+      ],
+      "title": "GoalChange",
+      "type": "object"
+    },
+    "GoalEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "delivery_id": {
+          "title": "Delivery Id",
+          "type": "string"
+        },
+        "observed_tick": {
+          "minimum": 0,
+          "title": "Observed Tick",
+          "type": "integer"
+        },
+        "owned_intent": {
+          "$ref": "#/$defs/OwnedIntentRef"
+        },
+        "feedback": {
+          "$ref": "#/$defs/ActionFeedback"
+        }
+      },
+      "required": [
+        "delivery_id",
+        "observed_tick",
+        "owned_intent",
+        "feedback"
+      ],
+      "title": "GoalEvidence",
+      "type": "object"
+    },
+    "GoalProposal": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "completion": {
+          "discriminator": {
+            "mapping": {
+              "own_action_success": "#/$defs/OwnActionSuccessPredicate",
+              "unverifiable": "#/$defs/UnverifiablePredicate"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/OwnActionSuccessPredicate"
+            },
+            {
+              "$ref": "#/$defs/UnverifiablePredicate"
+            }
+          ],
+          "title": "Completion"
+        }
+      },
+      "required": [
+        "text",
+        "completion"
+      ],
+      "title": "GoalProposal",
+      "type": "object"
+    },
+    "GoalState": {
+      "additionalProperties": false,
+      "properties": {
+        "goal_schema_version": {
+          "const": "0.1",
+          "title": "Goal Schema Version",
+          "type": "string"
+        },
+        "current": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Commitment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "next_goal_sequence": {
+          "minimum": 0,
+          "title": "Next Goal Sequence",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "goal_schema_version",
+        "current",
+        "next_goal_sequence"
+      ],
+      "title": "GoalState",
+      "type": "object"
+    },
+    "HeardUtterance": {
+      "additionalProperties": false,
+      "properties": {
+        "utterance_id": {
+          "title": "Utterance Id",
+          "type": "string"
+        },
+        "speaker_id": {
+          "title": "Speaker Id",
+          "type": "string"
+        },
+        "addressee_id": {
+          "title": "Addressee Id",
+          "type": "string"
+        },
+        "speech_act": {
+          "enum": [
+            "statement",
+            "request",
+            "accept",
+            "refuse"
+          ],
+          "title": "Speech Act",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "request_item_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Request Item Type"
+        },
+        "request_quantity": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Request Quantity"
+        },
+        "in_reply_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "In Reply To"
+        },
+        "heard_at_tick": {
+          "minimum": 0,
+          "title": "Heard At Tick",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "utterance_id",
+        "speaker_id",
+        "addressee_id",
+        "speech_act",
+        "text",
+        "request_item_type",
+        "request_quantity",
+        "in_reply_to",
+        "heard_at_tick"
+      ],
+      "title": "HeardUtterance",
+      "type": "object"
+    },
+    "InclusionManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "manifest_schema_version": {
+          "const": "0.1",
+          "title": "Manifest Schema Version",
+          "type": "string"
+        },
+        "context_profile_id": {
+          "title": "Context Profile Id",
+          "type": "string"
+        },
+        "retrieval_profile": {
+          "enum": [
+            "recent-relevant-v0",
+            "recent-only-fixture-v0"
+          ],
+          "title": "Retrieval Profile",
+          "type": "string"
+        },
+        "projection_profile": {
+          "const": "p3-context-v0",
+          "title": "Projection Profile",
+          "type": "string"
+        },
+        "store_next_sequence": {
+          "minimum": 0,
+          "title": "Store Next Sequence",
+          "type": "integer"
+        },
+        "retained_record_count": {
+          "minimum": 0,
+          "title": "Retained Record Count",
+          "type": "integer"
+        },
+        "evicted_record_count": {
+          "minimum": 0,
+          "title": "Evicted Record Count",
+          "type": "integer"
+        },
+        "mandatory_fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Mandatory Fields",
+          "type": "array"
+        },
+        "mandatory_bytes": {
+          "minimum": 0,
+          "title": "Mandatory Bytes",
+          "type": "integer"
+        },
+        "projection_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Projection Bytes"
+        },
+        "experiences": {
+          "items": {
+            "$ref": "#/$defs/ExperienceInclusion"
+          },
+          "title": "Experiences",
+          "type": "array"
+        },
+        "static_tiles": {
+          "items": {
+            "$ref": "#/$defs/TileInclusion"
+          },
+          "title": "Static Tiles",
+          "type": "array"
+        }
+      },
+      "required": [
+        "manifest_schema_version",
+        "context_profile_id",
+        "retrieval_profile",
+        "projection_profile",
+        "store_next_sequence",
+        "retained_record_count",
+        "evicted_record_count",
+        "mandatory_fields",
+        "mandatory_bytes",
+        "projection_bytes",
+        "experiences",
+        "static_tiles"
+      ],
+      "title": "InclusionManifest",
+      "type": "object"
+    },
+    "IssuedIntent": {
+      "additionalProperties": false,
+      "properties": {
+        "intent_id": {
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "action_type": {
+          "enum": [
+            "move_to",
+            "gather",
+            "eat",
+            "drink",
+            "fill_canteen",
+            "rest",
+            "sleep",
+            "talk",
+            "give",
+            "pick_up",
+            "wait"
+          ],
+          "title": "Action Type",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "entity": "#/$defs/EntityTarget",
+                  "resident": "#/$defs/ResidentTarget",
+                  "self": "#/$defs/SelfTarget",
+                  "tile": "#/$defs/TileTarget"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SelfTarget"
+                },
+                {
+                  "$ref": "#/$defs/TileTarget"
+                },
+                {
+                  "$ref": "#/$defs/EntityTarget"
+                },
+                {
+                  "$ref": "#/$defs/ResidentTarget"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        }
+      },
+      "required": [
+        "intent_id",
+        "action_type",
+        "target"
+      ],
+      "title": "IssuedIntent",
+      "type": "object"
+    },
+    "ItemRequest": {
+      "additionalProperties": false,
+      "description": "The ``request`` object of ``talk`` parameters.",
+      "properties": {
+        "item_type": {
+          "enum": [
+            "fruit",
+            "canteen"
+          ],
+          "title": "Item Type",
+          "type": "string"
+        },
+        "quantity": {
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "item_type",
+        "quantity"
+      ],
+      "title": "ItemRequest",
+      "type": "object"
+    },
+    "ItemTransferParameters": {
+      "additionalProperties": false,
+      "description": "Parameters for ``give`` and ``pick_up``.",
+      "properties": {
+        "item_type": {
+          "enum": [
+            "fruit",
+            "canteen"
+          ],
+          "title": "Item Type",
+          "type": "string"
+        },
+        "quantity": {
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "item_type",
+        "quantity"
+      ],
+      "title": "ItemTransferParameters",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "LLMCallRecordP3": {
+      "additionalProperties": false,
+      "properties": {
+        "call_schema_version": {
+          "const": "0.1",
+          "title": "Call Schema Version",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "decision_ordinal": {
+          "minimum": 0,
+          "title": "Decision Ordinal",
+          "type": "integer"
+        },
+        "attempt_index": {
+          "minimum": 0,
+          "title": "Attempt Index",
+          "type": "integer"
+        },
+        "dispatch_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Dispatch Sha256",
+          "type": "string"
+        },
+        "result": {
+          "$ref": "#/$defs/ProviderResult"
+        },
+        "parsed_proposal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecisionProposal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validation_error": {
+          "anyOf": [
+            {
+              "enum": [
+                "INVALID_CONTEXT",
+                "INVALID_PLAN",
+                "INVALID_DELTA",
+                "PARSE_ERROR",
+                "TIMEOUT",
+                "BUDGET",
+                "PROVIDER_ERROR",
+                "REPLAY_DIVERGED"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Validation Error"
+        },
+        "detail_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "MANDATORY_OVERSIZE",
+                "INPUT_LIMIT",
+                "OUTPUT_LIMIT",
+                "INVALID_JSON",
+                "INVALID_ACTION",
+                "INVALID_COGNITION",
+                "ATTEMPT_TIMEOUT",
+                "DECISION_TIMEOUT",
+                "ADMISSION_DENIED",
+                "PROVIDER_REJECTED",
+                "INTERRUPTED_CALL",
+                "RECOVERY_OFFLINE"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Detail Code"
+        },
+        "debit": {
+          "$ref": "#/$defs/CallDebit"
+        }
+      },
+      "required": [
+        "call_schema_version",
+        "run_id",
+        "decision_id",
+        "call_id",
+        "actor_id",
+        "tick",
+        "decision_ordinal",
+        "attempt_index",
+        "dispatch_sha256",
+        "result",
+        "parsed_proposal",
+        "validation_error",
+        "detail_code",
+        "debit"
+      ],
+      "title": "LLMCallRecordP3",
+      "type": "object"
+    },
+    "OwnActionSuccessPredicate": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "own_action_success",
+          "title": "Kind",
+          "type": "string"
+        },
+        "action_type": {
+          "enum": [
+            "move_to",
+            "gather",
+            "eat",
+            "drink",
+            "fill_canteen",
+            "rest",
+            "sleep",
+            "talk",
+            "give",
+            "pick_up",
+            "wait"
+          ],
+          "title": "Action Type",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "entity": "#/$defs/EntityTarget",
+                  "resident": "#/$defs/ResidentTarget",
+                  "tile": "#/$defs/TileTarget"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TileTarget"
+                },
+                {
+                  "$ref": "#/$defs/EntityTarget"
+                },
+                {
+                  "$ref": "#/$defs/ResidentTarget"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        },
+        "parameters": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmptyParameters"
+            },
+            {
+              "$ref": "#/$defs/DrinkParameters"
+            },
+            {
+              "$ref": "#/$defs/TalkParameters"
+            },
+            {
+              "$ref": "#/$defs/ItemTransferParameters"
+            }
+          ],
+          "title": "Parameters"
+        }
+      },
+      "required": [
+        "kind",
+        "action_type",
+        "target",
+        "parameters"
+      ],
+      "title": "OwnActionSuccessPredicate",
+      "type": "object"
+    },
+    "OwnCondition": {
+      "additionalProperties": false,
+      "properties": {
+        "satiety": {
+          "enum": [
+            "critical",
+            "low",
+            "moderate",
+            "good",
+            "strong"
+          ],
+          "title": "Satiety",
+          "type": "string"
+        },
+        "hydration": {
+          "enum": [
+            "critical",
+            "low",
+            "moderate",
+            "good",
+            "strong"
+          ],
+          "title": "Hydration",
+          "type": "string"
+        },
+        "stamina": {
+          "enum": [
+            "critical",
+            "low",
+            "moderate",
+            "good",
+            "strong"
+          ],
+          "title": "Stamina",
+          "type": "string"
+        },
+        "health": {
+          "enum": [
+            "critical",
+            "low",
+            "moderate",
+            "good",
+            "strong"
+          ],
+          "title": "Health",
+          "type": "string"
+        }
+      },
+      "required": [
+        "satiety",
+        "hydration",
+        "stamina",
+        "health"
+      ],
+      "title": "OwnCondition",
+      "type": "object"
+    },
+    "OwnInventory": {
+      "additionalProperties": false,
+      "properties": {
+        "fruit_count": {
+          "minimum": 0,
+          "title": "Fruit Count",
+          "type": "integer"
+        },
+        "canteen_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Canteen Id"
+        },
+        "canteen_servings": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Canteen Servings"
+        }
+      },
+      "required": [
+        "fruit_count",
+        "canteen_id",
+        "canteen_servings"
+      ],
+      "title": "OwnInventory",
+      "type": "object"
+    },
+    "OwnStateData": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "$ref": "#/$defs/OwnCondition"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "inventory": {
+          "$ref": "#/$defs/OwnInventory"
+        }
+      },
+      "required": [
+        "condition",
+        "position",
+        "inventory"
+      ],
+      "title": "OwnStateData",
+      "type": "object"
+    },
+    "OwnedIntentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "intent": {
+          "$ref": "#/$defs/ActionIntent"
+        },
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "decision_ordinal": {
+          "minimum": 0,
+          "title": "Decision Ordinal",
+          "type": "integer"
+        },
+        "committed_tick": {
+          "minimum": 0,
+          "title": "Committed Tick",
+          "type": "integer"
+        },
+        "goal_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Goal Id"
+        }
+      },
+      "required": [
+        "intent",
+        "decision_id",
+        "decision_ordinal",
+        "committed_tick",
+        "goal_id"
+      ],
+      "title": "OwnedIntentRef",
+      "type": "object"
+    },
+    "P3IntentTemplate": {
+      "additionalProperties": false,
+      "description": "Same action vocabulary; P3 authored-text limits do not alter legacy DTOs.",
+      "properties": {
+        "action_type": {
+          "enum": [
+            "move_to",
+            "gather",
+            "eat",
+            "drink",
+            "fill_canteen",
+            "rest",
+            "sleep",
+            "talk",
+            "give",
+            "pick_up",
+            "wait"
+          ],
+          "title": "Action Type",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "entity": "#/$defs/EntityTarget",
+                  "resident": "#/$defs/ResidentTarget",
+                  "tile": "#/$defs/TileTarget"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TileTarget"
+                },
+                {
+                  "$ref": "#/$defs/EntityTarget"
+                },
+                {
+                  "$ref": "#/$defs/ResidentTarget"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        },
+        "parameters": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmptyParameters"
+            },
+            {
+              "$ref": "#/$defs/DrinkParameters"
+            },
+            {
+              "$ref": "#/$defs/TalkParameters"
+            },
+            {
+              "$ref": "#/$defs/ItemTransferParameters"
+            }
+          ],
+          "title": "Parameters"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "action_type",
+        "target",
+        "parameters",
+        "reason"
+      ],
+      "title": "P3IntentTemplate",
+      "type": "object"
+    },
+    "P3PolicyPrivateState": {
+      "additionalProperties": false,
+      "properties": {
+        "private_schema_version": {
+          "const": "0.1",
+          "title": "Private Schema Version",
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "llm",
+            "fallback"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "fallback_state": {
+          "$ref": "#/$defs/RuleStateV0_1"
+        },
+        "last_fallback_ordinal": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Fallback Ordinal"
+        }
+      },
+      "required": [
+        "private_schema_version",
+        "mode",
+        "fallback_state",
+        "last_fallback_ordinal"
+      ],
+      "title": "P3PolicyPrivateState",
+      "type": "object"
+    },
+    "Perception": {
+      "additionalProperties": false,
+      "description": "What one resident physically perceives at a boundary; never full world state.",
+      "properties": {
+        "schema_version": {
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "own_condition": {
+          "$ref": "#/$defs/OwnCondition"
+        },
+        "own_position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "own_inventory": {
+          "$ref": "#/$defs/OwnInventory"
+        },
+        "visible_tiles": {
+          "items": {
+            "$ref": "#/$defs/TileView"
+          },
+          "title": "Visible Tiles",
+          "type": "array"
+        },
+        "visible_entities": {
+          "items": {
+            "$ref": "#/$defs/VisibleEntity"
+          },
+          "title": "Visible Entities",
+          "type": "array"
+        },
+        "transient_sightings": {
+          "items": {
+            "$ref": "#/$defs/TransientSighting"
+          },
+          "title": "Transient Sightings",
+          "type": "array"
+        },
+        "explored_static_tiles": {
+          "items": {
+            "$ref": "#/$defs/TileView"
+          },
+          "title": "Explored Static Tiles",
+          "type": "array"
+        },
+        "environmental_cues": {
+          "items": {
+            "$ref": "#/$defs/EnvironmentalCue"
+          },
+          "title": "Environmental Cues",
+          "type": "array"
+        },
+        "heard_utterances": {
+          "items": {
+            "$ref": "#/$defs/HeardUtterance"
+          },
+          "title": "Heard Utterances",
+          "type": "array"
+        },
+        "last_action_feedback": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActionFeedback"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "actor_id",
+        "tick",
+        "own_condition",
+        "own_position",
+        "own_inventory",
+        "visible_tiles",
+        "visible_entities",
+        "transient_sightings",
+        "explored_static_tiles",
+        "environmental_cues",
+        "heard_utterances",
+        "last_action_feedback"
+      ],
+      "title": "Perception",
+      "type": "object"
+    },
+    "ProviderPerception": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "own_condition": {
+          "$ref": "#/$defs/OwnCondition"
+        },
+        "own_position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "own_inventory": {
+          "$ref": "#/$defs/OwnInventory"
+        },
+        "visible_tiles": {
+          "items": {
+            "$ref": "#/$defs/TileView"
+          },
+          "title": "Visible Tiles",
+          "type": "array"
+        },
+        "visible_entities": {
+          "items": {
+            "$ref": "#/$defs/VisibleEntity"
+          },
+          "title": "Visible Entities",
+          "type": "array"
+        },
+        "transient_sightings": {
+          "items": {
+            "$ref": "#/$defs/TransientSighting"
+          },
+          "title": "Transient Sightings",
+          "type": "array"
+        },
+        "explored_static_tiles": {
+          "items": {
+            "$ref": "#/$defs/TileView"
+          },
+          "title": "Explored Static Tiles",
+          "type": "array"
+        },
+        "environmental_cues": {
+          "items": {
+            "$ref": "#/$defs/EnvironmentalCue"
+          },
+          "title": "Environmental Cues",
+          "type": "array"
+        },
+        "heard_utterances": {
+          "items": {
+            "$ref": "#/$defs/HeardUtterance"
+          },
+          "title": "Heard Utterances",
+          "type": "array"
+        },
+        "last_action_feedback": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActionFeedback"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "actor_id",
+        "tick",
+        "own_condition",
+        "own_position",
+        "own_inventory",
+        "visible_tiles",
+        "visible_entities",
+        "transient_sightings",
+        "explored_static_tiles",
+        "environmental_cues",
+        "heard_utterances",
+        "last_action_feedback"
+      ],
+      "title": "ProviderPerception",
+      "type": "object"
+    },
+    "ProviderProjection": {
+      "additionalProperties": false,
+      "properties": {
+        "projection_schema_version": {
+          "const": "0.1",
+          "title": "Projection Schema Version",
+          "type": "string"
+        },
+        "perception": {
+          "$ref": "#/$defs/ProviderPerception"
+        },
+        "identity": {
+          "$ref": "#/$defs/ResidentIdentity"
+        },
+        "goals": {
+          "$ref": "#/$defs/GoalState"
+        },
+        "recalled_experience": {
+          "items": {
+            "$ref": "#/$defs/ExperienceRecord"
+          },
+          "title": "Recalled Experience",
+          "type": "array"
+        },
+        "owned_intents": {
+          "items": {
+            "$ref": "#/$defs/OwnedIntentRef"
+          },
+          "title": "Owned Intents",
+          "type": "array"
+        }
+      },
+      "required": [
+        "projection_schema_version",
+        "perception",
+        "identity",
+        "goals",
+        "recalled_experience",
+        "owned_intents"
+      ],
+      "title": "ProviderProjection",
+      "type": "object"
+    },
+    "ProviderRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "provider_request_version": {
+          "const": "0.1",
+          "title": "Provider Request Version",
+          "type": "string"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "messages": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SystemMessage"
+              },
+              {
+                "$ref": "#/$defs/UserMessage"
+              }
+            ]
+          },
+          "title": "Messages",
+          "type": "array"
+        },
+        "response_schema": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Response Schema",
+          "type": "object"
+        },
+        "settings": {
+          "$ref": "#/$defs/ProviderSettings"
+        },
+        "max_output_tokens": {
+          "const": 2048,
+          "title": "Max Output Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "provider_request_version",
+        "model_id",
+        "messages",
+        "response_schema",
+        "settings",
+        "max_output_tokens"
+      ],
+      "title": "ProviderRequest",
+      "type": "object"
+    },
+    "ProviderResult": {
+      "additionalProperties": false,
+      "properties": {
+        "provider_result_version": {
+          "const": "0.1",
+          "title": "Provider Result Version",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "response",
+            "timeout",
+            "provider_error",
+            "output_limit"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "raw_response": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Raw Response"
+        },
+        "raw_body_base64": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Raw Body Base64"
+        },
+        "observed_body_bytes": {
+          "minimum": 0,
+          "title": "Observed Body Bytes",
+          "type": "integer"
+        },
+        "response_complete": {
+          "title": "Response Complete",
+          "type": "boolean"
+        },
+        "response_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Response Text"
+        },
+        "provider_request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Provider Request Id"
+        },
+        "token_input": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Token Input"
+        },
+        "token_output": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Token Output"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Latency Ms"
+        },
+        "provider_error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Provider Error Code"
+        }
+      },
+      "required": [
+        "provider_result_version",
+        "outcome",
+        "raw_response",
+        "raw_body_base64",
+        "observed_body_bytes",
+        "response_complete",
+        "response_text",
+        "provider_request_id",
+        "token_input",
+        "token_output",
+        "latency_ms",
+        "provider_error_code"
+      ],
+      "title": "ProviderResult",
+      "type": "object"
+    },
+    "ProviderSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "api": {
+          "const": "deepseek-responses",
+          "title": "Api",
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "const": "none",
+          "title": "Reasoning Effort",
+          "type": "string"
+        },
+        "store": {
+          "const": false,
+          "title": "Store",
+          "type": "boolean"
+        },
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "maxItems": 0,
+          "title": "Tools",
+          "type": "array"
+        },
+        "background": {
+          "const": false,
+          "title": "Background",
+          "type": "boolean"
+        },
+        "stream": {
+          "const": false,
+          "title": "Stream",
+          "type": "boolean"
+        },
+        "input_counter_id": {
+          "title": "Input Counter Id",
+          "type": "string"
+        },
+        "input_counter_version": {
+          "title": "Input Counter Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "api",
+        "reasoning_effort",
+        "store",
+        "tools",
+        "background",
+        "stream",
+        "input_counter_id",
+        "input_counter_version"
+      ],
+      "title": "ProviderSettings",
+      "type": "object"
+    },
+    "ResidentIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "identity_schema_version": {
+          "const": "0.1",
+          "title": "Identity Schema Version",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "profile_id": {
+          "title": "Profile Id",
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Values",
+          "type": "array"
+        },
+        "initial_direction": {
+          "title": "Initial Direction",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "identity_schema_version",
+        "actor_id",
+        "display_name",
+        "profile_id",
+        "values",
+        "initial_direction",
+        "source_sha256"
+      ],
+      "title": "ResidentIdentity",
+      "type": "object"
+    },
+    "ResidentTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "resident",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "ResidentTarget",
+      "type": "object"
+    },
+    "RuleCommitment": {
+      "additionalProperties": false,
+      "properties": {
+        "goal": {
+          "enum": [
+            "water",
+            "tree",
+            "canteen",
+            "explore"
+          ],
+          "title": "Goal",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/Coord"
+        },
+        "set_at_tick": {
+          "minimum": 0,
+          "title": "Set At Tick",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "goal",
+        "target",
+        "set_at_tick"
+      ],
+      "title": "RuleCommitment",
+      "type": "object"
+    },
+    "RuleStateV0_1": {
+      "additionalProperties": false,
+      "properties": {
+        "rule_state_version": {
+          "const": "0.1",
+          "title": "Rule State Version",
+          "type": "string"
+        },
+        "commitment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuleCommitment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "issued_intents": {
+          "items": {
+            "$ref": "#/$defs/IssuedIntent"
+          },
+          "title": "Issued Intents",
+          "type": "array"
+        },
+        "failed_targets": {
+          "items": {
+            "$ref": "#/$defs/FailedTarget"
+          },
+          "title": "Failed Targets",
+          "type": "array"
+        },
+        "cue_impressions": {
+          "items": {
+            "$ref": "#/$defs/CueImpression"
+          },
+          "title": "Cue Impressions",
+          "type": "array"
+        },
+        "canteen_capacity": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Canteen Capacity"
+        }
+      },
+      "required": [
+        "rule_state_version",
+        "commitment",
+        "issued_intents",
+        "failed_targets",
+        "cue_impressions",
+        "canteen_capacity"
+      ],
+      "title": "RuleStateV0_1",
+      "type": "object"
+    },
+    "SelfTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "self",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "SelfTarget",
+      "type": "object"
+    },
+    "SystemMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "const": "system",
+          "title": "Role",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "content"
+      ],
+      "title": "SystemMessage",
+      "type": "object"
+    },
+    "TalkParameters": {
+      "additionalProperties": false,
+      "description": "``request`` only for speech_act=request; ``in_reply_to`` only for accept/refuse.",
+      "properties": {
+        "speech_act": {
+          "enum": [
+            "statement",
+            "request",
+            "accept",
+            "refuse"
+          ],
+          "title": "Speech Act",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "in_reply_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "In Reply To"
+        }
+      },
+      "required": [
+        "speech_act",
+        "text"
+      ],
+      "title": "TalkParameters",
+      "type": "object"
+    },
+    "TileInclusion": {
+      "additionalProperties": false,
+      "properties": {
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "projected": {
+          "title": "Projected",
+          "type": "boolean"
+        },
+        "omission": {
+          "anyOf": [
+            {
+              "enum": [
+                "tile_limit",
+                "projection_bytes",
+                "mandatory_oversize"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Omission"
+        }
+      },
+      "required": [
+        "position",
+        "projected",
+        "omission"
+      ],
+      "title": "TileInclusion",
+      "type": "object"
+    },
+    "TileTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "tile",
+          "title": "Kind",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        }
+      },
+      "required": [
+        "kind",
+        "position"
+      ],
+      "title": "TileTarget",
+      "type": "object"
+    },
+    "TileView": {
+      "additionalProperties": false,
+      "description": "A tile and its static terrain (visible tiles and explored static tiles).",
+      "properties": {
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "terrain": {
+          "enum": [
+            "sea",
+            "beach",
+            "grass",
+            "woods",
+            "rock",
+            "spring",
+            "cave",
+            "fruit_tree",
+            "damp_moss"
+          ],
+          "title": "Terrain",
+          "type": "string"
+        }
+      },
+      "required": [
+        "position",
+        "terrain"
+      ],
+      "title": "TileView",
+      "type": "object"
+    },
+    "TransientSighting": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "entity_type": {
+          "enum": [
+            "resident",
+            "corpse",
+            "fruit_tree",
+            "ground_fruit",
+            "canteen",
+            "cue"
+          ],
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "seen_at_step": {
+          "minimum": 1,
+          "title": "Seen At Step",
+          "type": "integer"
+        },
+        "observable_signs": {
+          "items": {
+            "enum": [
+              "weak",
+              "dehydrated",
+              "fatigued"
+            ],
+            "type": "string"
+          },
+          "title": "Observable Signs",
+          "type": "array"
+        },
+        "fruit_band": {
+          "anyOf": [
+            {
+              "enum": [
+                "empty",
+                "few",
+                "many"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fruit Band"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Quantity"
+        }
+      },
+      "required": [
+        "entity_id",
+        "entity_type",
+        "position",
+        "seen_at_step",
+        "observable_signs",
+        "fruit_band",
+        "quantity"
+      ],
+      "title": "TransientSighting",
+      "type": "object"
+    },
+    "UnverifiablePredicate": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "unverifiable",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "UnverifiablePredicate",
+      "type": "object"
+    },
+    "UserMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "const": "user",
+          "title": "Role",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "content"
+      ],
+      "title": "UserMessage",
+      "type": "object"
+    },
+    "VisibleEntity": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "entity_type": {
+          "enum": [
+            "resident",
+            "corpse",
+            "fruit_tree",
+            "ground_fruit",
+            "canteen",
+            "cue"
+          ],
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "observable_signs": {
+          "items": {
+            "enum": [
+              "weak",
+              "dehydrated",
+              "fatigued"
+            ],
+            "type": "string"
+          },
+          "title": "Observable Signs",
+          "type": "array"
+        },
+        "fruit_band": {
+          "anyOf": [
+            {
+              "enum": [
+                "empty",
+                "few",
+                "many"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fruit Band"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Quantity"
+        }
+      },
+      "required": [
+        "entity_id",
+        "entity_type",
+        "position",
+        "observable_signs",
+        "fruit_band",
+        "quantity"
+      ],
+      "title": "VisibleEntity",
+      "type": "object"
+    },
+    "WireRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "wire_schema_version": {
+          "const": "0.1",
+          "title": "Wire Schema Version",
+          "type": "string"
+        },
+        "method": {
+          "const": "POST",
+          "title": "Method",
+          "type": "string"
+        },
+        "origin": {
+          "const": "https://api.deepseek.com",
+          "title": "Origin",
+          "type": "string"
+        },
+        "path": {
+          "const": "/responses",
+          "title": "Path",
+          "type": "string"
+        },
+        "content_type": {
+          "const": "application/json",
+          "title": "Content Type",
+          "type": "string"
+        },
+        "body_base64": {
+          "title": "Body Base64",
+          "type": "string"
+        }
+      },
+      "required": [
+        "wire_schema_version",
+        "method",
+        "origin",
+        "path",
+        "content_type",
+        "body_base64"
+      ],
+      "title": "WireRequest",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "inspection_schema_version": {
+      "const": "0.1",
+      "title": "Inspection Schema Version",
+      "type": "string"
+    },
+    "record": {
+      "$ref": "#/$defs/DecisionRecordP3"
+    },
+    "context": {
+      "$ref": "#/$defs/ContextRecordP3"
+    },
+    "dispatches": {
+      "items": {
+        "$ref": "#/$defs/AttemptDispatch"
+      },
+      "title": "Dispatches",
+      "type": "array"
+    },
+    "calls": {
+      "items": {
+        "$ref": "#/$defs/LLMCallRecordP3"
+      },
+      "title": "Calls",
+      "type": "array"
+    },
+    "outcome_event_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Outcome Event Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "inspection_schema_version",
+    "record",
+    "context",
+    "dispatches",
+    "calls",
+    "outcome_event_ids"
+  ],
+  "title": "DecisionInspection",
+  "type": "object"
+}
