@@ -206,7 +206,9 @@ def main():
         result = measure_short(args.out)
     result["argv"] = [sys.executable, *sys.argv]
     result["benchmark_sha256"] = sha256(Path(__file__).read_bytes()).hexdigest()
-    (args.out / "result.json").write_bytes(canonical_bytes(result))
+    (args.out / "result.json").write_text(
+        json.dumps(result, indent=2, sort_keys=True), encoding="utf-8"
+    )
     print(json.dumps(result), flush=True)
 
 
