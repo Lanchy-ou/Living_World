@@ -4,8 +4,8 @@
 > decision sheet on 2026-11-17 (§15). Revised after the first Gate 2 review
 > ([P3.5-PR-02 review](../tasks/p3.5/P3.5-PR-02-review.md), B-01–B-06,
 > N-01–N-02), after its round 2 (§7 of that report, R2-B-01–R2-B-03,
-> R2-N-01–R2-N-02) and after its round 3 (§8, R3-B-01–R3-B-02, R3-N-01); the
-> third revision is not yet reviewed.
+> R2-N-01–R2-N-02), after its round 3 (§8, R3-B-01–R3-B-02, R3-N-01) and
+> after its round 4 (§9, R4-B-01); the fourth revision is not yet reviewed.
 >
 > Implements [ADR 0007](../adr/0007-world-agent-protocol.md) under CR-009
 > option A ([open questions](open-questions.md)). When frozen, it supersedes for
@@ -93,6 +93,18 @@ module path is set by the M12 task cards.
 4. `sim` passes the submissions to the world in ascending actor ID order. The
    world validates them and settles tick `t → t+1`.
 
+- **When start checks run.** In every pack, the world starts and advances
+  actors one at a time in ascending actor ID order, as v1 does
+  (`world-rules-v0.1.md` §5.4, step 2). An actor's start checks run when its
+  place in that order comes, against the state at that moment: actors with a
+  lower ID have already started and advanced in this tick, and actors with a
+  higher ID have not. This covers the kernel checks (§4.2), the generic `act`
+  checks and rule matching (§4.3), item choices (§3.2) and the first utterance
+  check (§7.1). For example, a resident with a lower ID steps next to a giver
+  in this tick; the giver's start check comes later, sees it adjacent and
+  passes. With the IDs swapped, the giver's check comes first and fails
+  `OUT_OF_REACH`. The world-engine spec may add phases but keeps this order.
+  Completion checks run at settlement (§4.2).
 - The world clock stays frozen while a turn's model call is outstanding.
   Consolidation is the exception (ADR 0013 D3, ADR 0012 D2).
 - A resident with a running action and no turn keeps that action.
@@ -393,8 +405,10 @@ rolls follow ADR 0009 D1 and the world-engine spec.
   0007 D6). When several apply at one boundary, the first in this list is
   reported; the others are not reported for that action.
 - A missing or distant target ends every other action at its completion,
-  through the completion checks (§4.2, §4.3), as in v1. A reserved item cannot
-  go missing while held, because only its holder can move it.
+  through the completion checks (§4.2, §4.3), as in v1. No kernel action can
+  take a reserved item from its holder, because only the holder can move it.
+  Autonomous world changes to held items are left to the world-engine spec
+  (§14); if one removes a reserved item, the completion check reports it.
 - A completed action is never failed afterwards, as in v1.
 - A resident that chooses another action at a turn stops the running one at
   that turn's boundary: `stop = {by:"actor"}`, feedback
@@ -680,9 +694,15 @@ UtteranceFeedback { utterance_id:string|null, failure_code:FailureCode|null }
   is valid (`INVALID_REPLY`); the terms are valid (`INVALID_TERMS`, §7.2); the
   session cap allows it (`DIALOGUE_LIMIT`). The first failure is reported.
 - They run twice, as v1 checks a `talk` at its start and at its completion:
-  1. **At the turn's boundary `t`**, against the state at `t`: every check
-     except the session cap. A failure here is kept: the utterance is not
-     emitted even if the conditions hold by emission.
+  1. **At the speaker's start** (§2), against the state at that moment: every
+     check except the session cap. Residents with a lower ID have already
+     moved in this tick; the speaker's own action has not yet started or
+     advanced. A failure here is kept: the utterance is not emitted even if
+     the conditions hold by emission. For example, A is one step outside B's
+     hearing and walks into it in this tick while B speaks to A. If A has the
+     lower ID, B's check comes after A's step and passes. If B has the lower
+     ID, B's check comes first and fails `OUT_OF_HEARING`, and the failure is
+     kept.
   2. **At emission**, during `t → t+1`, in emission order: every check again,
      including the session cap, against the state at that moment. A speaker
      valid at `t` whose addressee has moved out of hearing by emission fails
@@ -1024,9 +1044,9 @@ the event catalog changes (ADR 0007 D8).
 | WAP-24 | A threshold crossing inside one band is reported once, is not repeated while the need stays below, is reported again after the need recovers and falls once more, and is never reported at tick zero |
 | WAP-25 | Bridge separation (§11.2): two compatibility outcomes with identical resident feedback (for example an empty tree and a full inventory on `gather`) give different bridge outputs; no bridge output appears in any model context, memory or `Perception`; a compatibility pack whose rule checks are not all in the code table is refused at load; outside the compatibility pack there is no bridge. Run as model → fallback → model, with a restore before acknowledgement: the fallback's gather failure leaves a private legacy code and back-off, the resumed model request, day log, recalled memories and perception hold neither the bridge output nor its source, and the legacy identity and effect survive the restore without duplicate delivery |
 | WAP-26 | Domain exceptions (§11.3), each pinned and listed as outside the equivalence promise: `gather` with no stamina and an existing but unreachable tree reports `OUT_OF_REACH`; with no stamina and a receipted tree that no longer exists, `INVALID_TARGET`; a canteen `drink` with full hydration and no canteen held reports `NO_ITEM`; a second reply after an acceptance, and after a refusal, reports `INVALID_REPLY`. Control: a `gather` at an unreceipted target reports `INVALID_TARGET` in both versions |
-| WAP-27 | Completion-time checks (§4.2), against v1 with `give_ticks = 3`: the recipient walks out of reach in the first tick and stays away, so the give runs to `t+3` and fails `OUT_OF_REACH` there; it walks away and returns before `t+3`, so the fruit is transferred at `t+3`. Each asserts the active state at every boundary, ticks, transfer, legacy feedback and triggers, queue disposal, back-off and next decision. Control: with `give_ticks = 1`, a move before completion gives `OUT_OF_REACH` at `t+1` in both |
+| WAP-27 | Completion-time checks (§4.2), against v1 with `give_ticks = 3`: the recipient walks out of reach in the first tick and stays away, so the give runs to `t+3` and fails `OUT_OF_REACH` there; it walks away and returns before `t+3`, so the fruit is transferred at `t+3`. Each asserts the active state at every boundary, ticks, transfer, legacy feedback and triggers, queue disposal, back-off and next decision. Control: with `give_ticks = 1`, a move before completion gives `OUT_OF_REACH` at `t+1` in both. Start order (§2), in both actor orders: a recipient one step beyond reach steps next to the giver in the tick the give starts. With the recipient's ID lower, the giver's start check sees it adjacent and the fruit is transferred; with the giver's ID lower, the start check fails `OUT_OF_REACH` at `t + invalid_attempt_ticks`. Each asserts the same fields as above |
 | WAP-28 | Spring drink without a known spring (§11.2): a resident below maximum hydration that has never seen the spring submits v1 `drink {source:"spring"}` and gets `failure/OUT_OF_REACH` at `t+1` under its v1 intent ID, with `ACTION_FAILED`, queue disposal and the next decision as v1; no spring coordinate enters its perception or the policy's private state. Control: with the spring known and adjacent, the drink succeeds |
-| WAP-29 | Two utterance checks (§7.1), against v1 `talk`: out of hearing at `t` but in hearing at emission fails `OUT_OF_HEARING` and emits nothing; in hearing at `t` but out of hearing at emission fails `OUT_OF_HEARING`; in hearing at both succeeds. Each asserts the utterance's presence, the joined result under the v1 intent ID, its tick and code, queue and back-off effects, and the next decision |
+| WAP-29 | Two utterance checks (§7.1), against v1 `talk`, in both actor orders. The addressee starts one step outside hearing and walks into it in this tick: with the speaker's ID lower, the speaker's start check comes first and fails `OUT_OF_HEARING`, the failure is kept and nothing is emitted; with the addressee's ID lower, the speaker's start check sees it in hearing, and the utterance is emitted and succeeds. Controls: in hearing at the speaker's start but out of hearing at emission fails `OUT_OF_HEARING`; in hearing at both succeeds; two talks competing for the last turn of a session are decided at emission. Each asserts the utterance's presence, the joined result under the v1 intent ID with its status, code and start and end ticks, the triggers, queue disposal or continuation, back-off and the next decision; saved and restored between start and emission, the kept start result survives |
 | WAP-30 | Delayed stop of a replaced action (§11.2): the policy replaces a running action to reproduce a v1 interruption with a successor lasting more than one tick; when the old stop arrives in the next packet, no second legacy interruption is issued and the successor's queue is not discarded |
 
 ## 14. Disposition of the ADR 0007 open questions
@@ -1050,6 +1070,7 @@ the event catalog changes (ADR 0007 D8).
 | CR-009 open item: v1 replay bundles in the viewer | Owner, PR-D7 (§11.1) |
 | Carried to the starter-content spec | Slower hunger and thirst during sleep, starter pack only (PR-D6, §6.3); the named need thresholds of each pack and which wake a sleeper (§5.3, §6.3); the compatibility pack's map from (`rule_id`, `failed_check`) to v1 failure codes (§11.3); the durations `drop_ticks` and `inspect_ticks` (§4.2) |
 | Carried to the rule-representation spec | How named need thresholds and their waking mark are declared (§5.3); condition and item-slot IDs for `failed_check` (§4.3); a verb's target kinds, target class, must-be-held flag and reach range (§4.3); tells (§5.2); the watcher-visibility flag of phenomena (§5.4) |
+| Carried to the world-engine spec | The tick phases keep the ascending actor ID start order and the start-check timing of §2; whether reserved items are protected from autonomous world changes (ADR 0008 D3–D4, ADR 0009 D3), or else how those changes reach the completion checks (§4.3) |
 | Carried to the memory-formation spec | K must lie within the sleep bounds of 6–54 ticks (PR-D4) |
 | Later direction, not this version | Being addressed directly wakes a sleeper (PR-D6) |
 
