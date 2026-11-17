@@ -140,7 +140,8 @@ with hidden truth.
 
 After the change set is committed, the working context of that waking period is
 closed (ADR 0011 D6). The next waking period starts a new one from the updated
-memory.
+memory. In the memory-off arm (ADR 0014 D2) no consolidation runs, and the
+working context closes at the same boundary.
 
 **[Owner]** The world does not pause for consolidation, and sleep can be
 interrupted. The resident chooses how long it sleeps (ADR 0007 D2). A normal
@@ -197,9 +198,10 @@ validator's verdict and the committed change set, hashed like a P3 decision. Rep
 model call.
 
 Failure (current draft, Q5): a consolidation with no valid output is retried a
-bounded number of times. If it still fails, the waking period's working
-context stays pending and is consolidated at the next loss of consciousness,
-together with the new one. After repeated failures only the mechanical writes
+bounded number of times. If it still fails, the waking period still ends at
+the boundary (ADR 0014 D2): the resident wakes with a new working context, and
+the failed one stays pending, unseen by the resident, and is consolidated at
+the next loss of consciousness together with the new one. After repeated failures only the mechanical writes
 (D1) are kept, and the rest of the pending experience counts as forgotten.
 
 ## Consequences

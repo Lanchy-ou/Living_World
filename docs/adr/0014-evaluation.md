@@ -14,7 +14,10 @@
   owner's architecture discussion of 2026-11-16. Learning paths, memory off,
   agreement checks, counterfactual probes, the "no difference" result and the
   time-use view follow an external review that the owner accepted on the same
-  day.
+  day. The memory-off boundary, the watching path, outcome-based skill scoring,
+  arm comparison rules and the milestone of each extension test answer the
+  independent design review of 2026-11-17
+  ([P3.5-00 review](../tasks/p3.5/P3.5-00-review.md)).
 
 ## Context
 
@@ -63,13 +66,22 @@ Views:
 **[Owner]** The model may know a recipe before it lives on the island, so
 evaluation records how each resident first succeeded with a rule:
 
-- right on the first attempt, which may be prior knowledge;
+- right on the first attempt, with no related experience in its context, which
+  may be prior knowledge;
 - after its own failed attempts;
+- after watching another resident's attempt, as its own perception delivered
+  it (ADR 0007 D10);
 - after being told by another resident;
 - with a memory from an earlier day in its context.
 
-Only the last three count as learned on the island. The strongest evidence is
-a rule that goes against common sense (ADR 0010 D2).
+Every path but the first counts as learned on the island. The strongest
+evidence is a rule that goes against common sense (ADR 0010 D2).
+
+**[Owner]** A skill hypothesis is scored by whether its predictions match the
+actual outcomes on the items it was applied to. It is not scored by mapping a
+descriptor such as "looks strong" to a band of true values, because a
+deceptive material would make that mapping judge a correct lesson as wrong.
+Hidden values never enter resident memory.
 
 Memory on/off comparisons run several seeds per arm, because model output varies
 between runs. Derived chance rolls (ADR 0009 D1) give both arms the same luck
@@ -79,13 +91,37 @@ judged by occurrence and traceability, not by rate thresholds
 ([P3.5 plan](../plans/p3.5-implementation-plan-v0.1.md) §4.1). Cost is measured
 in full even though P3.5 sets no limit (ADR 0012 D4).
 
-**[Owner]** Memory off removes memory across waking periods only: no
-consolidation, no long-term memories in the morning prefix, and recall that
-returns nothing, so nothing from an earlier waking period reaches the resident.
-The working context of the current waking period stays, because a resident
-cannot act without it. Hard facts (ADR 0012 D1) are still written for
-evaluation but never shown to the resident. Personality stays at its base
-values.
+**[Owner]** Memory off removes memory across waking periods only. Both arms
+share one period boundary: a waking period ends when the resident has been
+unconscious for K ticks (ADR 0012 D2), whether or not a consolidation call
+runs, and a shorter nap ends no period in either arm. The world runs the same
+in both arms; the boundary acts on the agent side only. In the off arm:
+
+- the new period starts with no earlier day log, no intention, no dialogue
+  state, no long-term memories in the prefix, and recall that returns nothing;
+- the resident keeps its identity, its base personality (no drift), its body
+  and inventory, and what it perceives now;
+- hard facts (ADR 0012 D1) are still written for evaluation but never shown to
+  the resident;
+- explored terrain stays, as in the on arm, because it is world-delivered
+  static map data, not memory (ADR 0007 D4). This is the only stated
+  exception.
+
+The boundary is recorded with the run, so replay applies it the same way. A
+synthetic test checks it: before a sleep, a resident holds a distinctive
+intention, an unfinished dialogue and explored terrain now out of sight; after
+waking, the off-arm context holds neither the intention nor the dialogue, the
+terrain appears only as world-delivered map data, and position, inventory and
+visible surroundings are intact.
+
+**[Owner]** Arm comparisons use evidence that both arms produce: utterances,
+attempts, actions and their outcomes in the objective log. Measures that need
+consolidated records, such as told memories and skill hypotheses, are reported
+for the on arm only and marked not applicable in the off arm.
+
+**[Owner]** The on/off difference measures the whole cross-period memory
+system, mechanical records included, not the consolidation model alone.
+Narrower claims need consolidation diagnostics or a later targeted ablation.
 
 **[Owner]** "No difference observed" is a valid result. If the two arms do not
 differ, the report says so and gives a diagnosis, for example memories that
@@ -126,6 +162,9 @@ registration or content, not engine or assembler code:
 - a test rule pack is settled by the engine, and the validator rejects a rule
   that breaks conservation;
 - a test recall recipe is selected by its turn reason.
+
+**[Owner]** The rule-pack test is M12 evidence; the memory-kind and
+recall-recipe tests are M14 evidence; all pass before M15 (plan §4).
 
 ### D4. Strict lane and exploration lane
 

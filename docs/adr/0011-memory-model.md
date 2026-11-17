@@ -67,7 +67,9 @@ the true rule. It may be incomplete or wrong, for example when taught by a liar.
 Evaluation compares it with the true rules (ADR 0014).
 
 **[Owner]** Residents pass knowledge only by speech; P3.5 has no writing or
-other medium. A taught skill reaches the listener as heard words. The
+other medium. This limits deliberate teaching, not learning: a resident may
+also learn by watching another's attempts (ADR 0007 D10), and evaluation counts
+that path (ADR 0014 D2). A taught skill reaches the listener as heard words. The
 listener's consolidation may turn them into a skill hypothesis with a `told`
 source (ADR 0012 D2), which may be incomplete or misunderstood.
 
@@ -77,8 +79,9 @@ hard, sharp edge", never true integer values such as `hardness_min = 4`. A
 resident can then apply a skill to a new item it sees, and can be fooled by a
 deceptive appearance, as intended. Mechanical evidence counting (ADR 0012 D1)
 matches attempts against the descriptors the resident was shown. Evaluation
-maps descriptor predicates to true property ranges when it compares skills with
-rules; that mapping exists only in `analysis`.
+scores a skill by whether its predictions match actual outcomes, because a
+deceptive material breaks any fixed mapping from descriptors to true values
+(ADR 0014 D2); that scoring exists only in `analysis`.
 
 ### D4. Provenance, confidence, supersession and forgetting
 

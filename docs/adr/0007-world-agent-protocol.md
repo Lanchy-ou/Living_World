@@ -16,7 +16,9 @@
   phenomena, process materials, compatibility pack scope) and apply the owner's
   architecture discussion of the same day (no world soft interrupts, one action
   per turn; ADR 0013 D1–D3). D10 records owner decisions on an external review
-  of the same day (speech during actions, watching, agreements).
+  of the same day (speech during actions, watching, agreements). The explored
+  terrain rule of D4 answers the independent design review of 2026-11-17
+  ([P3.5-00 review](../tasks/p3.5/P3.5-00-review.md), F-01).
 
 ## Context
 
@@ -107,6 +109,13 @@ ActIntent {
 - **[Owner]** Appearances may deceive. A material may declare an apparent value
   that differs from its true value for a property. Perception reports the
   apparent value; settlement always uses the true value.
+- **[Owner]** Explored terrain stays world-delivered, as in v1
+  (`explored_static_tiles`, `interface-contract-v0.1.md` §2.2): a resident
+  knows its way around places it has seen. It is static map data, not memory,
+  and is kept in both memory arms (ADR 0014 D2). Dynamic facts (fruit stock,
+  items, people) are not in it; they reach later turns only through memory.
+  How it is rendered in the context, given its size, is decided in the
+  decision-loop spec.
 
 ### D5. Feedback
 

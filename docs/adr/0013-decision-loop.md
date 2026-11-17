@@ -20,6 +20,9 @@
 - D3 and D4 are marked **Needs discussion** for their details.
 - The utterance of D2, the entry types of D4 and the commitment rule of D9
   follow an external review that the owner accepted on 2026-11-16.
+- The clock exception of D3 and the period boundary in D6 and D9 answer the
+  independent design review of 2026-11-17
+  ([P3.5-00 review](../tasks/p3.5/P3.5-00-review.md), F-01, F-04).
 
 ## Context
 
@@ -97,7 +100,10 @@ notification arrives while an action is running:
   replaces the v1 soft interrupts and deferred triggers for P3.5.
 - An unconscious resident cannot take a turn. Waking (for example because of an
   urgent need) is a world rule, not a notification.
-- The world clock stays frozen while a model call is outstanding, as in v1.
+- The world clock stays frozen while a turn's model call is outstanding, as in
+  v1. Consolidation is the exception: the world keeps running while its calls
+  are pending and waits only at the tick where the result takes effect (ADR
+  0012 D2).
 
 **[Owner]** The resident chooses what not to be disturbed by. An action may
 carry an optional mute list: the notification classes that should not give a
@@ -234,7 +240,8 @@ spec values (Q5).
 
 **[Owner]** No mandatory day plan. The resident may write an intention (ADR 0011
 D1) at any level of detail, or none. The current intention is shown at every
-turn and changed only by the resident. It never drives an action by itself.
+turn and changed only by the resident. It never drives an action by itself. In
+the memory-off arm it is cleared at the period boundary (ADR 0014 D2).
 
 ### D7. Model calls and fallback
 
@@ -271,8 +278,9 @@ not capped.
 
 The turns of a conversation are in the day log. Each open dialogue session
 also has a small working state in the resident's runtime: participants, open
-requests and whose reply is due. It is released when the session ends. The
-world's per-session turn cap is unchanged.
+requests and whose reply is due. It is released when the session ends or the
+waking period ends, whichever comes first. The world's per-session turn cap is
+unchanged.
 
 **[Owner]** Only an accepted agreement with structured terms becomes a
 commitment, written mechanically (ADR 0007 D10, ADR 0012 D1). The record is
