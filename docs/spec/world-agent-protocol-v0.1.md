@@ -3,8 +3,9 @@
 > **Draft (2026-11-17), task P3.5-PR-02. Not frozen.** The owner answered the
 > decision sheet on 2026-11-17 (§15). Revised after the first Gate 2 review
 > ([P3.5-PR-02 review](../tasks/p3.5/P3.5-PR-02-review.md), B-01–B-06,
-> N-01–N-02) and again after its round 2 (§7 of that report, R2-B-01–R2-B-03,
-> R2-N-01–R2-N-02); the second revision is not yet reviewed.
+> N-01–N-02), after its round 2 (§7 of that report, R2-B-01–R2-B-03,
+> R2-N-01–R2-N-02) and after its round 3 (§8, R3-B-01–R3-B-02, R3-N-01); the
+> third revision is not yet reviewed.
 >
 > Implements [ADR 0007](../adr/0007-world-agent-protocol.md) under CR-009
 > option A ([open questions](open-questions.md)). When frozen, it supersedes for
@@ -315,13 +316,18 @@ checks that the actor is alive (`DEAD`).
 | `drop` (tile) | The items are held (`NO_ITEM`); the tile is within reach and passable (`OUT_OF_REACH`, `INVALID_TARGET`) | After `drop_ticks`, the items are still held (`NO_ITEM`) |
 | `drop` (entity) | Receipt; the entity exists and is a container or a process entity that accepts items (`INVALID_TARGET`); the items are held (`NO_ITEM`); the entity is within reach (`OUT_OF_REACH`); it has room (`CONTAINER_FULL`) | After `drop_ticks`, the same checks again |
 | `wait` | None beyond being alive | After `wait_ticks` |
-| `inspect` | Receipt; the entity exists (`INVALID_TARGET`); it is held, or within reach (`OUT_OF_REACH`) | After `inspect_ticks`, if it still exists and is in reach, the result carries the `InspectView`; otherwise the hard stop `TARGET_GONE` |
-| `contribute` | Receipt; the entity exists (`INVALID_TARGET`); it is an open process entity (`NOT_A_PROCESS`); it is within reach (`OUT_OF_REACH`) | Work counts each tick while the required materials are present (ADR 0007 D6). Success when the process completes; `TARGET_GONE` if it disappears or leaves reach |
+| `inspect` | Receipt; the entity exists (`INVALID_TARGET`); it is held, or within reach (`OUT_OF_REACH`) | After `inspect_ticks`, the same checks again (`INVALID_TARGET`, `OUT_OF_REACH`); on success the result carries the `InspectView` |
+| `contribute` | Receipt; the entity exists (`INVALID_TARGET`); it is an open process entity (`NOT_A_PROCESS`); it is within reach (`OUT_OF_REACH`) | Work counts each tick while the required materials are present (ADR 0007 D6). Success when the process completes; the hard stop `TARGET_GONE` as soon as the process disappears or leaves reach |
 
 - A target missing at the start check is a failure code after
-  `invalid_attempt_ticks`. A target or reserved item that disappears while the
-  action runs is a hard stop (`TARGET_GONE`, `INPUT_GONE`, §4.4): it takes the
-  elapsed time and applies `on_interrupt`.
+  `invalid_attempt_ticks`.
+- **Mutable conditions are checked at completion, as in v1.** While an action
+  runs, the world does not recheck reach, holding or the target's existence: a
+  recipient who walks away and comes back before completion still receives the
+  gift. At completion the action's checks run again, and a failure takes the
+  elapsed time (`world-rules-v0.1.md` §4.1). `contribute` is the only
+  exception, because it has no fixed completion; it stops with `TARGET_GONE`
+  as soon as its process disappears or leaves reach.
 
 ### 4.3 Generic `act` preconditions
 
@@ -356,7 +362,7 @@ rolls follow ADR 0009 D1 and the world-engine spec.
 | No rule matches, or the matched rule is unmet at start | `t + attempt_ticks` of the verb | `settled`, `unmatched` or `unmet` |
 | A rule matches and runs | `t + work_ticks` | `settled`, `applied` or `chance_failed` |
 | The running rule is unmet when revalidated at completion | `t + work_ticks` | `settled`, `unmet`, with that rule's `unmet` phenomenon |
-| A target or reserved item disappears while running | The boundary where it is gone | `stopped`, `TARGET_GONE` or `INPUT_GONE` |
+| The target or a reserved item is missing, or out of reach, at completion | `t + work_ticks` | `settled`, `unmet`; `failed_check` names the slot |
 
 - `attempt_ticks` is declared per verb in the vocabulary and is at least 1
   (owner, PR-D2). Every attempt that passes §4.3 costs at least one tick (ADR
@@ -379,13 +385,16 @@ rolls follow ADR 0009 D1 and the world-engine spec.
 2. `FAINTED`: mental fatigue at its maximum (ADR 0012 D3)
 3. `EXHAUSTED`: stamina at zero during a movement or a rule that declares it
 4. `PATH_BLOCKED`: the next movement step is blocked
-5. `TARGET_GONE`: the target no longer exists or left reach
-6. `INPUT_GONE`: a reserved input or instrument is no longer held
-7. `WOKEN`: a sleeper is woken before its chosen duration (§6.3)
+5. `TARGET_GONE`: the process of a running `contribute` no longer exists or
+   left reach
+6. `WOKEN`: a sleeper is woken before its chosen duration (§6.3)
 
-- Only these end an action from the world side (ADR 0007 D6). When several
-  apply at one boundary, the first in this list is reported; the others are
-  not reported for that action.
+- Only these end an action from the world side before its completion (ADR
+  0007 D6). When several apply at one boundary, the first in this list is
+  reported; the others are not reported for that action.
+- A missing or distant target ends every other action at its completion,
+  through the completion checks (§4.2, §4.3), as in v1. A reserved item cannot
+  go missing while held, because only its holder can move it.
 - A completed action is never failed afterwards, as in v1.
 - A resident that chooses another action at a turn stops the running one at
   that turn's boundary: `stop = {by:"actor"}`, feedback
@@ -665,12 +674,20 @@ UtteranceFeedback { utterance_id:string|null, failure_code:FailureCode|null }
 - A statement with `addressee_id = null` is heard by everyone in range. It
   opens or continues no dialogue session, because sessions are keyed by an
   addressed pair (`world-rules-v0.1.md` §4.2).
-- World-level checks, in this order, keep the v1 `talk` order: the addressee
-  has a receipt, exists and is alive (`INVALID_TARGET`); it is within hearing
-  radius (`OUT_OF_HEARING`); the speech act is allowed (`INVALID_SPEECH_ACT`);
-  a reply is valid (`INVALID_REPLY`); the terms are valid (`INVALID_TERMS`,
-  §7.2); the session cap allows it (`DIALOGUE_LIMIT`). The first failure is
-  reported.
+- World-level checks keep the v1 `talk` order: the addressee has a receipt,
+  exists and is alive (`INVALID_TARGET`); it is within hearing radius
+  (`OUT_OF_HEARING`); the speech act is allowed (`INVALID_SPEECH_ACT`); a reply
+  is valid (`INVALID_REPLY`); the terms are valid (`INVALID_TERMS`, §7.2); the
+  session cap allows it (`DIALOGUE_LIMIT`). The first failure is reported.
+- They run twice, as v1 checks a `talk` at its start and at its completion:
+  1. **At the turn's boundary `t`**, against the state at `t`: every check
+     except the session cap. A failure here is kept: the utterance is not
+     emitted even if the conditions hold by emission.
+  2. **At emission**, during `t → t+1`, in emission order: every check again,
+     including the session cap, against the state at that moment. A speaker
+     valid at `t` whose addressee has moved out of hearing by emission fails
+     `OUT_OF_HEARING`. Two utterances competing for the last turn of a session
+     are decided by emission order.
 - A failed utterance produces no `utterance_spoken` event. Its failure code
   reaches the speaker in `last_utterance_feedback` at `t+1`; the action is
   unaffected.
@@ -816,7 +833,10 @@ compatibility verb to `invalid_attempt_ticks`, so a v1 start failure that
 becomes an unmet rule takes the same time. It keeps the v1 entity IDs of
 trees, the canteen and corpses, so receipts and targets map one to one. Its
 verbs copy the v1 reach and target constraints, and its rules declare their
-conditions in the v1 check order.
+conditions in the v1 check order. Its v1 `sleep_ticks` must lie within the
+sleep bounds of §3.2; a profile outside them is refused at load. `give_ticks`
+and the other v1 durations may take any value, because mutable conditions are
+checked at completion, as v1 does (§4.2).
 
 **Intent adapter.** It converts the policy's next v1 intent when that intent
 starts, from the current perception. It keeps a table from each v2
@@ -828,7 +848,7 @@ policy under its v1 identity.
 | `move_to` | `move_to`, same tile |
 | `gather` tree | `act` verb `gather`, target the tree entity |
 | `eat` | `act` verb `eat`, input `{held: fruit}` × 1 |
-| `drink {source:"spring"}` | `act` verb `drink`, target the spring tile |
+| `drink {source:"spring"}` | `act` verb `drink` with no target. "A spring within reach" is a rule condition of the compatibility rule, checked after the need, so the adapter needs no spring coordinate: a resident who has never seen the spring gets v1 `OUT_OF_REACH` through the bridge, at `t + attempt_ticks`, as v1. Neither the adapter nor the policy learns where the spring is |
 | `drink {source:"canteen"}` | `act` verb `drink`, instrument `{held: canteen}` |
 | `fill_canteen` target | `act` verb `fill`, target the submitted v1 target entity, kept as given. The verb declares its target class (a container) and that the target must be held, so a wrong target is `INVALID_TARGET` and an unheld canteen is `NO_ITEM`, in the v1 order; the spring and fullness are rule conditions |
 | `rest` | `act` verb `rest` |
@@ -923,7 +943,7 @@ Compared per tick against the committed v1 fixtures:
 |---|---|
 | `success` | Kernel `success`, or `act` settled `applied` |
 | `failure` at start with a code v2 keeps (`DEAD`, `INVALID_TARGET`, `NO_PATH`, `PATH_BLOCKED`, `EXHAUSTED` of `move_to`, `OUT_OF_REACH`, `NO_ITEM`, `ITEM_TAKEN`, `INVENTORY_FULL` of a transfer) | The same failure code, at `t + invalid_attempt_ticks` |
-| `failure` at start with a code that became a rule check (`RESOURCE_TAKEN`, `NO_NEED`, `NO_WATER`, `ALREADY_FULL`; `EXHAUSTED` and `INVENTORY_FULL` of `gather`; `OUT_OF_REACH` of `fill`) | `act` settled `unmet` at start, at `t + attempt_ticks`; the bridge maps (`rule_id`, `failed_check`) to the v1 code |
+| `failure` at start with a code that became a rule check (`RESOURCE_TAKEN`, `NO_NEED`, `NO_WATER`, `ALREADY_FULL`; `EXHAUSTED` and `INVENTORY_FULL` of `gather`; `OUT_OF_REACH` of `fill` and of a spring `drink`) | `act` settled `unmet` at start, at `t + attempt_ticks`; the bridge maps (`rule_id`, `failed_check`) to the v1 code |
 | `failure` at completion of a kernel action (for example `ITEM_TAKEN` of the loser of two pickups of the last fruit) | The same kernel failure code at completion, at `t` + the action's duration |
 | `failure` at completion represented by a rule check (for example `RESOURCE_TAKEN` of the loser of a contested gather) | `act` settled `unmet` at completion, at `t + work_ticks`, mapped by the bridge |
 | Failed `talk` | The joined talk result (§11.2) |
@@ -939,19 +959,22 @@ two stated exceptions:
 
 1. Scripted inputs that fail several checks at once, where v1 checked a
    condition that v2 makes a rule condition before a check that v2 makes
-   generic. There are two: `gather` with no stamina and a missing or
-   unreachable tree (v1 `EXHAUSTED`; v2 `INVALID_TARGET` or `OUT_OF_REACH`),
-   and `drink` with full hydration and no reachable spring or no canteen held
-   (v1 `NO_NEED`; v2 `OUT_OF_REACH` or `NO_ITEM`). v2 reports its own order
-   (§4.3). Other combined failures keep the v1 order, because kernel actions
-   copy it (§4.2) and compatibility rules declare their conditions in it.
+   generic. There are two: `gather` with no stamina and an existing but
+   unreachable tree, or a tree that no longer exists although the actor holds
+   its receipt (v1 `EXHAUSTED`; v2 `OUT_OF_REACH` or `INVALID_TARGET`); and a
+   canteen `drink` with full hydration and no canteen held (v1 `NO_NEED`; v2
+   `NO_ITEM`). v2 reports its own order (§4.3). Other combined failures keep
+   the v1 order, because kernel actions copy it (§4.2) and compatibility rules
+   declare their conditions in it. A target without a receipt is not an
+   exception: both versions reject it first, with `INVALID_TARGET`.
 2. A second reply to one request. v1 accepts it; v2 answers a proposal at most
    once (§7.1) and reports `INVALID_REPLY`.
 
 Fixtures pin the v2 outcome of each exception (WAP-26). M12 checks that no run
 of the P2 matrix reaches one; if one does, the equivalence check fails and the
-case goes through a change request. The adapter never invents an item ID; an
-intent it cannot convert is refused, recorded, and never reaches the world.
+case goes through a change request. Every v1 intent shape converts by the table
+of §11.2 without inventing an item ID or a coordinate; a conversion that fails
+is a defect, not a supported outcome.
 
 **Seeds and fixtures.** The P2 acceptance matrix (`p2-experiments-v0.1.md`
 §1–§2), same seeds and horizon, is the trajectory regression. Random seeds do
@@ -981,7 +1004,7 @@ the event catalog changes (ADR 0007 D8).
 | WAP-04 | Two hard stops at one boundary report the higher one (§4.4), for each named pair; a completed action is never failed afterwards, including by death in the same tick |
 | WAP-05 | An actor replaces an unfinished gather G at boundary `t` with a one-tick wait W: G finishes at `t` with `by: "actor"` and makes no further progress, its `on_interrupt` applies, W starts at `t` and finishes at `t+1`. The packet for `t+1` carries both in `action_feedback`, G before W, with two `action_ended` reports; saved before acknowledgement and restored, it is delivered once, and the next packet repeats neither |
 | WAP-06 | A material with an apparent value shows it in perception, while settlement uses the true value |
-| WAP-07 | `inspect` returns `on_inspect` descriptors, which never appear in later `EntityView`s; `inspect` out of reach is `OUT_OF_REACH`; a target gone before completion stops with `TARGET_GONE` |
+| WAP-07 | `inspect` returns `on_inspect` descriptors, which never appear in later `EntityView`s; `inspect` out of reach is `OUT_OF_REACH`; a target that disappears or moves away before completion fails the completion check after the elapsed time |
 | WAP-08 | A watcher in sight receives `ObservedAction` with watcher-visible phenomena only; a resident out of sight receives none; neither sees `rule_id` or true values. A visible actor walking to a tile the watcher cannot see, or acting on an entity hidden from it, shows `target = null` and gives the watcher no receipt; a visible target is shown |
 | WAP-09 | `propose` then `accept`, heard by two listeners, emits `utterance_spoken`, two `utterance_heard` sorted by listener, then `agreement_accepted` with backward causal links. `accept` without a matching proposal is `INVALID_REPLY`; a second answer, including after a `refuse`, fails. Each term kind is accepted when well formed; wrong parties, unexposed references and a `due_tick` not in the future are `INVALID_TERMS` |
 | WAP-10 | A resident picks up an item owned by another; the world allows it, and `item_transferred` records both owners; stack splits, container and process transfers, capacity limits and a race for the last item settle as §4.2 states |
@@ -995,12 +1018,16 @@ the event catalog changes (ADR 0007 D8).
 | WAP-18 | In the starter pack a sleeper wakes at the end of `duration_ticks` or when hunger or thirst crosses into the critical band; in the compatibility pack, at a v1 urgent crossing. Completion wins when both fall on one boundary; speech never wakes; an already-critical need at sleep start does not wake again until a new crossing; `duration_ticks` of 6 and 54 are accepted and 5 and 55 are `INVALID_TURN` |
 | WAP-19 | Report construction (§5.3): one boundary with an ended action, addressed and overheard speech, a band change, a threshold crossing, a first sighting and a cue upgrade, an observed action, a progress step and a wake yields exactly the expected report array, in the total order of §5.3. Two thresholds of one need crossed in one tick give two reports ordered by threshold ID. Saved before acknowledgement and restored, the packet is delivered once, and the next packet repeats none of it |
 | WAP-20 | Kernel preconditions (§4.2): for each kernel action, a target in reach, out of reach, of the wrong kind and missing gives the stated code; when several checks fail, the first in the table wins. `give` to a recipient at distance 0, 1 and 2 gives `OUT_OF_REACH`, success and `OUT_OF_REACH`; a distant recipient with no fruit held gives `OUT_OF_REACH`, as v1 |
-| WAP-21 | `act` timing (§4.3): a generic failure ends at `t + invalid_attempt_ticks`; unmet or unmatched at start at `t + attempt_ticks`; a contested last fruit settles the loser `unmet` at completion at `t + work_ticks`; a target gone mid-action stops with `TARGET_GONE` and applies `on_interrupt`; a missing target together with a missing input reports `INVALID_TARGET` |
+| WAP-21 | `act` timing (§4.3): a generic failure ends at `t + invalid_attempt_ticks`; unmet or unmatched at start at `t + attempt_ticks`; a contested last fruit settles the loser `unmet` at completion at `t + work_ticks`; a target that disappears mid-action settles `unmet` at completion with `failed_check` naming its slot; a `contribute` whose process disappears stops with `TARGET_GONE` at once; a missing target together with a missing input reports `INVALID_TARGET` |
 | WAP-22 | Item choice (§3.2): named choices are reserved before by-kind ones, so `[{held: X}, {item: e1}]` with `e1 < e2` held resolves to `e2` and `e1` in either listed order, and with only `e1` held reports `NO_ITEM`; by-kind choices take stacks in ascending ID order across several stacks, split a larger stack and never use one instance twice; the same resolution follows after replay or restore. `pick_up` by tile counts whatever stacks of that kind lie there at completion, and reports `ITEM_TAKEN` when they are too few |
 | WAP-23 | Committed scripted migration fixtures (§11.3), each asserting the packet actually delivered to the policy (v1 intent ID, status, code, triggers), ticks, queue disposal, back-off key and the next decision: urgent crossings inside one band for satiety, hydration and stamina, awake and asleep; urgent, direct speech and a new sight together, with v1 priority and every trigger kept in v1 order; `DIALOGUE_LIMIT`, `OUT_OF_HEARING` and `INVALID_REPLY` on an accept followed by a queued give, under the v1 talk intent ID; two talks competing for the last dialogue slot beside a non-talk completion; a request round trip; unfinished death; completion then death in one tick; natural and early waking; an empty tree at start and a contested last fruit (`RESOURCE_TAKEN`), and gather with no stamina or no room; `give` at distance 0; `fill_canteen` with a tree as target, and the correct-target control; two pickups of the last ground fruit (loser `ITEM_TAKEN` after its pickup time); a first reply; transfers by kind, including too few items; a profile with `talk_ticks = 2` refused at load |
 | WAP-24 | A threshold crossing inside one band is reported once, is not repeated while the need stays below, is reported again after the need recovers and falls once more, and is never reported at tick zero |
-| WAP-25 | Bridge separation (§11.2): two compatibility outcomes with identical resident feedback (for example an empty tree and a full inventory on `gather`) give different bridge outputs; no bridge output appears in any model context, memory or `Perception`; a compatibility pack whose rule checks are not all in the code table is refused at load; outside the compatibility pack there is no bridge |
-| WAP-26 | Domain exceptions (§11.3): `gather` with no stamina and an unreachable tree reports `OUT_OF_REACH`; `drink` with full hydration and no canteen held reports `NO_ITEM`; a second reply to one request reports `INVALID_REPLY`. Each outcome is pinned and listed as outside the equivalence promise |
+| WAP-25 | Bridge separation (§11.2): two compatibility outcomes with identical resident feedback (for example an empty tree and a full inventory on `gather`) give different bridge outputs; no bridge output appears in any model context, memory or `Perception`; a compatibility pack whose rule checks are not all in the code table is refused at load; outside the compatibility pack there is no bridge. Run as model → fallback → model, with a restore before acknowledgement: the fallback's gather failure leaves a private legacy code and back-off, the resumed model request, day log, recalled memories and perception hold neither the bridge output nor its source, and the legacy identity and effect survive the restore without duplicate delivery |
+| WAP-26 | Domain exceptions (§11.3), each pinned and listed as outside the equivalence promise: `gather` with no stamina and an existing but unreachable tree reports `OUT_OF_REACH`; with no stamina and a receipted tree that no longer exists, `INVALID_TARGET`; a canteen `drink` with full hydration and no canteen held reports `NO_ITEM`; a second reply after an acceptance, and after a refusal, reports `INVALID_REPLY`. Control: a `gather` at an unreceipted target reports `INVALID_TARGET` in both versions |
+| WAP-27 | Completion-time checks (§4.2), against v1 with `give_ticks = 3`: the recipient walks out of reach in the first tick and stays away, so the give runs to `t+3` and fails `OUT_OF_REACH` there; it walks away and returns before `t+3`, so the fruit is transferred at `t+3`. Each asserts the active state at every boundary, ticks, transfer, legacy feedback and triggers, queue disposal, back-off and next decision. Control: with `give_ticks = 1`, a move before completion gives `OUT_OF_REACH` at `t+1` in both |
+| WAP-28 | Spring drink without a known spring (§11.2): a resident below maximum hydration that has never seen the spring submits v1 `drink {source:"spring"}` and gets `failure/OUT_OF_REACH` at `t+1` under its v1 intent ID, with `ACTION_FAILED`, queue disposal and the next decision as v1; no spring coordinate enters its perception or the policy's private state. Control: with the spring known and adjacent, the drink succeeds |
+| WAP-29 | Two utterance checks (§7.1), against v1 `talk`: out of hearing at `t` but in hearing at emission fails `OUT_OF_HEARING` and emits nothing; in hearing at `t` but out of hearing at emission fails `OUT_OF_HEARING`; in hearing at both succeeds. Each asserts the utterance's presence, the joined result under the v1 intent ID, its tick and code, queue and back-off effects, and the next decision |
+| WAP-30 | Delayed stop of a replaced action (§11.2): the policy replaces a running action to reproduce a v1 interruption with a successor lasting more than one tick; when the old stop arrives in the next packet, no second legacy interruption is issued and the successor's queue is not discarded |
 
 ## 14. Disposition of the ADR 0007 open questions
 
