@@ -33,8 +33,10 @@ new work; do not silently restart deferred trials or merge parked candidates.
   [evaluation and inspection](docs/spec/p3-evaluation-v0.1.md)
 - [M9 acceptance and evidence](docs/tasks/p3/M9-evidence.md)
 
-P3.5 is in design. ADRs 0007–0014 are proposed, not effective, and the P3 specs
-stay in force until the P3.5 specs replace them.
+P3.5 is in design (M11). The owner accepted ADRs 0007–0014 on 2026-11-17,
+after approving the protocol change request CR-009
+(`docs/spec/open-questions.md`). The P3 specs stay in force until the P3.5
+specs replace them; those specs are written next.
 
 - [P3.5 plan](docs/plans/p3.5-implementation-plan-v0.1.md) (system index,
   milestones M11–M15, acceptance runs, deferred P3 work)

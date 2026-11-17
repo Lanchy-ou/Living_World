@@ -1,6 +1,8 @@
 # ADR 0007: World–agent protocol
 
-- Status: **Proposed** (draft for owner review; not effective).
+- Status: **Accepted** (owner M11, 2026-11-17, after CR-009 option A in
+  `docs/spec/open-questions.md`). Existing specs stay in force until this
+  ADR's spec replaces them.
 - Date: 2026-11-15.
 - Baseline: `8d5b44e` (`main`).
 - Phase: P3.5, system 1 of 8 ([plan index](../plans/p3.5-implementation-plan-v0.1.md)).

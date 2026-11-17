@@ -1,6 +1,7 @@
 # ADR 0012: Memory formation
 
-- Status: **Proposed** (draft for owner review; not effective).
+- Status: **Accepted** (owner M11, 2026-11-17). Existing specs stay in force
+  until this ADR's spec replaces them.
 - Date: 2026-11-16.
 - Baseline: `3f25930` (`task/P3.5-RR-01-world-adrs`).
 - Phase: P3.5, system 6 of 8 ([plan index](../plans/p3.5-implementation-plan-v0.1.md)).

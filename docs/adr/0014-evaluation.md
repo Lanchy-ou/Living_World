@@ -1,6 +1,7 @@
 # ADR 0014: Evaluation, observability and engineering constraints
 
-- Status: **Proposed** (draft for owner review; not effective).
+- Status: **Accepted** (owner M11, 2026-11-17). Existing specs stay in force
+  until this ADR's spec replaces them.
 - Date: 2026-11-16.
 - Baseline: `270d2aa` (`task/P3.5-MM-01-agent-adrs`).
 - Phase: P3.5, system 8 of 8 ([plan index](../plans/p3.5-implementation-plan-v0.1.md)).

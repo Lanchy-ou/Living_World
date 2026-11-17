@@ -1,6 +1,7 @@
 # ADR 0009: World engine execution and dynamics
 
-- Status: **Proposed** (draft for owner review; not effective).
+- Status: **Accepted** (owner M11, 2026-11-17). Existing specs stay in force
+  until this ADR's spec replaces them.
 - Date: 2026-11-15.
 - Baseline: `bf5ed7d` (`task/P3.5-PR-01-protocol-adr`).
 - Phase: P3.5, system 3 of 8 ([plan index](../plans/p3.5-implementation-plan-v0.1.md)).
