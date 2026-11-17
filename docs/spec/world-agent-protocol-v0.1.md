@@ -1,11 +1,12 @@
 # Living Island — World–Agent Protocol v0.1 (P3.5 v2 lane)
 
-> **Draft (2026-11-17), task P3.5-PR-02. Not frozen.** The owner answered the
-> decision sheet on 2026-11-17 (§15). Revised after the first Gate 2 review
-> ([P3.5-PR-02 review](../tasks/p3.5/P3.5-PR-02-review.md), B-01–B-06,
-> N-01–N-02), after its round 2 (§7 of that report, R2-B-01–R2-B-03,
-> R2-N-01–R2-N-02), after its round 3 (§8, R3-B-01–R3-B-02, R3-N-01) and
-> after its round 4 (§9, R4-B-01); the fourth revision is not yet reviewed.
+> **Frozen (owner, Gate 3, 2026-11-17), task P3.5-PR-02.** Any change goes
+> through the change-request steps
+> ([P3.5 plan](../plans/p3.5-implementation-plan-v0.1.md) §7). The owner
+> answered the decision sheet on 2026-11-17 (§15). Five Gate 2 rounds
+> ([P3.5-PR-02 review](../tasks/p3.5/P3.5-PR-02-review.md) §1–§10) found 12
+> blocking and 6 non-blocking issues, all resolved. Round 5 concluded "ready to
+> freeze"; its one wording note (R5-N-01) is applied in WAP-29.
 >
 > Implements [ADR 0007](../adr/0007-world-agent-protocol.md) under CR-009
 > option A ([open questions](open-questions.md)). When frozen, it supersedes for
@@ -1046,7 +1047,7 @@ the event catalog changes (ADR 0007 D8).
 | WAP-26 | Domain exceptions (§11.3), each pinned and listed as outside the equivalence promise: `gather` with no stamina and an existing but unreachable tree reports `OUT_OF_REACH`; with no stamina and a receipted tree that no longer exists, `INVALID_TARGET`; a canteen `drink` with full hydration and no canteen held reports `NO_ITEM`; a second reply after an acceptance, and after a refusal, reports `INVALID_REPLY`. Control: a `gather` at an unreceipted target reports `INVALID_TARGET` in both versions |
 | WAP-27 | Completion-time checks (§4.2), against v1 with `give_ticks = 3`: the recipient walks out of reach in the first tick and stays away, so the give runs to `t+3` and fails `OUT_OF_REACH` there; it walks away and returns before `t+3`, so the fruit is transferred at `t+3`. Each asserts the active state at every boundary, ticks, transfer, legacy feedback and triggers, queue disposal, back-off and next decision. Control: with `give_ticks = 1`, a move before completion gives `OUT_OF_REACH` at `t+1` in both. Start order (§2), in both actor orders: a recipient one step beyond reach steps next to the giver in the tick the give starts. With the recipient's ID lower, the giver's start check sees it adjacent and the fruit is transferred; with the giver's ID lower, the start check fails `OUT_OF_REACH` at `t + invalid_attempt_ticks`. Each asserts the same fields as above |
 | WAP-28 | Spring drink without a known spring (§11.2): a resident below maximum hydration that has never seen the spring submits v1 `drink {source:"spring"}` and gets `failure/OUT_OF_REACH` at `t+1` under its v1 intent ID, with `ACTION_FAILED`, queue disposal and the next decision as v1; no spring coordinate enters its perception or the policy's private state. Control: with the spring known and adjacent, the drink succeeds |
-| WAP-29 | Two utterance checks (§7.1), against v1 `talk`, in both actor orders. The addressee starts one step outside hearing and walks into it in this tick: with the speaker's ID lower, the speaker's start check comes first and fails `OUT_OF_HEARING`, the failure is kept and nothing is emitted; with the addressee's ID lower, the speaker's start check sees it in hearing, and the utterance is emitted and succeeds. Controls: in hearing at the speaker's start but out of hearing at emission fails `OUT_OF_HEARING`; in hearing at both succeeds; two talks competing for the last turn of a session are decided at emission. Each asserts the utterance's presence, the joined result under the v1 intent ID with its status, code and start and end ticks, the triggers, queue disposal or continuation, back-off and the next decision; saved and restored between start and emission, the kept start result survives |
+| WAP-29 | Two utterance checks (§7.1), against v1 `talk`, in both actor orders. The addressee starts one step outside hearing and walks into it in this tick: with the speaker's ID lower, the speaker's start check comes first and fails `OUT_OF_HEARING`, the failure is kept and nothing is emitted; with the addressee's ID lower, the speaker's start check sees it in hearing, and the utterance is emitted and succeeds. Controls: in hearing at the speaker's start but out of hearing at emission fails `OUT_OF_HEARING`; in hearing at both succeeds; two talks competing for the last turn of a session are decided at emission. Each asserts the utterance's presence, the joined result under the v1 intent ID with its status, code and start and end ticks, the triggers, queue disposal or continuation, back-off and the next decision. In the speaker-first case, the addressee's later step in the same tick never overwrites the kept start failure. Start and emission fall in one tick, so this is an in-tick assertion, not a save point; saves at tick boundaries are covered by WAP-05, WAP-19 and WAP-25 |
 | WAP-30 | Delayed stop of a replaced action (§11.2): the policy replaces a running action to reproduce a v1 interruption with a successor lasting more than one tick; when the old stop arrives in the next packet, no second legacy interruption is issued and the successor's queue is not discarded |
 
 ## 14. Disposition of the ADR 0007 open questions
