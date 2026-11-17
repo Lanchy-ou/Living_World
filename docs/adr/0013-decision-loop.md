@@ -25,6 +25,9 @@
 - The clock exception of D3 and the period boundary in D6 and D9 answer the
   independent design review of 2026-11-17
   ([P3.5-00 review](../tasks/p3.5/P3.5-00-review.md), F-01, F-04).
+- The pressure contract, the cue wording rule and the guard limits of D4
+  answer the round 3 review of 2026-11-17 (P3.5-00 review §8, R3-F-01,
+  R3-C-01, R3-C-02); the owner chose them on the same day.
 
 ## Context
 
@@ -142,10 +145,11 @@ a turn; it never stops the action.
 > Settled by the owner on 2026-11-17: what the day log holds, the morning
 > selection and context pressure (below). Still spec work: template wording
 > and observation thresholds (Q1), the prefix limit (Q2), and the pressure
-> thresholds and the guard's degradation strategy (Q4). Measured P3 request
-> (offline, steady state, upper-bound tokens): action schema 55% (sent twice;
-> P3.5 sends it once, ADR 0007 D7), tile lists 19%, recalled experience 20%
-> (half of it metadata), needs, inventory and feedback under 1%.
+> thresholds, the counting details and the guard's exact rules (Q4).
+> Measured P3 request (offline, steady state, upper-bound tokens): action
+> schema 55% (sent twice; P3.5 sends it once, ADR 0007 D7), tile lists 19%,
+> recalled experience 20% (half of it metadata), needs, inventory and
+> feedback under 1%.
 
 **[Owner]** Each resident has one working context per waking period, from
 waking to loss of consciousness. The harness rebuilds every request from stored
@@ -215,25 +219,57 @@ may mask these effects.
 **[Owner]** Context pressure links the load of the day to the resident's own
 choice to rest, without the harness choosing for it:
 
-- The harness computes context pressure from how full the working context is.
-  It is an agent-side cognitive cue, not world state, and never reaches the
-  world.
-- The current state shows it next to mental fatigue, in plain words, for
-  example "you are very tired, and so much has happened today that your
-  thoughts feel heavy".
+- **[Owner]** The harness computes context pressure from how full the whole
+  working context is (fixed prefix, day log and current state) against the
+  model's window. It is an agent-side cognitive cue, not world state, and never
+  reaches the world. The growth of the day log alone is recorded next to it for
+  analysis (ADR 0014 D2).
+- **[Owner]** The current state shows it in plain, neutral words, separate from
+  mental fatigue: each is described from its own value, so high pressure with
+  low fatigue never says "you are very tired". The cue describes and never
+  prescribes: "your thoughts feel crowded" is allowed, "you should sleep" is
+  not. It never mentions how long a sleep must last (ADR 0012 D2).
 - The cue rises gradually, well before the context nears the model's window,
   not only once the window is full.
 - The resident decides whether to keep going or rest. The harness never makes
   it sleep because of pressure.
-- Pressure is computed deterministically from the stored context (for example
-  with the P3 upper-bound token counter), so a rebuilt request matches its
-  recorded hash.
+- **[Owner]** The cue never counts itself. Pressure is computed from the
+  request without the pressure line; the line is then added, and the complete
+  request is counted again only to check that it fits the window (the guard
+  below). Otherwise a longer sentence could push the count across a band and
+  change the sentence.
+- **[Owner]** Pressure is computed deterministically with a pinned local
+  counter (for example the P3 upper-bound counter), never from usage that the
+  provider reports and never by calling the provider. It is recorded as a
+  derived agent-side entry in the context manifest (D10), not as an
+  observation: counter and wording versions, the counted amount, the band and
+  the cue text. Replay recomputes it with the same pinned code, or refuses if
+  an input or the counter differs, so a rebuilt request matches its recorded
+  hash.
 
-**[Owner]** An engineering guard still keeps every request within the model's
-context window, so a run cannot fail on a resident that keeps refusing to
-sleep. The guard acts on the agent side only and never changes world state;
-for example, it cannot make a resident sleep. Its degradation strategy is
-decided later (Q4).
+**[Owner]** An engineering guard keeps every model call within the model's
+context window: decisions, deliberate recall, the morning selection and both
+consolidation calls (ADR 0012 D2). A run then cannot fail on a resident that
+keeps refusing to sleep, or on a long day at consolidation. The guard must hold
+even when the resident ignores the cue. It acts on the agent side only and
+never changes world state, mental fatigue included; it cannot make a resident
+sleep. In the first version:
+
+- It only leaves content out, by fixed rules (for example the oldest day-log
+  entries first). It never asks a model to summarize, because that would be a
+  second memory-forming call (ADR 0012 D2).
+- The stored day log stays complete. Each time the guard acts, the record
+  states what was left out, with manifests before and after (D10), and the
+  inspection view shows it. Evaluation reports those turns apart from natural
+  long-context effects (ADR 0014 D2).
+- The resident is told only that it cannot clearly recall earlier parts of the
+  day. Nothing is invented in their place.
+- An oversized request is not a provider failure, so it does not trigger the
+  fallback policy (D7).
+- Pressure still reflects the full context, not the shortened request, so a
+  shortened day never looks fresh.
+
+The exact rules, what is left out first and the threshold are spec values (Q4).
 
 Consolidation at loss of consciousness closes the working context (ADR 0012
 D2). The next waking period starts a new one from the updated memory.
@@ -335,7 +371,9 @@ never made.
 
 - Each assembled context has a manifest: for every section and entry, the
   memory, day-log entry or perception it came from, by ID, and its size in
-  tokens. It holds references only, never copies.
+  tokens. Derived agent-side data, such as context pressure (D4), names the
+  derivation that produced it. The manifest holds references only, never
+  copies.
 - Day-log entries, memories and fixed-prefix parts are stored once, by content
   hash. A decision record stores its manifest, the new entries and the model
   output. The exact request bytes are rebuilt deterministically and checked
@@ -368,7 +406,7 @@ never made.
 | Q1 | The wording of the world-entry templates, which perceptions become observation entries, and how large an entry may be. |
 | Q2 | Whether the prefix selection is a separate call at waking or the last step of consolidation, and the prefix limit (start at about 8–20 memories, D4). |
 | Q3 | An operator-level run budget or kill switch for live runs, given no per-resident limit. |
-| Q4 | Context pressure: its bands, thresholds and wording (D4). The guard near the context window: its degradation strategy, what it drops or summarizes first, and at what threshold. Neither may change world state. |
+| Q4 | Context pressure: its bands, thresholds and wording, which parts of the request are counted, how the window is defined (including the room left for the response), and how replay verifies the derivation (D4). The guard: which entries it leaves out first, at what threshold, and what happens when a single new input is too large on its own. Neither may change world state. |
 | Q5 | The strength formula, the threshold, N, and how many recalls one turn may make. A recall never reaches the world, but it makes one turn more than one model call. |
 | Q6 | The exact notification classes (D3 names the first five) and which progress steps notify. |
 | Q7 | Request format: the provider's tool-calling messages or structured JSON output. If the provider returns a separate reasoning channel, it is recorded; whether it may be sent back in later requests depends on the provider. Both are decided by a live check. |

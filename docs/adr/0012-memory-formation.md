@@ -18,6 +18,8 @@
 - The agreement rule of D1, the source-kind check of D2 and the guidance on
   dated observations follow an external review that the owner accepted on
   2026-11-16.
+- The window guard on consolidation calls (D2) and Q8 answer the round 3
+  review of 2026-11-17 (P3.5-00 review §8, R3-F-01).
 - "Consolidation" replaces the earlier term "compaction": the step maintains
   long-term memory, it does not just shorten the day.
 
@@ -83,6 +85,10 @@ long-term memories, the model proposes changes, for example:
   writes of D1, and the existing long-term memories the model chooses.
   **[Owner]** The first version reads the whole waking period, as long as it
   fits the model's context window. Layered consolidation is evaluated later.
+  **[Owner]** The window guard of ADR 0013 D4 covers both consolidation calls,
+  because a day that fits a decision request may not fit together with the
+  index, the selected records and pending experience. The pending-area limit
+  (D5) alone does not show that a request fits (Q8).
 - **[Owner]** The model chooses which existing long-term memories to read. It
   first sees an index of the resident's long-term store and names the records
   it wants, then reads those in full and writes the change set. Both steps are
@@ -250,3 +256,4 @@ Retry counts and the pending limit are spec values (Q5).
 | Q5 | Retry counts and the pending-area limit (D5). |
 | Q6 | The change-set schema and the retention rules of each kind. |
 | Q7 | What wakes a sleeping resident besides a critical need, for example being addressed directly (ADR 0013 D3). |
+| Q8 | What consolidation does when the waking period, the index, the selected records and pending experience do not fit the window together. The guard keeps the call within the window (ADR 0013 D4), but what it leaves out is then not consolidated. |
