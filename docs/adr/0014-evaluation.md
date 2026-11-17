@@ -17,7 +17,9 @@
   day. The memory-off boundary, the watching path, outcome-based skill scoring,
   arm comparison rules and the milestone of each extension test answer the
   independent design review of 2026-11-17
-  ([P3.5-00 review](../tasks/p3.5/P3.5-00-review.md)).
+  ([P3.5-00 review](../tasks/p3.5/P3.5-00-review.md)). Recording context
+  pressure next to fatigue and sleep follows the owner's decisions of
+  2026-11-17 on the remaining design details.
 
 ## Context
 
@@ -48,7 +50,7 @@ Views:
 | Memory browser | A resident's memories by kind, supersession chains, `needs_review` records, personality over time |
 | Emergence metrics | The four capabilities (D2), with drill-down to instances |
 | Comparison | Two runs side by side, for example memory on and off |
-| Cost | Calls, tokens, cache hit rate, latency and fallback rate per resident and day; token share per context section (instructions, schema, current state, day log, recalled memories), from the context manifest (ADR 0013 D10); context size per turn over the day, and fallback rate against context size (ADR 0013 D8) |
+| Cost | Calls, tokens, cache hit rate, latency and fallback rate per resident and day; token share per context section (instructions, schema, current state, day log, recalled memories), from the context manifest (ADR 0013 D10); context size and context pressure per turn over the day, and fallback rate against context size (ADR 0013 D4, D8) |
 | Rules and attempts | Rule use, and where unmatched attempts cluster |
 | Time use | **[Owner]** The share of each resident-day spent on survival, exploring, crafting and talking (ADR 0010 D3) |
 
@@ -144,10 +146,15 @@ measures are Q5):
 
 - Does a growing working context change behaviour observably (repeated actions,
   missed information, invalid output and fallback), and how does that relate to
-  context size, time awake and the fatigue band? (ADR 0013 D4, ADR 0012 D3)
+  context size, time awake, the fatigue band and the context-pressure cue?
+  (ADR 0013 D4, ADR 0012 D3)
 - Does consolidation improve continuity across days (commitments kept, beliefs
   and skills carried over), form knowledge, and still forget what does not
   matter? (ADR 0012 D2)
+
+**[Owner]** Context pressure, the mental fatigue band and sleep choices are
+recorded at every turn, so evaluation can separate how each cue affects
+decisions (Q5).
 
 Long-context effects depend on the model, so the model ID is an experimental
 condition: runs with different models are not comparisons of the same
@@ -194,5 +201,5 @@ recall-recipe tests are M14 evidence; all pass before M15 (plan §4).
 | Q2 | The minimum occurrence count of each capability for M15 acceptance. |
 | Q3 | Inspection artifact size limits and sharding for long runs with many residents. |
 | Q4 | P3.5 drops the P3 trial caps (ADR 0012 D4). Do exploration runs still need a trial registration (for reproducibility only), or none? |
-| Q5 | Measures for the two experimental questions of D2, for example what counts as a repeated action or missed information. |
+| Q5 | Measures for the two experimental questions of D2, for example what counts as a repeated action or missed information, and how to tell the effect of context pressure from that of mental fatigue, which rise together during a day (for example with counterfactual probes that drop one cue). |
 | Q6 | Counterfactual probes: how key turns are chosen, how many samples each side needs, and when a choice counts as changed. |

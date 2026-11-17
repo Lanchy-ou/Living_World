@@ -112,6 +112,8 @@ deceptive material breaks any fixed mapping from descriptors to true values
   as history the resident can still recall ("I used to think the north tree had
   fruit"). Records derived from it are marked `needs_review`, not deleted, and
   are resolved at the next consolidation (ADR 0012).
+- **[Owner]** A merge keeps the sources of every record it merges, so a merged
+  memory still traces to what the resident saw or was told (ADR 0012 D2).
 - **[Owner]** Forgetting is not supersession. A forgotten record is removed from
   the long-term store, and the resident can no longer retrieve it. The audit
   records keep it for replay and evaluation only.

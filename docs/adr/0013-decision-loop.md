@@ -17,7 +17,9 @@
   harness, decision loop, memory). That discussion fixed directions only;
   formats, algorithms and numbers it did not fix are open questions, not owner
   decisions.
-- D3 and D4 are marked **Needs discussion** for their details.
+- The details of D3 and D4 that were marked *Needs discussion* were settled by
+  the owner on 2026-11-17, after the design review. Values, templates and the
+  guard's degradation strategy are spec work.
 - The utterance of D2, the entry types of D4 and the commitment rule of D9
   follow an external review that the owner accepted on 2026-11-16.
 - The clock exception of D3 and the period boundary in D6 and D9 answer the
@@ -124,18 +126,23 @@ critical band. It only gives the resident a turn; the resident still decides
 whether to stop. Hard stops (fainting, exhaustion, death) are separate: the
 world ends the action whatever the mute list says.
 
-> **Needs discussion (owner, 2026-11-16).** Current draft: a mute list lasts
-> for one action and is cleared when that action ends. The closed vocabulary
-> of notification classes is Q6.
+**[Owner]** The first version has a few stable notification classes: a change
+in body state, direct speech (addressed to the resident), nearby conversation,
+a new discovery, and task or environment progress. A notification only offers
+a turn; it never stops the action.
+
+- **[Owner]** A mute list holds only for the current action. It is cleared when
+  that action ends, is replaced or is stopped.
+- **[Owner]** Progress is not notified at every tick, only at meaningful steps,
+  so a long action does not produce a stream of empty turns. The exact classes
+  and steps are Q6.
 
 ### D4. Waking-period working context
 
-> **Needs discussion (owner, 2026-11-16).** The direction below is decided,
-> and so is the day-log entry format. Still open: the template wording and
-> which perceptions become observation entries (Q1), what enters the fixed
-> prefix (Q2), the guard near the context window (Q4), and how detailed the
-> day log is, which
-> decides how large the context grows (ADR 0014 D2). Measured P3 request
+> Settled by the owner on 2026-11-17: what the day log holds, the morning
+> selection and context pressure (below). Still spec work: template wording
+> and observation thresholds (Q1), the prefix limit (Q2), and the pressure
+> thresholds and the guard's degradation strategy (Q4). Measured P3 request
 > (offline, steady state, upper-bound tokens): action schema 55% (sent twice;
 > P3.5 sends it once, ADR 0007 D7), tile lists 19%, recalled experience 20%
 > (half of it metadata), needs, inventory and feedback under 1%.
@@ -152,8 +159,8 @@ parts; it does not rely on a provider-side session. Parts, in order:
    speech heard and said, notable observations (new sightings, changes),
    explorations, and memories recalled during the day (D5), in order.
 3. **Current state**, replaced at every turn: the latest perception, body state
-   (need and fatigue bands), inventory, the running action and its progress,
-   the current intention, and the reason for this turn.
+   (need and fatigue bands), context pressure, inventory, the running action and
+   its progress, the current intention, and the reason for this turn.
 
 - Dynamic world state is never kept as standing instructions. Only the current
   state shows it, and only as the resident perceives it now.
@@ -161,14 +168,22 @@ parts; it does not rely on a provider-side session. Parts, in order:
   drives), never how the world works: residents start with no recipes (ADR 0007
   D3).
 
+**[Owner]** The objective event log keeps the full history. The day log holds
+only what the resident actually received: its own actions and their results,
+speech heard (verbatim), notable new observations and changes, memories it
+recalled, and its adopted responses (verbatim). It never touches hidden world
+state. An unchanged surrounding is not logged again. An observation that was
+delivered is kept even when it gave no turn at once, for example while muted.
+
 **[Owner]** Day-log entries have fixed formats:
 
 - World entries are rendered by fixed templates from what the world reported
   to this resident: action results, notifications, speech heard (verbatim) and
   observations. A change of state is logged as an entry ("you feel hungry");
   the full state appears only in the current state.
-- **[Owner]** Every entry carries its type (own action result, own perception,
-  speech heard, recall, own response) and the tick it describes. Code can then
+- **[Owner]** Every entry carries its type (for example `action_result`,
+  `observation`, `heard_speech`, `recall`, `own_response`) and the tick it
+  describes. Code can then
   tell what the resident perceived from what it was told, which the
   consolidation validator checks (ADR 0012 D2).
 - Resident entries are the model's adopted responses, appended exactly as
@@ -181,19 +196,44 @@ parts; it does not rely on a provider-side session. Parts, in order:
   covers most of each request. Only the current state is new.
 - **[Owner]** The long-term memories in the fixed prefix are chosen by a
   harness-side model call (context management) from the memory index (ADR
-  0012 D2), not by fixed code rules and not by the resident.
+  0012 D2), not by fixed code rules and not by the resident. The index shows
+  each record's ID, kind, gist and confidence; selection is not a cut by a
+  fixed importance score. As a starting experiment the prefix holds about
+  8–20 memories; the real limit follows token use and tests (Q2). Open
+  commitments are not forced into the prefix, so a resident may forget a
+  promise (D9). During the day, cue-based recall and deliberate recall stay
+  (D5).
 
 **[Owner]** The working context grows naturally. It is not compressed to a short
 length during the waking period. Long-context effects of the model (missed
 details, repetition, weaker attention) are accepted as part of a resident's
 limited cognition. They are measured (ADR 0014 D2), not assumed. Context
 length is never an input to world rules: mental fatigue is computed from world
-quantities only (ADR 0012 D3).
+quantities only (ADR 0012 D3). Neither hidden compression nor automatic sleep
+may mask these effects.
 
-**[Owner]** An engineering guard keeps every request within the model's
-context window, so a long day cannot stop the run. The guard acts on the agent
-side only and never changes world state; for example, it cannot make a
-resident sleep. Its behaviour is Q4.
+**[Owner]** Context pressure links the load of the day to the resident's own
+choice to rest, without the harness choosing for it:
+
+- The harness computes context pressure from how full the working context is.
+  It is an agent-side cognitive cue, not world state, and never reaches the
+  world.
+- The current state shows it next to mental fatigue, in plain words, for
+  example "you are very tired, and so much has happened today that your
+  thoughts feel heavy".
+- The cue rises gradually, well before the context nears the model's window,
+  not only once the window is full.
+- The resident decides whether to keep going or rest. The harness never makes
+  it sleep because of pressure.
+- Pressure is computed deterministically from the stored context (for example
+  with the P3 upper-bound token counter), so a rebuilt request matches its
+  recorded hash.
+
+**[Owner]** An engineering guard still keeps every request within the model's
+context window, so a run cannot fail on a resident that keeps refusing to
+sleep. The guard acts on the agent side only and never changes world state;
+for example, it cannot make a resident sleep. Its degradation strategy is
+decided later (Q4).
 
 Consolidation at loss of consciousness closes the working context (ADR 0012
 D2). The next waking period starts a new one from the updated memory.
@@ -326,10 +366,10 @@ never made.
 | ID | Question |
 |---|---|
 | Q1 | The wording of the world-entry templates, which perceptions become observation entries, and how large an entry may be. |
-| Q2 | Whether the prefix selection is a separate call at waking or the last step of consolidation, and how much the prefix may hold. |
+| Q2 | Whether the prefix selection is a separate call at waking or the last step of consolidation, and the prefix limit (start at about 8–20 memories, D4). |
 | Q3 | An operator-level run budget or kill switch for live runs, given no per-resident limit. |
-| Q4 | The guard near the context window: what it drops or summarizes first, and at what threshold. It may not change world state. |
+| Q4 | Context pressure: its bands, thresholds and wording (D4). The guard near the context window: its degradation strategy, what it drops or summarizes first, and at what threshold. Neither may change world state. |
 | Q5 | The strength formula, the threshold, N, and how many recalls one turn may make. A recall never reaches the world, but it makes one turn more than one model call. |
-| Q6 | The closed vocabulary of notification classes, and how long a mute list lasts. |
+| Q6 | The exact notification classes (D3 names the first five) and which progress steps notify. |
 | Q7 | Request format: the provider's tool-calling messages or structured JSON output. If the provider returns a separate reasoning channel, it is recorded; whether it may be sent back in later requests depends on the provider. Both are decided by a live check. |
 | Q8 | Later direction, not in the first version: residents with different memory ability, for example a different recall reach or result count, as a trait. |

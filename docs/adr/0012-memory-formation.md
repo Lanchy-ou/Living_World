@@ -12,7 +12,9 @@
   The D2 direction and the D3 rule that fatigue never trims the context follow
   the owner's architecture discussion of 2026-11-16; details it did not fix are
   open questions, not owner decisions.
-- D2 is marked **Needs discussion** for its details.
+- The details of D2 and D5 that were marked *Needs discussion* were settled by
+  the owner on 2026-11-17, after the design review. The values they leave (K,
+  retry counts, capacities and the change-set schema) are spec work.
 - The agreement rule of D1, the source-kind check of D2 and the guidance on
   dated observations follow an external review that the owner accepted on
   2026-11-16.
@@ -56,12 +58,9 @@ metric (ADR 0014 D2) could not tell the two apart.
 
 ### D2. Consolidation at loss of consciousness
 
-> **Needs discussion (owner, 2026-11-16).** The direction below is decided.
-> Still open: the change-set schema, merge and forgetting rules (Q6), how
-> much of a day becomes episodic memory (Q4), the consolidation window (Q3)
-> and failure recovery (D5, Q5). The earlier conflict with the P3 capacity
-> limits E-01/E-02 of `resident-experience-v0.1.md` no longer arises: a raw
-> day log does not persist as long-term memory (ADR 0011 D6).
+The earlier conflict with the P3 capacity limits E-01/E-02 of
+`resident-experience-v0.1.md` no longer arises: a raw day log does not persist
+as long-term memory (ADR 0011 D6).
 
 **[Owner]** LLM formation happens in one place: consolidation, a workflow that
 runs when the resident loses consciousness (sleep, fainting, and later
@@ -92,6 +91,12 @@ long-term memories, the model proposes changes, for example:
   supersede, change confidence, forget, and adjust a personality trait within
   bounds (ADR 0011 D5). The hard facts of D1 are out of its reach, except the
   status of a commitment.
+
+**[Owner]** Retention differs by kind; no daily count is shared by all kinds.
+As a soft starting target for experiments, one consolidation keeps about 5–15
+episodic memories, adjusted by tests (Q4). A merge keeps the sources of every
+record it merges. A forgotten record leaves the long-term store and stays only
+in the audit, out of the resident's reach (ADR 0011 D4, D6).
 
 **[Owner]** The index has one line per record: ID, kind, a one-line gist and
 confidence. Consolidation writes the gist whenever it creates or changes a
@@ -148,17 +153,20 @@ interrupted. The resident chooses how long it sleeps (ADR 0007 D2). A normal
 sleep is long enough for consolidation to finish and the working context to be
 closed.
 
-> **Needs discussion (owner, 2026-11-16).** Current draft of the mechanism,
-> which keeps replay exact: consolidation takes effect at a fixed tick, K ticks
-> after the resident loses consciousness (K is a spec value). The world keeps
-> running in between. If the model has not answered by tick K, the simulation
-> waits at that tick, as it waits for decision calls, so a replay applies the
-> result at the same tick. If the resident wakes before tick K, because it
-> chose a short sleep (a nap) or because something woke it, the result is not
-> applied: the resident keeps its open working context and consolidates at the
-> next loss of consciousness. A nap rests the body but does not clear the
-> mind. A faint lasts at least K ticks, so fainting always ends in
-> consolidation.
+**[Owner]** The consolidation window. A fixed K ticks of unconsciousness ends
+a waking period (K is a spec value, Q3), and consolidation takes effect at that
+tick. Simulated time is separate from how long the model takes: consolidation
+runs while the resident sleeps and the world keeps running. If the model has
+not answered by tick K, the simulation waits at that tick, as it waits for
+decision calls, so a replay applies the result at the same tick.
+
+- A sleep shorter than K, whether chosen (a nap) or interrupted, ends no
+  waking period. The resident keeps its open working context and consolidates
+  at the next loss of consciousness. A nap rests the body but does not clear
+  the mind.
+- A faint lasts at least K ticks, so fainting always ends in consolidation.
+- Both memory arms use the same boundary. The off arm runs no consolidation but
+  closes the working context in the same way (ADR 0014 D2).
 
 **[Owner]** Residents are not told that a nap does not clear the mind. They
 learn it, or fail to, from experience.
@@ -172,8 +180,11 @@ utterances heard and new sightings). It never depends on token counts.
 - The resident perceives it as a band, like other needs.
 - **[Owner]** `agents` tells the model how tired the resident feels. It does not
   shrink or trim the working context because of fatigue: the context grows
-  naturally (ADR 0013 D4). Whether a long context and fatigue relate, and how,
-  is measured (ADR 0014 D2), not designed.
+  naturally (ADR 0013 D4).
+- **[Owner]** Next to fatigue, the model is told how heavy the day's load is:
+  context pressure, an agent-side cue that never reaches the world (ADR 0013
+  D4). Mental fatigue stays a world quantity that never depends on token
+  counts. How the two cues affect choices is measured (ADR 0014 D2).
 - At the maximum, a world rule makes the resident faint, which triggers
   consolidation. This also bounds a waking period that never sleeps.
 - Physical fatigue and rest needs stay world rules, unchanged by this ADR.
@@ -197,12 +208,22 @@ Each consolidation is two recorded model calls, selection and change set
 validator's verdict and the committed change set, hashed like a P3 decision. Replay applies the recorded change set without a
 model call.
 
-Failure (current draft, Q5): a consolidation with no valid output is retried a
-bounded number of times. If it still fails, the waking period still ends at
-the boundary (ADR 0014 D2): the resident wakes with a new working context, and
-the failed one stays pending, unseen by the resident, and is consolidated at
-the next loss of consciousness together with the new one. After repeated failures only the mechanical writes
-(D1) are kept, and the rest of the pending experience counts as forgotten.
+**[Owner]** Failure recovery:
+
+- A failed provider call is retried a bounded number of times. A change set
+  that is partly invalid loses only the invalid operations and those that
+  depend on them (D2).
+- If consolidation still fails, the waking period still ends at the boundary
+  (ADR 0014 D2). The resident wakes with a new working context. The failed one
+  waits in a pending area that the resident cannot reach, and is retried at the
+  next sleep together with the new one.
+- The pending area has a limit, in size or in waking periods, so pending
+  experience cannot pile up. Beyond the limit, pending experience counts as
+  forgotten and stays only in the audit.
+- Mechanical records (D1: commitments, transfers, skill evidence) are never
+  lost, whatever happens to the pending experience.
+
+Retry counts and the pending limit are spec values (Q5).
 
 ## Consequences
 
@@ -224,7 +245,8 @@ the next loss of consciousness together with the new one. After repeated failure
 |---|---|
 | Q1 | The mental fatigue formula and its maximum (world rule, shared with ADR 0010), including how much a nap lowers it. |
 | Q2 | Does fainting or intoxication degrade consolidation (for example, memory gaps)? Deferred after the first version. |
-| Q3 | The consolidation window K (a spec value). |
-| Q4 | How much of a day becomes episodic memory: a bound per consolidation, or only the capacity of each kind (ADR 0011 Q1)? |
-| Q5 | Failure recovery: retry count, how many pending waking periods may be combined, and when the rest counts as forgotten. |
-| Q6 | The change-set schema and the rules for merging and forgetting. |
+| Q3 | The value of K. |
+| Q4 | The episodic target per consolidation (start at about 5–15, D2) and the capacity of each kind (ADR 0011 Q1). |
+| Q5 | Retry counts and the pending-area limit (D5). |
+| Q6 | The change-set schema and the retention rules of each kind. |
+| Q7 | What wakes a sleeping resident besides a critical need, for example being addressed directly (ADR 0013 D3). |
