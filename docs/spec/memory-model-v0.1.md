@@ -1,5 +1,7 @@
 # Living Island — Memory Model v0.1 (P3.5)
 
+> **Rework 2 (2026-11-18).** Defines safe record projections, immutable evidence revisions and capacity for refuted skills. MM-21–24 exercise these paths.
+
 > **Draft (2026-11-18), task P3.5-SP-01. Not frozen.** Owner decisions are
 > written with the author's recommended answer applied and are listed in
 > §13 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md).
@@ -50,8 +52,7 @@
   from 1, never reused, so a merged or forgotten ID never returns.
 - **Store version.** An integer that starts at 0 and increases by one with
   every committed change. There are three kinds: a mechanical write, a use
-  update (the `last_used_tick` and `use_count` changes of one context
-  assembly, as one batch), and a committed change set. A change set names the
+  update (the `last_used_tick` and `use_count` changes for records first sent in a decision context of a turn, deduplicated across dispatches of that turn), and a committed change set. A change set names the
   version it was built from (memory-formation spec).
 - Records are stored by content hash, once (ADR 0013 D10). A record's content
   hash is the SHA-256 of the canonical encoding of the record without
@@ -107,8 +108,19 @@ The index lists one line per record in the store except archived commitments
 ```
 
 `flags` is a sorted, comma-separated subset of `superseded`, `needs_review`,
-`open` (an open commitment), or `-`. For example:
+`refuted` (a refuted skill), `open` (an open commitment), or `-`. For example:
 `m:ella:42 | belief | c3 | - | Fruit grows on the tree north of the cave`.
+
+**Resident projection.** Use the same typed serializer for prefix, recall,
+index/gist, selected, mandatory, pending and changed mechanical records.
+Commitment hard fields shown are terms, role, counterpart, due tick and
+heard_counterpart, alongside its resident-authored status/note and safe
+sources. Omit agreement_id and raw acceptance/proposal/event references.
+For social facts show given, received, last seen/heard and local commitment
+record IDs in place of agreement IDs. Templates derive gists only from
+these safe fields. Keep the private join from local record to objective
+event on the writer/inspection side. Independently delivered speech can
+carry the same ID bytes: provenance grants that view.
 
 ## 3. The kinds
 
@@ -165,7 +177,7 @@ SocialFacts {                     // hard facts, written by code only (ADR 0012 
 - `given` and `received` count successful `give` transfers between the two,
   by archetype, sorted, **as this resident perceived them** (memory formation
   §1.1): `given` from its own `give` feedback, `received` from the giver's
-  `give` it watched settle. A gift received while asleep is not counted, as
+  successful self-targeted `give` settle's `received_items` witness (WAP §5.4). A gift received while asleep is not counted, as
   the resident did not see who gave it. Objective transfers stay in the event
   log for evaluation.
 - `trust` (0–4) and `impression` are the resident's own view, changed only by
@@ -180,7 +192,7 @@ written in what the resident perceives:
 ```text
 SkillHypothesis {
   verb:string,
-  target:Look|null,
+  target:Look|{terrain:Terrain}|null,
   instruments:array<Look>,
   inputs:array<{look:Look, quantity:integer}>,
   circumstances:string|null,      // free text, e.g. "near a fire", "when not tired"
@@ -215,7 +227,10 @@ SkillEvidence {                   // written by code only (ADR 0012 D1)
   was shown, so a deceptive item can fool it, as intended.
 - `status` is set by consolidation: `doubtful` or `refuted` when evidence goes
   against the hypothesis (ADR 0011 D1: refuted hypotheses are demoted). A
-  refuted skill is kept as history; it is not recalled by recipe.
+  refuted skill without a successor stays live for capacity, flagged refuted
+  in the index, excluded from recipes and evidence writes. It is the first
+  live skill eligible for eviction (oldest created_tick, then ID). Once
+  superseded it counts only against history and retains its refuted flag.
 - A skill taught by another reaches the listener as heard words; consolidation
   may turn it into a hypothesis with a `told` source (ADR 0011 D3).
 
@@ -309,8 +324,8 @@ Source = {kind:"observed", entry_id:string}                     // a day-log ent
   (memory-formation spec).
 - An `observed` source cites a day-log entry whose type is one of the resident's
   own perceptions (decision-loop spec), never a `heard_speech` entry. The
-  feedback on the resident's own utterance is its own perception: it knows
-  what it said.
+  feedback on the resident's own utterance proves only the act of speaking.
+  It cannot add observed provenance about the subject of the words.
 - A `told` source cites an utterance that was delivered to this resident, in a
   `heard_speech` entry, with that entry's speaker. Nothing else makes a
   source `told`: not an agreement record, not another resident's report of
@@ -318,6 +333,14 @@ Source = {kind:"observed", entry_id:string}                     // a day-log ent
 - An `innate` source is written only by code at run start. A change set can
   never create one.
 - A merged record keeps every source of every record it merges (ADR 0011 D4).
+
+For every inferred source the writer binds each authorized memory ID to
+its immutable revision (ID, store version, content hash) as read by that
+call or staged by the producer op. Keep those bindings and the source
+entry's delivery/member key in inspection, including evicted revisions.
+A skill-evidence write journals the hypothesis revision, intent, actor,
+observer/owner delivery members and exact counter delta. Totals alone
+cannot establish which attempt supported a lesson.
 
 ### 4.2 Confidence
 
@@ -400,7 +423,8 @@ kind above capacity, the rule of ADR 0011 D1 for that kind applies:
   consolidation drops them).
 - **Belief**: code forgets live beliefs to make room, lowest confidence first,
   then least recently used (`last_used_tick`, never-used first), then lowest
-  ID, skipping beliefs the change set itself adds or changes. The forgotten
+  ID, skipping every explicit mutation operand or producer in the set (including
+  later ops), plus implicit writes already staged, as in formation §3.5. The forgotten
   beliefs go to the audit like any forgotten record.
 - **Skill**: code forgets `refuted` skills first, oldest first; if that is not
   enough, the excess adds are dropped.
@@ -494,6 +518,10 @@ adds a test kind this way (M14 evidence).
 | MM-18 | Intentions: setting replaces with `replaced`; clearing with no successor gives `cleared` and no current intention; an off-arm boundary gives `reset`; a history reader never returns a non-current intention as current |
 | MM-19 | Archive: a commitment marked `kept` leaves the index, prefix and recall, stays in the store and is read by evaluation |
 | MM-20 | Skills: a revised hypothesis is a new record superseding the old, with zero evidence; the old keeps its counts; a merge of two skills is refused |
+| MM-21 | Compare commitment, social facts, gist, index and consolidation projections for an asleep proposer. No objective ID leaks through backlinks; an independently delivered speech ID survives. |
+| MM-22 | Refute a skill at live cap without a successor: index refuted, zero recipe/evidence eligibility, still live; overflow evicts it first and preserves its evidence in audit. Superseded refuted skill counts as history only. |
+| MM-23 | Follow an inferred source after its ancestor changes and is evicted: audit resolves the original revision. Own repetition of another's claim proves speech only. |
+| MM-24 | Equal inventory increases after a successful watched merge and an unseen gift give different received counts. Only a delivered successful receipt increments the former. |
 
 ## 12. Disposition of open questions
 
