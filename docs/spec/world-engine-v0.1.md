@@ -121,8 +121,11 @@ order exactly, which the compatibility check depends on.
 | 7 | Commit | As v1 (`world-rules-v0.1.md` §5.4 step 7) |
 
 - All events of phases 1–6 belong to tick `t+1`, as in v1.
-- Model calls happen between phase 7 of one tick and phase 1 of the next.
-  The world clock does not move while one is outstanding (protocol §2).
+- A turn's model calls happen between phase 7 of one tick and phase 1 of the
+  next, and the world clock does not move while one is outstanding (protocol
+  §2). Consolidation calls are not turn calls: they run while the world
+  continues, and `sim` waits for them only at their commit boundary (memory
+  formation §3.1).
 
 ## 4. Phase 2: action progress
 

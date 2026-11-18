@@ -3,6 +3,9 @@
 > **Draft (2026-11-18), task P3.5-SP-01. Not frozen.** Owner decisions are
 > written with the author's recommended answer applied and are listed in
 > §12 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md).
+> Rework 1 (2026-11-18) answers the Gate 2 resident-track review
+> ([review](../tasks/p3.5/P3.5-SP-01-review-agent.md) B01–B06, B08, B09, B11)
+> and uses the protocol as amended by CR-010.
 >
 > Implements [ADR 0012](../adr/0012-memory-formation.md). Writes the records
 > of the [memory model](memory-model-v0.1.md). The working context it reads is
@@ -38,9 +41,9 @@ consolidation.
 | Write | Written when | From | Into |
 |---|---|---|---|
 | Day-log entries | A packet is delivered; a turn is adopted; a recall is made | The delivered packet, the adopted response, the recall result | The working context (decision-loop spec) |
-| Skill evidence | One of this resident's `act` actions ends, or it watches an `act` | `action_feedback` with the looks of the items used; `ObservedAction` | `evidence` of each matching live skill (§1.2) |
-| Commitment | An agreement in which this resident is a party is accepted | The `agreement_accepted` fact (§1.1) | A new `commitment` record |
-| Social facts | A `give` between this resident and another succeeds; an agreement between them is accepted; the other is seen or heard | The `item_transferred` and `agreement_accepted` facts (§1.1); the packet | `facts` of the social record for the other, created if absent |
+| Skill evidence | One of this resident's `act` actions ends, or it watches an `act` settle | Its `action_feedback` with `items_used`; the watcher's `ObservedAction`s (protocol §4.1, §5.4) | `evidence` of each matching live skill (§1.2) |
+| Commitment | An agreement in which this resident is a party is accepted | The agreement fact of §1.1 and the resident's own delivered packets | A new `commitment` record |
+| Social facts | It gives to another; it watches another's `give` to it settle; an agreement between them is accepted; the other is seen or heard | Its own delivered packets; the agreement fact (§1.1) | `facts` of the social record for the other, created if absent |
 
 - Every mechanical write increases the store version (memory model §1) and is
   also appended to the audit's mechanical log, so it is never lost (ADR 0012
@@ -49,45 +52,111 @@ consolidation.
 - Code writes a mechanical record's gist from a fixed template, for example
   `Promised mia: give 2 fruit by tick 300`.
 
-### 1.1 The party fact feed
+### 1.1 The agreement fact
 
-Commitments and transfers are hard facts about the resident itself. Owner
-PR-D5 gives both parties of an agreement a record even if one did not hear the
-acceptance, for example because it was asleep. So `sim` passes each resident
-the objective facts in which it is a party (owner, MF-D1):
+Owner PR-D5 gives both parties of an agreement a record even if one did not
+hear the acceptance, for example because it was asleep. This is the one
+objective fact that reaches memory without the resident perceiving it (owner,
+MF-D1). Everything else that code writes comes from the resident's own
+delivered packets.
 
-- `agreement_accepted` where it is the promisor or the promisee;
-- `item_transferred` with `via:"give"` where it is the giver or the
-  recipient.
+- **Allowlist.** For each `agreement_accepted` event, `sim` passes each of the
+  two parties exactly this projection, and nothing else of the event log:
 
-The feed goes only to the memory writer. It never enters the day log, the
-current state or a request; the resident meets these facts only through the
-records written from them, by prefix or recall. A resident who slept through
-an acceptance has the commitment in its store but no memory of hearing it.
+  ```text
+  AgreementFact { agreement_id, role:"promisor"|"promisee", counterpart_id,
+                  terms:Terms, due_tick:integer|null, accepted_tick:integer,
+                  proposal_id:string, acceptance_id:string }
+  ```
 
-A commitment record's source is `told`, citing the other party's utterance in
-the agreement: the acceptance for the proposer, the proposal for the acceptor.
+  A resident that is not a party receives nothing. The fact goes only to the
+  memory writer; it is kept in the audit's mechanical log with the event ID it
+  came from, which code alone reads.
+- **What the resident can see of it.** Only the commitment record written from
+  it (memory model §3.5), by prefix, recall or as a consolidation input: its
+  terms, counterpart, role, due tick and whether the counterpart's utterance
+  was heard. The raw fact, the event ID and the utterance IDs it carries never
+  enter a request.
+- **Sources** come from the resident's own packets, never from the fact
+  (memory model §3.5): `observed` for its own proposal or acceptance, `told`
+  for the counterpart's utterance only if `heard_utterances` delivered it to
+  this resident. A resident who slept through an acceptance therefore has the
+  commitment in its store, with `heard_counterpart = false`, and no source
+  saying it heard it. Evaluation never counts a commitment record as hearing
+  (evaluation spec §3.1).
+- **Social facts** are counted from the packets: `given` from the resident's
+  own `give` feedback with `status = "done"` and its `items_used`; `received`
+  from a `settle` observation of another's `give` to it, with its
+  `visible_items`. `agreements` lists the agreement IDs of its commitment
+  records. A gift received while asleep is not counted.
+
+The fact feed is the same in both memory arms (ADR 0014 D2).
 
 ### 1.2 Skill evidence
 
-- **Own attempts.** When one of the resident's `act` actions ends, code takes
-  the looks of its target, instruments and inputs as the resident perceived
-  them at the turn that chose the action (from that turn's perception: the
-  `EntityView` and `ItemView` descriptors) and the phenomena in its
-  `action_feedback`. For each live skill (`status` not `refuted`) with the
-  same verb whose every `Look` fits an item of the attempt one to one (the
-  rule representation's assignment order, §5.2 there), `attempts` increases,
-  and then `matched_expected` if the phenomena include all of `expected`, else
-  `other_outcomes`. `last_attempt_tick` is set.
+- **What an attempt looked like.** The attempt's items are its `ItemUse`
+  entries (protocol §5.1, CR-010), with role, quantity and apparent
+  descriptors, as the world built them at the start. For own attempts they
+  are `items_used` in the action's feedback; for watched ones, the
+  `visible_items` of the `start` observation of that intent. The target, when
+  it is not an item, is the attempt's target as the resident saw it
+  (`EntityView` or tile terrain in the same packet). Nothing else is used:
+  never `act_items`, never the attempt descriptor, never true values.
+- **Grouping.** Input entries with equal looks (archetype, material and
+  descriptor words) are summed into one group. A hypothesis input
+  `{look, quantity}` fits a group whose look fits and whose total equals the
+  quantity. Target and instruments fit one to one. The assignment of looks to
+  groups and items uses the rule representation's assignment order (§5.2
+  there). For example, a by-kind input of 3 fibres that took 2 vine and 1 grass
+  gives two groups and fits no "3 vine" hypothesis.
 - A `Look` fits an item when every field it names (archetype, material,
   descriptor word) equals the item's perceived value. Fields it does not name
   are free. Perceived values are apparent values, so a deceptive item fits
   the look it shows (memory model §3.4).
-- **Watched attempts.** For an `ObservedAction` of an `act`, the same matching
-  over its `visible_items` and target increases `watched` only. The watcher's
-  phenomena are the watcher-visible ones.
+- **Own attempts.** When one of the resident's `act` actions ends with
+  `status = "done"`, for each live skill (`status` not `refuted`) with the same
+  verb whose hypothesis fits, `attempts` increases, and then
+  `matched_expected` if the phenomena include all of `expected`, else
+  `other_outcomes`. `last_attempt_tick` is set. A generic failure
+  (`status = "failed"`) or a stop counts nothing. Fallback-origin attempts
+  count nothing (§1.3).
+- **Watched attempts.** A watched `act` counts once, at its `settle`
+  observation, and only if the watcher also received its `start` observation
+  (the items in use). Then a fitting skill gets `watched` +1, and
+  `watched_matched` +1 if the watcher-visible phenomena of the `settle`
+  observation include all of `expected`. An attempt seen only at start, or
+  only at the end, is unscorable and counts nothing. A `stop` counts nothing.
 - Attempts that fit no skill change no record; they stay in the day log, from
   which consolidation may form a new hypothesis.
+
+### 1.3 Fallback turns stay out of the mind
+
+When `sim` uses the fallback policy for an LLM resident's turn (ADR 0013 D7,
+decision-loop spec §8), what that turn did is not the resident's experience.
+Code carries the origin (`model` or `fallback`) with each turn and each
+intent, by turn and intent ID, through delivery, logging, consolidation and
+evaluation:
+
+- **Not written** for a fallback-origin intent or utterance: its feedback and
+  `items_used` in the day log, any skill evidence, and `given` social facts.
+  This holds even when the result arrives after the model has resumed (a
+  delayed stop, or a multi-tick action that ends later), and across a save and
+  restore.
+- **Still written**: everything the resident perceives about the world
+  afterwards (its inventory, needs, position, what it sees and hears), because
+  those are its senses, not the fallback's decisions; and the observations
+  other residents make of the fallback's actions, which are genuine for them.
+- **Fallback turns carry no utterance.** The fallback policy acts but does not
+  speak for an LLM resident, so it can never propose, accept or refuse an
+  agreement in the resident's name, and no commitment arises from a fallback
+  turn.
+
+### 1.4 The order of writes at one boundary
+
+At each boundary, for each resident, code writes in this order: the day-log
+entries of the delivered packet (decision-loop spec §4.3), then skill evidence,
+then social facts, then commitments from agreement facts of that boundary. A
+store version is taken after each mechanical write (memory model §1).
 
 ## 2. The waking-period boundary
 
@@ -97,11 +166,24 @@ the agreement: the acceptance for the proposer, the proposal for the acceptor.
 - **K = 36** ticks, six hours (ADR 0012 Q3; owner, MF-D2). It lies within the
   sleep bounds of 6–54 (owner, PR-D4) and equals the starter pack's
   `faint_ticks`, so a faint always ends a period (engine §9.3).
-- If unconsciousness starts at boundary `s` (the first tick of sleep or faint
-  is `s → s+1`), the period ends at boundary `s + K` if the resident is still
-  unconscious throughout. A sleep that ends before `s + K`, by choice or by
+- **Start `s`.** `s` is the boundary at which the first tick without awareness
+  begins (world engine §9.5):
+  - for a chosen sleep, the boundary of the turn that chose it, since the
+    sleep runs from that tick; the packet of `s + 1` confirms it with
+    `awareness = "asleep"`;
+  - for a faint, the boundary of the packet that first shows
+    `awareness = "unconscious"`, which also confirms it.
+  Nothing starts before the confirming packet. A sleep that never starts (no
+  confirming packet) starts nothing.
+- **End.** The period ends at boundary `s + K` if the resident has not been
+  awake at any boundary from `s + 1` to `s + K − 1`. Waking exactly at `s + K`
+  still ends it. For example, a 36-tick sleep chosen at 100 is confirmed at
+  101, wakes at 136 and ends the period at 136; a faint first shown at 101
+  ends the period at 137. A sleep that ends before `s + K`, by choice or by
   waking, ends no period: the resident keeps its open working context (ADR
   0012 D2). The sleep itself is a day-log entry.
+- **Death** before `s + K` ends the resident and its period, with nothing
+  committed (§3.1).
 - The boundary is the same in both memory arms (ADR 0014 D2) and is recorded
   with the run, so replay applies it at the same tick.
 - The boundary is agent-side. The world knows nothing of K (protocol §6.3).
@@ -110,19 +192,26 @@ the agreement: the acceptance for the proposer, the proposal for the acceptor.
 
 ### 3.1 When it runs
 
-| Situation at boundary `s` | Consolidation |
+| Situation | Consolidation |
 |---|---|
-| A sleep starts with `duration_ticks ≥ K`, or a faint starts | Its calls may start at `s` (owner, MF-D3) |
-| A sleep starts with `duration_ticks < K` | None; the period continues |
-| The sleeper is woken before `s + K` | The calls are recorded as abandoned and nothing is committed; the period continues |
-| Boundary `s + K` is reached | The change set is validated and committed at `s + K`, before any turn at that boundary |
+| The confirming packet shows a sleep with `duration_ticks ≥ K`, or a faint | Its calls may start at that boundary (owner, MF-D3) |
+| A sleep with `duration_ticks < K` | None; the period continues |
+| The sleeper is woken before `s + K` | The calls are recorded as `abandoned` and nothing is committed; the period continues |
+| The resident dies before `s + K` | The calls are recorded as `abandoned` with reason `death`; nothing is committed |
+| Boundary `s + K` is reached | The change set is validated and committed at `s + K`, before any turn at that boundary (§3.6) |
 
-- The world keeps running while the calls are outstanding. If they have not
-  finished by `s + K`, the simulation waits at boundary `s + K`, as it waits
-  for decision calls, so replay commits at the same tick (ADR 0012 D2).
-- Inputs are fixed at `s`: the working context as it stood when the resident
-  lost consciousness. Nothing new enters a working context while its owner is
-  unconscious, because its senses are off (protocol §5.1).
+- The world keeps running while the calls are outstanding: consolidation
+  calls are not turn calls, so the protocol's frozen clock does not apply to
+  them (protocol §2; world engine §3). If they have not finished by `s + K`,
+  the simulation waits at boundary `s + K`, so replay commits at the same tick
+  (ADR 0012 D2).
+- **Inputs are a snapshot.** They are fixed when the confirming packet has
+  been logged: the working context as it then stood, and the store at its
+  version then (`base_version`). Until then the working context is kept open,
+  so a sleep that fails to start loses nothing. Nothing new enters a working
+  context while its owner is not awake: in the starter pack its senses are off
+  (protocol §5.1), and fallback turns cannot occur, because a resident who is
+  not awake takes no turn.
 - Only LLM residents consolidate. In the memory-off arm no calls run; the
   working context closes at `s + K` all the same (§6).
 
@@ -144,10 +233,12 @@ The model chooses; code never scores importance (ADR 0012 D2).
 ### 3.3 Call 2: change set
 
 **Input:** the same instructions and working context, the pending periods, the
-index, the selected records in full, the mechanical writes made during the
-period (new commitments, changed social facts and skill evidence; ADR 0012
-D2), and two groups always included without being chosen: open commitments and
-records with `needs_review` (ADR 0012 D2).
+index, the selected records in full, the records that mechanical writes
+created or changed during the period, shown as records in their usual model
+view (new commitments, social records with changed facts, skills with changed
+evidence; ADR 0012 D2), and two groups always included without being chosen:
+open commitments and records with `needs_review` (ADR 0012 D2). Raw facts,
+event IDs and the audit's mechanical log are never part of it (§1.1).
 
 **Output** (owner, MF-D4):
 
@@ -168,16 +259,31 @@ NewRecord = {kind, gist, text?, content, about_tick?, sources, confidence}
 ```
 
 - Ops apply in listed order. `op_id`s are unique within the set.
-- An op **depends on** another when it cites that op's `ref`, or names a
-  record that op merges, supersedes or forgets.
-- `update` may change only the fields the kind leaves to consolidation:
-  never a commitment's terms, a social record's `facts`, a skill's
-  `evidence`, or any `sources` except by adding (memory model §3, §4.1).
 - `merge` creates the merged record with the union of all merged records'
   sources, plus any it adds, and marks the merged ones superseded by it.
-- Intentions are not set here. An intention is the resident's own choice at a
-  turn; consolidation may only `forget` or `supersede` one when the day showed
-  it was dropped (ADR 0011 D7: kept or dropped).
+- **Authority.** Which op may touch which kind (memory model §3), and which
+  fields each may write. Anything not allowed here fails `authority` (§3.5).
+
+  | Kind | Ops allowed | Fields the model may write | Code-owned |
+  |---|---|---|---|
+  | `episodic`, `belief` | all except `commitment_status`, `trait` | `gist`, `text`, `content`, `about_tick`, added `sources`, `confidence` | — |
+  | `social` | `update`, `confidence`, `review_done` | `gist`, `text`, `content.impression`, `content.trust` (by at most one step per consolidation) | `about`, `facts` |
+  | `skill` | `add`, `update`, `supersede`, `confidence`, `review_done`, `forget` | on `add`: the hypothesis, `status`, `gist`, `text`; on `update`: `status`, `gist`, `text` | `evidence` (all zero on `add`); the hypothesis after `add` (memory model §3.4) |
+  | `commitment` | `commitment_status`, `review_done` | `status`, `status_note` | everything else |
+  | `intention` | none | — | all (memory model §3.6) |
+  | `personality` | `trait` | one step per trait (memory model §3.7) | `base`, `min`, `max`, history |
+  | Any | — | — | `id`, `owner_id`, `kind`, `created_tick`, `updated_tick`, `last_used_tick`, `use_count`, `supersedes`, `superseded_by` (set only through ops), `needs_review` (set by code, cleared by `review_done`) |
+
+  - `add` and `merge` may create only `episodic`, `belief` and `skill`
+    records; a `merge` may not involve skills. A commitment, social,
+    intention or personality record is never created by a change set.
+  - `supersede` and `forget` may never name a commitment, social or
+    personality record, nor may capacity eviction remove one (memory model
+    §5, §7).
+  - At most one `trait` op per trait and one `trust` change per social record
+    in one change set.
+- Intentions are not touched here. An intention is the resident's own choice
+  at a turn (ADR 0013 D6); a resident drops it by clearing it.
 
 ### 3.4 What the instructions ask
 
@@ -199,32 +305,91 @@ The wording is exploration-lane work (ADR 0014 D4). Its required content
 
 ### 3.5 The validator
 
-The validator reads only the change set, the inputs of the call and the store.
-It never reads world state or the objective event log (ADR 0012 D2).
+The validator reads only the change set, the change-set call's sent input
+(after the guard) and the store. It never reads world state, the objective
+event log or the audit (ADR 0012 D2).
 
-| Check | An op fails when |
+**The allowlist.** From the sent input, code builds a typed allowlist before
+checking any op:
+
+| Source or target | Allowed only when |
 |---|---|
-| Version | The store changed since `base_version` by anything other than mechanical writes. Mechanical writes since then touch only hard-fact fields and new mechanical records, which no op may change, so they do not fail the set |
-| Provenance | A new or changed record cites a source that was not in the input: a day-log entry ID not in the working context or pending periods, a memory ID not in the index, an utterance ID not in a `heard_speech` entry |
-| Source kind | An `observed` source cites an entry that is not the resident's own perception; a record built only from speech has a source other than `told` or `inferred`; an existing source is removed or changed (memory model §4.1) |
-| Ownership | It names a record of another resident, or changes a hard fact (§1) other than a commitment's status |
-| Format | It is not one of the closed ops; a field breaks the envelope (memory model §2); a confidence breaks the caps of memory model §4.2; a trait changes by more than one step, leaves its range or has no sources |
-| Capacity | An episodic `add` or `merge` would leave the kind above capacity after the earlier ops; the excess fail in listed order. Beliefs and skills make room by the eviction rule of memory model §7 instead, and fail only when that is not enough |
-| Reference | It names an ID that does not exist, a ref not yet defined, or a record an earlier op forgot |
+| `observed` `entry_id` | The entry is in the sent input (current period or a sent pending period) and its type is one of the resident's own perceptions (decision-loop spec §4.3) |
+| `told` `utterance_id`, `speaker_id` | A `heard_speech` entry in the sent input carries that utterance ID, and its speaker equals `speaker_id` |
+| `inferred` `memory_ids`, `call_id` | `call_id` is this change-set call's ID; each memory ID is a record shown in the sent input (in full or as an index line) or a ref defined by an earlier accepted op of this set |
+| `innate` | Never in a change set |
+| Record named by `update`, `confidence`, `review_done`, `forget`, `commitment_status`, by `supersede` as the old record, or by `merge` as a merged record | The record is in the sent input **in full** (selected, mandatory or mechanical), not as an index line only |
 
-- A failing op is dropped, together with every op that depends on it,
-  transitively. The rest is committed as one store version (ADR 0012 D2).
-- Dropped ops and their reasons go to the audit.
+So an ID the guard left out, a guessed ID, a wrong speaker or a forged call is
+refused, and the model can change only records it was shown in full.
+
+**Checks.** Each op is checked in this order; the first failure is its reason:
+
+| Reason | An op fails when |
+|---|---|
+| `format` | It is not one of the closed ops; a field breaks the envelope (memory model §2); a confidence breaks the caps of memory model §4.2; a trait changes by more than one step, leaves its range or has no sources |
+| `authority` | It breaks the authority table of §3.3: a kind or field it may not write, a second `trait` op for one trait, a second `trust` change for one record |
+| `reference` | It names an ID that does not exist in the staged store, a ref not yet defined, or a record an earlier accepted op forgot |
+| `provenance` | A source or a named record is not in the allowlist |
+| `source_kind` | An existing source is removed or changed; a record built only from speech has a source other than `told` or `inferred` (memory model §4.1) |
+| `capacity` | An episodic `add` or `merge` would leave the kind above capacity; beliefs and skills make room by the eviction rule of memory model §7 and fail only when that is not enough |
+| `depends_on` | It depends on a dropped op (below) |
+
+**Staged application** (a transaction over one store version):
+
+1. The ops are taken in listed order against a staged copy of the store at
+   `base_version`.
+2. An op **depends on** an earlier op X when it cites X's ref, or names, as
+   target or as an `inferred` source, a record that X creates, changes,
+   merges, supersedes or forgets.
+3. An op that depends on a dropped op is dropped with reason `depends_on` and
+   the dropped op's ID. Otherwise it is checked against the staged state. If
+   it passes, its effects are staged as a whole, including the implicit ones:
+   `needs_review` flags on records inferred from what it supersedes or merges
+   (memory model §5), and the evictions its capacity check needs. If it
+   fails, it has no effect at all.
+4. After the last op, the staged effects are rebased (§3.6) and committed as
+   one store version (ADR 0012 D2).
+
+For example, an `update` that fails `provenance` while adding an `observed`
+source leaves the record unchanged; a later `confidence` op on that record
+depends on it and is dropped; an independent valid op in the same set still
+commits. An overflowing belief `add` that fails stages no eviction.
+
+- Every verdict, with its reason and the IDs of the ops it depends on, goes to
+  the consolidation record and the audit.
 - A wrong belief that passes these checks is kept: code never corrects a
   resident with hidden truth.
 
 ### 3.6 Commit and the new period
 
-At `s + K`, in this order: the change set is validated and committed; records
-the change set superseded have their derived records flagged `needs_review`
-(memory model §5); the working context is closed and moved to the audit; a new
-period starts, and its working context is opened when the resident wakes
-(decision-loop spec).
+**Rebase.** Between `base_version` and the commit, only mechanical writes can
+change the store: the resident is not awake, so no turn writes and no context
+is assembled, and only one consolidation per resident runs at a time. Those
+writes touch only code-owned fields and create only code-written records
+(§3.3). The staged effects are therefore applied onto the latest version
+field by field: model-owned fields from the change set, code-owned fields
+(`facts`, `evidence`, use counters) from the latest version. `updated_tick` is
+the commit tick, and the content hash is recomputed. No conflict is possible;
+if one were found (a model-owned field changed after `base_version`), the
+whole change set fails with reason `version` and the period goes to the
+pending area.
+
+**Cutoff.** Records that mechanical writes create after `base_version` (for
+example an agreement a counterpart accepted while this resident slept) are
+not inputs of this consolidation. They are ordinary records of the next
+period and appear, as open commitments, in the next consolidation.
+
+**Order at `s + K`.** In this order:
+
+1. the change set is validated, rebased and committed (or the failure is
+   recorded);
+2. the period's working context is closed and moved to the audit; pending
+   periods are updated (§5);
+3. the new period starts; its working context opens when the resident wakes
+   (decision-loop spec);
+4. then the mechanical writes of the packet delivered at `s + K` (§1.4), which
+   belong to the new period.
 
 ## 4. The window guard at consolidation
 
@@ -237,19 +402,23 @@ request fits the window with room for the response (owner, MF-D5):
 3. Day-log entries of the current period, oldest first.
 
 **Never left out:** the instructions, the schema and its framing, the index,
-open commitments, `needs_review` records, and the omission notice. This is the
-minimum mandatory request (P3.5 brief §11, request fit).
+open commitments, `needs_review` records, the records changed by mechanical
+writes in the period, and the omission notice. This is the minimum mandatory
+request (P3.5 brief §11, request fit). The selection call has the same floor
+without the selected and mechanical records.
 
 - Day-log entries left out are not consolidated (ADR 0012 Q8). They stay in
   the audit's closed working context. The record lists them, with manifests
   before and after.
-- **Request fit.** With the pinned window of the provider model (decision-loop
-  spec), the minimum mandatory request fits when the index holds at most the
-  store capacities of memory model §7 (about 900 live and history lines) plus
-  open commitments. A run whose minimum mandatory request still does not fit
-  stops as incomplete, with that reason recorded. The guard never drops a
-  mandatory part, invents a summary or invokes the fallback policy to make a
-  request fit.
+- **Request fit** follows the decision loop's pre-dispatch contract (§7.4
+  there): the floor is measured on the actual request, notice included,
+  before dispatch. The index has no fixed bound because open commitments have
+  none (memory model §7). If the floor does not fit, the call is not
+  dispatched; it gets a `stopped_unfit` call record with the measured floor,
+  the reserve and the omitted parts; the consolidation is `failed` with that
+  reason and the run stops as incomplete. The guard never drops a mandatory
+  part, invents a summary or invokes the fallback policy to make a request
+  fit.
 
 ## 5. Failure and the pending area
 
@@ -261,43 +430,59 @@ minimum mandatory request (P3.5 brief §11, request fit).
 | Ops fail validation | Only they and their dependents are dropped (§3.5); this is not a failed consolidation |
 
 - **Pending area.** A failed consolidation's working context goes to the
-  pending area, which the resident cannot reach. The next consolidation reads
-  it together with the new period, oldest first (ADR 0012 D5).
+  pending area (memory model §6), which the resident cannot reach. The next
+  consolidation reads it together with the new period, oldest first (ADR
+  0012 D5).
+- **Which call consumes a pending period.** A pending period leaves the
+  pending area only when a change set commits whose sent change-set input
+  included that period in full. If the guard left it out of the change-set
+  call (even when the selection call saw it), or the consolidation failed, it
+  stays pending. Retries resend the same input, so they change nothing here.
 - **Limit:** at most 2 pending periods (ADR 0012 Q5; owner, MF-D6). When a
   third would be added, the oldest pending period counts as forgotten and
-  stays only in the audit.
+  moves to the audit.
+- The consolidation record lists, for each pending period, one state:
+  `included` (consumed by this commit), `omitted` (left out by the guard,
+  still pending), `retained` (still pending after a failure) or `evicted`
+  (forgotten by the limit).
 - Mechanical records are never lost, whatever happens to pending experience
   (§1).
 
 ## 6. The memory-off arm
 
 At `s + K` the working context is closed and moved to the audit, with no
-calls. The next period starts with no earlier day log, no intention, no
-dialogue state, no long-term memories in the prefix and recall that returns
-nothing (ADR 0014 D2; decision-loop spec). Mechanical writes continue.
+calls. The current intention is set to `reset` (memory model §9). The next
+period starts with no earlier day log, no intention, no dialogue state, no
+long-term memories in the prefix and recall that returns nothing (ADR 0014
+D2; decision-loop spec §9). Mechanical writes continue.
 
 ## 7. Recording and replay
 
 ```text
 ConsolidationRecord {
   record_schema:"mf/0.1", resident_id, period_id, arm:"on"|"off",
-  started_tick:integer, boundary_tick:integer,
+  s_tick:integer, started_tick:integer, boundary_tick:integer,
   outcome:"committed"|"failed"|"abandoned"|"off_arm",
+  reason:string|null,                           // failed or abandoned: "provider", "parse", "stopped_unfit", "version", "woken", "death"
   base_version:integer, result_version:integer|null,
-  selection_call_id:string|null, change_set_call_id:string|null,
-  input_manifests:array<ContextManifest>,        // decision-loop spec, one per call
-  guard_events:array<GuardEvent>,
+  selection_call_id:string|null, change_set_call_id:string|null,   // logical call records, decision-loop spec §10
   selection:SelectionOutput|null, change_set:ChangeSet|null,
   verdicts:array<{op_id, result:"committed"|"dropped", reason:string|null, depends_on:array<string>}>,
+  pending:array<{period_id, state:"included"|"omitted"|"retained"|"evicted"}>,
   pending_after:array<string>                   // period IDs still pending
 }
 ```
 
-- Both calls are recorded like decision calls: input manifest, prompt version,
-  model, raw output, parsed output, tokens and latency (decision-loop spec; ADR
-  0012 D5).
+- Both calls are logical calls of the decision loop's record model
+  (decision-loop spec §10): one record per logical call with its kind
+  (`consolidation_selection` or `consolidation_change_set`), its full and
+  sent manifests, guard result and every dispatched attempt, including a
+  call that was never dispatched (`stopped_unfit`) or abandoned. The
+  consolidation record joins them by call ID.
 - The record and the store version after commit are hashed, as P3 hashes a
-  decision record.
+  decision record. The selection output, the base version and the call
+  records are part of the agent checkpoint, so a restore between selection
+  and commit continues from the recorded state and gives the same result.
 - **Replay** applies the recorded change set at the recorded boundary with no
   model call, rebuilds the store and checks its hash.
 
@@ -312,19 +497,22 @@ ConsolidationRecord {
 | ID | Test |
 |---|---|
 | MF-01 | Mechanical writes: a commitment for both parties when an agreement is accepted, also for a party who was asleep; social facts after a give; each write increases the store version and appears in the mechanical log |
-| MF-02 | The party feed never reaches a day log, a current state or a request; a request hash is unchanged by it |
-| MF-03 | Skill evidence: an own attempt whose items fit a skill's looks counts `matched_expected` or `other_outcomes`; a deceptive item that looks right fits; a watched attempt counts `watched` only; a refuted skill gets no evidence |
-| MF-04 | Boundary: a 36-tick sleep ends a period at `s + 36`; a 35-tick sleep, a nap, and a 54-tick sleep woken at tick 20 do not; a faint of 36 ticks does |
-| MF-05 | Timing: calls start at `s` for a long sleep or a faint and never for a nap; the simulation waits at `s + K` when they are late; a woken sleeper's calls are recorded as abandoned |
-| MF-06 | Change set: each op of §3.3 applies as specified on a fixture store, in listed order, with `new:<n>` refs |
-| MF-07 | Validator: one negative fixture per check of §3.5; a failing op drops its dependents transitively and nothing else; dropped ops are in the audit |
-| MF-08 | Version: a change set built on version `v` commits after mechanical writes; it fails after another committed change set |
+| MF-02 | Agreement fact (§1.1): for A asleep and B accepting, A gets the commitment with `heard_counterpart = false` and no `told` source, B gets `told` for the proposal; a non-party gets nothing; in both arms. The raw fact, its event ID and utterance IDs never appear in a day log, a current state or any request (decision, recall, morning, both consolidation calls), checked on the sent bytes; only the commitment record's model view does. A gift received while asleep adds no `received` fact |
+| MF-03 | Skill evidence from items in use: an own attempt whose `items_used` fit a skill's looks counts `matched_expected` or `other_outcomes`; a deceptive item that looks right fits; a by-kind input of 2 vine and 1 grass fits no "3 vine" look; a watched attempt with both `start` and `settle` counts `watched` and `watched_matched`; one seen only at start or only at settle counts nothing; a stop counts nothing; a refuted skill gets no evidence |
+| MF-04 | Boundary: a 36-tick sleep chosen at 100 is confirmed at 101 and ends a period at 136; a faint first shown at 101 ends one at 137; a 35-tick sleep, a nap, and a 54-tick sleep woken at tick 20 do not; a sleep that fails to start starts nothing; death before `s + K` commits nothing |
+| MF-05 | Timing: calls start at the confirming packet for a long sleep or a faint and never for a nap; the world runs while they are outstanding and the simulation waits at `s + K` when they are late; a woken sleeper's calls are recorded as abandoned |
+| MF-06 | Change set: each op of §3.3 applies as specified on a fixture store, in listed order, with `new:<n>` refs; every forbidden cell of the authority table is refused with `authority` (an `add` of a commitment, a `merge` of skills, a skill `update` of its hypothesis, a `forget` of a social record, two `trait` ops for one trait) |
+| MF-07 | Validator: one negative fixture per reason of §3.5, including a guessed ID the guard left out, a `told` source with the wrong speaker, an `inferred` source with another call's ID, an `innate` source, and an `update` of a record shown only as an index line; staged application: an invalid producer, its transitive dependents, an overflowing belief add that stages no eviction, and an independent valid op that commits; verdicts and reasons are in the record and the audit |
+| MF-08 | Rebase (§3.6): a social update staged while a give changes the same record's facts commits with the new facts and the model's impression; a commitment created during the sleep is not an input and appears in the next period; the order at `s + K` puts the commit before that packet's mechanical writes; restored between selection and commit, the run commits the same version and hash |
 | MF-09 | No hidden correction: a wrong but well-sourced belief is committed; the validator reads no world state (checked by injecting a world-state reader that fails when called) |
 | MF-10 | Guard: an oversized consolidation request leaves out selected records, then pending periods, then the oldest entries; never a mandatory part; the record shows manifests before and after and the left-out entries |
 | MF-11 | Failure: a call failing after 3 retries makes the consolidation fail; the period ends; its context goes to the pending area; a third failure in a row forgets the oldest pending period into the audit; mechanical records survive all of this |
 | MF-12 | Memory off: no calls; the context closes at `s + K`; mechanical writes continue |
 | MF-13 | Replay: a recorded run's stores are rebuilt from mechanical writes and change sets with zero model calls, with equal hashes at every version |
 | MF-14 | A synthetic test memory kind registered by the memory model's extension point is consolidated by the same change-set ops (ADR 0014 D3) |
+| MF-15 | Fallback (§1.3), run as model → fallback → model with a restore before acknowledgement: a fallback gather that fails after the model resumes, and a multi-tick fallback action ending later, write no day-log entry, no `items_used` and no skill evidence; a fallback turn carries no utterance; the resident's later perception of its inventory and needs is logged; another resident who watched the fallback action gets its observation |
+| MF-16 | Pending periods (§5): a period left out of the change-set call by the guard stays pending as `omitted`; one included in a committed change set is `included` and leaves; a third pending period evicts the oldest as `evicted` |
+| MF-17 | Unfit request: a change-set request whose floor exceeds the window is not dispatched; its call record is `stopped_unfit` with the measured floor; the consolidation fails with that reason; no provider and no fallback is used |
 
 ## 10. Disposition of open questions
 
@@ -344,13 +532,13 @@ ConsolidationRecord {
 | Value | Used by |
 |---|---|
 | K = 36 | Starter content `faint_ticks` (§5.2 there); the decision loop's period boundary; evaluation's arm boundary |
-| The party fact feed | `sim` (decision-loop spec, harness) |
+| The agreement fact (§1.1) and turn origins (§1.3) | `sim` (decision-loop spec, harness); evaluation |
 
 ## 12. Owner decisions (recommended answers applied)
 
 | ID | Question | Recommended answer, applied in this draft | Why |
 |---|---|---|---|
-| MF-D1 | Do hard facts reach a party who did not perceive them? | Yes: `sim` feeds each party the agreement and give facts it is part of, to the memory writer only | Owner PR-D5 gives both parties a record; the facts are about the resident itself and never enter its context directly |
+| MF-D1 | Do hard facts reach a party who did not perceive them? | Only the agreement: `sim` feeds each party an allowlisted agreement fact, to the memory writer only; its commitment record never claims the resident heard what it did not. Rework 1 derives give facts from the resident's own packets instead | Owner PR-D5 gives both parties a record; the fact is about the resident itself and never enters its context directly |
 | MF-D2 | K | 36 ticks (6 hours) | A normal night consolidates; a nap or an interrupted sleep does not; equals the faint length |
 | MF-D3 | When do consolidation calls start? | At the start of a sleep chosen at K or longer, or of a faint; the result is committed at `s + K` | The world keeps running while the model works; a nap costs no call |
 | MF-D4 | The change-set schema | Nine closed ops: add, update, merge, supersede, confidence, review_done, forget, commitment_status, trait | Covers every change ADR 0012 D2 names, and nothing that touches hard facts |

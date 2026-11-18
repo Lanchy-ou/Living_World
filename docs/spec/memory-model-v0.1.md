@@ -3,6 +3,9 @@
 > **Draft (2026-11-18), task P3.5-SP-01. Not frozen.** Owner decisions are
 > written with the author's recommended answer applied and are listed in
 > §13 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md).
+> Rework 1 (2026-11-18) answers the Gate 2 resident-track review
+> ([review](../tasks/p3.5/P3.5-SP-01-review-agent.md) B01, B04, B08, B10,
+> N01, N03) and uses the protocol as amended by CR-010.
 >
 > Implements [ADR 0011](../adr/0011-memory-model.md). When frozen, it
 > supersedes `resident-experience-v0.1.md` for new work; P3 experience capture
@@ -46,14 +49,19 @@
 - **Record IDs** are `m:<resident_id>:<n>`, `n` counting the resident's records
   from 1, never reused, so a merged or forgotten ID never returns.
 - **Store version.** An integer that starts at 0 and increases by one with
-  every committed change: a mechanical write or a committed change set. A
-  change set names the version it was built from (memory-formation spec).
+  every committed change. There are three kinds: a mechanical write, a use
+  update (the `last_used_tick` and `use_count` changes of one context
+  assembly, as one batch), and a committed change set. A change set names the
+  version it was built from (memory-formation spec).
 - Records are stored by content hash, once (ADR 0013 D10). A record's content
   hash is the SHA-256 of the canonical encoding of the record without
   `last_used_tick` and `use_count`, which change on use.
 - All values are strings, integers, booleans, `null`, or arrays and objects of
-  them, and never floats. ADR 0011 D2 says strings or integers; the boolean
-  `needs_review` flag and `null` for absent values are the only additions.
+  them, and never floats. ADR 0011 D2 says strings or integers; booleans
+  (such as `needs_review`) and `null` for absent values are the only
+  additions. This is a declared variance from the letter of D2, for typed
+  flags and absent values; `false` and `null` mean different things and are
+  never interchanged. The owner confirms it with the freeze (decision sheet).
 
 ## 2. The common envelope
 
@@ -62,7 +70,7 @@ MemoryRecord {
   id:string, owner_id:string, kind:MemoryKind,
   created_tick:integer, updated_tick:integer,
   about_tick:{from:integer,to:integer}|null,   // the time the content describes (D2, D4)
-  sources:array<Source>,                       // at least one; sorted (§4.1)
+  sources:array<Source>,                       // sorted (§4.1); at least one, except commitments (§3.5)
   confidence:integer,                          // 0..4
   last_used_tick:integer|null, use_count:integer,
   supersedes:string|null,                      // the record this one replaced
@@ -81,13 +89,18 @@ MemoryKind = "episodic"|"belief"|"social"|"skill"|"commitment"|"intention"|"pers
 - `text` is at most 2000 characters.
 - `about_tick` is required on episodic records and on beliefs that describe a
   dated observation; it is `null` for stable knowledge (§4.3).
-- A record with `superseded_by` set is **history**: it stays in the store, can
-  be recalled as what the resident used to think, and is shown in the index
-  marked as superseded.
+- A record is **history** when `superseded_by` is set, or, for an intention,
+  when its `state` is not `current` (§3.6). History stays in the store, can be
+  recalled as what the resident used to think, and is shown in the index
+  marked as superseded. A record is **live** otherwise.
+- A commitment whose status is not `open` is **archived** (ADR 0011 D1): it
+  stays in the store and is never removed, but it leaves the index, the prefix
+  and recall. Evaluation and inspection still read it.
 
 ### 2.1 The index line
 
-The index lists one line per record in the store (ADR 0012 D2), sorted by ID:
+The index lists one line per record in the store except archived commitments
+(ADR 0012 D2), sorted by ID:
 
 ```text
 <id> | <kind> | c<confidence> | <flags> | <gist>
@@ -105,8 +118,8 @@ The index lists one line per record in the store (ADR 0012 D2), sorted by ID:
 | `belief` | `subject:{kind:"place"|"entity"|"resident"|"kind_of_thing"|"general", ref:string|null}`, `stance:"stable"|"dated"|"guess"`, `topics:array<Topic>` | Consolidation |
 | `social` | `about:string` (resident ID), `trust:integer` (0–4), `impression:string`, `facts:SocialFacts` | Facts by code; the rest by consolidation |
 | `skill` | `hypothesis:SkillHypothesis`, `evidence:SkillEvidence`, `status:"active"|"doubtful"|"refuted"` | Evidence by code; the rest by consolidation |
-| `commitment` | `agreement_id`, `role:"promisor"|"promisee"`, `counterpart_id`, `terms:Terms`, `due_tick:integer|null`, `status:"open"|"kept"|"broken"|"expired"`, `status_note:string|null` | Code; status by consolidation |
-| `intention` | `set_turn:string` (the turn ID that set it) | The resident at a turn |
+| `commitment` | `agreement_id`, `role:"promisor"|"promisee"`, `counterpart_id`, `terms:Terms`, `due_tick:integer|null`, `heard_counterpart:boolean`, `status:"open"|"kept"|"broken"|"expired"`, `status_note:string|null` | Code; status by consolidation |
+| `intention` | `set_turn:string` (the turn ID that set it), `state:"current"|"replaced"|"cleared"|"reset"`, `ended_turn:string|null` | The resident at a turn; `reset` by code (§9) |
 | `personality` | `traits:array<Trait>` | Code at start; drift by consolidation |
 
 ### 3.1 Episodic
@@ -149,9 +162,12 @@ SocialFacts {                     // hard facts, written by code only (ADR 0012 
 }
 ```
 
-- `given` and `received` count successful `give` transfers between the two
-  (protocol `item_transferred` with `via:"give"`), by archetype, sorted. A
-  resident knows what it gave and received because it perceived it.
+- `given` and `received` count successful `give` transfers between the two,
+  by archetype, sorted, **as this resident perceived them** (memory formation
+  §1.1): `given` from its own `give` feedback, `received` from the giver's
+  `give` it watched settle. A gift received while asleep is not counted, as
+  the resident did not see who gave it. Objective transfers stay in the event
+  log for evaluation.
 - `trust` (0–4) and `impression` are the resident's own view, changed only by
   consolidation. A new social record starts with `trust = 2` and an empty
   impression.
@@ -176,20 +192,27 @@ Look {                            // what something looks like, never true value
 }
 SkillEvidence {                   // written by code only (ADR 0012 D1)
   attempts:integer, matched_expected:integer, other_outcomes:integer,
-  watched:integer, last_attempt_tick:integer|null
+  watched:integer, watched_matched:integer, last_attempt_tick:integer|null
 }
 ```
+
+- The hypothesis of a skill record never changes after it is created. A
+  revised hypothesis is a new skill record that supersedes the old one, with
+  evidence starting at zero, so evidence always belongs to the hypothesis it
+  was counted for; the old record keeps its counts as history. Evidence is
+  never merged.
 
 - `Look` uses archetype and material IDs and descriptor words, the things a
   resident sees (protocol §5.1). For example, "a sharp flint flake bound with
   sturdy cord to a long piece of wood makes an axe". It never uses integers or
   true values (ADR 0011 D3).
-- **Evidence** is counted by code (memory-formation spec): an own attempt with
+- **Evidence** is counted by code (memory formation §1.2): an own attempt with
   this verb whose items fit every `Look` of the hypothesis counts in
   `attempts`, then in `matched_expected` if the delivered phenomena include
-  all of `expected`, else in `other_outcomes`. A watched attempt that fits counts
-  in `watched` only. Matching reads the looks the resident was shown, so a
-  deceptive item can fool it, as intended.
+  all of `expected`, else in `other_outcomes`. A watched attempt that fits
+  counts in `watched`, and in `watched_matched` if the watcher-visible
+  phenomena include all of `expected`. Matching reads the looks the resident
+  was shown, so a deceptive item can fool it, as intended.
 - `status` is set by consolidation: `doubtful` or `refuted` when evidence goes
   against the hypothesis (ADR 0011 D1: refuted hypotheses are demoted). A
   refuted skill is kept as history; it is not recalled by recipe.
@@ -203,18 +226,42 @@ D10, protocol §7.2), one record for each party (owner, PR-D5). `terms` is the
 protocol's `Terms`. Consolidation may set `status` and `status_note`, and
 nothing else; it may never remove the record (ADR 0012 D1).
 
+- **Basis and sources.** The record's basis is the agreement itself
+  (`agreement_id`), a hard fact the world registered; it is not a claim the
+  resident heard. Its `sources` hold only what the resident actually
+  perceived of the agreement: `observed` for its own proposal or acceptance
+  (its own utterance feedback), and `told` for the counterpart's utterance
+  only if that utterance was delivered to this resident. So a proposer who
+  slept through the acceptance has `heard_counterpart = false` and no `told`
+  source; `sources` may then hold only its own proposal, or be empty when
+  that is not in its day log either. A commitment is the one kind that may
+  have empty `sources`.
+- The code template for its gist says when the answer was not heard, for
+  example `Mia agreed to give me 2 fruit by tick 300 (I did not hear her
+  answer)`.
+
 - **A commitment to oneself is an intention** (ADR 0011 Q4; owner, MM-D4). The
   `commitment` kind holds only accepted agreements, so every commitment can be
   checked against objective events (ADR 0014 D2).
-- A commitment is `open` until consolidation marks it otherwise. Its status in
-  memory is the resident's view; evaluation judges keeping from objective
-  events, never from this field.
+- A commitment is `open` until consolidation marks it otherwise; then it is
+  archived (§2). Its status in memory is the resident's view; evaluation
+  judges keeping from objective events, never from this field.
 
 ### 3.6 Intention
 
-At most one current intention per resident. A turn that sets an intention
-supersedes the current one; a turn that clears it marks it superseded with no
-successor (ADR 0013 D6). The text is the resident's own words, unchanged.
+At most one intention per resident has `state = "current"`. Only the resident
+changes it, at a turn (ADR 0013 D6), and code at an off-arm period boundary
+(§9); consolidation never does (memory formation §3.3).
+
+| Turn or event | Old current intention | New record |
+|---|---|---|
+| Sets an intention | `state = "replaced"`, `superseded_by` the new one, `ended_turn` | `state = "current"` |
+| Clears it | `state = "cleared"`, `superseded_by = null`, `ended_turn` | None |
+| Off-arm period boundary | `state = "reset"`, `ended_turn = null` | None |
+
+History is every intention whose `state` is not `current`, so clearing without
+a successor never leaves an old intention looking current. The text is the
+resident's own words, unchanged.
 
 ### 3.7 Personality
 
@@ -261,7 +308,15 @@ Source = {kind:"observed", entry_id:string}                     // a day-log ent
   itself, citing that entry. The formation validator enforces this
   (memory-formation spec).
 - An `observed` source cites a day-log entry whose type is one of the resident's
-  own perceptions (decision-loop spec), never a `heard_speech` entry.
+  own perceptions (decision-loop spec), never a `heard_speech` entry. The
+  feedback on the resident's own utterance is its own perception: it knows
+  what it said.
+- A `told` source cites an utterance that was delivered to this resident, in a
+  `heard_speech` entry, with that entry's speaker. Nothing else makes a
+  source `told`: not an agreement record, not another resident's report of
+  what was said, not a fallback action (memory formation §1.3).
+- An `innate` source is written only by code at run start. A change set can
+  never create one.
 - A merged record keeps every source of every record it merges (ADR 0011 D4).
 
 ### 4.2 Confidence
@@ -303,10 +358,15 @@ content was true. "I saw two fruits there yesterday" written tonight has
   forgotten.
 - Forgetting is not supersession (ADR 0011 D4). A forgotten record can be
   reached by no recall, no index and no context in any form (D6).
-- Mechanical records cannot be forgotten: commitments, the `facts` of social
-  records and the `evidence` of skills (ADR 0012 D1). A skill's hypothesis may
-  be forgotten; its evidence then stays in the audit's mechanical log.
+- Mechanical records cannot be forgotten, superseded or merged, directly or
+  by capacity: commitments and social records (ADR 0012 D1). The `evidence` of
+  a skill is code-owned: a skill record may be superseded or forgotten (its
+  hypothesis is the resident's), and its evidence then stays in the audit's
+  mechanical log for inspection; the resident no longer sees it. Skills are
+  never merged (§3.4).
 - Personality is never forgotten or superseded; it drifts (§3.7).
+- Which operation may touch which kind and field is the authority table of
+  memory formation §3.3.
 
 ## 6. Carriers and the audit
 
@@ -314,7 +374,8 @@ content was true. "I saw two fruits there yesterday" written tonight has
 |---|---|---|
 | Working context | The waking period: prefix, day log, current state (decision-loop spec) | Yes, until it is closed |
 | Long-term store | The records of §2–§5 | Yes, through the prefix, recall and the consolidation index |
-| Audit | Closed working contexts, forgotten records, the mechanical log, every model call, dropped change-set operations, the objective event log | Never |
+| Pending area | Working contexts of periods whose consolidation failed, at most 2 (memory formation §5) | Only as input to its own next consolidation |
+| Audit | Closed working contexts, forgotten records and pending periods, the mechanical log, every model call, dropped change-set operations, the objective event log | Never |
 
 - **The audit is out of reach by construction** (ADR 0011 D6). The audit
   lives behind its own interface in `persistence`. The modules that assemble
@@ -323,6 +384,10 @@ content was true. "I saw two fruits there yesterday" written tonight has
   the audit module). Only `analysis` and replay read it.
 - The first version has no retrieval of the audit in any form, including
   recall of a forgotten experience (ADR 0011 D6).
+- The pending area is resident-local and lives with the store in `memory`, not
+  in the audit. Only the consolidation input builder reads it (ADR 0012 D5). A
+  pending period that is forgotten moves to the audit and is then out of
+  reach like any audit content.
 
 ## 7. Capacities
 
@@ -340,7 +405,10 @@ kind above capacity, the rule of ADR 0011 D1 for that kind applies:
 - **Skill**: code forgets `refuted` skills first, oldest first; if that is not
   enough, the excess adds are dropped.
 - Other kinds have no overflow: `social` and `commitment` have no limit, and
-  a new intention supersedes the current one.
+  a new intention replaces the current one.
+- **History beyond its bound** goes to the audit oldest first, as a forget
+  does. For a skill, its evidence stays in the mechanical log.
+- Capacity rules never touch commitments, social records or personality.
 
 | Kind | Capacity (live records, history excluded) | History |
 |---|---|---|
@@ -355,6 +423,14 @@ kind above capacity, the rule of ADR 0011 D1 for that kind applies:
 With the soft target of 5–15 episodic memories per consolidation (ADR 0012
 D2), seven game days fill under 110 episodic records; the capacities leave room
 for longer runs while bounding the index.
+
+**Index size.** The index holds at most `(300 + 300) + (200 + 200) + (80 + 80)
+= 1160` episodic, belief and skill lines, 21 intention lines, 1 personality
+line, one social line per other resident, and one line per open commitment.
+Open commitments have no fixed bound, so the index has none either; the
+decision loop measures each request instead and stops a run that cannot fit
+(decision-loop spec §7.4). An index line is at most 220 characters (ID, kind,
+confidence, flags and a 160-character gist).
 
 ## 8. Persistence and replay
 
@@ -372,8 +448,15 @@ for longer runs while bounding the index.
 In the memory-off arm (ADR 0014 D2) the store still receives mechanical writes,
 for evaluation, but nothing from it reaches the resident: no prefix records,
 no recall, no consolidation index. No consolidation runs, so the store holds
-only mechanical records and the personality record with its base values. The
-decision-loop spec applies the period boundary.
+only mechanical records, intentions and the personality record with its base
+values. The decision-loop spec applies the period boundary.
+
+- **One exception within a period.** The current intention is set and read
+  within a waking period in both arms, because it is part of the working
+  context (ADR 0013 D6). A nap does not end the period, so it survives a nap.
+- **At the period boundary** code sets the current intention, if any, to
+  `state = "reset"` (§3.6). Nothing the store holds is read again in that arm.
+  The mechanical records stay for evaluation and inspection.
 
 ## 10. The extension point
 
@@ -391,7 +474,7 @@ adds a test kind this way (M14 evidence).
 
 | ID | Test |
 |---|---|
-| MM-01 | Envelope: every record has the §2 fields with valid types and ranges; a record with an empty `sources`, a gist over 160 characters or a newline, or a confidence outside 0–4 is refused |
+| MM-01 | Envelope: every record has the §2 fields with valid types and ranges; a record other than a commitment with an empty `sources`, a gist over 160 characters or a newline, or a confidence outside 0–4 is refused; `false` and `null` are kept distinct |
 | MM-02 | IDs: record IDs count from 1 per resident and are never reused after a merge or a forget |
 | MM-03 | Store version increases by one per mechanical write and per committed change set |
 | MM-04 | Index lines: format, sort order and flags, for a superseded, a `needs_review` and an open commitment record |
@@ -407,6 +490,10 @@ adds a test kind this way (M14 evidence).
 | MM-14 | Replay: rebuilding a store from recorded writes and change sets gives the same hash at every version, with no model call |
 | MM-15 | Memory off: mechanical records are written; the prefix, recall and index return nothing; the personality stays at base |
 | MM-16 | Extension: a registered test kind is stored, consolidated and assembled with no change to store, validator or assembler code (ADR 0014 D3) |
+| MM-17 | Commitment sources: A proposes, falls asleep, B accepts in hearing range; A's record has `heard_counterpart = false`, an `observed` source for its own proposal and no `told` source; B's has `observed` for its acceptance and `told` for A's proposal; the gists follow the template |
+| MM-18 | Intentions: setting replaces with `replaced`; clearing with no successor gives `cleared` and no current intention; an off-arm boundary gives `reset`; a history reader never returns a non-current intention as current |
+| MM-19 | Archive: a commitment marked `kept` leaves the index, prefix and recall, stays in the store and is read by evaluation |
+| MM-20 | Skills: a revised hypothesis is a new record superseding the old, with zero evidence; the old keeps its counts; a merge of two skills is refused |
 
 ## 12. Disposition of open questions
 
