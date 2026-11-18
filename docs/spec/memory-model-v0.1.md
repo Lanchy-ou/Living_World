@@ -101,7 +101,7 @@ The index lists one line per record in the store (ADR 0012 D2), sorted by ID:
 | Kind | `content` fields | Written by |
 |---|---|---|
 | `episodic` | `participants:array<string>` (resident IDs), `place:Coord|null` | Consolidation |
-| `belief` | `subject:{kind:"place"|"entity"|"resident"|"kind_of_thing"|"general", ref:string|null}`, `stance:"stable"|"dated"|"guess"` | Consolidation |
+| `belief` | `subject:{kind:"place"|"entity"|"resident"|"kind_of_thing"|"general", ref:string|null}`, `stance:"stable"|"dated"|"guess"`, `topics:array<Topic>` | Consolidation |
 | `social` | `about:string` (resident ID), `trust:integer` (0–4), `impression:string`, `facts:SocialFacts` | Facts by code; the rest by consolidation |
 | `skill` | `hypothesis:SkillHypothesis`, `evidence:SkillEvidence`, `status:"active"|"doubtful"|"refuted"` | Evidence by code; the rest by consolidation |
 | `commitment` | `agreement_id`, `role:"promisor"|"promisee"`, `counterpart_id`, `terms:Terms`, `due_tick:integer|null`, `status:"open"|"kept"|"broken"|"expired"`, `status_note:string|null` | Code; status by consolidation |
@@ -127,6 +127,12 @@ A claim about the world. `stance` keeps three things apart (ADR 0011 D4):
 
 A later `dated` belief that differs from an earlier one is a change in the
 world, not a contradiction; both stay (ADR 0011 D4).
+
+`topics` is a sorted subset of `food`, `water`, `shelter`, `tools`,
+`materials`, `people`, `danger` and `other`, chosen by consolidation. Recall
+recipes use it, for example "known food and water beliefs" (decision-loop
+spec). `subject.ref` is a place as `"x,y"`, an entity ID, a resident ID or an
+archetype ID, as `subject.kind` says.
 
 ### 3.3 Social
 
