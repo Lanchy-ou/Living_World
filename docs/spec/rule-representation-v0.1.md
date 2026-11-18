@@ -206,10 +206,10 @@ pack's needs for each term are in the starter-content spec.
 | Matter classes | `mineral`, `plant`, `water` |
 | `scale` properties | `hardness` (visible), `strength` (visible), `weight` (on_inspect) |
 | `bool` properties | `sharp` (visible), `long` (visible), `dry` (visible), `flexible` (on_inspect), `malleable` (on_inspect), `flammable` (on_use), `edible` (on_use), `brittle` (on_use), `watertight` (on_use) |
-| `count` properties | `fruit_amount` (visible), `stock_amount` (visible), `water_amount` (visible), `wear_state` (visible), `fire_state` (visible), `freshness` (visible) |
+| `count` properties | `fruit_amount` (visible), `stock_amount` (visible), `water_amount` (visible), `wear_state` (visible), `fire_state` (visible) |
 | Compatibility verbs | `gather`, `eat`, `drink`, `fill`, `rest`, `sleep` |
 | Starter verbs | `combine`, `strike`, `cut`, `light`, `build` |
-| Phenomena | `picks_fruit`, `finds_nothing`, `hands_full`, `too_tired`, `tastes_good`, `tastes_bad`, `not_hungry`, `drinks`, `not_thirsty`, `no_water_here`, `fills_up`, `already_full`, `rests`, `sleeps`, `nothing_happens`, `leaves_dent`, `chips_off`, `splits`, `cuts_through`, `does_not_cut`, `fits_together`, `falls_apart`, `slips`, `snaps`, `holds_firm`, `smokes`, `catches_fire`, `fizzles`, `site_marked`, `ground_unsuitable` |
+| Phenomena | `picks_fruit`, `takes_some`, `finds_nothing`, `hands_full`, `too_tired`, `tastes_good`, `tastes_bad`, `not_hungry`, `drinks`, `not_thirsty`, `no_water_here`, `fills_up`, `already_full`, `rests`, `sleeps`, `nothing_happens`, `leaves_dent`, `chips_off`, `splits`, `cuts_through`, `does_not_cut`, `fits_together`, `falls_apart`, `slips`, `snaps`, `holds_firm`, `smokes`, `catches_fire`, `fizzles`, `site_marked`, `ground_unsuitable` |
 
 Verb declarations of `vocab/0.1`:
 
@@ -253,7 +253,9 @@ Verb declarations of `vocab/0.1`:
   created_tick` is a derived field.
 - Residents and corpses are engine entities, not archetypes. Rules may target
   them where a verb allows `resident`; they have no components.
-- Static fields are set by the archetype and never change.
+- Static fields are set by the archetype, or by an instance at placement
+  where the archetype leaves them open (for example the archetype a
+  `deposit`'s store holds), and never change afterwards.
 
 ### 3.2 Predicate keys
 
@@ -290,10 +292,10 @@ signature (§6), so it can be evaluated on a recorded attempt.
 | `work_complete` | — | The subject process's `work_done` is at least the rule's `work_ticks` | Process rules only (§5.8) |
 
 - `op` is one of `<`, `<=`, `==`, `!=`, `>=`, `>`.
-- `state.field` is one of `store.count`, `store.free` (`capacity − count`),
-  `container.used`, `container.free`, `container.count:<archetype>`,
-  `durability.wear`, `durability.left` (`max_wear − wear`), `fuel.ticks_left`,
-  `process.work_done`, `age`.
+- `state.field` is one of `quantity`, `store.count`, `store.free`
+  (`capacity − count`), `container.used`, `container.free`,
+  `container.count:<archetype>`, `durability.wear`, `durability.left`
+  (`max_wear − wear`), `fuel.ticks_left`, `process.work_done`, `age`.
 - The reference tile of `terrain_near` and `entity_near` is the actor's tile in
   a verb rule and the subject's tile in a world rule. A held entity's tile is
   its holder's tile.
@@ -313,7 +315,7 @@ a bounded change to the actor's own needs.
 
 | Operation | Fields | Effect |
 |---|---|---|
-| `create` (in `outputs`) | `archetype`, `material` or `material_from = "<slot>"`, `quantity` (integer or `"to_capacity"`), `at`, optional `source` | Creates new matter. Without `source` it is made from the rule's consumed inputs (§8); with `source` it comes from a declared source |
+| `create` (in `outputs`) | `archetype`, `material` or `material_from = "<slot>"`, `quantity` (an integer, `"to_capacity"` or `"subject.quantity"`), `at`, optional `source` | Creates new matter. Without `source` it is made from the rule's consumed inputs and destroyed entities (§8); with `source` it comes from a declared source |
 | `consume` | `of` (`"subject"`, `"target"`, `"slot:<name>"` or a contents reference such as `"slot:canteen.contents"`), `archetype` (for contents), `quantity` | Destroys matter (a sink) |
 | `move` | `from` (`"target.store"`, `"subject.store"`, a contents reference), `to` (a place), `quantity` | Moves matter without changing it |
 | `set_state` | `of`, `field` (a non-static component field), `set` or `add` | Changes component state, clamped to the field's bounds (`0..max_wear`, `0..capacity`, `≥ 0`) |
@@ -321,9 +323,15 @@ a bounded change to the actor's own needs.
 
 - **Places** (`at`, `to`): `"actor"` (the actor's inventory, or the actor's
   tile when the inventory has no room), `"actor.tile"`, `"target.tile"`,
-  `"target.contents"`, `"subject.tile"`, `"subject.contents"`.
-- **Inputs are always consumed** at a successful settlement, and instruments
-  never are (protocol §3.2). A rule does not list `consume` for its inputs.
+  `"target.contents"`, `"target.store"`, `"subject.tile"`,
+  `"subject.contents"`, `"subject.store"`, and `"subject.place"` (wherever
+  the subject itself is: a tile, an inventory or a container). A store accepts
+  only its own archetype.
+- Consuming an entity that holds contents first places its contents on its
+  tile, so nothing inside is lost without a rule saying so.
+- **Inputs are consumed** at a successful settlement, except slots marked
+  `consumed = false`, and instruments never are (protocol §3.2). A rule does
+  not list `consume` for its inputs.
 - `create` of a stackable item merges into an equal stack at the place (§4.5).
 - An item created by a verb rule records the actor as `owner_id` if it is not
   stackable (§4.6).
@@ -493,7 +501,7 @@ phenomena = { success = ["fits_together"], unmet = ["falls_apart"], chance_faile
 | `trigger` | §3.5 |
 | `target` | For verb rules: a slot `{ where = ... }` or `{ terrain = "<terrain>" }` for a tile target, or omitted for no target. Must agree with the verb's target kinds |
 | `subject` | For world rules only: a predicate on the entities the rule runs over |
-| `instruments`, `inputs` | Lists of slots `{slot, where, qty}`; instruments have `qty = 1` |
+| `instruments`, `inputs` | Lists of slots `{slot, where, qty}`; instruments have `qty = 1`. An input slot may add `consumed = false`: its items must be offered but are kept, as when a binding snaps and the head and handle stay |
 | `conditions` | Ordered list (§3.3) |
 | `work_ticks` | Integer ≥ 1, or `{ param = "<name>" }` when the verb has a `duration_param` |
 | `on_interrupt` | `"lose"`, `{ partial = [outputs] }` or `{ keep_progress = "<process archetype>" }` (§5.4) |
@@ -502,7 +510,7 @@ phenomena = { success = ["fits_together"], unmet = ["falls_apart"], chance_faile
 | `on_chance_failed` | `"keep_inputs"` or `"consume_inputs"` |
 | `chance_failed_effects` | Optional `set_state` effects on instruments that apply on a failed roll (§5.6) |
 | `outputs`, `effects` | §3.4 |
-| `phenomena` | Lists of phenomenon IDs for `success`, `unmet` and `chance_failed` |
+| `phenomena` | Lists of phenomenon IDs for `success`, `unmet` and `chance_failed`, and an optional `unmet_by_check` table from a slot name or condition ID to its own list |
 | `provenance` | §5.9; added by the loader for authored rules |
 
 ### 5.2 Slots and exact matching
@@ -594,8 +602,13 @@ instruments, so a slipping tool can still wear.
 |---|---|
 | `applied` | The rule's `success` list |
 | `chance_failed` | The rule's `chance_failed` list |
-| `unmet` | The rule's `unmet` list, whichever condition or slot failed |
+| `unmet` | The rule's `unmet_by_check` list for the failed check if it has one, else its `unmet` list |
 | `unmatched` | The verb's comparison table below |
+
+`unmet_by_check` lets a rule tell physical states apart, for example "not
+thirsty" from "no water here" for one drinking rule. Both lists are still the
+rule's own phenomena: they describe what the resident would sense, never name
+the rule or say which condition failed (ADR 0007 D5).
 
 **Comparison tables for unmatched attempts** (ADR 0007 D5, Q4; owner,
 RR-D5). A pack gives each enabled verb an ordered table:
@@ -746,7 +759,8 @@ of a rule, for every class:
 
 `units created by outputs without a source ≤ units of consumed inputs`
 
-where consumed inputs are the inputs (when they are consumed) plus anything a
+where consumed inputs are the input slots that are consumed (not those with
+`consumed = false`, and none when a failed roll keeps them) plus anything a
 `consume` effect destroys, and outputs include partial outputs. `move` neither
 creates nor destroys. Destroying matter is allowed (eating, burning). For
 example, a stone axe of `{mineral = 1, plant = 2}` may be made from a stone
@@ -788,7 +802,8 @@ restores hydration from nothing; it is bounded by §5.5 instead.
 ## 9. Example: compatibility rules
 
 The starter-content spec lists the full compatibility pack. Two rules show
-how v1 checks become conditions in v1 order (protocol §11.2):
+how v1 checks become conditions in v1 order (protocol §11.2; v1 checks room
+before stock, `world/actions.py` `validate`):
 
 ```toml
 [[rule]]
@@ -797,8 +812,8 @@ trigger = "verb:gather"
 target = { where = { archetype = "fruit_tree" } }
 conditions = [
   { id = "stamina", kind = "need", need = "stamina", op = ">", value = "min" },   # v1 EXHAUSTED
-  { id = "stock",   kind = "state", of = "target", field = "store.count", op = ">=", value = 1 },  # v1 RESOURCE_TAKEN
   { id = "room",    kind = "free_slots", op = ">=", value = 1 },                  # v1 INVENTORY_FULL
+  { id = "stock",   kind = "state", of = "target", field = "store.count", op = ">=", value = 1 },  # v1 RESOURCE_TAKEN
 ]
 work_ticks = 2
 on_interrupt = "lose"
@@ -893,6 +908,6 @@ every unmet condition; the bridge, not the phenomena, carries the v1 code.
 | RR-D1 | Does a rule's success chance depend on the inputs or on skill? | Fixed per rule. Better inputs can get a better chance through a more specific rule. No world-side skill | Simple and testable. A world-side skill would carry knowledge across waking periods in the memory-off arm |
 | RR-D2 | How is matter measured? | Units per matter class (`mineral`, `plant`, `water`) per archetype | Mass values need balancing of their own; a unit count alone cannot tell stone from wood |
 | RR-D3 | What does an output inherit? | The input's material with its true and apparent values; archetype properties win; instance overrides are not inherited | Flint and stone axes then differ by material, as ADR 0008 D3 intends, and deception stays per material |
-| RR-D4 | The first vocabulary | 5 needs, 3 matter classes, 18 properties, 6 compatibility verbs plus 5 starter verbs (`combine`, `strike`, `cut`, `light`, `build`), 30 phenomena | Small enough to test, enough for the starter content of ADR 0010 D2 |
+| RR-D4 | The first vocabulary | 5 needs, 3 matter classes, 17 properties, 6 compatibility verbs plus 5 starter verbs (`combine`, `strike`, `cut`, `light`, `build`), 31 phenomena | Small enough to test, enough for the starter content of ADR 0010 D2 |
 | RR-D5 | How are phenomena of unmatched attempts made? | Per-verb comparison tables over true values; the union of holding entries, else a default | Gives physical feel without naming a rule (ADR 0007 D5) |
 | RR-D6 | Do stackable items record an owner? | No; only non-stackable entities do | Merging stacks would mix owners; `item_transferred` events keep who gave what |
