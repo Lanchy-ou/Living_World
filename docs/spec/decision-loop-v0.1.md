@@ -633,7 +633,8 @@ CallRecord {
   record_schema:"cr/0.1", call_id, call_kind:CallKind, resident_id, tick, period_id,
   turn_id:string|null, consolidation_period:string|null,
   full_manifest:ContextManifest, sent_manifest:ContextManifest|null,
-  candidates:array<{manifest:ContextManifest, wire_sha256:Hash, measured_tokens:integer}>,
+  candidates:array<{manifest:ContextManifest, wire_sha256:Hash, measured_tokens:integer,
+                    omitted:array<Ref>}>,
   floor_candidate:integer|null, guard:{omitted:array<Ref>, notice:boolean,
     counter_id, counter_version, framing_version, model_window, reserve, floor_tokens, reason:string|null}|null,
   settings:{provider, model, prompt_version, schema_sha256, wire_adapter_version,
@@ -641,7 +642,8 @@ CallRecord {
   outcome:"adopted"|"not_adopted"|"failed"|"stopped_unfit"|"abandoned",
   attempts:array<{n:integer, request_sha256:Hash, started_at, ended_at:timestamp|null,
                   error_class:string|null, raw_output_ref:Hash|null,
-                  parsed_ref:Hash|null, tokens:{input,output,cache_hit,cache_miss}|null, latency_ms:integer|null}>
+                  parsed_ref:Hash|null, tokens:{input:int|null,output:int|null,cache_hit:int|null,cache_miss:int|null}|null,
+                  missing_usage_reason:string|null, latency_ms:integer|null}>
 }
 ```
 
@@ -670,6 +672,11 @@ DecisionRecordV2 {
   new_entries:array<string>,                 // day-log entry IDs written at this turn
   output:TurnOutput|null,                    // the adopted output
   valid_cites:array<string>, invalid_cites:array<string>,
+  cited_parts:array<{id, act_call_id, sent_part_sha256, revision:string|null}>,
+  telemetry:{delivery_id, awake_ticks, fatigue_band:string|null,
+             stages:array<{call_id, full_tokens, pressure_band, pressure_text,
+                           omitted:array<Ref>}>},
+  use_updates:array<{record_id, revision, call_id, before_version, after_version}>,
   origin:"model"|"fallback"|null,             // null when no turn committed
   fallback:{used:boolean, reason:string|null, policy_id:string|null},
   submission:TurnSubmission|null,                 // what reached the world
@@ -687,11 +694,13 @@ DecisionRecordV2 {
   versus actually sent memory revisions and use-update links. No-dispatch
   turns have no submission, adopted act, origin or outcome event. Every
   logical call (including morning) is independently indexed by run,
-  resident and call ID with its turn/period parent. Persist all exact packet
+  resident and call ID with its turn/period parent. A recall step has three
+  call IDs only when a recall call actually ran; off_empty joins the two
+  decision calls and its typed local entry. Persist all exact packet
   deliveries including no-turn intervals (EN §2), plus ordered event/member
   and revision links for inspection. Audit access is analysis-only.
 
-- A turn with a recall joins three calls in order; the recall query is a part
+- A turn with a dispatched deliberate recall joins three calls in order; the recall query is a part
   of the `recall` call's manifest, so the turn's `act` output alone is never
   needed to rebuild it.
 
