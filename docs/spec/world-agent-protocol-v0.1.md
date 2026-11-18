@@ -420,14 +420,15 @@ rolls follow ADR 0009 D1 and the world-engine spec.
   reported; the others are not reported for that action.
 - **[CR-010] When a stop is found.** The priority applies among the stops that
   find the action still running at the same check. A stop found while the
-  action progresses (`PATH_BLOCKED` at a step, `TARGET_GONE`) ends it there,
-  so a death later in the same tick does not replace it, just as a completed
-  action is never failed afterwards. `DEATH`, `FAINTED` and `EXHAUSTED` are
-  found together after the tick's physiology, as v1 finds exhaustion
-  (`world-rules-v0.1.md` §3): an unfinished movement, or a rule that declares
-  exhaustion, stops with `EXHAUSTED` at the boundary where stamina reached zero,
-  unless death or fainting applies at that check. The world-engine spec gives
-  the phases.
+  action progresses (`PATH_BLOCKED` at a step, or `EXHAUSTED` when the action
+  would progress with no stamina, as v1) ends it there, so a death later in
+  the same tick does not replace it, just as a completed action is never
+  failed afterwards. The other stops are found together at the end of the
+  tick, after its physiology: `DEATH`, `FAINTED`, `EXHAUSTED`, `TARGET_GONE`
+  and `WOKEN`. There, as v1 finds exhaustion (`world-rules-v0.1.md` §3), an
+  unfinished movement, or a rule that declares exhaustion, stops with
+  `EXHAUSTED` at the boundary where stamina reached zero, unless death or
+  fainting applies at that check. The world-engine spec gives the phases.
 - A missing or distant target ends every other action at its completion,
   through the completion checks (§4.2, §4.3), as in v1. No kernel action can
   take a reserved item from its holder, because only the holder can move it.

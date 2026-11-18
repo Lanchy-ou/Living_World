@@ -259,10 +259,12 @@ Gate 2 of P3.5-SP-01 checks the amended text.
   boundary" could let a later death in the same tick replace a blocked step,
   which v1 never does.
 - *Rule.* The priority applies among stops found at the same check. A stop
-  found during progress ends the action there. `DEATH`, `FAINTED` and
-  `EXHAUSTED` are found together after the tick's physiology. This changes no
-  v1-visible outcome; it is the wording the approved compatibility alignment
-  needs.
+  found during progress (`PATH_BLOCKED`, or `EXHAUSTED` when an action would
+  progress with no stamina) ends the action there. The others are found
+  together after the tick's physiology: `DEATH`, `FAINTED`, `EXHAUSTED` of an
+  unfinished action whose stamina reached zero, `TARGET_GONE` and `WOKEN`.
+  This changes no v1-visible outcome; it is the wording the approved
+  compatibility alignment needs.
 
 **Impact.** Spec text only: WAP §4.1, §4.4, §5.1, §5.3, §5.4, §9 and tests
 WAP-01, 04, 08, 14, 23 and the new WAP-31 to WAP-33. The world-engine,
