@@ -322,7 +322,9 @@ Source = {kind:"observed", entry_id:string}                     // a day-log ent
   is believed; it gains an `observed` source only when the resident sees for
   itself, citing that entry. The formation validator enforces this
   (memory-formation spec).
-- An `observed` source cites a day-log entry whose type is one of the resident's
+- An `observed` source cites a day-log entry that directly witnesses the
+  record's subject (its witness keys, memory formation §3.5); an unrelated
+  perception never makes a claim observed. It cites an entry whose type is one of the resident's
   own perceptions (decision-loop spec), never a `heard_speech` entry. The
   feedback on the resident's own utterance proves only the act of speaking.
   It cannot add observed provenance about the subject of the words.

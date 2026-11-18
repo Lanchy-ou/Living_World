@@ -236,13 +236,23 @@ DayLogEntry { id:string, type:string, tick:integer, text:string,
                  |{kind:"turn", turn_id}|{kind:"recall", mode:"deliberate", call_id}
                  |{kind:"recall", mode:"recipe"|"off_empty", turn_id, ordinal}
                  |{kind:"inspection", intent_id},
-              verbatim:object|null }            // heard speech: speaker, addressee, act, text, terms as delivered
+              verbatim:object|null,             // heard speech: speaker, addressee, act, text, terms as delivered
+              about:array<string> }             // witness keys, computed by code (below)
 ```
 
 Store exact packet member path (field and ordered index) alongside each
 packet-derived entry in inspection; entries may link multiple members for
 one observation. Non-packet entries have null delivery. Record the retrieved
-revision and rendered text hash for each recall. The `ref` is resident-safe (IDs the resident's own packets carried). The
+revision and rendered text hash for each recall. **Witness keys.** Code computes each entry's `about` keys from the delivered
+item alone, never from hidden state: `entity:<id>`, `archetype:<id>` and
+`material:<id>` of every entity or item it shows; `resident:<id>` of every
+resident it shows, the actor of a watched action and the speaker of heard
+speech; `place:<x>,<y>` of every tile position it shows; `verb:<id>` and
+`phenomenon:<id>` of an action it reports; `need:<id>` of a body change. The
+keys say what the entry directly witnesses; memory formation §3.5 uses them
+to check `observed` sources.
+
+The `ref` is resident-safe (IDs the resident's own packets carried). The
 analysis side joins it to the objective event (evaluation spec §1); the entry
 itself carries only identifiers authorized by this resident's own delivery.
 

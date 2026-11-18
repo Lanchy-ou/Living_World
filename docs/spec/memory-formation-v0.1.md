@@ -342,11 +342,22 @@ checking any op:
 
 | Source or target | Allowed only when |
 |---|---|
-| `observed` `entry_id` | The entry is in the sent input (current period or a sent pending period) and its type is one of the resident's own perceptions (decision-loop spec §4.3) |
+| `observed` `entry_id` | The entry is in the sent input (current period or a sent pending period), its type is one of the resident's own perceptions (decision-loop spec §4.3), and it **witnesses the record's subject**: its `about` keys share at least one key with the record's subject keys (below) |
 | `told` `utterance_id`, `speaker_id` | A `heard_speech` entry in the sent input carries that utterance ID, and its speaker equals `speaker_id` |
 | `inferred` `memory_ids`, `call_id` | `call_id` is this change-set call's ID; each memory ID is a record shown in the sent input (in full or as an index line) or a ref defined by an earlier accepted op of this set |
 | `innate` | Never in a change set |
 | Record named by `update`, `confidence`, `review_done`, `forget`, `commitment_status`, by `supersede` as either endpoint, or by `merge` as a merged record | The record is in the sent input **in full** (selected, mandatory or mechanical), or is an earlier accepted new ref with its full staged record; an index line alone cannot authorize mutation |
+
+**Subject keys** of a record, for the witness test: a belief's `subject` (a
+place `x,y` gives `place:x,y`, an entity `entity:<id>`, a resident
+`resident:<id>`, a kind of thing `archetype:<id>`; a `general` belief has
+none); an episodic record's participants and place; a skill's verb and the
+archetype and material IDs of its looks; a social record's resident. A
+record with no subject keys cannot take an `observed` source; it can rest on
+`told` or `inferred` sources. The test checks attribution against what the
+resident received, never whether the claim is true. For example, a hunger
+entry (`need:satiety`) cannot be cited as having seen that a spring is
+poisoned (`place:38,30`); an entry showing the spring tile can.
 
 So an ID the guard left out, a guessed ID, a wrong speaker or a forged call is
 refused, and the model can change only records it was shown in full.
@@ -575,6 +586,7 @@ ConsolidationRecord {
 | MF-21 | Interrupt before dispatch, after selection and after change-set preparation: replay same prefix and disposition. Unfit floor before early wake is abandoned; surviving K records stopped_unfit without a world submission. |
 | MF-22 | Resume model during and after fallback: current action visible, no rationale/result recall; an awake watcher with both phases may update its own skill. Exact packet and hypothesis revision identify the write. |
 | MF-23 | Selection floor contains open/review records in full; change-set floor adds changed mechanical records. Recount framed floors including notice and restore an in-flight attempt at its journal cursor. |
+| MF-24 | Observed witnesses (§3.5): B hears A say the spring is poisoned and never sees the spring; a belief about the spring citing A's `heard_speech` as `told` and B's hunger `body_change` as `observed`, at confidence 4, is refused with `provenance`; the same belief with only the `told` source commits at most at 3; when B's sent input holds an `observation` entry showing the spring tile, citing it as `observed` is accepted and lifts the cap. The check reads only B's delivered entries |
 
 ## 10. Disposition of open questions
 
