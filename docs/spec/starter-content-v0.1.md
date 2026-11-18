@@ -1,6 +1,6 @@
 # Living Island — Starter Content v0.1 (P3.5 v2 lane)
 
-> **Rework 2 (2026-11-18).** Enumerates compatibility pins, fixes fire and rot clocks, and extends policy calibration. CT-16–19 cover the new fixtures.
+> **Rework 2 (2026-11-18).** Enumerates compatibility pins, fixes fire and rot clocks, and extends policy calibration. CT-17–20 cover the new fixtures.
 
 > **Draft (2026-11-18), task P3.5-SP-01. Not frozen.** Owner decisions are
 > written with the author's recommended answer applied and are listed in
@@ -343,9 +343,9 @@ including an edited file at a known path, receive no equivalence claim.
 | Fixture | Sole substitution | Resulting TOML SHA-256 |
 |---|---|---|
 | WAP-27 | give_ticks = 1 → 3 | `b980a2cb42b526991eab648f417dbcf097776d18ab1679d6c015b9c229246c74` |
-| CT-15 | regrow_per_cycle = 1 → 2 | `32a8098c62cc7b17a42cbb8825e5860dd80c222ed006bba493c7aa7afedbb5e4` |
-| CT-16 zero growth | regrow_per_cycle = 1 → 0 | `92c32604733be96c1894045ab24960eb550cc27df4388e389654e99967459ecf` |
-| CT-16 gather | gather_ticks = 2 → 1 | `569cf836eaee207dce3df9efc55479cb823edfe3919392621b7c7e845601be43` |
+| CT-15 regrowth | regrow_per_cycle = 1 → 2 | `32a8098c62cc7b17a42cbb8825e5860dd80c222ed006bba493c7aa7afedbb5e4` |
+| CT-17 zero growth | regrow_per_cycle = 1 → 0 | `92c32604733be96c1894045ab24960eb550cc27df4388e389654e99967459ecf` |
+| CT-17 gather | gather_ticks = 2 → 1 | `569cf836eaee207dce3df9efc55479cb823edfe3919392621b7c7e845601be43` |
 
 All listed configs have fruit_few_max = 2. R10 is the positive registry,
 rather than a cutoff filter on arbitrary v1 files. For each need and sign
@@ -515,7 +515,8 @@ need more than a phrase.
   `fire_goes_out`):
   - A fire lit in phase 3 of tick `k` is a subject of phase 4 in the same
     tick, so `fire_burns` already takes one of its 18 fuel ticks then. It
-    burns in ticks `k` to `k+17` and goes out at the end of tick `k+17`.
+    burns in ticks `k` to `k+17` and reaches zero fuel at the end of tick
+    `k+17`; removal then follows spill admission below.
   - `bake_pot` runs at every completed tick that is a multiple of 6. A pot
     placed in phase 3 of completed tick j can bake in 4a of the same tick.
     The delay to the first due check is (6 − j mod 6) mod 6 completed
@@ -787,11 +788,11 @@ sleeping. It is measured, not tuned, in this version (owner, CT-D9):
 | CT-13 | Balance: the calibration of §9.1 passes; then §9.2 passes on the acceptance seeds for the final starter candidate, with 40 valid cases, both arms in the visible-feedback mode, and the denominators reported |
 | CT-14 | The engine test pack covers every closed term of rule representation §3 and shares no ID with a real pack |
 | CT-15 | Supported configurations (§4.7): a fixture config with `give_ticks = 3` loads and gives a three-tick `give`; `regrow_per_cycle = 2` regrows a tree at stock 3 of 5 by two and at stock 4 by one, as v1; `talk_ticks = 2`, `sleep_ticks = 60` or `fruit_few_max = 3` is refused at load; the manifest records the fixture's config hash |
-| CT-16 | Verify each registry digest and canonical run binding. Unknown three-serving and 3999-serving configs refused. Check exact 0/1/2 serving projection, zero regrowth and one-tick gather loss bound 300. |
-| CT-17 | Compose and normalize every inherited/authored rule; explicit versus default wear=0, work_done=0 and empty lists give identical effects. Reject world work_ticks. Check initial corpse reserve. |
-| CT-18 | Insert pot in phase 3 on due tick 6: bake at 6; insert at 7: first check at 12. Block last-fuel spill then free space: exact contents released once. Split fruit at age 431: both parts rot at 432 where admitted. |
-| CT-19 | Run DL-25/WAP-35 calibration, including generic failure, stopped gather and mid-queue restore, before the existing paired 40-case comparison. |
 | CT-16 | Fill: a canteen with one serving filled at the spring ends with two, and an empty clay pot with one; a full one is `already_full` |
+| CT-17 | Verify each registry digest and canonical run binding. Unknown three-serving and 3999-serving configs refused. Check exact 0/1/2 serving projection, zero regrowth and one-tick gather loss bound 300. |
+| CT-18 | Compose and normalize every inherited/authored rule; explicit versus default wear=0, work_done=0 and empty lists give identical effects. Reject world work_ticks. Check initial corpse reserve. |
+| CT-19 | Insert pot in phase 3 on due tick 6: bake at 6; insert at 7: first check at 12. Block last-fuel spill then free space: exact contents released once. Split fruit at age 431: both parts rot at 432 where admitted. |
+| CT-20 | Run DL-25/WAP-35 calibration, including generic failure, stopped gather and mid-queue restore, before the existing paired 40-case comparison. |
 
 ## 11. Disposition of open questions
 
