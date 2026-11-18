@@ -479,6 +479,7 @@ These complete protocol §9.
 | `entity_state_changed` | `{entity_id, field, before, after, rule_id}` | A `set_state` effect |
 | `stack_merged` | `{from_id, into_id, quantity}` | A moving or created part merges into an equal stack |
 | `needs_changed` | `{resident_id, changes:[{need_id, before, after}], causes:array<string>}` | A rule's completion need effect (`causes` is its rule ID), and once per resident in phase 5 for physiology and per-tick rule effects (`causes` holds `"physiology"` and those rule IDs, sorted) |
+| `act_items` | `{slots:array<{slot, entity_id, quantity}>, rule_id}` | Right after `action_started` of an `act` whose rule was chosen at start: the reserved items by slot, in slot order (evaluation spec §3.4) |
 | `world_rule_applied` | `{rule_id, subject_id}` | Before the effect events of a world rule |
 | `process_progressed` | `{process_id, work_done, contributor_id}` | A contribution adds work |
 
