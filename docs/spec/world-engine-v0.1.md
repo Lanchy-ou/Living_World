@@ -504,7 +504,7 @@ asleep/unconscious: v −= recovery_per_tick_asleep
   period (memory-formation spec), so that fainting always leads to
   consolidation as ADR 0012 D3 requires. The world does not know K (protocol
   §6.3), so this is checked when `sim` composes a run from a pack and an
-  agent configuration, which refuses the pair (decision-loop spec §10); the
+  agent configuration, which refuses the pair (decision-loop spec §10.5); the
   world's content loader does not read K.
 
 ### 9.4 Waking

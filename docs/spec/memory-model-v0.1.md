@@ -429,7 +429,7 @@ for longer runs while bounding the index.
 line, one social line per other resident, and one line per open commitment.
 Open commitments have no fixed bound, so the index has none either; the
 decision loop measures each request instead and stops a run that cannot fit
-(decision-loop spec §7.4). An index line is at most 220 characters (ID, kind,
+(decision-loop spec §7.1). An index line is at most 220 characters (ID, kind,
 confidence, flags and a 160-character gist).
 
 ## 8. Persistence and replay

@@ -410,7 +410,7 @@ without the selected and mechanical records.
 - Day-log entries left out are not consolidated (ADR 0012 Q8). They stay in
   the audit's closed working context. The record lists them, with manifests
   before and after.
-- **Request fit** follows the decision loop's pre-dispatch contract (§7.4
+- **Request fit** follows the decision loop's pre-dispatch contract (§7.1
   there): the floor is measured on the actual request, notice included,
   before dispatch. The index has no fixed bound because open commitments have
   none (memory model §7). If the floor does not fit, the call is not
