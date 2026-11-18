@@ -1,5 +1,7 @@
 # Living Island — World Engine v0.1 (P3.5 v2 lane)
 
+> **Rework 2 (2026-11-18).** Pins checkpoint state, physical preflight, watch projection and objective evidence. EN-29–35 apply to the engine test pack.
+
 > **Draft (2026-11-18), task P3.5-SP-01. Not frozen.** Owner decisions are
 > written with the author's recommended answer applied and are listed in
 > §17 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md).
@@ -63,8 +65,11 @@ for any recipe, archetype or material ID (ADR 0009 consequences, ADR 0010 D4).
 - The ID says nothing about when an entity was made. A resident cannot tell
   a fruit's age from its ID, since the fruit has no age property (owner,
   CT-D7). `created_tick` stays world-internal.
-- `n` is an integer below 2^53 (`interface-contract-v0.1.md` §6), so it never
-  overflows within any run. Engine IDs contain `:`, which content IDs cannot,
+- `n` is an integer below 2^53 (`interface-contract-v0.1.md` §6), and the checkpoint retains the sorted set of all previously issued engine
+  IDs, including destroyed IDs (one entry per committed allocation, size n).
+  Refuse the transition before allocation if incrementing n or retrying k
+  would reach 2^53. Allocation failure is terminal before tick commit;
+  never wrap, publish partial IDs or reuse an absent ID. Engine IDs contain `:`, which content IDs cannot,
   so they never collide. IDs are never reused.
 - A split stack's moving part, a merged stack's survivor and every output get
   their IDs by these rules only, so replay reproduces them.
@@ -79,10 +84,10 @@ event cursor) and adds:
 | Field | Content |
 |---|---|
 | `entities` | Every non-resident entity: `entity_id`, `archetype_id`, `material_id`, `quantity`, `created_tick`, `owner_id`, place, component state, own true values, apparent overrides and tells. Sorted by entity ID |
-| `entity_counter` | The creation counter `n` (§1) |
+| `entity_counter` | The creation counter `n` and its complete issued-ID set (§1) |
 | `needs` | Per resident, the stored value of each enabled need, sorted by need ID |
 | `awareness` | Per resident: `awake`, `asleep` or `unconscious`, and for `unconscious` the tick it ends |
-| `active_actions` | Per actor: the complete intent, `tick_started`, elapsed work, due tick or `null`, route state, the chosen `rule_id`, the resolved and reserved items by slot, and any pending outcome decided at start |
+| `active_actions` | Per actor: the complete intent, `tick_started`, elapsed work, due tick or `null`, route state, the chosen `rule_id`, original-stack to reserved-part bindings, the ordered immutable apparent items and typed start_target (WAP §§4.1, 5.1), phase locations and any pending outcome decided at start |
 | `phase_offsets` | Per entity and `every:` rule, from content |
 | `fatigue_inputs` | Per resident, the counts of the last delivered packet that mental fatigue reads (§9.3) |
 | `library` | `vocabulary_hash`, `rule_library_hash`, `pack_ids`, the active rule IDs, and the canonical parsed form of every rule added during the run (§13) |
@@ -100,7 +105,11 @@ event cursor) and adds:
   a save before acknowledgement neither loses nor repeats them.
 - The agent side's checkpoint (memory store, turn state, decision records) is
   the decision-loop and memory specs'; `sim` saves both checkpoints at the
-  same boundary.
+  same boundary. The sim checkpoint alone owns per-resident acknowledgement
+  cursors and the policy adapter state of WAP §11.2. Journal each exact
+  delivered packet under (run, resident, delivery_id), including no-turn
+  boundaries, before advancing the cursor; publish journal prefix, cursor
+  and world checkpoint together. Re-ingestion verifies identical bytes.
 - Restore refuses a snapshot whose vocabulary or library hash differs from
   the loaded content plus the snapshot's added rules. There is no implicit
   migration (ADR 0009 D5).
@@ -166,8 +175,13 @@ resource transfer settles in this phase, as in v1.
   Unmet and unmatched outcomes end at `t + attempt_ticks` of the verb
   (protocol §4.3).
 - **Reservation.** The items in a chosen rule's slots are reserved for the
-  action (ADR 0007 D6), as (stack ID, units) pairs; reserving never splits a
-  stack. A reserved item cannot be used by another action of the same actor;
+  action (ADR 0007 D6). On successful item resolution at start split an
+  oversized stack as WAP §3.2 requires. Allocate the isolated part in its
+  current place, retain original ID and age for the public snapshot, map
+  original ID to reserved physical ID and amount; delay automatic remerge
+  until release. Keep reserved units distinct through capture and rechecks.
+  Resolution shortage commits no split. On release merge any equal free
+  remnants deterministically into the lowest free ID, recording lineage. A reserved item cannot be used by another action of the same actor;
   since only its holder can move a held item and an actor has one action, no
   other actor can take it through a kernel action. World rules are not
   blocked by reservations (owner, EN-D3): if a world rule consumes or changes
@@ -177,7 +191,8 @@ resource transfer settles in this phase, as in v1.
   were resolved, `act_items` follows it (§11), whatever the outcome.
 - The resolved items are also the actor's `running_action.items` and
   `items_used`, and the `start` view of watchers (protocol §4.1, §5.1, §5.4,
-  CR-010), built from the apparent values at this start.
+  CR-010/011), filtered by each entitled view. Store the safe start target,
+  independently of the true target and parts in act_items.
 - A sleep verb (`awareness_during = "asleep"`) makes the actor `asleep` from
   this tick, with `resident_fell_asleep`.
 
@@ -239,18 +254,20 @@ unfinished action, as v1.
      effects (§6).
    - `act`: the chosen rule is revalidated as a whole, in the check order of
      rule representation §5.2: target, instrument slots, input slots, the
-     declared conditions, then `world_limit` (ADR 0009 D1 item 6). No new
+     declared conditions (ADR 0009 D1 item 6). No new
      rule is chosen. A failure is `settled/unmet` at completion, with
      `failed_check` naming the first failing check. It ends at this tick,
      having spent its work time (protocol §4.3).
    - If the checks pass and `success_per_mille < 1000`, the chance roll is
-     drawn (§5.3). A failed roll is `settled/chance_failed`: inputs are kept or
+     drawn (§5.3). A failed roll selects the `chance_failed` branch: inputs are kept or
      consumed as the rule's `on_chance_failed` says, and only the rule's
      `chance_failed_effects` apply (ADR 0009 Q3, rule representation §5.6).
-   - Otherwise `settled/applied`: inputs are consumed, then `effects` in
+   - Otherwise select `applied`: inputs are consumed, then `effects` in
      declared order, then `outputs` in declared order (§11), with quantities
      captured before the first effect (rule representation §3.4.1).
-   - Each branch is applied atomically: its placements were admitted by
+   - After selecting the branch, simulate its full physical transaction. A
+     refusal yields `settled/unmet` with `world_limit`, including for a
+     failed roll. On admission apply only that branch. Its placements pass
      `world_limit` before anything was spent (§12), so a settlement either
      applies whole or not at all.
 4. The result is final. A completed action is never failed afterwards
@@ -389,14 +406,20 @@ is emitted for each unit.
 ### 7.3 Completion
 
 In phase 4b, after all other world rules, the engine visits the process
-entities in entity ID order. For each, on the state at that moment, it takes
+entities in entity ID order (snapshot the open IDs after 4a, skip deleted
+subjects, defer new 4b subjects to next tick). This is the approved R7
+exception to ADR 0009 D3. For each, on the state at that moment, it takes
 the eligible process rules whose `work_complete` holds and settles only the
 most specific one, then the lowest `rule_id` (rule representation §5.8). Its
 slots are bound from the contents (rule representation §5.2), its inputs are
 consumed, then its effects and outputs apply, as one atomic branch (§12). If
 `world_limit` refuses it, nothing happens this tick and the process keeps its
-work. Every `contribute` running on that process then ends with success at
-`t+1`.
+work and nobody succeeds. On commit the required whole-subject consume
+closes it atomically. End each still-active contribution to that ID whose
+actor is in reach immediately before closure, in actor ID order, as success
+at `t+1`; prior workers affect provenance only. Out-of-reach contributions
+get the protocol target-gone stop at phase 6. A rejected placement alone
+never terminates an in-reach contribution.
 
 - The process's `progress` descriptor reads `work_done` against the
   archetype's `work_required`, the same total for every rule (rule
@@ -411,8 +434,7 @@ work. Every `contribute` running on that process then ends with success at
 
 A process does not decay and is never removed by the engine in this version
 (ADR 0009 Q4; owner, EN-D4). Content may still add a `when:` rule that acts on
-`age` or `process.work_done`. A process with no contributor costs nothing per
-tick, because work only counts in phase 2.
+`age` or `process.work_done`. A ready process is checked in 4b even without a current contributor.
 
 ## 8. Phase 4: world rules
 
@@ -430,7 +452,7 @@ tick, because work only counts in phase 2.
   representation §3.5), so it never fires at tick 0. This is the v1 regrowth
   schedule (`world-rules-v0.1.md` §5.5).
 - A subject for which the rule's slots are filled and conditions hold
-  settles as `applied`; otherwise nothing happens and no event is emitted, as
+  settles as `applied` if preflight admits it; otherwise nothing happens and no event is emitted, as
   v1 emits no regrowth fact when a tree is full.
 - Each application emits `world_rule_applied {rule_id, subject_id}` followed
   by the events of its effects.
@@ -587,15 +609,17 @@ reports (protocol §5.3), then one `BoundaryDelivery` per living resident.
 Descriptors are computed from apparent values and descriptor tables (rule
 representation §2.2, §4.3).
 
-- **Watched actions** (protocol §5.4, CR-010). For each action that started,
-  stopped or settled in this tick and each watcher whose sight at this
-  boundary includes the actor, the engine builds one `ObservedAction` per
-  phase. `visible_items` uses the apparent views at this boundary: at `start`
-  the resolved items (the same list as `act_items`, §11), at `stop` those that
-  still exist, at `settle` those that still exist after settlement plus the
-  outputs placed in the actor's inventory or on its tile. An item away from the
-  actor is shown only if it is in the watcher's own perception. The actor's
-  own `items_used` is that start list.
+- **Watch projection (CR-010/011).** Record membership and held/placed
+  relation at each phase, using immutable apparent start looks and original
+  quantities/IDs for existing items. An output first acquires a look when
+  created. Filter this phase record by the recipient's awareness, sight,
+  actor location and target access at delivery exactly as WAP §5.4. Keep
+  one record per phase even when both reach one packet. For a successful
+  give capture committed moved portions before merge; only its observing
+  recipient sees received_items and self target. These fields and the actor's
+  safe start_target are independent of authoritative act_items. Compatibility
+  sleep sights are projected for v1 novelty/deferral under WAP §11.2.
+
 - A packet built for a boundary is stored in `pending_deliveries` until it is
   acknowledged (§2).
 
@@ -605,7 +629,7 @@ These complete protocol §9.
 
 | `EventType` | Payload | Emitted when |
 |---|---|---|
-| `entity_created` | `{entity_id, archetype_id, material_id, quantity, place, owner_id, rule_id:string|null, source:string|null, made_from:array<{entity_id, quantity}>, process_id:string|null}` | An output is created, or content is placed at tick 0. `made_from` lists the stacks the settlement consumed (inputs and `consume` effects), in event order; `process_id` names the process a process rule ran on |
+| `entity_created` | `{entity_id, archetype_id, material_id, quantity, place, owner_id, rule_id:string|null, source:string|null, recreated_from:array<{entity_id, quantity}>, made_from:array<{entity_id, quantity}>, process_id:string|null}` | An output is created, or content is placed at tick 0. `made_from` lists the stacks the settlement consumed (inputs and `consume` effects), in event order. For a same-slot return, `recreated_from` lists only the original parts of that slot spent on this output, allocated in part order without reuse; empty for ordinary outputs. Emit creation before any merge; `process_id` names the process a process rule ran on |
 | `entity_consumed` | `{entity_id, archetype_id, quantity, rule_id}` | Inputs or a `consume` effect destroy matter |
 | `matter_moved` | `{archetype_id, quantity, from:Place, to:Place, entity_id:string|null, rule_id}` | A `move` effect, such as fruit from a tree's store to an inventory; `entity_id` is the resulting stack, `null` when the destination is a store |
 | `store_count_changed` | `{entity_id, archetype_id, before, after, rule_id, source:string|null}` | A store's count changes: a sourced refill (`source` set) or a `move` out of or into it |
@@ -613,8 +637,8 @@ These complete protocol §9.
 | `stack_split` | `{from_id, new_id, quantity}` | Part of a stack moves and gets a new ID (§1, §6) |
 | `stack_merged` | `{from_id, into_id, quantity}` | A moving or created part merges into an equal stack |
 | `needs_changed` | `{resident_id, changes:[{need_id, before, after}], causes:array<string>}` | A rule's completion need effect (`causes` is its rule ID), and once per resident in phase 5 for physiology and per-tick rule effects (`causes` holds `"physiology"` and those rule IDs, sorted) |
-| `act_items` | `{rule_id:string|null, target:{kind, id:string|null, position:Coord|null}|null, slots:array<{slot:string|null, role, parts:array<{entity_id, archetype_id, material_id, quantity}>}>}` | Right after `action_started` of every `act` whose items were resolved, whatever the outcome: the target and the resolved items with their true archetype and material, by slot in slot order when a rule was chosen at start (`slot` null and submitted order otherwise). Objective analysis data, never resident-facing (evaluation spec §3.4) |
-| `condition_witness` | `{intent_id, condition_id, entity_id}` | At an `applied` settlement, for each `entity_near` condition of the rule: the matching entity nearest the reference tile (then lowest ID), for example the shelter a sleeper used |
+| `act_items` | `{rule_id:string|null, target:{kind, id:string|null, position:Coord|null}|null, slots:array<{slot:string|null, role, parts:array<{entity_id, archetype_id, material_id, quantity}>}>}` | Right after `action_started` of every `act` whose items were resolved, whatever the outcome: the target and the resolved items with their true archetype and material, including exactly one role=target part for an item target (original ID, matched quantity or one unit for an unquantified use), by slot in slot order when a rule was chosen at start (`slot` null and submitted order otherwise). Objective analysis data, never resident-facing (evaluation spec §3.4) |
+| `condition_witness` | `{intent_id, condition_id, entity_id:string|null, tick, timing}` | Immediately before each per-tick benefit or admitted completion benefit, record the currently matching nearest entity (lowest ID on tie) for its `entity_near` condition, null if absent. A timed gain already earned stands; later replacement or completion never rewrites its witness |
 | `world_rule_applied` | `{rule_id, subject_id}` | Before the effect events of a world rule |
 | `process_progressed` | `{process_id, work_done, contributor_id}` | A contribution adds work |
 
@@ -655,17 +679,28 @@ Q5; owner, EN-D6).
   leave a tile with more than `max_entities_per_tile` entities after merges
   is not admitted. Kernel drops and death drops are not refused (the protocol
   has no such failure code); they can exceed the tile bound, which therefore
-  limits per-tick rule work, not snapshot size.
+  bounds rule placements on receiving tiles. Check only tiles receiving
+  a placement, including a spill, at the final post-merge count. Removing
+  from a dense tile alone is legal.
 - **Preflight.** `world_limit` (rule representation §3.3) is evaluated on the
   whole branch before anything is spent, consumed, worn or changed. A refused
   `act` settles `unmet` with `failed_check = "world_limit"`; a refused world
   or process rule does nothing this tick; a refused `partial` or
   `keep_progress` falls back to `lose` (rule representation §5.4).
-- The loader refuses a pack whose placements already break a bound. The
-  compatibility pack sets bounds that no v1 configuration can reach; reaching
-  one there is a defect (starter-content spec §4.5).
-- Snapshot size is bounded by the world bound. The storage plan for long runs
-  is part of M13's time budget (plan §4).
+- At initialization enforce tile bounds and count + living residents ≤
+  max_entity_units_world. Compatibility limits cover the pinned registry
+  (starter content §4.7). R6 bounds live units and therefore entities;
+  journal bytes, allocator history and backtracking time have separate costs.
+- On a scratch ledger capture operands, reserve/consume bound units, then
+  apply effects and outputs in order, including store materialization,
+  automatic spills, actor overflow to tile, and releases/merges. Check
+  source availability, surviving destination and acceptance, capacity in
+  slots, ownership/reservations per §4.1, corpse reserve and receiving
+  tile counts. Preserve the pre-branch allocations, counts, places, IDs,
+  needs and effect-event cursor on refusal. Previously earned per-tick
+  gains remain. A refused cleanup with contents leaves the exhausted
+  holder and contents in place for the next eligible tick. Preserve
+  lexicographic binding order even if infeasible search prefixes are pruned.
 
 ## 13. Rule library changes and saves
 
@@ -689,7 +724,8 @@ Q5; owner, EN-D6).
 ## 14. Determinism and replay
 
 - Every phase iterates in a stated order: actors by ID, the completion set
-  by the v1 shuffle, world rules by `rule_id` then entity ID, physiology by
+  by the v1 shuffle, 4a by rule ID then subject, 4b by open process ID
+  with specificity then rule-ID tie-break, physiology by
   resident ID, entity placement by entity ID.
 - `resolution_rng` keeps its single v1 consumer, the completion shuffle.
   Chance rolls are derived (§5.3). Nothing else is random.
@@ -729,9 +765,16 @@ Q5; owner, EN-D6).
 | EN-23 | End-of-tick exhaustion (§10.1), against v1 with the fixture's seed: Ella moves with stamina 1 and Ryan waits; Ella stops `EXHAUSTED` at boundary 1, Ryan's wait is the sole completion of the next tick and `resolution_rng` stays at the state v1 shows (one completion, no draw); a gather whose stamina reaches zero after physiology stops the same way |
 | EN-24 | Sleep and faint boundaries (§9.5): a sleep chosen at 100 for 36 ticks first shows `asleep` in the packet for 101 and wakes at 136; a faint in tick 100 → 101 first shows `unconscious` at 101 and wakes at `101 + faint_ticks`; an unmet sleep never shows `asleep` |
 | EN-25 | Hearing while not awake (§9.6): speech emitted in the final tick of a sleep is not heard, whether the sleep completes before or after the utterance in the shuffle and on early waking; compatibility sight while asleep matches protocol WAP-32 |
-| EN-26 | Watched items (§10.2): `act_items`, the actor's `items_used` and a watcher's `start` view list the same items; the `settle` view shows outputs in the actor's inventory and no consumed input |
+| EN-26 | Watched items (§10.2): for held items seen by all, `act_items`, the actor's `items_used` and a watcher's `start` view agree on original IDs and quantities; the `settle` view shows outputs in the actor's inventory and no consumed input |
 | EN-27 | Analysis events (§11): an applied `act` emits `entity_created` with `made_from` naming its consumed stacks; a sourced store refill emits `store_count_changed` with the source; a sleep near a shelter emits `condition_witness` naming that shelter, and with two shelters in range the nearer one |
 | EN-28 | Atomic branches: a settlement whose second output the limits refuse creates nothing, consumes nothing and applies no need effect of `completion` timing |
+| EN-29 | Restore after tool wear, disappearance and acknowledgement of the start packet: actor feedback and filtered watch retain original looks. Force next hash candidate to collide with a consumed ID; restore skips it. Reject counter exhaustion without committing allocation. |
+| EN-30 | Initialize at world cap with a living resident: refuse. Full receiving tile blocks fire spill; rejected rot in a fruit-only container preserves fruit. Light-fire failure spends only tinder on a dense tile; selected success refused on that same tile spends nothing. |
+| EN-31 | Two ready processes with reversed winning rule IDs settle by subject ID after 4a. Consume subject once; a rejected spill preserves work and gives no success. Only active in-reach contributors succeed on closure. |
+| EN-32 | Capture same-packet consumed input and self-target merged gift at phase time, filter at delivery after watcher moves or actor dies. Replay compares exact packet journal and restored legacy trigger sequence. |
+| EN-33 | Assert every target-only item use has one target part, changed shelter A→B has distinct per-benefit witnesses, and each snap return identifies only its own source before merge. |
+| EN-34 | Dense overlapping contents with a broad slot before a restricted slot: compare first binding with exhaustive enumeration, record visited prefixes and elapsed time. Live-unit limits alone give no per-tick timing guarantee. |
+| EN-35 | Split at resolution, reserve actual ID, compare public original ID; release on stopped, unmet and success, preserving age, quantities and replay lineage. |
 | EN-22 | No recipe code: the engine passes its tests with the synthetic test pack only, and a scan finds no archetype, material or rule ID of any real pack in engine code (ADR 0010 D4) |
 
 ## 16. Disposition of open questions
