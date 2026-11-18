@@ -301,6 +301,10 @@ signature (§6), so it can be evaluated on a recorded attempt.
   condition fits in the recorded context (§6).
 - Conditions are checked in declared order; the first that fails is the
   `failed_check` (protocol §4.3).
+- `failed_check` is a slot name (`target` or an instrument or input slot) or a
+  condition ID. One further value is reserved: `world_limit`, for an output
+  the engine's entity limits refuse (engine spec §12). No slot or condition
+  may use that name.
 
 ### 3.4 Effect operations
 
