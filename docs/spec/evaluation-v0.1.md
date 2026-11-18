@@ -3,6 +3,11 @@
 > **Draft (2026-11-18), task P3.5-SP-01. Not frozen.** Owner decisions are
 > written with the author's recommended answer applied and are listed in
 > §14 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md).
+> Rework 1 (2026-11-18) answers the Gate 2 resident-track review
+> ([review](../tasks/p3.5/P3.5-SP-01-review-agent.md) B02, B12–B15, N04) and
+> the world-track B14 and B16, applies the owner's 2026-11-18 decisions on the
+> axe link and on judging agreements, and uses the protocol as amended by
+> CR-010.
 >
 > Implements [ADR 0014](../adr/0014-evaluation.md). Reads what the other P3.5
 > specs record: objective events ([protocol](world-agent-protocol-v0.1.md) §9,
@@ -38,8 +43,11 @@
 - **Objective judgements.** Keeping a commitment, using an artifact and
   succeeding with a rule are judged from objective events, never from what
   residents say (ADR 0014 D2).
-- **Fallback excluded.** Turns tagged `agent_fallback_used` never count as
-  discovered, taught or acted on (ADR 0014 D2).
+- **Fallback excluded.** An intent or turn whose origin is `fallback`
+  (decision loop §2.4) never counts as the resident's discovery, teaching,
+  learning, use or keeping, whenever its result arrives (ADR 0014 D2). Other
+  residents' observations of it are genuine for them and may count as their
+  learning sources.
 - **Guard turns apart.** Turns where the guard left content out are reported
   separately and never counted as natural long-context effects (ADR 0013
   D4).
@@ -98,11 +106,22 @@ D1). A decision jumps to its moment on the map replay.
 
 - **Turn**, **period** and **arm** as in the decision-loop and
   memory-formation specs.
-- **Learning event sources**: own attempts (`act_settled` with this actor),
-  watched attempts (`ObservedAction` delivered, protocol §5.4), heard speech
-  (`utterance_heard`), and memories in context (manifest refs).
-- **Items used** by an `act` come from the engine's `act_items` event (engine
-  §11), which names the reserved entity of each slot.
+- **Learning event sources**: own attempts (`act_settled` with this actor,
+  model origin), watched attempts (`ObservedAction`s delivered, protocol
+  §5.4), heard speech (`utterance_heard`), and memories in context (sent
+  manifest refs). A commitment record is never a source of hearing: only a
+  `told` source or a `heard_speech` entry is (memory model §3.5).
+- **Items used** by an `act`, objectively, come from the engine's `act_items`
+  event (engine §11), with true archetype and material per slot and part.
+  **What a resident saw** of them comes from its own packets only:
+  `items_used` for its own attempts, and for a watched one the `visible_items`
+  of the `start` and `settle` observations it received. A watcher who did not
+  receive the `start` observation did not see the items.
+- **Lineage** of an item: `entity_created` (`made_from`, `process_id`),
+  `stack_split`, `stack_merged` and `item_transferred` (engine §6, §11). An
+  item **descends from** an artifact when a chain of these events links them.
+- **Joins** (§3.8): a day-log entry is joined to its objective counterpart by
+  its `ref` and `delivery_id` (decision loop §4.3).
 - An instance's **trace** is the list of IDs that prove it; it is stored with
   the instance.
 
@@ -112,10 +131,12 @@ A **claim chain** starts at an utterance `U₀` and follows hops (ADR 0014 D2,
 Q1; owner, EV-D1):
 
 - A **hop** from speaker `A` to listener `B` holds when `B` heard `Uᵢ`
-  (`utterance_heard`), and later `B` spoke an utterance `Uᵢ₊₁` at a turn whose
-  manifest contains either the day-log entry of hearing `Uᵢ` or a record with
-  a `told` source citing `Uᵢ`, and whose output `cite` names that entry or
-  record.
+  (`utterance_heard`), and later `B` spoke an utterance `Uᵢ₊₁` at a
+  model-origin turn whose **valid** citations (decision loop §3) name either
+  the `heard_speech` entry whose `ref` is `Uᵢ` or a record with a `told`
+  source citing `Uᵢ`. Valid means it was in the request actually sent, so an
+  entry the guard left out never makes a hop. Two identical utterances have
+  different IDs and different entries; only the cited one makes the hop.
 - The chain's **hop count** is the number of hops. Chains branch; each branch
   is counted once, and a branch never revisits a resident.
 - **Believed or doubted**, per listener, from its store (on arm): believed when
@@ -139,66 +160,87 @@ Q1; owner, EV-D1):
   model cover them.
 - **First success** of rule `R` by resident `X`: its first non-fallback
   `act_settled` with `rule_id = R` and `kind = applied`.
+- **Related to `R`.** An attempt is related to `R` when it has `R`'s verb and
+  either settled under `R` (any kind) or used at least one item of an
+  archetype that fills a slot of `R` in `X`'s first success (by `act_items`).
+  So an earlier failed pot does not count towards an axe.
 - **Learning path** of that first success (ADR 0014 D2): every flag that
-  holds, from the manifest of the turn that chose the action:
+  holds, from the sent manifest of the turn that chose the action:
 
-  | Flag | Holds when the turn's context contained |
+  | Flag | Holds when the turn's sent context contained |
   |---|---|
-  | `own_failures` | Day-log entries of `X`'s own earlier attempts with the same verb that did not settle `applied` under `R` |
-  | `watched` | An observation entry of another resident's attempt that settled under `R` (judged from the objective log) |
-  | `told` | A `heard_speech` entry, or a record with a `told` source, cited by the turn's output, or a `told` skill record with this verb |
-  | `earlier_day` | A prefix or recall record created in an earlier period that is a skill with this verb or cites an attempt that settled under `R` |
+  | `own_failures` | Day-log entries of `X`'s own earlier model-origin attempts related to `R` that did not settle `applied` under `R` |
+  | `watched` | Observation entries of another resident's attempt that settled `applied` under `R`, with both its `start` and `settle` observations delivered to `X` |
+  | `told` | A `heard_speech` entry or a record with a `told` source, validly cited by the turn's output, whose utterance a checker marks `carries` for `R` (§3.7) |
+  | `earlier_period` | A prefix or recall record created in an earlier waking period (not an earlier calendar day) that is a skill with this verb or whose sources lead to an attempt related to `R` |
   | `prior_knowledge` | None of the above: right on the first attempt, with no related experience |
 
   A first success with any flag other than `prior_knowledge` counts as
   **learned on the island**. The flags are reported as a set, so mixed paths
-  stay visible.
+  stay visible. A `told` flag counts for acceptance only with its check;
+  unchecked, it is reported as `unchecked`.
 - **Coverage** of `R`: the residents with a live skill whose evidence
   attempts include at least one that settled `applied` under `R`.
 - **Skill accuracy** (ADR 0014 D2; owner, EV-D2): for each skill with at least
   one evidence attempt, `matched_expected ÷ attempts` from its code-counted
   evidence (memory model §3.4). A skill is never scored by mapping descriptors
   to true values. Accuracy is reported per skill and as a distribution.
-- **The rule against common sense** (starter content §5.3; owner, EV-D7). A
-  **learned grass-cord axe** is a non-fallback `make_stone_axe` settlement
-  `applied` by resident `X`, whose `bind` slot (`act_items`) holds a cord of
-  material `grass`, where all of these hold:
-  1. **An island event.** Earlier in the run, some resident's `act_settled`
-     was `bind_snaps` (a vine cord snapped) or `make_stone_axe` with a grass
-     cord.
-  2. **It reached `X`.** Through `X`'s own feedback (it made that attempt),
-     through an `ObservedAction` of it delivered to `X` (watched), or through
-     an utterance `X` heard whose content refers to it, checked by hand
-     (§3.7) (told).
-  3. **It is in the decision.** The manifest of the turn that chose the axe
-     attempt contains the day-log entry of that delivery, or a memory record
-     whose sources lead back to it by IDs: an `observed` source citing that
-     entry, a `told` source citing that utterance, or an `inferred` source
-     citing a record that does.
-  - Not enough: a success right on the first attempt with none of the above,
-    and a context that holds only some other `combine` experience (the general
-    `own_failures` flag). The trace names the event, the delivery, the
-    manifest entry and the settlement.
+- **The rule against common sense** (starter content §5.3; owner, EV-D7 and
+  2026-11-18). A **learned grass-cord axe** is a model-origin
+  `make_stone_axe` settlement `applied` by resident `X`, whose `bind` slot
+  (`act_items`) holds a cord of material `grass`, where all of these hold:
+  1. **An island event (the lesson).** Earlier in the run, an objective
+     settlement taught the rule: a `bind_snaps` whose `bind` slot held a vine
+     cord, or a `make_stone_axe` `applied` whose `bind` slot held a grass cord.
+     The material comes from `act_items`, never from what anyone said.
+  2. **It reached `X`, with the material.** One of:
+     - *own*: it was `X`'s own model-origin attempt, and its `items_used`
+       showed the cord's material;
+     - *watched*: `X` received both the `start` observation, whose
+       `visible_items` show that cord with its material, and the `settle`
+       observation with `snaps` or with the success phenomena;
+     - *told*: `X` heard an utterance that a checker marks `carries` for this
+       event (§3.7).
+  3. **It is linked to the choice.** The turn that chose `X`'s grass-cord
+     attempt validly cites (decision loop §3) a day-log entry or a memory
+     record that carries this lesson: the entry of that delivery (its
+     `action_result`, its `observation` entries or its `heard_speech`), or a
+     record whose sources lead back to one of them by IDs (`observed`,
+     `told`, or `inferred` through records that do). A checker then confirms
+     that the cited item bears on choosing grass over vine and marks the
+     instance `relevant` (§3.7).
+  - Not enough: a success right on the first attempt with none of the above; a
+    context that merely contains the lesson, uncited; a citation marked
+    `not_relevant`; a watch that saw only the start, or saw the snap without
+    the cord's material; and a context that holds only some other `combine`
+    experience. The trace names the event, the delivery, the cited entry or
+    record, the check and the settlement. Causal claims beyond this link come
+    only from probes (§6).
 - **Per-seed report for the axe.** For each run, per resident: whether it
-  **met** both materials (perceived vine and grass, or cords of both),
-  **tried** (a `combine` that offered a head, a handle and a cord: any
-  settlement of `make_stone_axe` or `bind_snaps`, or an unmatched attempt with
-  a cord among its inputs), **succeeded** (`make_stone_axe` applied) and
-  **learned** (a learned grass-cord axe). The report keeps "never got that
-  far" apart from "got there and did not learn".
+  **met** both materials (an `ItemView` or `EntityView` with material `vine`
+  and one with `grass`, in its own packets), **tried** (any settlement of
+  `make_stone_axe` or `bind_snaps`, or an unmatched `combine` whose attempt
+  descriptor has exactly three input entries whose signatures are a `sharp`
+  item, a `long` wood item and a cord), **succeeded** (`make_stone_axe`
+  applied) and **learned** (a learned grass-cord axe). The report keeps "never
+  got that far" apart from "got there and did not learn".
 - Hidden values never enter resident memory; the true rules are read only by
   `analysis`.
 
 ### 3.4 Artifacts persist and are used
 
 - An **artifact** is an entity created by a rule output whose settlement had
-  an actor (verb rules), or by a process rule. Its **makers** are that actor,
-  or the contributors of the process (`process_progressed`). Merged stacks
-  carry the union of their makers (`stack_merged`).
-- A **use** is an `act_items` slot that names the artifact, in an `act` that
-  settled `applied`, by a resident who is not one of its makers. A shelter is
-  used when a non-maker's `sleep_in_shelter` settles `applied` within its
-  reach.
+  an actor (verb rules, model or fallback origin), or by a process rule. Its
+  **makers** are that actor, or the contributors of the process named by the
+  output's `process_id` (`process_progressed` of that process only). A stack
+  split from an artifact keeps its makers (`stack_split`); merged stacks carry
+  the union of their makers (`stack_merged`).
+- A **use** is an `act_items` slot part whose entity is the artifact or
+  descends from it (§3.1), in a model-origin `act` that settled `applied`, by
+  a resident who is not one of its makers. A shelter is used when a
+  non-maker's `sleep_in_shelter` settles `applied` and its `condition_witness`
+  names that shelter (engine §11); with two shelters in reach, the witness
+  decides which.
 - **Persistence**: an artifact counts as persisting across a day when it
   exists at a later day's start than the day it was made.
 
@@ -208,7 +250,11 @@ Agreements come from `agreement_accepted` (protocol §7.2). An agreement
 **spans a sleep** when its promisor passes a period boundary (memory
 formation §2) after the acceptance and before the agreement is judged.
 
-| Kind | Kept when, after acceptance and by `due_tick` (or by the run end without one) |
+Each agreement has a **deadline**: the boundary `due_tick + 6` for `be_at`,
+the boundary `due_tick` for the other kinds with a due tick, and none
+without one.
+
+| Kind | Kept when, after acceptance and by the deadline (inclusive) |
 |---|---|
 | `give_item {item_id}` | That item moves from the promisor to the promisee by `give` |
 | `give_item {archetype, quantity}` | `give` transfers from promisor to promisee of that archetype sum to at least `quantity` |
@@ -216,32 +262,49 @@ formation §2) after the acceptance and before the agreement is judged.
 | `be_at {position, due_tick}` | The promisor stands at the position at some boundary from `due_tick − 6` to `due_tick + 6` (owner, EV-D3) |
 | `contribute {process_id, work_ticks}` | The promisor's contributions to that process sum to at least `work_ticks` |
 
-- **Broken**: `due_tick` passed without the agreement being kept while both
+- **Broken**: the deadline passed without the agreement being kept while both
   parties lived, or the promisor made it impossible (gave the promised item
   to someone else, consumed it, or let the process complete without its
   share).
 - **Expired**: it became impossible without the promisor's act (a party
   died, a world rule destroyed the item, others removed the process) before it
   was kept.
-- **Open**: no `due_tick`, and not kept by the run end.
-- Judgements read only objective events and positions (ADR 0014 D2). What the
-  residents' commitment records say (memory model §3.5) is reported beside
-  them, as the residents' view, so a forgotten promise and a broken one stay
-  apart.
+- **Unjudged**: the deadline is after the run end, and it was neither kept
+  nor made impossible by then.
+- **Open**: no due tick, and not kept by the run end.
+- **Judged** means kept, broken or expired. Only judged agreements count for
+  M15 (§7.2); unjudged and open ones are reported with their counts.
+- **Precedence.** A judgement is fixed by the first deciding event in event
+  order: a fulfilling event at or before the deadline makes it kept, even if a
+  breaking or impossibility event follows in the same tick; otherwise the
+  first breaking or impossibility event decides; otherwise the deadline
+  passing makes it broken. For example, a resident who reaches a `be_at`
+  place at `due_tick + 4` after a long sleep has kept it: nothing is judged at
+  `due_tick` itself.
+- Judgements read only objective events and positions (ADR 0014 D2), and a
+  fallback-origin action fulfils nothing. What the residents' commitment
+  records say (memory model §3.5) is reported beside them, as the residents'
+  view, so a forgotten promise and a broken one stay apart.
 
 ### 3.6 Time use
 
-Each awake resident-tick is assigned one class by the action running in it
-(ADR 0014 Q1, ADR 0010 Q6; owner, EV-D4):
+Each awake tick of a living resident is assigned exactly one class by the
+action running in it, whatever its outcome (a failed start counts as the
+action it attempted) (ADR 0014 Q1, ADR 0010 Q6; owner, EV-D4). The table is
+exhaustive: every action and verb of the active packs has one row.
 
 | Class | Actions |
 |---|---|
-| `survival` | `eat`, `drink`, `fill`, `gather` from a fruit tree, `rest`; a `move_to` whose next started action is one of these within reach of the destination |
-| `crafting` | `combine`, `strike`, `cut`, `light`, `build`, `gather` from a deposit, `contribute`, and transfers into a process or container |
+| `survival` | `eat`, `drink`, `fill`, `gather` from a fruit tree, `rest`; `pick_up` and `drop` of fruit or of a water container; a `move_to` whose next started action is one of these within reach of the destination |
+| `crafting` | `combine`, `strike`, `cut`, `light`, `build`, `gather` from a deposit, `contribute`; `pick_up` and `drop` of anything else, including into or out of a process or container |
 | `exploring` | Any other `move_to`; `inspect` |
-| `social` | `give`, `pick_up` and `drop` between residents; `wait` at a turn that carries an utterance |
+| `social` | `give`; `wait` at a turn that carries an utterance |
 | `idle` | Any other `wait` |
 
+- The tick `t → t+1` belongs to the action running in it; when an action is
+  replaced at boundary `t`, the tick belongs to the new one.
+- Fallback-origin ticks are classified the same way and also counted in a
+  `fallback` column.
 - Sleep and unconsciousness are reported apart, not as awake ticks.
 - **Talking** is an overlay: the ticks in which the resident spoke, counted
   beside the classes, because speech rides alongside actions.
@@ -250,20 +313,49 @@ Each awake resident-tick is assigned one class by the action running in it
 
 ### 3.7 Content checks
 
-Some evidence needs a reader: whether a retelling passes on what was heard
-(§3.2), and whether a heard utterance refers to an event (§3.3). For M15
-acceptance a person checks each such instance in the replay (owner, EV-D1):
+Some evidence needs a reader. For M15 acceptance a person checks each such
+instance in the replay (owner, EV-D1 and 2026-11-18):
+
+| Check | Question | Verdicts |
+|---|---|---|
+| `hop` | Does the retelling pass on what was heard (§3.2)? | `carries`, `different` |
+| `told_event` | Does a heard utterance refer to the event or rule (§3.3)? | `carries`, `different` |
+| `choice_link` | Does the cited entry or record bear on the choice, such as grass over vine (§3.3)? | `relevant`, `not_relevant` |
+| `contradiction` | Are two live stable beliefs about one subject opposite claims (§4.2)? Diagnostic only | `contradicts`, `consistent` |
 
 - The checker is the owner or someone the owner names at Gate 3.
-- For each instance the analysis lists the two texts with their IDs, ticks
-  and speakers, and the replay moment. The checker marks it `carries` (the
-  later text passes on the earlier message or refers to the event, garbled or
-  embellished included) or `different`.
+- For each instance the analysis lists the texts with their IDs, ticks and
+  speakers, the cited items, and the replay moment. "Carries" includes a
+  garbled or embellished retelling.
 - The verdicts are stored beside the run's analysis in `content-checks.json`:
-  `{instance_id, ids:array<string>, verdict:"carries"|"different", checker,
-  date, note}`. Only `carries` instances count for acceptance.
+  `{instance_id, check, ids:array<string>, verdict, checker, date, note}`.
+  Only `carries` and `relevant` instances count for acceptance.
 - Acceptance needs only a few instances (§7.2), so this is a short review,
   not a labelling project. Instances outside acceptance stay `unchecked`.
+
+### 3.8 Instances, joins and missing inputs
+
+- **Instance ID**: `<metric>:` followed by the first 16 hex digits of the
+  SHA-256 of the canonical, sorted trace, so the same evidence always gives
+  the same ID across exports.
+- **Joins**, read from recorded artifacts only:
+
+  | From | To | Key |
+  |---|---|---|
+  | `heard_speech` entry | `utterance_heard` event | `ref.utterance_id` and the listener |
+  | `observation` entry of a watched action | `action_observed` event | `ref.intent_id`, `ref.phase` and the observer |
+  | `action_result` entry | `act_settled` or `action_*` event | `ref.intent_id` |
+  | Any entry | Its packet | `delivery_id` |
+  | Decision record | Call records, manifests | `call_ids` |
+  | Call record | Parts | Manifest refs, by content hash |
+  | Turn and intent | Origin | Decision record `origin` |
+
+  Deliveries with no turn (a resident that only received a packet) are joined
+  by `delivery_id` all the same.
+- **Missing inputs.** A metric whose input record is missing is `null` with a
+  reason (§0.2), per instance; the per-turn telemetry covers every turn,
+  including fallback turns and turns that stopped unfit, so a missing turn
+  record is a defect.
 
 ## 4. The two experimental questions
 
@@ -279,7 +371,7 @@ ticks awake, guard events. Measured per turn and binned by context tokens
 |---|---|
 | Repeat after failure | The turn chooses the same action, verb, target and item kinds as the previous turn's, whose action failed or settled `unmet` |
 | Missed reply | A `propose` addressed to the resident is not answered (`accept` or `refuse`) before its dialogue session closes |
-| Forgotten intention | The intention set at an earlier turn of the period is neither pursued (an action citing or matching it) nor changed for 72 awake ticks |
+| Forgotten intention | The current intention set at an earlier turn of the period is neither pursued (a later turn's output validly cites its record) nor cleared or replaced for 72 awake ticks; no free-text matching is used |
 | Invalid output | Attempts with invalid output, and turns that reached the fallback |
 
 - Pressure and fatigue rise together over a day, so their correlations are
@@ -295,21 +387,34 @@ On the on arm, and against the off arm where the evidence exists in both
 - commitments that span a sleep and are kept, broken or expired (§3.5);
 - records used after the period that created them (`use_count` changes in a
   later period), by kind;
-- skills carried over: first successes with the `earlier_day` flag (§3.3);
+- skills carried over: first successes with the `earlier_period` flag (§3.3);
 - forgetting: records forgotten per consolidation, and how many of those were
   ever used;
-- contradictory pairs left in a store: two live beliefs about one subject
-  with the stance `stable` and opposite claims, found by the consolidation
-  diagnostics in the memory browser; dated observations of a changed world
-  are not counted (ADR 0012 D2).
+- contradictory pairs left in a store, as a diagnostic: candidates are two
+  live beliefs with the stance `stable` and the same subject; a checker marks
+  each `contradicts` or `consistent` (§3.7), and the count is over checked
+  candidates. Dated observations of a changed world are never candidates
+  (ADR 0012 D2).
 
 ### 4.3 Guard exposure
 
 Guard effects can outlast the call (P3.5 brief §11, R4-C-01). Evaluation
-records guard exposure per waking period and per consolidation, and marks
-later outcomes as possibly affected: a skill missing after a consolidation
-that left entries out, or a commitment forgotten after a guarded morning
-selection.
+keeps two kinds of exposure record and joins them forward:
+
+```text
+PeriodExposure        { period_id, resident_id, calls:array<{call_id, call_kind, omitted:array<Ref>}> }   // decision, recall, morning calls of the period
+ConsolidationExposure { period_id, resident_id, consolidation_attempt, call_id,
+                        omitted_entries:array<Ref>, omitted_pending:array<string>, supplies_period:string } // the period its commit starts
+```
+
+- A period's report shows its own calls' omissions and, inherited, the
+  consolidation exposures whose `supplies_period` is that period or an earlier
+  one. So a period whose own calls were never guarded is still marked exposed
+  when the consolidation before it left entries out.
+- Later outcomes are marked as possibly affected when they fall in an exposed
+  period: a skill missing after a consolidation that left entries out, or a
+  commitment forgotten after a guarded morning selection. The call IDs and
+  omitted refs are part of their trace.
 
 ## 5. Memory on and off
 
@@ -328,7 +433,7 @@ selection.
   luck for the same events (engine §5.3).
 - **No difference** is a valid result. The report then gives a diagnosis from
   measured signs: memories never recalled (`use_count` stays 0), a world
-  too simple to need them (no rule with an `earlier_day` first success in
+  too simple to need them (no rule with an `earlier_period` first success in
   either arm), or prior knowledge enough (first successes mostly
   `prior_knowledge`). The owner decides at Gate 3 (plan §4.1).
 - The model ID and the pressure cue policy are experimental conditions:
@@ -340,13 +445,15 @@ A probe tests whether one memory changed one choice (ADR 0014 D2, Q6; owner,
 EV-D6).
 
 - **Key turns**, at most 20 per run: turns whose output cites a memory, first
-  successes with a `told`, `watched` or `earlier_day` flag, and turns that
+  successes with a `told`, `watched` or `earlier_period` flag, and turns that
   fulfil a commitment spanning a sleep. Chosen in that order, then by tick.
 - **Samples**: 5 calls with the memory and 5 without, at the recorded model
   settings.
 - **Changed choice**: the most frequent choice (action, verb, target) without
-  the memory differs from the most frequent with it, or from the recorded
-  choice. Ties count as unchanged.
+  the memory differs from the most frequent with it. Ties count as unchanged.
+  The recorded choice is reported beside both; when the with-memory mode
+  differs from the recorded choice, the probe is `unstable` and counts as
+  neither changed nor unchanged.
 - **Labels**: `cue_fixed` keeps the recorded pressure line and every other
   recorded input; `rebuilt` rebuilds the whole request, so the cue and the
   guard follow the change. Both are reported separately, with the manifests
@@ -369,9 +476,9 @@ Across the three on-arm runs (ADR 0014 Q2; owner, EV-D7):
 | Capability | Minimum, each instance traced |
 |---|---|
 | Information spreads | 3 claim chains with at least 2 hops, every counted hop content-checked (§3.7) |
-| Rules discovered and taught | 2 rules whose first success, by some resident, is learned on the island; at least 1 first success through `watched` or `told`; and at least 1 learned grass-cord axe (§3.3) by some resident, its evidence traced from an island event to the axe decision |
+| Rules discovered and taught | 2 rules whose first success, by some resident, is learned on the island; at least 1 first success through `watched` or a checked `told`; and at least 1 learned grass-cord axe (§3.3) by some resident: lesson event, delivery with the material, a valid citation and a `relevant` check |
 | Artifacts persist and are used | 3 uses of artifacts by non-makers, at least 1 on a later day than the artifact was made |
-| Commitments hold across days | 3 agreements that span a sleep and are judged; at least 2 of them kept |
+| Commitments hold across days | 3 agreements that span a sleep and are judged (kept, broken or expired, §3.5); at least 2 of them kept |
 
 - The axe line needs one learned grass-cord axe across the three on-arm runs,
   not one per run (owner, EV-D7). Making an axe needs a resident to find the
@@ -381,7 +488,7 @@ Across the three on-arm runs (ADR 0014 Q2; owner, EV-D7):
   learned. A learned axe in one seed shows that the behaviour can arise on its
   own; how often it recurs is stated as open.
 - Told evidence for the axe and every counted hop pass the content check of
-  §3.7.
+  §3.7, and the axe's citation passes its `choice_link` check.
 - The on/off difference is reported (§5), with no threshold, as planned.
 
 ### 7.3 The fake-model run
@@ -427,31 +534,36 @@ As ADR 0014 D4:
 | ID | Test |
 |---|---|
 | EV-01 | Export: a finished run exports to a fresh directory; every shard validates by hash and schema; the source run is unchanged; an oversized shard is split, never truncated |
-| EV-02 | Claim chains: a scripted three-resident fixture with cited retellings gives one chain of 2 hops, marked `unchecked`; with `carries` verdicts it counts for acceptance, and with one `different` verdict it does not; an uncited retelling is a context-only candidate, not a hop |
+| EV-02 | Claim chains: a scripted three-resident fixture with cited retellings gives one chain of 2 hops, marked `unchecked`; with `carries` verdicts it counts for acceptance, and with one `different` verdict it does not; an uncited retelling is a context-only candidate, not a hop. Two identical utterances heard at one boundary: only the cited entry makes the hop; a cited entry the guard left out is invalid and makes none |
 | EV-03 | Belief and doubt: told records at confidence 3 and 1 give believed and doubted; a cited later action gives acted on |
-| EV-04 | Learning paths: fixtures for each flag; a first success with only `prior_knowledge`; a mixed case reports both flags |
+| EV-04 | Learning paths: fixtures for each flag; a first success with only `prior_knowledge`; a mixed case reports both flags; an earlier failed pot is not an `own_failures` flag for an axe; a watch with only the `start` observation gives no `watched` flag; a told flag counts only with its check; `earlier_period` follows waking periods, not calendar days |
 | EV-05 | Skill accuracy from code-counted evidence; a deceptive-material fixture scores a correct lesson ("vine cord snaps") as accurate |
-| EV-06 | Artifacts: a cord made by A and used by B in an axe counts; A's own use does not; a merged stack keeps both makers; a shelter built by A and C and slept in by B counts |
-| EV-07 | Commitments: one fixture per term kind for kept, broken, expired and open; `be_at` within ±6 ticks is kept and at 7 is not |
-| EV-08 | Time use: each class from its action; a `move_to` ending next to a spring before a drink is survival; talking overlays |
-| EV-09 | Fallback and guard turns are excluded or reported apart in every metric that §0.2 names |
+| EV-06 | Artifacts: a cord made by A and used by B in an axe counts; A's own use does not; a stack split from A's cord and used by B counts; a merged stack keeps both makers; a shelter built by A and C and slept in by B counts by its `condition_witness`, and with two shelters in reach the witnessed one is used; two processes completing in one tick credit their own contributors |
+| EV-07 | Commitments: one fixture per term kind for kept, broken, expired, unjudged and open; `be_at` within ±6 ticks is kept and at 7 is not; a `be_at` reached at `due_tick + 4` after a K sleep is kept and is never judged broken at `due_tick`; a fulfilment and a breaking event in one tick resolve by event order; an agreement due after the run end is unjudged and not counted |
+| EV-08 | Time use: every action and verb of both packs maps to exactly one class; a failed start counts as its action; a ground pickup of a stone is crafting and of fruit survival; a `move_to` ending next to a spring before a drink is survival; talking overlays; fallback ticks are also in their column |
+| EV-09 | Fallback and guard turns are excluded or reported apart in every metric that §0.2 names; a fallback result arriving after the model resumed is still excluded. Guard exposure: a consolidation that left entries out marks the next period exposed although none of its calls was guarded; a guarded morning selection marks its period exposed |
 | EV-10 | Arms: on-arm-only measures are marked not applicable in the off arm; per-arm reports include prefix tokens, pressure at waking and sleep timing |
-| EV-11 | Probes: key-turn selection order; 5 + 5 samples; the two labels recorded separately; no probe call appears in the run or its replay |
+| EV-11 | Probes: key-turn selection order; 5 + 5 samples; the two labels recorded separately; a with-memory mode that differs from the recorded choice is `unstable`; no probe call appears in the run or its replay |
 | EV-12 | M15 counts: a synthetic metrics fixture at the minimum passes and one below fails each line |
 | EV-13 | The fake-model run of §7.3 passes |
 | EV-14 | Read-only: `analysis` passes the import-linter contract; the frontend computes no metric (its tests read values from the shards) |
-| EV-15 | Grass-cord axe: learned via own snapped vine cord, via a watched `bind_snaps`, and via a told account with a `carries` verdict; not learned when the axe succeeds on the first try, when the context holds only another `combine` attempt, or when the told account is marked `different`; the trace names event, delivery, manifest entry and settlement |
-| EV-16 | Per-seed report: fixtures for a resident that never met both materials, one that met them and never tried, one that tried and failed, and one that learned, each reported in its own column |
+| EV-15 | Grass-cord axe: learned via own snapped vine cord, via a watched `bind_snaps` with both phases, and via a told account with a `carries` verdict, each with a valid citation marked `relevant`. Not learned: a first-try success; a context that holds the lesson uncited; a citation marked `not_relevant` (the stated reason is unrelated); a watch that saw only the start; a snap watched without the cord's material; a told account marked `different`; only another `combine` attempt in context. The trace names event, delivery, citation, check and settlement |
+| EV-16 | Per-seed report: fixtures for a resident that never met both materials, one that met them and never tried, one that tried and failed, and one that learned, each reported in its own column; an unmatched `combine` with head, handle and cord signatures counts as tried, and a cord-only attempt does not |
+| EV-17 | Instances and joins (§3.8): the same evidence gives the same instance ID in two exports; every join of the table resolves on a fixture run, including a delivery with no turn; a metric with a missing record is `null` with a reason |
 
 ## 11. What other specs must record
 
 | Needed by | Recorded in |
 |---|---|
 | Items used by an `act` | Engine `act_items` event (engine §11) |
-| Makers of process outputs | `process_progressed` (engine §11) |
-| Turn manifests and citations | Decision records (decision loop §10) |
+| What residents saw of items in use | `items_used` and `ObservedAction` phases (protocol §4.1, §5.4, CR-010) |
+| Makers of process outputs | `entity_created.process_id`, `process_progressed` (engine §11) |
+| Lineage | `made_from`, `stack_split`, `stack_merged`, `item_transferred` (engine §6, §11) |
+| Shelter used | `condition_witness` (engine §11) |
+| Turn manifests, valid citations, origins | Call and decision records (decision loop §10) |
+| Day-log links | Entry `ref` and `delivery_id` (decision loop §4.3) |
 | Period boundaries and arms | Memory formation §7, decision loop §11 |
-| Guard events | Manifests (decision loop §10.1), consolidation records (memory formation §7) |
+| Guard events | Call records (decision loop §10.2), consolidation records (memory formation §7) |
 | Skill evidence | Store records (memory model §3.4) and the mechanical log |
 
 ## 12. Disposition of open questions
@@ -481,6 +593,6 @@ As ADR 0014 D4:
 | EV-D4 | Time-use classes | Survival, crafting, exploring, social, idle; sleep apart; talking as an overlay | Covers ADR 0014 D1's four shares; speech rides alongside actions |
 | EV-D5 | Measures for the two questions | Repeat after failure, missed reply, forgotten intention, invalid output, by context size, pressure and fatigue; continuity by commitments, reuse, carried skills and forgetting | Behaviours that objective logs can show without judging text |
 | EV-D6 | Probe design | Up to 20 key turns per run, 5 + 5 samples, modal choice compared, both labels | Small enough to afford, enough to see a clear change |
-| EV-D7 | M15 minimum occurrences | 3 content-checked chains of 2+ hops; 2 learned rules with 1 via watching or telling, plus at least 1 learned grass-cord axe across the three on-arm runs, traced from an island event to the axe decision; a per-seed report (met, tried, succeeded, learned) with no per-seed minimum; 3 non-maker uses with 1 on a later day; 3 judged cross-sleep agreements with 2 kept (owner, 2026-11-18) | The axe is the strongest sign of learning on the island; three seeds are too few to require it in two of them |
+| EV-D7 | M15 minimum occurrences | 3 content-checked chains of 2+ hops; 2 learned rules with 1 via watching or telling, plus at least 1 learned grass-cord axe across the three on-arm runs, traced from an island event to the axe decision; a per-seed report (met, tried, succeeded, learned) with no per-seed minimum; 3 non-maker uses with 1 on a later day; 3 judged cross-sleep agreements with 2 kept (owner, 2026-11-18). The link to the axe decision is a valid citation of the lesson plus a `relevant` check by hand; agreements due after the run end are unjudged and not counted (owner, 2026-11-18, rework 1) | The axe is the strongest sign of learning on the island; three seeds are too few to require it in two of them |
 | EV-D8 | Artifact limits | 8 MiB per shard, 32 MiB index, split never truncate | Fits a browser load; long runs shard instead of failing silently |
 | EV-D9 | Exploration registration | A reproducibility manifest only, no budget approval | P3.5 has no trial caps (ADR 0012 D4) |

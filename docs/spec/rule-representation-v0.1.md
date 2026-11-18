@@ -945,7 +945,7 @@ The report also lists, deterministically sorted:
   R′ matches every intent R matches), and all its conditions are among R's
   conditions declared before c. Whenever c is R's first failing check, R′ is
   then eligible, and an eligible rule always wins over an unmet one (engine
-  spec §5.2). For example, (`compat_sleep_cave`, `cave`) is unreachable
+  spec §4.1). For example, (`compat_sleep_cave`, `cave`) is unreachable
   because plain `compat_sleep` has the same slots and no conditions.
   The compatibility code table uses this list (starter-content spec §4.5).
 
