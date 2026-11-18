@@ -178,7 +178,9 @@ resource transfer settles in this phase, as in v1.
   action (ADR 0007 D6). On successful item resolution at start split an
   oversized stack as WAP §3.2 requires. Allocate the isolated part in its
   current place, retain original ID and age for the public snapshot, map
-  original ID to reserved physical ID and amount; delay automatic remerge
+  original ID to reserved physical ID and amount, emitting `stack_split`
+  with cause `reservation` for the isolated part (its constituent units taken
+  from the original oldest first, evaluation §3.4); delay automatic remerge
   until release. Keep reserved units distinct through capture and rechecks.
   Resolution shortage commits no split. On release merge any equal free
   remnants deterministically into the lowest free ID, recording lineage. A reserved item cannot be used by another action of the same actor;
@@ -629,15 +631,15 @@ These complete protocol §9.
 
 | `EventType` | Payload | Emitted when |
 |---|---|---|
-| `entity_created` | `{entity_id, archetype_id, material_id, quantity, place, owner_id, rule_id:string|null, source:string|null, recreated_from:array<{entity_id, quantity}>, made_from:array<{entity_id, quantity}>, process_id:string|null}` | An output is created, or content is placed at tick 0. `made_from` lists the stacks the settlement consumed (inputs and `consume` effects), in event order. For a same-slot return, `recreated_from` lists only the original parts of that slot spent on this output, allocated in part order without reuse; empty for ordinary outputs. Emit creation before any merge; `process_id` names the process a process rule ran on |
+| `entity_created` | `{entity_id, archetype_id, material_id, quantity, place, owner_id, rule_id:string|null, source:string|null, recreated_from:array<{physical_id, quantity}>, made_from:array<{physical_id, quantity}>, process_id:string|null}` | An output is created, or content is placed at tick 0. `made_from` lists the physical stacks the settlement consumed (inputs and `consume` effects, the same IDs as their `entity_consumed` events), in event order. For a same-slot return, `recreated_from` lists only the physical parts of that slot spent on this output, allocated in part order without reuse; empty for ordinary outputs. Emit creation before any merge; `process_id` names the process a process rule ran on |
 | `entity_consumed` | `{entity_id, archetype_id, quantity, rule_id}` | Inputs or a `consume` effect destroy matter |
 | `matter_moved` | `{archetype_id, quantity, from:Place, to:Place, entity_id:string|null, rule_id}` | A `move` effect, such as fruit from a tree's store to an inventory; `entity_id` is the resulting stack, `null` when the destination is a store |
 | `store_count_changed` | `{entity_id, archetype_id, before, after, rule_id, source:string|null}` | A store's count changes: a sourced refill (`source` set) or a `move` out of or into it |
 | `entity_state_changed` | `{entity_id, field, before, after, rule_id}` | A `set_state` effect |
-| `stack_split` | `{from_id, new_id, quantity}` | Part of a stack moves and gets a new ID (§1, §6) |
+| `stack_split` | `{from_id, new_id, quantity, cause:"transfer"|"reservation"}` | Part of a stack moves, or is isolated for a reservation (§4.1), and gets a new ID (§1, §6) |
 | `stack_merged` | `{from_id, into_id, quantity}` | A moving or created part merges into an equal stack |
 | `needs_changed` | `{resident_id, changes:[{need_id, before, after}], causes:array<string>}` | A rule's completion need effect (`causes` is its rule ID), and once per resident in phase 5 for physiology and per-tick rule effects (`causes` holds `"physiology"` and those rule IDs, sorted) |
-| `act_items` | `{rule_id:string|null, target:{kind, id:string|null, position:Coord|null}|null, slots:array<{slot:string|null, role, parts:array<{entity_id, archetype_id, material_id, quantity}>}>}` | Right after `action_started` of every `act` whose items were resolved, whatever the outcome: the target and the resolved items with their true archetype and material, including exactly one role=target part for an item target (original ID, matched quantity or one unit for an unquantified use), by slot in slot order when a rule was chosen at start (`slot` null and submitted order otherwise). Objective analysis data, never resident-facing (evaluation spec §3.4) |
+| `act_items` | `{rule_id:string|null, target:{kind, id:string|null, position:Coord|null}|null, slots:array<{slot:string|null, role, parts:array<{entity_id, physical_id, archetype_id, material_id, quantity}>}>}` | Right after `action_started` of every `act` whose items were resolved, whatever the outcome: the target and the resolved items with their true archetype and material, including exactly one role=target part for an item target (original ID, matched quantity or one unit for an unquantified use). `entity_id` is the original public ID, the one `items_used` and watchers show; `physical_id` is the part actually reserved and later consumed or released (equal to `entity_id` when no split was needed), by slot in slot order when a rule was chosen at start (`slot` null and submitted order otherwise). Objective analysis data, never resident-facing (evaluation spec §3.4) |
 | `condition_witness` | `{intent_id, condition_id, entity_id:string|null, tick, timing}` | Immediately before each per-tick benefit or admitted completion benefit, record the currently matching nearest entity (lowest ID on tie) for its `entity_near` condition, null if absent. A timed gain already earned stands; later replacement or completion never rewrites its witness |
 | `world_rule_applied` | `{rule_id, subject_id}` | Before the effect events of a world rule |
 | `process_progressed` | `{process_id, work_done, contributor_id}` | A contribution adds work |
@@ -776,6 +778,7 @@ Q5; owner, EN-D6).
 | EN-34 | Dense overlapping contents with a broad slot before a restricted slot: compare first binding with exhaustive enumeration, record visited prefixes and elapsed time. Live-unit limits alone give no per-tick timing guarantee. |
 | EN-35 | Split at resolution, reserve actual ID, compare public original ID; release on stopped, unmet and success, preserving age, quantities and replay lineage. |
 | EN-22 | No recipe code: the engine passes its tests with the synthetic test pack only, and a scan finds no archetype, material or rule ID of any real pack in engine code (ADR 0010 D4) |
+| EN-36 | Split lineage: a stack S holds an older flake made by A and a newer equal flake made by B; a snap reserves one unit, isolated as P by `stack_split` with cause `reservation`. `act_items` shows `entity_id = S` and `physical_id = P`; `items_used` and watchers show S; `entity_consumed`, `made_from` and the returned head's `recreated_from` all name P; replay gives the same IDs |
 
 ## 16. Disposition of open questions
 

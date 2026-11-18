@@ -260,6 +260,16 @@ Q1; owner, EV-D1):
   artifact with its own makers; made_from edges explain ingredients only.
   A snap's recreated parts have new physical IDs: map each returned portion
   only to its recreated_from source for maker/day attribution.
+- **Physical portions.** All objective joins (makers, creation days, uses,
+  returns) use the `physical_id` of `act_items` parts and the IDs of
+  `entity_consumed`, `made_from` and `recreated_from` (engine §11), never
+  the public `entity_id` alone. A reservation split (`stack_split` with
+  cause `reservation`) gives the isolated portion its constituents from the
+  original oldest first, as any split does. The public ID serves only for
+  what a resident saw. For example, with S holding A's older flake and B's
+  newer one, a snap that reserves one unit as P spends A's flake: the
+  returned head is A's, B's later use of it is a non-maker use, and the
+  remainder of S stays B's.
 - A qualifying **use** is one model-origin applied act using a crafted
   portion as instrument or input, or one model-origin shelter sleep with a
   delivered physical benefit witnessed in EN §11. Use the event-local
@@ -622,6 +632,7 @@ As ADR 0014 D4:
 | EV-21 | Failed non-store gather is crafting; awake failed sleep survival. A substituted action owns the next interval. Check no-next-action and absent-target move fall-through and sum all five classes to the awake denominator. |
 | EV-22 | A makes cord, B uses it for an axe then cuts: only B's cord use qualifies. Two split parts in one action count once. Target-only feed/strike appears in inspection only. Attribute shelter benefits before/after replacement separately; rerun EV-12 at and below threshold. |
 | EV-23 | Guarded selection only, omitted selected records, failed/abandoned change set and committed supplier each get an exposure row. Only the commit propagates by supplies_period. Retrieved but never dispatched memory leaves continuity unchanged. |
+| EV-24 | Split portions (§3.4): on the EN-36 log the returned head has maker A and A's creation day; B's later use of it counts once as a non-maker use; the remainder of S keeps maker B; no join uses the public S alone |
 
 ## 11. What other specs must record
 
