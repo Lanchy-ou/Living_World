@@ -158,8 +158,6 @@ id = "fill"
 description = "Fill something you hold with water."      # short text for the system instructions
 target = { kinds = ["entity"], class = "container", must_be_held = true }
 reach = { min = 0, max = 1 }
-instruments = { min = 0, max = 0 }
-inputs = { min = 0, max = 0 }
 params = []
 ```
 
@@ -169,14 +167,16 @@ params = []
 | `target.class` | Optional component name (§3.1) the target entity must have; a mismatch is `INVALID_TARGET` (protocol §4.3 check 3) |
 | `target.must_be_held` | The target must be in the actor's inventory; otherwise `NO_ITEM` (check 4) |
 | `reach` | Manhattan distance range from the actor's tile to the target's tile (check 5). A held target is always within reach |
-| `instruments`, `inputs` | How many entries an intent may list. A count outside the range is a shape error (`INVALID_TURN`, protocol §3.4) |
 | `params` | The closed parameter shape: a list of `{name, type = "integer", min, max}` |
 | `awareness_during` | Optional; `"asleep"` makes the actor asleep while the action runs (`sleep`) |
 | `duration_param` | Optional; names the parameter that sets the matched rule's work time (`sleep`, §5.4) |
 
-- The schema of a turn is generated from the enabled verbs' `id`, `target`,
-  `instruments`, `inputs` and `params` (protocol §10). `description` goes into
-  the system instructions (decision-loop spec). Rules never do.
+- The schema of a turn is generated from the enabled verbs' `id`, `target`
+  and `params` (protocol §10). `description` goes into the system
+  instructions (decision-loop spec). Rules never do.
+- A verb sets no limit on how many instruments or inputs an intent lists:
+  the protocol's shape checks (§3.4 there) are unchanged. An intent with more
+  items than any rule has slots simply matches no rule (§5.2).
 - `attempt_ticks` is a pack value per verb, at least 1 (owner, PR-D2).
 - A pack lists the verbs it enables. Only enabled verbs appear in the schema.
 
@@ -213,19 +213,19 @@ pack's needs for each term are in the starter-content spec.
 
 Verb declarations of `vocab/0.1`:
 
-| Verb | Target kinds, class, held | Reach | Instruments | Inputs | Params |
-|---|---|---|---|---|---|
-| `gather` | entity, class `store` | 1–1 (v1) | 0 | 0 | — |
-| `eat` | none | — | 0 | 1 | — |
-| `drink` | none | — | 0–1 | 0 | — |
-| `fill` | entity, class `container`, held | 0–1 | 0 | 0 | — |
-| `rest` | none | — | 0 | 0 | — |
-| `sleep` | none | — | 0 | 0 | `duration_ticks` 6–54 (PR-D4); `awareness_during = "asleep"`, `duration_param = "duration_ticks"` |
-| `combine` | none | — | 0–2 | 1–4 | — |
-| `strike` | entity | 0–1 | 1 | 0 | — |
-| `cut` | entity | 0–1 | 1 | 0 | — |
-| `light` | entity | 0–1 | 0–2 | 0–2 | — |
-| `build` | tile | 0–1 | 0 | 0 | — |
+| Verb | Target kinds, class, held | Reach | Params |
+|---|---|---|---|
+| `gather` | entity, class `store` | 1–1 (v1) | — |
+| `eat` | none | — | — |
+| `drink` | none | — | — |
+| `fill` | entity, class `container`, held | 0–1 | — |
+| `rest` | none | — | — |
+| `sleep` | none | — | `duration_ticks` 6–54 (PR-D4); `awareness_during = "asleep"`, `duration_param = "duration_ticks"` |
+| `combine` | none | — | — |
+| `strike` | entity | 0–1 | — |
+| `cut` | entity | 0–1 | — |
+| `light` | entity | 0–1 | — |
+| `build` | tile | 0–1 | — |
 
 - The compatibility verbs copy the v1 reach and target rules (protocol §11.2):
   v1 `gather` needs distance exactly 1 (`world/actions.py` `validate`).
@@ -235,6 +235,10 @@ Verb declarations of `vocab/0.1`:
 ## 3. Closed sets defined by this spec
 
 ### 3.1 Components
+
+ADR 0008 D1 names `bears_fruit` and `grows` as examples. This version covers
+them with `store` plus a regrowth world rule (§5.8), which also serves deposits
+of stone or grass; no separate growth component is needed.
 
 | Component | State fields | Meaning |
 |---|---|---|
@@ -510,6 +514,7 @@ phenomena = { success = ["fits_together"], unmet = ["falls_apart"], chance_faile
 | `on_chance_failed` | `"keep_inputs"` or `"consume_inputs"` |
 | `chance_failed_effects` | Optional `set_state` effects on instruments that apply on a failed roll (§5.6) |
 | `outputs`, `effects` | §3.4 |
+| `conservation` | How the outputs arise (ADR 0007 D9 item 4, ADR 0008 D3): `"inputs_to_outputs"` (made from consumed matter, the default), `"source"` (from declared sources only) or `"none"` (no outputs). The validator checks it against the outputs (§8) |
 | `phenomena` | Lists of phenomenon IDs for `success`, `unmet` and `chance_failed`, and an optional `unmet_by_check` table from a slot name or condition ID to its own list |
 | `provenance` | §5.9; added by the loader for authored rules |
 
@@ -529,8 +534,9 @@ intent item and every intent item fills exactly one slot:
 - **Assignment order.** When several assignments work, the engine uses the
   first: it tries permutations of the intent's entries in lexicographic order
   of their submitted positions and assigns the `i`-th entry to the `i`-th slot,
-  instruments first, then inputs. At most 2 instruments and 4 inputs exist
-  (§2.6), so this is at most 2 × 24 tries.
+  instruments first, then inputs. Only rules with exactly as many slots as
+  the intent has entries are tried, and a rule has at most 2 instrument slots
+  and 4 input slots (§7, `BAD_SHAPE`), so this is at most 2 × 24 tries.
 - An item choice by kind (`{held: archetype}`) is resolved to held items first
   (protocol §3.2); matching sees the resolved items.
 
@@ -732,7 +738,7 @@ proposal.
 | 1. References resolve | `UNKNOWN_TERM` | A vocabulary term, archetype, material, component, field, slot or condition ID that does not exist |
 | 1. IDs | `DUPLICATE_ID` | A repeated ID in one namespace, or an ID that breaks §1 |
 | 2. Ranges | `OUT_OF_RANGE` | A value outside its domain: scale 0–5, chances 0–1000, `work_ticks ≥ 1`, thresholds within the need's range, `distance.max ≤ condition_radius`, phase offsets within the period |
-| 2. Shapes | `BAD_SHAPE` | A target slot that disagrees with the verb's target kinds; slot counts outside the verb's ranges; an instrument with `qty ≠ 1`; a condition kind used where §3.3 does not allow it; a world rule with actor-only fields |
+| 2. Shapes | `BAD_SHAPE` | A target slot that disagrees with the verb's target kinds; more than 2 instrument slots or 4 input slots; an instrument with `qty ≠ 1`; a `conservation` declaration that disagrees with the outputs (§8); a condition kind used where §3.3 does not allow it; a world rule with actor-only fields |
 | 3. Conservation | `CONSERVATION` | Outputs of a class exceeding consumed inputs of that class (§8) |
 | 4. Sources | `UNDECLARED_SOURCE` | Creation from nothing without a declared source, or a source without a rate bound (§8.2) |
 | 5. Cycles | — | Follows from check 3 (§8.3) |
@@ -768,6 +774,10 @@ head (`mineral = 1`), a wooden handle and a fibre binding (`plant = 1` each).
 
 Items inside a `store` or a `container` count as units of their archetype.
 `quantity = "to_capacity"` counts as the container's capacity.
+
+The rule's `conservation` field must agree with its outputs: `"none"` has no
+outputs, `"source"` has only outputs with a `source`, and
+`"inputs_to_outputs"` has none with a `source`.
 
 ### 8.2 Sources
 

@@ -144,8 +144,10 @@ The model chooses; code never scores importance (ADR 0012 D2).
 ### 3.3 Call 2: change set
 
 **Input:** the same instructions and working context, the pending periods, the
-index, the selected records in full, and two groups always included without
-being chosen: open commitments and records with `needs_review` (ADR 0012 D2).
+index, the selected records in full, the mechanical writes made during the
+period (new commitments, changed social facts and skill evidence; ADR 0012
+D2), and two groups always included without being chosen: open commitments and
+records with `needs_review` (ADR 0012 D2).
 
 **Output** (owner, MF-D4):
 
@@ -207,7 +209,7 @@ It never reads world state or the objective event log (ADR 0012 D2).
 | Source kind | An `observed` source cites an entry that is not the resident's own perception; a record built only from speech has a source other than `told` or `inferred`; an existing source is removed or changed (memory model §4.1) |
 | Ownership | It names a record of another resident, or changes a hard fact (§1) other than a commitment's status |
 | Format | It is not one of the closed ops; a field breaks the envelope (memory model §2); a confidence breaks the caps of memory model §4.2; a trait changes by more than one step, leaves its range or has no sources |
-| Capacity | An `add` or `merge` would leave its kind above capacity after the earlier ops (memory model §7); the excess ops fail in listed order |
+| Capacity | An episodic `add` or `merge` would leave the kind above capacity after the earlier ops; the excess fail in listed order. Beliefs and skills make room by the eviction rule of memory model §7 instead, and fail only when that is not enough |
 | Reference | It names an ID that does not exist, a ref not yet defined, or a record an earlier op forgot |
 
 - A failing op is dropped, together with every op that depends on it,

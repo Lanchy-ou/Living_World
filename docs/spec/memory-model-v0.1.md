@@ -52,7 +52,8 @@
   hash is the SHA-256 of the canonical encoding of the record without
   `last_used_tick` and `use_count`, which change on use.
 - All values are strings, integers, booleans, `null`, or arrays and objects of
-  them (ADR 0011 D2). Booleans are added only for flags this spec names.
+  them, and never floats. ADR 0011 D2 says strings or integers; the boolean
+  `needs_review` flag and `null` for absent values are the only additions.
 
 ## 2. The common envelope
 
@@ -326,9 +327,20 @@ content was true. "I saw two fruits there yesterday" written tonight has
 ## 7. Capacities
 
 Capacities bound each kind after every committed change (ADR 0011 Q1; owner,
-MM-D1). A change set whose result would exceed a capacity has its excess `add`
-operations dropped by the validator (memory-formation spec); mechanical writes
-are never refused.
+MM-D1). Mechanical writes are never refused. When a change set would leave a
+kind above capacity, the rule of ADR 0011 D1 for that kind applies:
+
+- **Episodic**: the excess `add` and `merge` operations are dropped by the
+  validator, in listed order (episodic memories are forgotten only when a
+  consolidation drops them).
+- **Belief**: code forgets live beliefs to make room, lowest confidence first,
+  then least recently used (`last_used_tick`, never-used first), then lowest
+  ID, skipping beliefs the change set itself adds or changes. The forgotten
+  beliefs go to the audit like any forgotten record.
+- **Skill**: code forgets `refuted` skills first, oldest first; if that is not
+  enough, the excess adds are dropped.
+- Other kinds have no overflow: `social` and `commitment` have no limit, and
+  a new intention supersedes the current one.
 
 | Kind | Capacity (live records, history excluded) | History |
 |---|---|---|
@@ -390,7 +402,7 @@ adds a test kind this way (M14 evidence).
 | MM-09 | Merge keeps the union of sources; forgetting moves the record to the audit, and no recall, index or context reaches it afterwards |
 | MM-10 | Mechanical records: a forget or change of a commitment's terms, a social record's facts or a skill's evidence is refused; a status change of a commitment is accepted |
 | MM-11 | Personality: base values from the profile; a change of two steps, or outside `min..max`, or without sources, is refused |
-| MM-12 | Capacities: an `add` beyond capacity is dropped; history beyond its bound moves to the audit oldest first; mechanical writes are never refused |
+| MM-12 | Capacities: an episodic `add` beyond capacity is dropped; a belief beyond capacity forgets the lowest-confidence, least recently used belief; a skill beyond capacity forgets a refuted skill first; history beyond its bound moves to the audit oldest first; mechanical writes are never refused |
 | MM-13 | Audit isolation: the import-linter contract fails when context, recall or consolidation code imports the audit module |
 | MM-14 | Replay: rebuilding a store from recorded writes and change sets gives the same hash at every version, with no model call |
 | MM-15 | Memory off: mechanical records are written; the prefix, recall and index return nothing; the personality stays at base |
@@ -411,7 +423,7 @@ adds a test kind this way (M14 evidence).
 
 | ID | Question | Recommended answer, applied in this draft | Why |
 |---|---|---|---|
-| MM-D1 | Capacity of each kind | Episodic 300, belief 200, skill 80, social one per known resident, commitment unlimited, intention 1; history bounded per kind | A week fills less than half; the index stays readable for consolidation |
+| MM-D1 | Capacity of each kind | Episodic 300, belief 200, skill 80, social one per known resident, commitment unlimited, intention 1; history bounded per kind. At capacity, episodic adds are dropped, beliefs give way lowest confidence and least recently used first, skills give way refuted first (ADR 0011 D1) | A week fills less than half; the index stays readable for consolidation |
 | MM-D2 | Personality traits and drift | Five traits on 0–4 (curiosity, caution, sociability, trustfulness, diligence), drift one step from base | Few enough to read in the prefix, enough to tell the three profiles apart |
 | MM-D3 | Trust to default confidence of told claims | Trust 0 → 0, 1–2 → 1, 3 → 2, 4 → 3 | Hearsay starts below what one saw; full trust still falls short of certainty |
 | MM-D4 | Is a commitment to oneself a commitment? | No, it is an intention; commitments are accepted agreements only | Every commitment can then be judged from objective events |
