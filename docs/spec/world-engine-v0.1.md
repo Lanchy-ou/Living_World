@@ -660,7 +660,7 @@ Q5; owner, EN-D6).
   `keep_progress` falls back to `lose` (rule representation §5.4).
 - The loader refuses a pack whose placements already break a bound. The
   compatibility pack sets bounds that no v1 configuration can reach; reaching
-  one there is a defect (starter-content spec §4.6).
+  one there is a defect (starter-content spec §4.5).
 - Snapshot size is bounded by the world bound. The storage plan for long runs
   is part of M13's time budget (plan §4).
 

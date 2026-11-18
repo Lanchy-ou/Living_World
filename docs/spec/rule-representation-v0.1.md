@@ -331,9 +331,10 @@ signature (§6), so it can be evaluated on a recorded attempt.
   `failed_check` (protocol §4.3). The full check order of a rule is in §5.2.
 - `failed_check` is a slot name (`target` or an instrument or input slot) or a
   condition ID, from the rule's one namespace (§1).
-- **The implicit `world_limit` condition.** Every rule whose effects create
-  an entity, split a stack or place items has one more condition, after its
-  declared ones: `world_limit`, which holds when the engine's entity limits
+- **The implicit `world_limit` condition.** Every rule whose effects can
+  raise the engine's entity count or place an entity on a tile (a `create`
+  of an entity, a `move` out of a store, a `partial` or `keep_progress`
+  output) has one more condition, after its declared ones: `world_limit`, which holds when the engine's entity limits
   admit every placement of the branch about to apply (engine spec §12). It is
   a real condition of the rule, so a refusal is an ordinary `unmet` with
   `failed_check = "world_limit"` (protocol §4.3), checked before anything is
@@ -351,7 +352,7 @@ a bounded change to the actor's own needs.
 | Operation | Fields | Effect |
 |---|---|---|
 | `create` (in `outputs`) | `archetype` or `archetype_from = "<slot>"`, optional `material` or `material_from = "<slot>"`, `quantity` (§3.4.1), `at`, optional `source` | Creates new matter. Without `source` it is made from the rule's consumed inputs and destroyed entities (§8); with `source` it comes from a declared source |
-| `consume` | `of` (`"subject"`, `"target"` or a contents reference such as `"slot:canteen.contents"` or `"subject.contents"`), `archetype` (for contents), `quantity` (§3.4.1; omitted for `subject` and `target`, which are consumed whole) | Destroys matter (a sink) |
+| `consume` | `of` (`"subject"`, `"target"` or a contents reference such as `"slot:canteen.contents"` or `"subject.contents"`), `archetype` (for contents), `quantity` (§3.4.1; for `subject` and `target`, omitted means the whole entity) | Destroys matter (a sink) |
 | `move` | `from` (`"target.store"`, `"subject.store"`, a contents reference), `to` (a place), `quantity` (§3.4.1) | Moves matter without changing it |
 | `set_state` | `of`, `field` (a non-static component field other than `store.count`), `set` or `add` | Changes component state, clamped to the field's bounds (`0..max_wear`, `≥ 0`). It never changes matter: `store.count` and contents change only through `create`, `consume` and `move` (§8) |
 | `need` | `need`, `delta`, `timing = "per_tick"\|"completion"` | Changes the actor's stored need value, clamped to its range. `per_tick` applies each tick of work; `completion` applies once at settlement |
@@ -803,7 +804,7 @@ default = ["nothing_happens"]
   inputs = [{ slot = "frame", where = { long = true, material = "wood" }, qty = 4 },
             { slot = "cover", where = { archetype = "grass_tuft" }, qty = 6 }]
   conditions = [{ id = "done", kind = "work_complete" }]
-  outputs = [{ archetype = "shelter", material = "wood", quantity = 1, at = "subject.tile" }]
+  outputs = [{ archetype = "shelter", quantity = 1, at = "subject.tile" }]
   effects = [{ op = "consume", of = "subject" }]
   phenomena = { success = ["fits_together"], unmet = [], chance_failed = [] }
   ```
@@ -946,7 +947,7 @@ The report also lists, deterministically sorted:
   then eligible, and an eligible rule always wins over an unmet one (engine
   spec §5.2). For example, (`compat_sleep_cave`, `cave`) is unreachable
   because plain `compat_sleep` has the same slots and no conditions.
-  The compatibility code table uses this list (starter-content spec §4.6).
+  The compatibility code table uses this list (starter-content spec §4.5).
 
 ## 8. Conservation
 
@@ -981,6 +982,10 @@ The check is symbolic, so it holds for every runtime value:
   `subject` or `target` consume and `{ of = r }` as the reference, and
   `{ upto = n, of = r }` as 0, since its lower bound is unknown.
 - `slot:<name>.quantity` is that slot's `qty`, a constant, on either side.
+- A credit with `archetype_from = s` and a quantity of at most `s`'s `qty` is
+  covered by the debit of slot `s` itself, for every archetype that can fill
+  `s` (slot coverage, §7), because it returns the same archetype. This is how
+  `bind_snaps` passes.
 - The branch passes when, per class, the credited constant is at most the
   debited constant and each reference's credited coefficient is at most its
   debited coefficient. A credit by `fit:` without a source never passes,
