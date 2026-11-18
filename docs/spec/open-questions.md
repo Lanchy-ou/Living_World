@@ -202,6 +202,23 @@ remove v1 code before the M12 conditions are met.
 scope above. ADR 0007 may now be accepted; `world-agent-protocol-v0.1.md` is
 written and frozen after that.
 
+## CR-011: compatibility profiles, legacy triggers and apparent action views (approved 2026-11-18)
+
+Status: **approved by the owner on 2026-11-18 (A, B and C)** for SP-01 Rework 2.
+The [world report](../tasks/p3.5/P3.5-SP-01-review-world.md) R2-B01–B03/B10
+and [resident report](../tasks/p3.5/P3.5-SP-01-review-agent.md) R2-B02/B04/B12
+supply the counterexamples. Amend the frozen [protocol](world-agent-protocol-v0.1.md)
+in place. Keep CR-010 annotations and the existing version (no v2 artifacts).
+
+| Clause | Previous contract and failure | Approved amendment and affected consumers |
+|---|---|---|
+| A | §11.2 admitted parameter ranges. A valid unlisted v1 canteen with 3999 servings exceeds the pack's bound and its descriptor cannot encode the count. | Limit equivalence to the enumerated, hash-pinned default, P2 inputs and committed fixtures in starter content §4.7. Preserve the P2 seed matrix and both §11.3 scripted-intent exceptions. |
+| B | §11.2 passed entity novelty through and allowed only the bridge to join speech. A moving recipient's first held fruit can interrupt a v2 policy alone. | Both policy modes derive v1 novelty and deferred triggers from the authorized v1 projection, with checkpointed receipts, queue and cursor. Visible mode privately joins its own speech and action feedback. |
+| C | §5.4 lacked a common sample clock, a self-target and a receipt witness after merge. Terminal feedback lacked a safe non-item target look. | Freeze apparent use and target looks at start, filter each phase for the watcher at delivery, and show successful received portions to the observing recipient. Memory reads only the delivered projection. |
+
+Impact: protocol §§4.1, 5.1, 5.4, 11.2–11.3 and WAP-34–37. M12 implements
+the fixtures. Round 3 checks these amendments and resulting consistency.
+
 ## CR-010: protocol amendments from the P3.5-SP-01 review (approved 2026-11-18)
 
 Status: **approved by the owner on 2026-11-18: A1 and B1; C is part of the

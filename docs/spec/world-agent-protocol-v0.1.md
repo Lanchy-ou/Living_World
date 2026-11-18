@@ -15,6 +15,11 @@
 > text is marked `[CR-010]`; tests WAP-31 to WAP-33 cover it. No artifact
 > exists under `wap/0.1`, so the schema version is unchanged.
 >
+> **Rework 2 under CR-011 (owner, 2026-11-18).** [CR-011] amends the
+> compatibility profile, private policy adapters and apparent action views.
+> WAP-34–37 cover the amendment. See [open questions](open-questions.md).
+>
+
 > Implements [ADR 0007](../adr/0007-world-agent-protocol.md) under CR-009
 > option A ([open questions](open-questions.md)). When frozen, it supersedes for
 > new work in the v2 lane: the action, perception and feedback parts of
@@ -281,6 +286,7 @@ ActionFeedback {
   stop_reason:HardStop|"own_choice"|null,
   phenomena:array<PhenomenonId>,           // act only; sorted, unique
   inspected:InspectView|null,              // inspect only (§5.2)
+  start_target:StartTarget|null,           // [CR-011] identical to the running view
   items_used:array<ItemUse>                // [CR-010] as running_action.items (§5.1)
 }
 ```
@@ -460,6 +466,7 @@ Perception {
   running_action:{
     intent_id:string, action:string, verb:VerbId|null,
     tick_started:integer, progress:DescriptorValue|null,
+    start_target:StartTarget|null,         // [CR-011]
     items:array<ItemUse>                         // [CR-010] resolved at start
   }|null,
   visible_tiles:array<{position:Coord,terrain:Terrain}>,
@@ -484,6 +491,10 @@ EntityView { entity_id:string, kind:"resident"|"corpse"|"item"|"structure"|"proc
              observable_signs:array<VisibleSign> }   // residents only; [] otherwise
 Descriptor { property_id:PropertyId, value:DescriptorValue }
 NeedBand   = "critical"|"low"|"moderate"|"good"|"strong"   // critical is always the worst state
+StartTarget = {kind:"tile",position:Coord,terrain:Terrain}
+            | {kind:"entity"|"resident",id:string,archetype_id:ArchetypeId|null,
+               material_id:MaterialId|null,descriptors:array<Descriptor>} // [CR-011]
+
 ItemUse    { entity_id:string,                   // [CR-010]
              role:"target"|"instrument"|"input"|"item"|"output",
              archetype_id:ArchetypeId|null, material_id:MaterialId|null,
@@ -519,6 +530,14 @@ ItemUse    { entity_id:string,                   // [CR-010]
   ID at start. `running_action.items` lists the items resolved at start, in
   the order target, instruments, inputs, item, then by entity ID. It shows the
   actor nothing it did not already hold or perceive.
+- **[CR-011] Start snapshot.** Capture the actor's item roles, quantities
+  and target from its own permitted view when the action starts. Use only
+  visible descriptors. A known static tile may supply terrain. An old entity
+  receipt alone supplies no look: omit that item and set an unseen target
+  to null. Keep the same ordered snapshot through stop, settlement and
+  restore, including one-tick consumption. A failure before resolution
+  carries an empty list and null target.
+
 - `Terrain` and `VisibleSign` keep their v1 vocabularies
   (`interface-contract-v0.1.md` §2.5); the vocabulary spec may add members.
 - `explored_static_tiles` keeps its v1 meaning: static map data the world
@@ -631,13 +650,15 @@ ObservedAction {
   phase:"start"|"stop"|"settle",           // [CR-010]
   action:string, verb:VerbId|null,
   target:Target|null,
+  start_target:StartTarget|null,           // [CR-011] watcher-filtered start look
+  received_items:array<ItemUse>,           // [CR-011] successful give to this watcher only
   visible_items:array<ItemUse>,            // [CR-010] §5.1
   phenomena:array<PhenomenonId>            // only phenomena declared visible to watchers
 }
 ```
 
-- A resident sees another resident's action when the actor is in its sight at
-  the boundary where the action starts, stops or settles (ADR 0007 D10).
+- A resident sees another resident's action when the actor's location is in its sight at
+  delivery (§5.4 timing below) (ADR 0007 D10).
   **[CR-010]** Each of these is one `ObservedAction` with its `phase`;
   `settle` covers the completion of a kernel action as well. When two phases
   of one intent reach a watcher in one packet, `start` comes first. The array
@@ -650,7 +671,8 @@ ObservedAction {
 - **The target is projected for each watcher, never copied from the intent.**
   `target` holds the actor's target only when the watcher itself perceives it
   at that boundary: a tile in the watcher's `visible_tiles`, an entity or
-  resident in its `visible_entities` or own inventory, or an item the actor
+  resident in its `visible_entities` or own inventory, the watching resident
+  itself `[CR-011]`, or an item the actor
   holds and uses, which the watcher sees in `visible_items` `[CR-010]`.
   Otherwise `target` is `null`. For example, A walking towards a distant tile
   that B cannot see shows B only that A is walking.
@@ -669,6 +691,30 @@ ObservedAction {
   watcher sees the vine cord, the head and the handle at `start`, and at
   `settle` the `snaps` phenomenon with no cord left. Nothing in an
   `ObservedAction` shows a true value, an `on_inspect` value or a rule.
+- **[CR-011] Two samples.** At start retain the apparent descriptors,
+  quantities, original IDs, target look and use locations (held by actor
+  or at a perceivable place). For each phase retain its membership then:
+  start includes resolved items even if consumed this tick, stop includes
+  surviving parts, settle includes surviving parts plus outputs with their
+  first apparent look at creation. Reuse the start look for pre-existing
+  parts. Record each phase's held/placed relation; later movement or a
+  merge cannot rewrite that phase. At delivery require an awake watcher
+  with sight of the actor's delivery position (last position if just
+  deceased). Test held uses there, other uses against the watcher's
+  current sight of their phase place, respecting container visibility.
+  A watcher entering range may see the recorded phase; one leaving range
+  does not. Apply the target filter above at delivery to both target
+  reference and start look; omit a hidden or receipt-only look. Neither
+  actor death nor acknowledgement erases an already captured phase.
+- **[CR-011] Received give.** On a successful give settle to the watcher,
+  project self as target and list exactly the portions actually transferred
+  in `received_items` (role item, original source IDs, start looks, moved
+  quantities, source order). The observation identifies the giver. Build
+  this witness from the committed transfer before merge destroys a part
+  ID; failed, stopped, other-recipient and non-settle observations have
+  an empty list. Normal delivery visibility still applies. The witness
+  grants no reference receipt.
+
 - Watching creates no receipt. A watcher gains a receipt for a target only
   through its own perception (§3.3), never because another resident chose
   that target. An entity ID in `visible_items` authorizes no reference.
@@ -916,17 +962,15 @@ The rule-based policy keeps its v1 plan queue and reproduces the v1
 interrupts of `world-rules-v0.1.md` §4.3 on its own side (ADR 0007 D8). Two
 adapters and one feedback bridge connect it to v2.
 
-**Supported profile.** The compatibility pack runs only v1 configurations
-with `talk_ticks = wait_ticks = invalid_attempt_ticks = 1`, the v1 default; it
-refuses any other profile at load. It sets the `attempt_ticks` of each
-compatibility verb to `invalid_attempt_ticks`, so a v1 start failure that
-becomes an unmet rule takes the same time. It keeps the v1 entity IDs of
-trees, the canteen and corpses, so receipts and targets map one to one. Its
-verbs copy the v1 reach and target constraints, and its rules declare their
-conditions in the v1 check order. Its v1 `sleep_ticks` must lie within the
-sleep bounds of §3.2; a profile outside them is refused at load. `give_ticks`
-and the other v1 durations may take any value, because mutable conditions are
-checked at completion, as v1 does (§4.2).
+**[CR-011] Supported profile.** Equivalence is guaranteed only for the
+default, P2 scenario revisions and committed test configurations explicitly
+enumerated by file and SHA-256 in starter content §4.7. Check the source and
+map pins before applying an authorized P2 seed or fixture overlay. Unknown
+or changed inputs cannot claim compatibility. The listed inputs use one-tick
+talk, wait and invalid attempts and legal sleep durations. Bind verb
+`attempt_ticks` to the fixture's invalid attempt time; keep v1 entity IDs
+for trees, the canteen and corpses, v1 reach and check order. Mutable checks
+run again at completion.
 
 **Intent adapter.** It converts the policy's next v1 intent when that intent
 starts, from the current perception. It keeps a table from each v2
@@ -990,8 +1034,9 @@ under the v1 talk intent ID and with the wait's ticks: `success` when the
 utterance succeeded, otherwise `failure` with the utterance's failure code. The
 joined failure produces the v1 trigger `ACTION_FAILED`, so the policy discards
 its queued intents and applies its failed-talk back-off, as in v1
-(`rule-policy-v0.1.md`). Only the bridge joins them; in v2 itself a failed
-utterance never fails an action (§7.1).
+(`rule-policy-v0.1.md`). **[CR-011]** Visible-feedback policy mode may form the same private transition
+from its own public wait and utterance feedback, keyed by turn and intent.
+Neither join changes the public action outcome (§7.1).
 
 **Perception adapter.** It maps v2 perception and reports to the v1
 `Perception` and triggers that the policy reads:
@@ -1004,8 +1049,32 @@ utterance never fails an action (§7.1).
   result, or `PLAN_FINISHED` when the queue is empty; `need_threshold_crossed`
   of an urgent threshold to `URGENT_NEED`; `utterance_heard` to
   `UTTERANCE_HEARD`, plus `DIRECT_SPEECH` when addressed, plus
-  `REPLY_REQUIRED` for an addressed request; `entity_first_seen` to
-  `NEW_SIGHT`; `woke` to `WOKE`.
+  `REPLY_REQUIRED` for an addressed request; `woke` to `WOKE`.
+  **[CR-011]** Derive `NEW_SIGHT` independently as follows.
+
+**[CR-011] Legacy receipts and trigger queue.** On each ingested boundary
+project end sight, transient sightings, own position/inventory and highest
+cue detail into v1 forms. Sum held fruit into a count, nested water into
+servings. Neither contributes an entity key. Coalesce ground fruit by tile
+as `ground_fruit@x,y`; keep one canteen ID on the ground and in hand.
+Use v1 identities for residents, corpses, trees and cues. Exclude watch and
+use fields. Against the immutable tick-start legacy receipts, a first
+non-self sighted ID, first held canteen ID or first near detail of a cue
+sets NEW_SIGHT. Seed receipts silently at tick zero. Merge exposed
+(id,type,position) tuples (including self and held canteen), explored tiles
+and highest cue detail after testing. Count a new position of a known ID
+only as a receipt update.
+
+Ingest once per resident/delivery, asleep included. Apply the v1 awake
+interrupt table to current-boundary triggers, union all bits into the private
+deferred set while busy, and add PLAN_FINISHED only for success with no
+queued intent. At the next eligible v1 decision discard the invalidated
+queue, deliver bits once in v1 order (ACTION_FAILED, ACTION_INTERRUPTED,
+URGENT_NEED, DIRECT_SPEECH, NEW_SIGHT, UTTERANCE_HEARD, REPLY_REQUIRED,
+WOKE, PLAN_FINISHED), then clear on decision commit. With no decision due,
+keep the deferred set. Restore projected receipts, cursor, deferred bits,
+queue, intent mapping and already-handled stops before processing pending
+packets. The two policy modes share this schedule.
 
 The compatibility pack declares the v1 urgent thresholds as named thresholds
 (§5.3). With these triggers the policy applies the v1 interruption table
@@ -1043,7 +1112,7 @@ Compared per tick against the committed v1 fixtures:
 | `failure` `EXHAUSTED` or `PATH_BLOCKED` during movement or gathering | `stopped` by the world, same name |
 | Completed, then death in the same tick | The completion stands in both |
 
-**Supported domain.** The equivalence promise covers every intent the frozen
+**[CR-011] Supported domain.** Within the pinned configurations (§11.2), the equivalence promise covers every intent the frozen
 rule-based policy produces, and scripted v1 intents of the same shapes, with
 two stated exceptions:
 
@@ -1121,6 +1190,10 @@ the event catalog changes (ADR 0007 D8).
 | WAP-31 | `[CR-010]` Items in use (§4.1, §5.1, §5.4): an actor's `running_action.items` and `items_used` list target, instruments and inputs with role, quantity and visible descriptors; a by-kind input taking units from two stacks of one archetype with different looks gives two entries. A watcher in sight sees the held vine cord, head and handle at `start`, and at `settle` the `snaps` phenomenon, the outputs and no cord; one packet with `start` and `settle` of one intent holds both observations in phase order and one `action_observed` report. A watcher out of sight sees nothing; no observation shows a true value or an `on_inspect` value, and an entity ID seen in `visible_items` is refused as a reference (`INVALID_TARGET`) |
 | WAP-32 | `[CR-010]` Sight while asleep (§5.1), compatibility pack against v1: Ella sleeps next to Ryan, who dies this tick; at the still-asleep boundary Ella's packet shows the corpse with an `entity_first_seen` report and her receipt for it, as v1, and on waking the policy receives the v1 triggers, deferred ones included, with no second sighting; a sleep that spans the start of daylight grows the explored footprint as v1; speech emitted during the final sleep tick is not heard, on natural and on early waking. In the starter pack the same set-up gives an empty sleeping packet and the corpse first seen on waking |
 | WAP-33 | `[CR-010]` When a stop is found (§4.4), against v1: a movement whose stamina reaches zero after the tick's physiology stops `EXHAUSTED` at that boundary and joins no completion shuffle; a step blocked in phase 2 stays `PATH_BLOCKED` when the actor dies later in the tick; exhaustion and death at the same check report `DEATH` |
+| WAP-34 | [CR-011 A] Verify each listed source/map hash and P2 seed binding. A changed cutoff or 3999-serving config outside the registry fails admission. A declared fixture overlay is independently pinned. |
+| WAP-35 | [CR-011 B] First held fruit during a move preserves the queue. Split/merged fruit on one known tile and nested water add no novelty. A first canteen and a near cue do. Restore before waking after first corpse sight; compare receipts, ordered triggers, joined failed talk, back-off and next intent in both policy modes with v1. |
+| WAP-36 | [CR-011 C] Enter/leave sight before delivery, same-tick actor death and same-packet consumed input. Assert phase membership, original looks, recipient awareness, filtered target and absence of watch receipts. Receipt-only target supplies no start look after restore. |
+| WAP-37 | [CR-011 C] Awake recipient sees giver, self and exact portions including after split/merge. A failed give has no received portions. A bystander has no recipient witness or new watch receipt; an asleep or out-of-sight recipient has no observation. |
 
 ## 14. Disposition of the ADR 0007 open questions
 
