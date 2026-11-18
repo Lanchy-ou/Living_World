@@ -1,5 +1,7 @@
 # Living Island — Context Assembly and Decision Loop v0.1 (P3.5)
 
+> **Rework 2 (2026-11-18).** Unifies origin filtering, policy calibration, request floors and durable decision evidence. DL-25–30 specify replay fixtures.
+
 > **Draft (2026-11-18), task P3.5-SP-01. Not frozen.** Owner decisions are
 > written with the author's recommended answer applied and are listed in
 > §15 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md).
@@ -124,6 +126,16 @@ The five classes of ADR 0013 D3 (ADR 0013 Q6; owner, DL-D1):
   intent ID (memory formation §1.3). A fallback turn for an LLM resident
   carries no utterance.
 
+**Filter before consumption.** At packet ingestion resolve origin by intent
+and turn against the durable bindings. Keep the exact packet for replay.
+For the actor, remove fallback choices, rationale, speech and terminal
+feedback/phenomena from the agent input used by the renderer, all recall
+recipes and all memory writers. Preserve the neutral action-ended scheduling
+signal and current running action, progress and continue/replace controls.
+It supplies no recipe key from that result. Other independently delivered
+senses and a witness's own observations follow ordinary rules (MF §1.3).
+Apply this filter also after handback and restoration.
+
 ## 3. The model's output
 
 ```text
@@ -149,7 +161,11 @@ TurnOutput = {step:"recall", query:string}                  // at most once per 
 - **Citations.** `cite` may name memory record IDs (`m:…`) and day-log entry
   IDs (`d:…`), at most 10. A citation is **valid** only when the cited item was
   in the request actually sent for this turn (its sent manifest, §10.1): a
-  memory in full or as a recall entry, or a day-log entry that the guard kept.
+  memory in full or as a recall entry, the current intention's own local ID
+  rendered beside its text in either arm, or a day-log entry the guard kept.
+  Bind each valid citation to the adopted act request, its immutable rendered
+  fragment and revision. The off arm may cite only its current-period intention
+  through this current-state path.
   Invalid citations are recorded and ignored, never an error. The instructions
   ask the resident to cite the entries and memories its choice relies on.
   Evaluation reads only valid citations (ADR 0013 D10; evaluation spec
@@ -190,8 +206,9 @@ The response schema goes only in the provider's structured-output field
   resident's identity and its current state at waking; it outputs up to 20
   record IDs.
 - It is a separate call at waking, not the last step of consolidation
-  (ADR 0013 Q2; owner, DL-D2): it also runs after a failed or abandoned
-  consolidation, and its input is the store as it stands at waking.
+  (ADR 0013 Q2; owner, DL-D2): it runs when opening a new waking period after K, including a failed
+  consolidation. Waking early keeps the existing prefix. Its input is the
+  store as it stands when the new awake context opens.
 - **Prefix limit:** at most 20 records (owner, DL-D2), from the soft range of
   8–20 in ADR 0013 D4. Open commitments are not forced in.
 - At tick 0 and in the memory-off arm no call runs: the prefix holds no
@@ -216,14 +233,18 @@ DayLogEntry { id:string, type:string, tick:integer, text:string,
                  |{kind:"observed_action", intent_id, phase}
                  |{kind:"entity", entity_id}|{kind:"cue", cue_id}
                  |{kind:"report", report_kind, subject_id}
-                 |{kind:"turn", turn_id}|{kind:"recall", call_id}
+                 |{kind:"turn", turn_id}|{kind:"recall", mode:"deliberate", call_id}
+                 |{kind:"recall", mode:"recipe"|"off_empty", turn_id, ordinal}
                  |{kind:"inspection", intent_id},
               verbatim:object|null }            // heard speech: speaker, addressee, act, text, terms as delivered
 ```
 
-The `ref` is resident-safe (IDs the resident's own packets carried). The
+Store exact packet member path (field and ordered index) alongside each
+packet-derived entry in inspection; entries may link multiple members for
+one observation. Non-packet entries have null delivery. Record the retrieved
+revision and rendered text hash for each recall. The `ref` is resident-safe (IDs the resident's own packets carried). The
 analysis side joins it to the objective event (evaluation spec §1); the entry
-itself holds no event ID.
+itself carries only identifiers authorized by this resident's own delivery.
 
 | Type | Written from | Template (fixed wording, pinned version) |
 |---|---|---|
@@ -239,7 +260,9 @@ itself holds no event ID.
 | `recall` | A recall result | "You remember: {gist}. {text}" per record, with its ID |
 
 - An `observation` of a watched action names its phase: one entry per
-  `ObservedAction` (protocol §5.4), with the looks of `visible_items`.
+  `ObservedAction` (protocol §5.4), with `visible_items`, its filtered start
+  target and any received portions. Journal permitted packets throughout sleep
+  under MF §§2–3; selection and change-set read the frozen confirmation snapshot.
 - An `inspection` entry keeps the `on_inspect` words the resident saw, so an
   inspected tell stays in the day log even though no later `EntityView`
   shows it (protocol §5.2).
@@ -279,7 +302,7 @@ Rendered at every turn, in this order:
 4. Position, time of day and awareness.
 5. Inventory: each item with its look and quantity.
 6. The running action and its progress, and its mute list.
-7. The current intention, or "none".
+7. The current intention (citable local ID, text), or "none".
 8. What is in sight: visible entities with their looks, transient sightings,
    cues; residents with their visible signs.
 9. The explored map: a character grid of the bounding box of the resident's
@@ -330,9 +353,14 @@ days     = (now − (last_used_tick or created_tick)) div 144
 strength = 20 × confidence + min(40, 10 × use_count) + max(0, 40 − 10 × days)
 ```
 
-Strength is 0–160. A record is **used** when it enters a context, through the
-prefix or a recall: `last_used_tick` becomes the current tick and `use_count`
-increases by one, as a deterministic update recorded with the manifest.
+Strength is 0–160. A prefix or recalled record earns **use** at its first
+actual dispatch in a decision or decision_after_recall request of that turn.
+Deduplicate (turn_id, record_id) across retries and follow-up decisions. At
+that dispatch update last_used_tick and increment use_count once, in one
+store batch for newly exposed IDs. Log turn, call, revision and store-version
+delta durably. Guard-trimmed or never-dispatched retrieval earns zero; a
+provider error after dispatch still exposes the sent item. Index scanning
+and merely rendering the intention in current state earn no use credit.
 Unused records weaken, and consolidation may forget weak ones (ADR 0013 D5).
 Strength is internal to recall; the index line stays as memory model §2.1
 defines it.
@@ -343,7 +371,8 @@ At every turn, before the request is built, code recalls by the turn's reasons
 (ADR 0013 D5). Each recipe reaches records with strength at least 20, takes the
 strongest first (then the lowest ID) and appends at most 5 records per turn in
 total, skipping records already recalled or in the prefix in this period.
-History records are not recalled by recipe.
+History and refuted skills are excluded. Suppress the entire action-ended
+recipe for fallback-origin results, even a delayed result after handback.
 
 | Turn reason | Recalled |
 |---|---|
@@ -413,23 +442,32 @@ Before any call is dispatched, the harness:
    left;
 4. if the floor alone does not fit, does not dispatch: the call record
    (§10.2) gets outcome `stopped_unfit` with the measured floor, the reserve,
-   the window, the omitted parts and the reason; the run stops as incomplete.
+   the window, the omitted parts and the reason; decision/morning stops take
+   effect at this boundary. Consolidation stops are staged until living K
+   under MF §§3.1, 7; early wake/death abandons them.
    Neither the provider nor the fallback is used on this path.
 
-The floor of each call kind:
+**Request and floor by kind.** Every row includes its versioned instructions,
+schema, provider framing and settings. Include the exact omission notice
+whenever trimming occurs. The pressure cue in a turn describes the full
+decision context before trimming; morning renders waking current state
+with the same pinned computation over its own full request. Recall and
+consolidation have no additional live pressure computation (a frozen
+context retains its existing text).
 
-| Call kind | Floor (never left out) | Bound |
+| Kind | Full request in addition to common framing | Minimum counted request |
 |---|---|---|
-| `decision` | Instructions, schema and framing, current state, pressure line, newest 20 day-log entries, notice | About 60,000 tokens: the current state is bounded by the 10-slot inventory, sight and the 64×64 map grid, and each entry by §3 and §4.3 |
-| `decision_after_recall` | The `decision` floor plus the turn's up to 5 `recall` entries | The decision bound plus 5 records (2,160 characters each at most) |
-| `recall` | Instructions, the query, the index lines of records with strength at least 40 | No fixed bound: the index grows with open commitments (memory model §7) |
-| `morning` | Instructions, identity, current state at waking, the index | No fixed bound, as above |
-| `consolidation_selection`, `consolidation_change_set` | Memory formation §4 | No fixed bound, as above |
+| decision | Fixed identity/verb/personality prefix, prefix memories, log, current state with pressure | Fixed prefix, current state, latest 20 entries or all if fewer, applicable notice |
+| decision_after_recall | Same plus this turn's recall result | Decision floor plus this turn's deliberate/empty recall entries, counted once |
+| recall | Query and eligible index | Entire request |
+| morning | Identity, waking current state with pressure, index | Entire request |
+| consolidation_selection | Frozen context, pending periods, index, full open/review records | Frozen prefix/current state, index, full open/review records, applicable notice |
+| consolidation_change_set | Selection request plus selected and mechanically changed records | Selection floor plus full changed mechanical records, deduplicated by revision |
 
-Where the table gives no fixed bound, the measured floor decides, and the
-`stopped_unfit` record is the complete outcome. With 1160 index lines of at
-most 220 characters (memory model §7), the index alone is under 90,000
-tokens, so only an extreme number of open commitments could reach it.
+For each candidate count the actual rendered parts, including applicable
+notice and exact provider framing. Record the minimal candidate with the
+notice it actually needs, independently of the full and sent requests.
+Index size and compressed token counts have no universal constant bound.
 
 **Wire limits.** The reused P3 provider adapter (`llm-decision-v0.1.md`
 §2.2) keeps its wire preparation, but its request byte cap is replaced for
@@ -486,7 +524,9 @@ When a decision call still fails, the fallback policy takes that one turn
 
   | Submitted v1 intent | Visible feedback | v1 result |
   |---|---|---|
-  | Any kernel action | `status`, `failure_code`, `stop_reason` | The same code; a stop as protocol §11.3's table |
+  | Any intent, kernel or act (before verb rows) | failed | failure with the delivered failure_code |
+  | Any intent, kernel or act | stopped | EXHAUSTED/PATH_BLOCKED → failure with that code; WOKEN → interrupted/URGENT_NEED; DEATH → interrupted/DEATH. Consume own_choice once under WAP §11.2. Starter FAINTED or TARGET_GONE clears the queue; defer fresh choice until eligible |
+  | Kernel other than talk | done | success |
   | `gather` | `picks_fruit` / `too_tired` / `hands_full` / `finds_nothing` / `nothing_happens` | `success` / `EXHAUSTED` / `INVENTORY_FULL` / `RESOURCE_TAKEN` / `OUT_OF_REACH` |
   | `eat` | `tastes_good` / `not_hungry` / `nothing_happens` | `success` / `NO_NEED` / `NO_ITEM` |
   | `drink {source:"spring"}` | `drinks` / `not_thirsty` / `no_water_here` | `success` / `NO_NEED` / `OUT_OF_REACH` |
@@ -496,6 +536,9 @@ When a decision call still fails, the fallback policy takes that one turn
   | `talk` (the `wait` carrying it) | The wait's feedback joined with `last_utterance_feedback` | `success`, or `failure` with the utterance's code, as protocol §11.2's joined talk; the failure gives `ACTION_FAILED` and discards the queue, as v1 |
   | Anything else | Any other feedback | `failure` with `INVALID_TARGET`, which the policy backs off from |
 
+  - Dispatch status before any per-verb row; the rows below stopped apply
+    only to done. The wait and utterance of an actual talk form one private
+    transition under CR-011, matched to their turn and legacy talk ID.
   - The join of a failed talk uses the resident's own utterance feedback,
     which it perceives, so no bridge is needed.
   - Triggers come from the perception adapter as protocol §11.2 maps them,
@@ -504,6 +547,14 @@ When a decision call still fails, the fallback policy takes that one turn
     reachable case, because each compatibility check has its own phenomenon
     for the submitted action (starter content §4.3, §4.5). Starter content
     §9.1 checks this before the balance runs.
+- In LLM fallback only, suppress a policy-selected talk before submission:
+  send its ordinary one-tick wait without an utterance, clear the dependent
+  plan tail and apply failed-talk back-off to the intended addressee at
+  completion. The wait remains publicly successful if it completes; its
+  feedback cannot advance a queued give. Record this private suppression
+  under the intent ID; restore consumes it exactly once. A stand-alone
+  calibration policy speaks normally.
+
 - The policy keeps its internal queue across consecutive fallback turns and
   discards it when the model takes a turn again (`llm-decision-v0.1.md` §5),
   and at every waking-period boundary.
@@ -563,11 +614,12 @@ Ref = {kind:"template"|"schema"|"memory"|"day_log"|"current_state"|"pending_peri
 
 - The manifest holds references only, never copies (ADR 0013 D10). Every part
   is content-addressed: templates and instructions by prompt version, the
-  schema by `action_schema_sha256`, the current state as the rendered part
+  schema by the actual call kind's schema hash, the current state as the rendered part
   itself (stored once), the recall query as its own part, index lines by the
   store version they were built from.
-- Each call has two manifests: **full**, every part before the guard, in
-  order; and **sent**, what was dispatched. Pressure is computed on the full
+- Keep ordered **full**, every measured **candidate** including the minimum
+  **floor**, and **sent** only for an actual dispatch. Pin each part's
+  rendered bytes, member path or memory revision, and provider framing. Pressure is computed on the full
   manifest without its own line (§5); replay recounts it from the full
   manifest with the pinned counter.
 
@@ -581,13 +633,15 @@ CallRecord {
   record_schema:"cr/0.1", call_id, call_kind:CallKind, resident_id, tick, period_id,
   turn_id:string|null, consolidation_period:string|null,
   full_manifest:ContextManifest, sent_manifest:ContextManifest|null,
-  guard:{omitted:array<Ref>, notice:boolean, floor_tokens:integer}|null,
+  candidates:array<{manifest:ContextManifest, wire_sha256:Hash, measured_tokens:integer}>,
+  floor_candidate:integer|null, guard:{omitted:array<Ref>, notice:boolean,
+    counter_id, counter_version, framing_version, model_window, reserve, floor_tokens, reason:string|null}|null,
   settings:{provider, model, prompt_version, schema_sha256, wire_adapter_version,
             max_output_tokens, temperature},
   outcome:"adopted"|"not_adopted"|"failed"|"stopped_unfit"|"abandoned",
-  attempts:array<{n:integer, request_sha256:Hash, started_at, ended_at,
+  attempts:array<{n:integer, request_sha256:Hash, started_at, ended_at:timestamp|null,
                   error_class:string|null, raw_output_ref:Hash|null,
-                  parsed_ref:Hash|null, tokens:object|null, latency_ms:integer|null}>
+                  parsed_ref:Hash|null, tokens:{input,output,cache_hit,cache_miss}|null, latency_ms:integer|null}>
 }
 ```
 
@@ -595,6 +649,15 @@ CallRecord {
   bytes are kept once in the audit's content-addressed store, as P3 keeps its
   journal (`llm-decision-v0.1.md` §4.3); replay rebuilds them from the sent
   manifest, the settings and the pinned wire adapter, and checks the hash.
+- Store candidate/floor counted wire bytes by hash even for no-dispatch.
+  When cancelled before preparation, record the frozen full parts and stage,
+  with empty candidates and null floor/guard. After prepare and before
+  dispatch, sent stays null. Journal dispatch before I/O, terminal usage
+  and error on return; unresolved/unsupported measurements stay null with
+  a reason. Restoring an already dispatched attempt consumes the journal
+  terminal or P3 interrupted disposition without blind resend. An abandoned
+  workflow can have zero or more dispatched attempts, with a late terminal
+  retained only for accounting. Seal at the deterministic MF §7 boundary.
 - `stopped_unfit` has no attempt (§7.1); `abandoned` is a consolidation call
   whose period was interrupted (memory formation §3.1).
 
@@ -607,9 +670,9 @@ DecisionRecordV2 {
   new_entries:array<string>,                 // day-log entry IDs written at this turn
   output:TurnOutput|null,                    // the adopted output
   valid_cites:array<string>, invalid_cites:array<string>,
-  origin:"model"|"fallback",
+  origin:"model"|"fallback"|null,             // null when no turn committed
   fallback:{used:boolean, reason:string|null, policy_id:string|null},
-  submission:TurnSubmission,                 // what reached the world
+  submission:TurnSubmission|null,                 // what reached the world
   used_memories:array<string>                // records whose use counters changed
 }
 ```
@@ -617,6 +680,17 @@ DecisionRecordV2 {
 - One record per turn, including fallback turns and turns that stopped
   unfit. The morning call and consolidation calls have their own call records
   (§4.2; memory formation §7).
+- For each scheduled turn, even on failure, record the delivery ID and
+  tick/period, consecutive awake ticks from interval history, fatigue band
+  from the delivered need (null if disabled), full decision tokens,
+  pressure band/text and guard refs per decision stage. Retain selected
+  versus actually sent memory revisions and use-update links. No-dispatch
+  turns have no submission, adopted act, origin or outcome event. Every
+  logical call (including morning) is independently indexed by run,
+  resident and call ID with its turn/period parent. Persist all exact packet
+  deliveries including no-turn intervals (EN §2), plus ordered event/member
+  and revision links for inspection. Audit access is analysis-only.
+
 - A turn with a recall joins three calls in order; the recall query is a part
   of the `recall` call's manifest, so the turn's `act` output alone is never
   needed to rebuild it.
@@ -628,7 +702,8 @@ DecisionRecordV2 {
   recorded output or fallback choice, and makes no model call (protocol §12).
 - A save holds each resident's runtime: the open working context's parts and
   entry counter, the dialogue states, the mute list, the policy queue during
-  fallback, and outstanding consolidation calls. Saves are taken at completed
+  fallback, the shared adapter's receipts/deferred triggers and origin map, seen
+  turn/record use keys, and MF §7's frozen inputs, stage and journal cursors. Saves are taken at completed
   boundaries only (protocol §5.3; `interface-contract-v0.1.md` §5).
 - A decision or consolidation call outstanding at a save is handled as P3's
   interrupted calls (`llm-decision-v0.1.md` §7.2): it is either committed
@@ -679,7 +754,7 @@ still reads them. The arm is recorded with the run.
 | DL-04 | Output: each `TurnOutput` form parses; identity fields from the model are ignored and filled by the harness; a too-long field is a shape error; `intention`, `mute` and `cite` never reach the world |
 | DL-05 | Prefix: the morning selection runs at waking, picks at most 20 IDs, and is skipped at tick 0 and in the off arm; open commitments are not forced in |
 | DL-06 | Day log: each entry type is written from its source with its template; unchanged surroundings are not logged again; a muted observation is logged; a non-adopted response and a fallback turn write nothing |
-| DL-07 | No hidden data: a request never contains true values, rule IDs, settlement kinds, bridge output, raw agreement facts or event IDs (with protocol WAP-01 and WAP-25) |
+| DL-07 | No hidden data: a request never contains true values, rule IDs, settlement kinds, bridge output, raw agreement facts or identifiers from objective-only paths (with protocol WAP-01 and WAP-25); speech IDs actually delivered remain usable |
 | DL-08 | Pressure: the band follows the integer thresholds; the line is not counted in itself; replay recomputes it and refuses with another counter version |
 | DL-09 | Strength and recipes: strength follows §6.1; each recipe returns the strongest eligible records, at most 5 per turn, never twice in a period, never history |
 | DL-10 | Deliberate recall: one recall per turn reaches only records with strength at least 40, appends up to 5, and the turn then returns `act`; a second recall is a shape error |
@@ -688,15 +763,21 @@ still reads them. The arm is recorded with the run.
 | DL-13 | Visible-feedback mode: every row of the §8.3 table gives its code from the submitted intent and visible feedback only, with no bridge installed; a canteen and a spring drink both seeing `no_water_here` give `NO_WATER` and `OUT_OF_REACH`; a failed talk joined from the utterance feedback discards the queued give; a delayed own-choice stop is not passed on twice; on `compat-v1` the mode equals the bridge-backed policy on the WAP-23 fixtures; in `compat-v1` the ordinary fallback still uses the bridge |
 | DL-14 | Fallback isolation: model, then fallback, then model again, with a restore before acknowledgement (with protocol WAP-25 and memory formation MF-15): the resumed request has no fallback entries, no fallback utterance was spoken, and a delayed fallback stop is not logged; the decision records carry each intent's origin; the objective log tags the fallback turn |
 | DL-15 | Dialogue state: opened by addressed speech, shows unanswered proposals, released by the gap rule or the period end, and never rebuilt from the world's session |
-| DL-16 | Records: every call of all six kinds has a call record with full and sent manifests, including a failed morning call, a `stopped_unfit` decision and an abandoned consolidation; requests rebuild byte for byte from stored parts and settings; pressure recomputes from the full manifest; a deliberate recall's query is rebuilt from its own call record; the whole run replays with zero model calls |
+| DL-16 | Records: every call of all six kinds has a full manifest and a sent manifest only on dispatch, including a failed morning call, a `stopped_unfit` decision and an abandoned consolidation; requests rebuild byte for byte from stored parts and settings; pressure recomputes from the full manifest; a deliberate recall's query is rebuilt from its own call record; the whole run replays with zero model calls |
 | DL-17 | Memory off (ADR 0014 D2's synthetic test): after a period boundary the off-arm context has no intention, no dialogue state, no prefix memories, empty recall (a `recall` step gets the empty entry and a second decision call) and no fallback queue, and keeps position, inventory, visible surroundings and the explored map, including tiles now out of sight. Controls: an intention set before a nap survives the nap; an exact K sleep resets; an unfinished dialogue whose gap outlasts the sleep is not revived; a commitment record stays in the store for inspection and is never shown |
 | DL-18 | Operator stop: a stop request ends the run at the next boundary as incomplete with its records committed |
 | DL-19 | A registered test recall recipe is selected by its turn reason (ADR 0014 D3) |
-| DL-20 | Pre-dispatch (§7.1): for each call kind a request whose floor exceeds `W` is not dispatched, gets `stopped_unfit` with the measured floor and stops the run; a request that fits only without its notice is treated as not fitting until the notice is counted; the P3 byte cap does not refuse an admitted request |
+| DL-20 | Pre-dispatch (§7.1): for each call kind a request whose floor exceeds `W` is not dispatched, gets `stopped_unfit` with the measured floor and stops at its applicable boundary (§7.1); a request that fits only without its notice is treated as not fitting until the notice is counted; the P3 byte cap does not refuse an admitted request |
 | DL-21 | Citations: a cited day-log entry the guard kept and a cited memory in the sent request are valid; an omitted entry, an unknown ID and a memory never sent are invalid and ignored |
 | DL-22 | Commitment cues: a silent counterpart in sight and a due tick within 24 ticks each recall the open commitment, whatever its strength |
 | DL-23 | Day log: an `inspection` entry keeps the `on_inspect` words; a watched action gives one entry per phase; heard speech is never cut and its `verbatim` equals the delivered utterance; every entry's `ref` points to its delivered item |
 | DL-24 | Run composition: a starter pack with `faint_ticks = 35` and K = 36 is refused by `sim` before tick 0 |
+| DL-25 | Calibrate both policy modes on EXHAUSTED gather, WOKEN sleep, generic NO_ITEM, failed talk, deferred novelty and restore. Suppressed fallback accept becomes a silent wait and discards the queued give. FAINTED clears a starter queue. |
+| DL-26 | Fallback action visible while running; filter delayed results before outcome-specific recall, context and evidence. Short wake preserves prefix, successful K or failed consolidation opens it once; death at K has no morning call. |
+| DL-27 | Rebuild full, counted candidates/floor and any sent request of all six kinds from pinned parts. Recount pressure/notice/framing. No-dispatch has null submission and no attempt; abandoned in-flight retains a nullable terminal and journal cursor. |
+| DL-28 | Use credit once for first decision dispatch per record/turn across retries; guard omission and never-dispatch get zero. Join recipe/off-empty recall without a call and cite the rendered current intention in both arms. |
+| DL-29 | Export no-turn packet, watched members and exact skill-evidence revision; resolve a failed turn's telemetry, available cache counts and the morning call by index alone. |
+| DL-30 | Index-only, omitted or later-revised memory cannot substitute for the fragment cited in the adopted act request. A commitment projection never exposes the raw acceptance ID. |
 
 ## 14. Disposition of open questions
 
