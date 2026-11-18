@@ -1,5 +1,7 @@
 # Living Island — Starter Content v0.1 (P3.5 v2 lane)
 
+> **Rework 2 (2026-11-18).** Enumerates compatibility pins, fixes fire and rot clocks, and extends policy calibration. CT-16–19 cover the new fixtures.
+
 > **Draft (2026-11-18), task P3.5-SP-01. Not frozen.** Owner decisions are
 > written with the author's recommended answer applied and are listed in
 > §12 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md).
@@ -107,8 +109,9 @@ The members are fixed by rule representation §2.6.
 - `fruit_amount` reproduces the v1 fruit band exactly: `empty`, `few` for
   1–2 (`perception.fruit_few_max = 2`), `many` above
   (`interface-contract-v0.1.md` §2.5).
-- `water_amount` shows servings exactly, as v1 showed the holder its canteen
-  servings; the perception adapter reads it (protocol §11.2).
+- For the pinned capacities (at most two), `water_amount` maps empty, one
+  serving and two servings to exact counts 0, 1 and 2. The adapter uses
+  only this held-canteen projection; nested water is never a novel entity.
 - `on_use` properties have no words: they never appear as values.
 - No property shows an item's age (owner, CT-D7): fruit gives no sign of its
   age, so residents learn that fruit rots from experience.
@@ -181,11 +184,15 @@ say what the body does, never what it achieves.
 `drop_ticks` and `inspect_ticks` are new and carried from protocol §14; one
 tick each keeps them as cheap as `pick_up`.
 
-The compatibility limits are far above anything v1 can reach: v1 has at most
-one canteen, two water units, the residents' inventories, ground fruit from
-deaths and the corpses, under a hundred units in entities. The tile bound
-never applies to compatibility rules, which place items only in inventories
-and containers.
+For each admitted configuration keep a reserve for every living resident at
+load (engine §12). In compatibility trajectories the initial trees, canteen,
+its capacity in water units, and for each resident its slot capacity plus
+one corpse bound the live entity units: v1 can accumulate ground fruit
+only from death drops. Transfers conserve that sum. Generate the world
+limit as the greater of this bound and 4000; retain 16 for rule placement
+on tiles (compatibility outputs go to inventory or container). The starter
+inherits the default limits. These limits bound live entities, not search
+cost or retained history.
 
 ## 4. The compatibility pack `compat-v1`
 
@@ -279,17 +286,17 @@ any verb rule has no entry (protocol WAP-25).
 | Rule | Check → v1 code or disposition |
 |---|---|
 | `compat_gather_fruit` | `target` → `OUT_OF_REACH`; `stamina` → `EXHAUSTED`; `room` → `INVENTORY_FULL`; `stock` → `RESOURCE_TAKEN`; `world_limit` → `defect` |
-| `compat_eat_fruit` | `food` → `NO_ITEM`; `need` → `NO_NEED` |
+| `compat_eat_fruit` | `food` → `NO_ITEM`; `need` → `NO_NEED`; `world_limit` → `defect` |
 | `compat_drink_spring` | `need` → `NO_NEED`; `spring` → `OUT_OF_REACH` |
-| `compat_drink_canteen` | `canteen` → `NO_ITEM`; `need` → `NO_NEED`; `water` → `NO_WATER` |
+| `compat_drink_canteen` | `canteen` → `NO_ITEM`; `need` → `NO_NEED`; `water` → `NO_WATER`; `world_limit` → `defect` |
 | `compat_fill_canteen` | `target` → `NO_ITEM`; `spring` → `OUT_OF_REACH`; `room` → `ALREADY_FULL`; `world_limit` → `defect` |
 | `compat_rest`, `compat_sleep` | none (no slots or conditions) |
 | `compat_sleep_cave` | `cave` → `unreachable` |
 
 - **`unreachable`** is allowed only for a pair the validator proves
   unreachable (rule representation §7). (`compat_sleep_cave`, `cave`) is one:
-  away from the cave, plain `compat_sleep` is eligible and wins, so v1's plain
-  sleep without a bonus is reproduced and no failure is ever reported. The
+  away from the cave, plain `compat_sleep` wins at start; for a chosen cave
+  sleep, neither the sleeping actor nor the cave can move before completion. The
   loader refuses `unreachable` on a pair the validator does not list.
 - **`defect`** marks a check that no v1 configuration in the supported profile
   can reach (here `world_limit`, by the limits of §3). If the bridge ever
@@ -309,12 +316,43 @@ PD-05 with all 60 residents alive (P2-05).
 
 ### 4.7 Supported configurations and bound values
 
-The loader accepts any v1 configuration that the frozen v1 config schema
-accepts and that meets the protocol's supported profile (§11.2): `talk_ticks
-= wait_ticks = invalid_attempt_ticks = 1` and `sleep_ticks` within 6–54. It
-also refuses a configuration whose value lives in the shared vocabulary
-rather than the pack: `perception.fruit_few_max` must be 2, the `few` cutoff
-of `fruit_amount` (§2.1). Every other value is bound from the configuration:
+**CR-011 A registry.** The following are the admitted v1 configuration
+sources. SHA-256 here hashes exact Git blob bytes, before seed substitution.
+Check both file and map. Also record v1's canonical effective config and
+map hashes after the registered seed override, as P2 requires. Paths use
+the e7ade04 tree except the explicitly historical S2 orig.
+
+| Input | Repository path | SHA-256 of TOML |
+|---|---|---|
+| Production / S2 m6 (7c13d78) | content/worlds/default.toml | `15c576c98be29ac1054e1154376508b6479e4fb57ebf1f07d241905f433dc128` |
+| S2 orig (04fde8b) | content/worlds/default.toml | `c5599943abbb18830e9fad19222fbf4e2b3658fd1ee22e7afc89da54470de7fd` |
+| S1 orig | content/scenarios/s1-spring-visible/orig.toml | `843331a01ff8ff7e3bff9a40bf4dcf294df6c6a14aa5ee30d059393d6893c263` |
+| S3 orig | content/scenarios/s3-regrow288/orig.toml | `111bb746979df3c96dbc3ec9b421d8b608db734f049cd0d5570c9844a123fc29` |
+| S4 orig | content/scenarios/s4-decay120/orig.toml | `a858afdee231e1d88272ed21e47a6fd02b8251ce4e74aefee902e632fe64091d` |
+| P1 default fixture | backend/tests/fixtures/p1_default/default.toml | `c5599943abbb18830e9fad19222fbf4e2b3658fd1ee22e7afc89da54470de7fd` |
+| Mechanics fixture | backend/tests/fixtures/replay/mechanics.toml | `b3107b77dbaa0d9ed45e2e13e87c2f7f2aab8e363b59f4ea85880d63989411b0` |
+
+The referenced island map has SHA-256
+`007a113879e45ceea908306b00606d3c6bc9dc516632939fd13023563bff1a9c`;
+the mechanics map has `c7e92011064d90ead5645c6fa8f16d03f52941ba39a6dff0f04d4dde446f734c`.
+The following scripted fixture configurations are specified in this
+committed registry as exact byte substitutions in the production blob,
+one per row, same map. M12 materializes and verifies them. Unknown hashes,
+including an edited file at a known path, receive no equivalence claim.
+
+| Fixture | Sole substitution | Resulting TOML SHA-256 |
+|---|---|---|
+| WAP-27 | give_ticks = 1 → 3 | `b980a2cb42b526991eab648f417dbcf097776d18ab1679d6c015b9c229246c74` |
+| CT-15 | regrow_per_cycle = 1 → 2 | `32a8098c62cc7b17a42cbb8825e5860dd80c222ed006bba493c7aa7afedbb5e4` |
+| CT-16 zero growth | regrow_per_cycle = 1 → 0 | `92c32604733be96c1894045ab24960eb550cc27df4388e389654e99967459ecf` |
+| CT-16 gather | gather_ticks = 2 → 1 | `569cf836eaee207dce3df9efc55479cb823edfe3919392621b7c7e845601be43` |
+
+All listed configs have fruit_few_max = 2. R10 is the positive registry,
+rather than a cutoff filter on arbitrary v1 files. For each need and sign
+derive its bound as the maximum over admitted rules of per-tick magnitude
+plus ceiling(completion magnitude / minimum work ticks), zero for no
+effects. For zero regrowth omit the rule, its source and phase offsets.
+Other bound values are:
 
 | Pack value | v1 configuration key |
 |---|---|
@@ -470,7 +508,8 @@ need more than a phrase.
 - Fruit that rots after 432 ticks (3 days) punishes hoarding, not normal
   eating: in P2 runs fruit was eaten within a day of gathering (P2-05). A stack
   takes the age of its oldest unit (rule representation §4.5), so adding
-  fresh fruit to an old stack does not save it. Fruit on a tree does not age:
+  fresh fruit to an old stack does not save it. Both parts of a split inherit
+  the same oldest-unit timestamp. Fruit on a tree does not age:
   a store holds counts, not entities.
 - **Fire timing** (engine §8, rule-ID order `bake_pot` < `fire_burns` <
   `fire_goes_out`):
@@ -478,12 +517,14 @@ need more than a phrase.
     tick, so `fire_burns` already takes one of its 18 fuel ticks then. It
     burns in ticks `k` to `k+17` and goes out at the end of tick `k+17`.
   - `bake_pot` runs at every completed tick that is a multiple of 6. A pot
-    put into a lit fire bakes at the next such tick, so it waits between 1
-    and 6 ticks. For example, a fire holding a pot at tick 5 bakes it at tick
+    placed in phase 3 of completed tick j can bake in 4a of the same tick.
+    The delay to the first due check is (6 − j mod 6) mod 6 completed
+    boundaries, from zero to five ticks. For example, a fire holding a pot at tick 5 bakes it at tick
     6.
   - At the tick of the last fuel, `bake_pot` runs before `fire_burns`, so a
     pot there still bakes; then the fuel reaches 0 and `fire_goes_out`
-    removes the fire in the same tick, with its contents on its tile.
+    removes the fire if the spill is admitted. Otherwise the unlit fire and
+    contents stay in place and cleanup retries on subsequent ticks.
   - `feed_fire` adds 18 fuel ticks.
 
 ### 5.7 Comparison tables
@@ -533,14 +574,16 @@ scripted scenario (plan §4).
 | Sharp flake | Flint struck with stone | The head of an axe |
 | Cord | 3 flexible fibres | Binds an axe and a shelter; grass cord holds, vine cord snaps |
 | Stone axe | Flake, branch, grass cord | 2 branches per 2 ticks from deadwood, against 1 per 3 by hand: three times faster |
-| Campfire | 2 branches, tinder, flint and stone | Bakes a shaped pot in 6 ticks; burns 3 hours |
+| Campfire | 2 branches, tinder, flint and stone | Checks for a pot every 6 ticks (§5.6); burns 3 hours |
 | Clay pot | 2 clay, shaped, baked in a fire | Carries one more serving of water |
 | Shelter | Site, 4 branches, 4 grass, 1 grass cord, 24 work | Sleep with the cave's stamina gain wherever it is built |
 
 ### 5.10 Exact encodings
 
 The rows above whose effects are more than a phrase, in the rule format
-(rule representation §5.1). Fields not shown take the defaults of §5.5.
+(rule representation §5.1). Apply the trigger and component normalization table in rule representation
+§5.1, then the stated authored verb values of §5.5. Validate the whole
+composed starter pack, including inherited and replaced entries.
 
 ```toml
 [[rule]]
@@ -668,7 +711,8 @@ M13's scenarios and measured with LLM residents (ADR 0014 D1).
   fixtures (protocol WAP-23) and on the 20 acceptance seeds; the two must give
   the same decisions and the same trajectories. Covered cases include
   successful and failed speech (the failed talk discards the queued give as
-  v1), hard stops, urgent thresholds and contested actions. A difference is a
+  v1), generic NO_ITEM on an act, EXHAUSTED on gather, WOKEN on sleep,
+  receipt/trigger restore during sleep, urgent thresholds and contested actions. A difference is a
   defect of the mode's table, fixed before the balance runs.
 - **Seeds.** The P2 development list for tuning, then the P2 acceptance list
   once for the final candidate, each 20 seeds, 1008 ticks, `s2-default:m6`
@@ -735,7 +779,7 @@ sleeping. It is measured, not tuned, in this version (owner, CT-D9):
 | CT-05 | Recipes: in a scripted scenario, a resident knaps a flake, twists grass cord, makes an axe, cuts wood three times faster than by hand, lights a fire, shapes and bakes a pot, fills it and drinks from it, and builds a shelter with others |
 | CT-06 | Deception: vine shows `strength` "strong" and grass "weak"; vine cord makes `bind_snaps` settle with `snaps`, the cord gone and a head and a handle of the same archetypes and materials given back with new IDs; a watcher in sight sees the vine cord at the start and the `snaps` at the end (protocol WAP-31); grass cord makes the axe; a shelter site with vine cord gets no work until grass cord replaces it |
 | CT-07 | Conservation: every starter rule passes the validator; across a 7-day scripted run the units of each matter class equal placements plus source creation minus destruction |
-| CT-08 | World rules: deadwood regrows 1 per 72 ticks up to its stock; a fire lit at tick `k` burns ticks `k` to `k+17` and goes out at `k+17` with its contents on its tile; a pot put in at tick 5 bakes at tick 6; a pot in a fire on its last fuel tick still bakes; a stack of 4 fruit held 432 ticks becomes 4 rotten fruit where it was; an axe breaks after 20 cuts and leaves a branch where it was; a failed `light_fire` uses the tinder and leaves both branches |
+| CT-08 | World rules: deadwood regrows 1 per 72 ticks up to its stock; a fire lit at tick `k` burns ticks `k` to `k+17` and reaches zero fuel at `k+17` and releases its contents if spill admission passes; a pot put in at tick 5 bakes at tick 6; a pot in a fire on its last fuel tick still bakes; a stack of 4 fruit held 432 ticks becomes 4 rotten fruit where it was; an axe breaks after 20 cuts and leaves a branch where it was; a failed `light_fire` uses the tinder and leaves both branches |
 | CT-09 | Mental fatigue: the §5.2 day reaches about 6400; 200 silent awake ticks faint the resident for 36 ticks; a 48-tick night clears 7200 |
 | CT-10 | Waking: in `starter-v1` a sleeper wakes at the critical band of hunger or thirst, not at the urgent threshold; in `compat-v1` at the urgent threshold |
 | CT-11 | Asleep rates: satiety and hydration fall 15 and 60 per tick asleep in `starter-v1` and 25 and 100 in `compat-v1` |
@@ -743,6 +787,10 @@ sleeping. It is measured, not tuned, in this version (owner, CT-D9):
 | CT-13 | Balance: the calibration of §9.1 passes; then §9.2 passes on the acceptance seeds for the final starter candidate, with 40 valid cases, both arms in the visible-feedback mode, and the denominators reported |
 | CT-14 | The engine test pack covers every closed term of rule representation §3 and shares no ID with a real pack |
 | CT-15 | Supported configurations (§4.7): a fixture config with `give_ticks = 3` loads and gives a three-tick `give`; `regrow_per_cycle = 2` regrows a tree at stock 3 of 5 by two and at stock 4 by one, as v1; `talk_ticks = 2`, `sleep_ticks = 60` or `fruit_few_max = 3` is refused at load; the manifest records the fixture's config hash |
+| CT-16 | Verify each registry digest and canonical run binding. Unknown three-serving and 3999-serving configs refused. Check exact 0/1/2 serving projection, zero regrowth and one-tick gather loss bound 300. |
+| CT-17 | Compose and normalize every inherited/authored rule; explicit versus default wear=0, work_done=0 and empty lists give identical effects. Reject world work_ticks. Check initial corpse reserve. |
+| CT-18 | Insert pot in phase 3 on due tick 6: bake at 6; insert at 7: first check at 12. Block last-fuel spill then free space: exact contents released once. Split fruit at age 431: both parts rot at 432 where admitted. |
+| CT-19 | Run DL-25/WAP-35 calibration, including generic failure, stopped gather and mid-queue restore, before the existing paired 40-case comparison. |
 | CT-16 | Fill: a canteen with one serving filled at the spring ends with two, and an empty clay pot with one; a full one is `already_full` |
 
 ## 11. Disposition of open questions
