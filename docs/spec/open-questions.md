@@ -216,6 +216,14 @@ in place. Keep CR-010 annotations and the existing version (no v2 artifacts).
 | B | §11.2 passed entity novelty through and allowed only the bridge to join speech. A moving recipient's first held fruit can interrupt a v2 policy alone. | Both policy modes derive v1 novelty and deferred triggers from the authorized v1 projection, with checkpointed receipts, queue and cursor. Visible mode privately joins its own speech and action feedback. |
 | C | §5.4 lacked a common sample clock, a self-target and a receipt witness after merge. Terminal feedback lacked a safe non-item target look. | Freeze apparent use and target looks at start, filter each phase for the watcher at delivery, and show successful received portions to the observing recipient. Memory reads only the delivered projection. |
 
+**Options and recommendation.** For A, keeping an open v1 parameter
+range would require pack-specific descriptor generation and bounds for that
+range. For B, passing v2 novelty through loses v1 identity and queue timing.
+For C, sampling every field at settlement loses consumed or merged inputs;
+reading private transfer events in memory crosses the perception boundary.
+The owner selected the pinned registry, independent legacy projection and
+start-look/delivery-visibility design in the table above.
+
 Impact: protocol §§4.1, 5.1, 5.4, 11.2–11.3 and WAP-34–37. M12 implements
 the fixtures. Round 3 checks these amendments and resulting consistency.
 
