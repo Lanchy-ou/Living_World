@@ -8,6 +8,13 @@
 > blocking and 6 non-blocking issues, all resolved. Round 5 concluded "ready to
 > freeze"; its one wording note (R5-N-01) is applied in WAP-29.
 >
+> **Amended under CR-010 (owner, 2026-11-18)**
+> ([open questions](open-questions.md)), before any v2 code: items in use and
+> watch phases (§4.1, §5.1, §5.3, §5.4, §9), sight while asleep in the
+> compatibility pack (§5.1), and when a hard stop is found (§4.4). Amended
+> text is marked `[CR-010]`; tests WAP-31 to WAP-33 cover it. No artifact
+> exists under `wap/0.1`, so the schema version is unchanged.
+>
 > Implements [ADR 0007](../adr/0007-world-agent-protocol.md) under CR-009
 > option A ([open questions](open-questions.md)). When frozen, it supersedes for
 > new work in the v2 lane: the action, perception and feedback parts of
@@ -273,7 +280,8 @@ ActionFeedback {
   failure_code:FailureCode|null,           // kernel preconditions only
   stop_reason:HardStop|"own_choice"|null,
   phenomena:array<PhenomenonId>,           // act only; sorted, unique
-  inspected:InspectView|null               // inspect only (§5.2)
+  inspected:InspectView|null,              // inspect only (§5.2)
+  items_used:array<ItemUse>                // [CR-010] as running_action.items (§5.1)
 }
 ```
 
@@ -288,6 +296,11 @@ ActionFeedback {
 - `stopped` reports a hard stop or the actor's own choice. The rule's
   `on_interrupt` applies in both cases (ADR 0007 D6).
 - `state_delta` stays internal, as in v1.
+- **[CR-010]** `items_used` lists the items resolved at start, as
+  `running_action.items` showed them, so an action that starts and ends
+  between two packets still tells the actor which stacks it used. It is empty
+  when the action failed before its items were resolved. It is fixed at start,
+  so the four settlement kinds of one `act` give the same list (WAP-01).
 
 ### 4.2 Failure codes
 
@@ -405,6 +418,16 @@ rolls follow ADR 0009 D1 and the world-engine spec.
 - Only these end an action from the world side before its completion (ADR
   0007 D6). When several apply at one boundary, the first in this list is
   reported; the others are not reported for that action.
+- **[CR-010] When a stop is found.** The priority applies among the stops that
+  find the action still running at the same check. A stop found while the
+  action progresses (`PATH_BLOCKED` at a step, `TARGET_GONE`) ends it there,
+  so a death later in the same tick does not replace it, just as a completed
+  action is never failed afterwards. `DEATH`, `FAINTED` and `EXHAUSTED` are
+  found together after the tick's physiology, as v1 finds exhaustion
+  (`world-rules-v0.1.md` §3): an unfinished movement, or a rule that declares
+  exhaustion, stops with `EXHAUSTED` at the boundary where stamina reached zero,
+  unless death or fainting applies at that check. The world-engine spec gives
+  the phases.
 - A missing or distant target ends every other action at its completion,
   through the completion checks (§4.2, §4.3), as in v1. No kernel action can
   take a reserved item from its holder, because only the holder can move it.
@@ -435,7 +458,8 @@ Perception {
   inventory:array<ItemView>,                     // exact, sorted by entity_id
   running_action:{
     intent_id:string, action:string, verb:VerbId|null,
-    tick_started:integer, progress:DescriptorValue|null
+    tick_started:integer, progress:DescriptorValue|null,
+    items:array<ItemUse>                         // [CR-010] resolved at start
   }|null,
   visible_tiles:array<{position:Coord,terrain:Terrain}>,
   explored_static_tiles:array<{position:Coord,terrain:Terrain}>,
@@ -459,6 +483,10 @@ EntityView { entity_id:string, kind:"resident"|"corpse"|"item"|"structure"|"proc
              observable_signs:array<VisibleSign> }   // residents only; [] otherwise
 Descriptor { property_id:PropertyId, value:DescriptorValue }
 NeedBand   = "critical"|"low"|"moderate"|"good"|"strong"   // critical is always the worst state
+ItemUse    { entity_id:string,                   // [CR-010]
+             role:"target"|"instrument"|"input"|"item"|"output",
+             archetype_id:ArchetypeId|null, material_id:MaterialId|null,
+             quantity:integer, descriptors:array<Descriptor> }
 ```
 
 - `needs` lists the need IDs that the active packs declare. The compatibility
@@ -471,6 +499,25 @@ NeedBand   = "critical"|"low"|"moderate"|"good"|"strong"   // critical is always
   `needs`, position, inventory, `running_action`, `explored_static_tiles` and
   the feedback fields. Speech missed while asleep is never replayed later, as
   in v1.
+- **[CR-010] Sight while asleep, compatibility pack only.** A pack may declare
+  `sight_while_asleep = true`. Only the compatibility pack does, because v1
+  builds every living resident's sight at every boundary, asleep or not, and
+  suppresses only hearing (`world-rules-v0.1.md` §5.4, step 6). In that pack,
+  while `awareness` is `asleep`, `visible_tiles`, `visible_entities`,
+  `transient_sightings` and `environmental_cues` are built as when awake,
+  receipts and the explored footprint grow, and `entity_first_seen` reports
+  are built; `heard_utterances` and `observed_actions` stay empty. The sleeper
+  still takes no turn. `unconscious` always switches the senses off. The
+  starter pack keeps the senses off while asleep.
+- **[CR-010] Items in use.** `ItemUse` shows one item an action uses or makes,
+  with its apparent view (the `ItemView` fields, visible descriptors only) and
+  its role: `target` (an item as the target), `instrument`, `input`, `item`
+  (the items a kernel action moves) or `output` (an item a settlement
+  created). For a by-kind choice that takes units from several stacks, each
+  stack is one entry, with the units taken from it; `entity_id` is the stack's
+  ID at start. `running_action.items` lists the items resolved at start, in
+  the order target, instruments, inputs, item, then by entity ID. It shows the
+  actor nothing it did not already hold or perceive.
 - `Terrain` and `VisibleSign` keep their v1 vocabularies
   (`interface-contract-v0.1.md` §2.5); the vocabulary spec may add members.
 - `explored_static_tiles` keeps its v1 meaning: static map data the world
@@ -564,7 +611,7 @@ How each report is built. Fields not listed are `null`.
 | `need_threshold_crossed` | The need ID; `threshold_id` names the threshold | Downward crossing of a named threshold | The need went from above the threshold to at or below it during the last tick; never again while it stays below (the v1 crossing rule, `interface-contract-v0.1.md` §2.5) |
 | `utterance_heard` | The utterance ID; `addressed` is true when this actor is the addressee | Utterance in `heard_utterances` | Always with the heard utterance |
 | `entity_first_seen` | The entity or cue ID | First exposure of an entity ID, or a cue's first upgrade from distant to near | The v1 `NEW_SIGHT` rule; exposures at tick zero seed receipts without reports |
-| `action_observed` | The observed intent ID | `ObservedAction` delivered (§5.4) | Always with the observation |
+| `action_observed` | The observed intent ID | Observed intent with at least one `ObservedAction` in this packet (§5.4); two phases of one intent in one packet give one report `[CR-010]` | Always with the observation |
 | `progress_step` | The actor's intent ID, or the process entity ID | Change of a progress descriptor | The descriptor of the actor's running action, or of a process entity it contributes to, changed in the last tick |
 | `woke` | `null` | Waking | The actor woke at this boundary (§6.3) |
 
@@ -580,29 +627,50 @@ How each report is built. Fields not listed are `null`.
 ```text
 ObservedAction {
   actor_id:string, intent_id:string, tick:integer,
+  phase:"start"|"stop"|"settle",           // [CR-010]
   action:string, verb:VerbId|null,
   target:Target|null,
-  visible_items:array<{entity_id:string,archetype_id:ArchetypeId|null,
-                       material_id:MaterialId|null,descriptors:array<Descriptor>}>,
+  visible_items:array<ItemUse>,            // [CR-010] §5.1
   phenomena:array<PhenomenonId>            // only phenomena declared visible to watchers
 }
 ```
 
 - A resident sees another resident's action when the actor is in its sight at
   the boundary where the action starts, stops or settles (ADR 0007 D10).
+  **[CR-010]** Each of these is one `ObservedAction` with its `phase`;
+  `settle` covers the completion of a kernel action as well. When two phases
+  of one intent reach a watcher in one packet, `start` comes first. The array
+  is sorted by `tick`, then `actor_id`, then `intent_id`, then phase in the
+  order start, stop, settle.
 - It sees who acted, the action or verb, the visible items used and the
   phenomena that the vocabulary marks as visible to watchers. It never sees
   `rule_id`, the settlement kind, true values, `on_inspect` values or the
   actor's own feedback.
 - **The target is projected for each watcher, never copied from the intent.**
   `target` holds the actor's target only when the watcher itself perceives it
-  at that boundary: a tile in the watcher's `visible_tiles`, or an entity or
-  resident in its `visible_entities` or own inventory. Otherwise `target` is
-  `null`. For example, A walking towards a distant tile that B cannot see
-  shows B only that A is walking. `visible_items` follows the same rule.
+  at that boundary: a tile in the watcher's `visible_tiles`, an entity or
+  resident in its `visible_entities` or own inventory, or an item the actor
+  holds and uses, which the watcher sees in `visible_items` `[CR-010]`.
+  Otherwise `target` is `null`. For example, A walking towards a distant tile
+  that B cannot see shows B only that A is walking.
+- **[CR-010] Items in use are seen in the actor's hands.** A watcher who sees
+  the actor sees the items it holds and uses, with their apparent views
+  (`ItemUse`, visible descriptors only), at the same range as items on the
+  ground. An item the action uses that lies elsewhere (on the ground, in a
+  container or process) is shown only when the watcher perceives it.
+  - `start`: the items resolved at start, as the actor's
+    `running_action.items`.
+  - `stop`: those items that still exist.
+  - `settle`: those items that still exist after the settlement, and the
+    items the settlement created in the actor's inventory or on its tile
+    (role `output`).
+  For example, B binds a vine cord to a head and handle and the cord snaps: a
+  watcher sees the vine cord, the head and the handle at `start`, and at
+  `settle` the `snaps` phenomenon with no cord left. Nothing in an
+  `ObservedAction` shows a true value, an `on_inspect` value or a rule.
 - Watching creates no receipt. A watcher gains a receipt for a target only
   through its own perception (§3.3), never because another resident chose
-  that target.
+  that target. An entity ID in `visible_items` authorizes no reference.
 - Kernel actions (`give`, `pick_up`, `drop`, `contribute`) are watched the same
   way, so residents can see who gave or took what.
 
@@ -783,7 +851,7 @@ Events produced by this protocol:
 | `resident_moved` | as v1 | Each entered tile |
 | `item_transferred` | `{item_id, archetype_id, quantity, from:{kind,id}, to:{kind,id}, via:"give"|"pick_up"|"drop", owner_before:string|null, owner_after:string|null}` | A kernel transfer succeeds |
 | `entity_inspected` | `{entity_id, descriptors}` | An `inspect` completes |
-| `action_observed` | `{observer_id, actor_id, observed_intent_id}` | A watcher receives an `ObservedAction` |
+| `action_observed` | `{observer_id, actor_id, observed_intent_id, phase}` `[CR-010]` | A watcher receives an `ObservedAction` |
 | `utterance_spoken` | `{utterance_id, addressee_id:string|null, speech_act, text, terms:object|null, in_reply_to:string|null}` | An utterance passes validation |
 | `utterance_heard` | `{utterance_id, listener_id}` | Each listener, sorted by listener ID, right after `utterance_spoken` |
 | `agreement_accepted` | `{agreement_id, proposal_id, acceptance_id, terms}` | After the `utterance_heard` events of the accepting utterance |
@@ -1019,20 +1087,20 @@ the event catalog changes (ADR 0007 D8).
 
 | ID | Test |
 |---|---|
-| WAP-01 | For one `act` set up four ways (applied, chance failed, unmet, unmatched), `ActionFeedback` differs only in `phenomena`; `settlement`, `rule_id` and `failed_check` appear only in `ActionResult` and events |
+| WAP-01 | For one `act` set up four ways (applied, chance failed, unmet, unmatched), `ActionFeedback` differs only in `phenomena` (`items_used` is the same list in all four `[CR-010]`); `settlement`, `rule_id` and `failed_check` appear only in `ActionResult` and events |
 | WAP-02 | Binding (§3.1): `continue` with no running action, a nested actor or turn that differs from the outstanding turn, a stale `observed_tick`, a malformed `intent_id`, and a shape error in the utterance are each `INVALID_TURN` with no world effect; a second submission for a committed turn is refused; the ordinal advances exactly once for the turn finally committed, including a fallback turn |
 | WAP-03 | An utterance on a turn with `continue` is heard at `t+1`; the running action's progress and end tick are unchanged; the addressee's packet has `utterance_heard` with `addressed = true` and an overhearing resident's has `addressed = false` |
-| WAP-04 | Two hard stops at one boundary report the higher one (§4.4), for each named pair; a completed action is never failed afterwards, including by death in the same tick |
+| WAP-04 | Two hard stops at one boundary report the higher one (§4.4), for each named pair found at the same check; a completed action is never failed afterwards, including by death in the same tick; a stop found during progress is not replaced by a later death `[CR-010]` (WAP-33) |
 | WAP-05 | An actor replaces an unfinished gather G at boundary `t` with a one-tick wait W: G finishes at `t` with `by: "actor"` and makes no further progress, its `on_interrupt` applies, W starts at `t` and finishes at `t+1`. The packet for `t+1` carries both in `action_feedback`, G before W, with two `action_ended` reports; saved before acknowledgement and restored, it is delivered once, and the next packet repeats neither |
 | WAP-06 | A material with an apparent value shows it in perception, while settlement uses the true value |
 | WAP-07 | `inspect` returns `on_inspect` descriptors, which never appear in later `EntityView`s; `inspect` out of reach is `OUT_OF_REACH`; a target that disappears or moves away before completion fails the completion check after the elapsed time |
-| WAP-08 | A watcher in sight receives `ObservedAction` with watcher-visible phenomena only; a resident out of sight receives none; neither sees `rule_id` or true values. A visible actor walking to a tile the watcher cannot see, or acting on an entity hidden from it, shows `target = null` and gives the watcher no receipt; a visible target is shown |
+| WAP-08 | A watcher in sight receives `ObservedAction` with watcher-visible phenomena only; a resident out of sight receives none; neither sees `rule_id` or true values. A visible actor walking to a tile the watcher cannot see, or acting on an entity hidden from it, shows `target = null` and gives the watcher no receipt; a visible target is shown; each observation carries its phase, and held items in use are shown (WAP-31) `[CR-010]` |
 | WAP-09 | `propose` then `accept`, heard by two listeners, emits `utterance_spoken`, two `utterance_heard` sorted by listener, then `agreement_accepted` with backward causal links. `accept` without a matching proposal is `INVALID_REPLY`; a second answer, including after a `refuse`, fails. Each term kind is accepted when well formed; wrong parties, unexposed references and a `due_tick` not in the future are `INVALID_TERMS` |
 | WAP-10 | A resident picks up an item owned by another; the world allows it, and `item_transferred` records both owners; stack splits, container and process transfers, capacity limits and a race for the last item settle as §4.2 states |
 | WAP-11 | Adding a rule to the library leaves `action_schema_sha256` unchanged; adding a verb changes it; a save with a different vocabulary or library hash is refused |
 | WAP-12 | `TurnSubmission` has no field for intention, mute list, citations or context pressure; settlement is identical whatever the memory, intention, mute state or context pressure on the agent side, and whichever policy produced the submission |
 | WAP-13 | A DTO with an unknown `schema_version` is refused |
-| WAP-14 | While asleep or unconscious the senses are off (§5.1): no visible entities, no heard utterances, no observations, and missed speech is not replayed after waking; needs, position, inventory, running action, explored static tiles and feedback stay |
+| WAP-14 | While asleep or unconscious the senses are off (§5.1): no visible entities, no heard utterances, no observations, and missed speech is not replayed after waking; needs, position, inventory, running action, explored static tiles and feedback stay. `[CR-010]` In the compatibility pack sight stays on while asleep (WAP-32); hearing and observations stay off |
 | WAP-15 | The compatibility pack with the rule-based policy matches the committed v1 projections on the seed set (§11.3) |
 | WAP-16 | Replaying a recorded run from its submissions makes no model call and reproduces the event log byte for byte, including fallback turns and reports |
 | WAP-17 | A deceptive material is shown with its true `material_id` and its apparent values, both on sight and on `inspect`; perception is identical for a resident that has used it before and one that has not |
@@ -1041,7 +1109,7 @@ the event catalog changes (ADR 0007 D8).
 | WAP-20 | Kernel preconditions (§4.2): for each kernel action, a target in reach, out of reach, of the wrong kind and missing gives the stated code; when several checks fail, the first in the table wins. `give` to a recipient at distance 0, 1 and 2 gives `OUT_OF_REACH`, success and `OUT_OF_REACH`; a distant recipient with no fruit held gives `OUT_OF_REACH`, as v1 |
 | WAP-21 | `act` timing (§4.3): a generic failure ends at `t + invalid_attempt_ticks`; unmet or unmatched at start at `t + attempt_ticks`; a contested last fruit settles the loser `unmet` at completion at `t + work_ticks`; a target that disappears mid-action settles `unmet` at completion with `failed_check` naming its slot; a `contribute` whose process disappears stops with `TARGET_GONE` at once; a missing target together with a missing input reports `INVALID_TARGET` |
 | WAP-22 | Item choice (§3.2): named choices are reserved before by-kind ones, so `[{held: X}, {item: e1}]` with `e1 < e2` held resolves to `e2` and `e1` in either listed order, and with only `e1` held reports `NO_ITEM`; by-kind choices take stacks in ascending ID order across several stacks, split a larger stack and never use one instance twice; the same resolution follows after replay or restore. `pick_up` by tile counts whatever stacks of that kind lie there at completion, and reports `ITEM_TAKEN` when they are too few |
-| WAP-23 | Committed scripted migration fixtures (§11.3), each asserting the packet actually delivered to the policy (v1 intent ID, status, code, triggers), ticks, queue disposal, back-off key and the next decision: urgent crossings inside one band for satiety, hydration and stamina, awake and asleep; urgent, direct speech and a new sight together, with v1 priority and every trigger kept in v1 order; `DIALOGUE_LIMIT`, `OUT_OF_HEARING` and `INVALID_REPLY` on an accept followed by a queued give, under the v1 talk intent ID; two talks competing for the last dialogue slot beside a non-talk completion; a request round trip; unfinished death; completion then death in one tick; natural and early waking; an empty tree at start and a contested last fruit (`RESOURCE_TAKEN`), and gather with no stamina or no room; `give` at distance 0; `fill_canteen` with a tree as target, and the correct-target control; two pickups of the last ground fruit (loser `ITEM_TAKEN` after its pickup time); a first reply; transfers by kind, including too few items; a profile with `talk_ticks = 2` refused at load |
+| WAP-23 | Committed scripted migration fixtures (§11.3), each asserting the packet actually delivered to the policy (v1 intent ID, status, code, triggers), ticks, queue disposal, back-off key and the next decision: urgent crossings inside one band for satiety, hydration and stamina, awake and asleep; urgent, direct speech and a new sight together, with v1 priority and every trigger kept in v1 order; `DIALOGUE_LIMIT`, `OUT_OF_HEARING` and `INVALID_REPLY` on an accept followed by a queued give, under the v1 talk intent ID; two talks competing for the last dialogue slot beside a non-talk completion; a request round trip; unfinished death; completion then death in one tick; natural and early waking; an empty tree at start and a contested last fruit (`RESOURCE_TAKEN`), and gather with no stamina or no room; `give` at distance 0; `fill_canteen` with a tree as target, and the correct-target control; two pickups of the last ground fruit (loser `ITEM_TAKEN` after its pickup time); a first reply; transfers by kind, including too few items; a profile with `talk_ticks = 2` refused at load; `[CR-010]` a sleeper next to a death and a sleep across the start of daylight (WAP-32), and exhaustion after the tick's physiology (WAP-33) |
 | WAP-24 | A threshold crossing inside one band is reported once, is not repeated while the need stays below, is reported again after the need recovers and falls once more, and is never reported at tick zero |
 | WAP-25 | Bridge separation (§11.2): two compatibility outcomes with identical resident feedback (for example an empty tree and a full inventory on `gather`) give different bridge outputs; no bridge output appears in any model context, memory or `Perception`; a compatibility pack whose rule checks are not all in the code table is refused at load; outside the compatibility pack there is no bridge. Run as model → fallback → model, with a restore before acknowledgement: the fallback's gather failure leaves a private legacy code and back-off, the resumed model request, day log, recalled memories and perception hold neither the bridge output nor its source, and the legacy identity and effect survive the restore without duplicate delivery |
 | WAP-26 | Domain exceptions (§11.3), each pinned and listed as outside the equivalence promise: `gather` with no stamina and an existing but unreachable tree reports `OUT_OF_REACH`; with no stamina and a receipted tree that no longer exists, `INVALID_TARGET`; a canteen `drink` with full hydration and no canteen held reports `NO_ITEM`; a second reply after an acceptance, and after a refusal, reports `INVALID_REPLY`. Control: a `gather` at an unreceipted target reports `INVALID_TARGET` in both versions |
@@ -1049,6 +1117,9 @@ the event catalog changes (ADR 0007 D8).
 | WAP-28 | Spring drink without a known spring (§11.2): a resident below maximum hydration that has never seen the spring submits v1 `drink {source:"spring"}` and gets `failure/OUT_OF_REACH` at `t+1` under its v1 intent ID, with `ACTION_FAILED`, queue disposal and the next decision as v1; no spring coordinate enters its perception or the policy's private state. Control: with the spring known and adjacent, the drink succeeds |
 | WAP-29 | Two utterance checks (§7.1), against v1 `talk`, in both actor orders. The addressee starts one step outside hearing and walks into it in this tick: with the speaker's ID lower, the speaker's start check comes first and fails `OUT_OF_HEARING`, the failure is kept and nothing is emitted; with the addressee's ID lower, the speaker's start check sees it in hearing, and the utterance is emitted and succeeds. Controls: in hearing at the speaker's start but out of hearing at emission fails `OUT_OF_HEARING`; in hearing at both succeeds; two talks competing for the last turn of a session are decided at emission. Each asserts the utterance's presence, the joined result under the v1 intent ID with its status, code and start and end ticks, the triggers, queue disposal or continuation, back-off and the next decision. In the speaker-first case, the addressee's later step in the same tick never overwrites the kept start failure. Start and emission fall in one tick, so this is an in-tick assertion, not a save point; saves at tick boundaries are covered by WAP-05, WAP-19 and WAP-25 |
 | WAP-30 | Delayed stop of a replaced action (§11.2): the policy replaces a running action to reproduce a v1 interruption with a successor lasting more than one tick; when the old stop arrives in the next packet, no second legacy interruption is issued and the successor's queue is not discarded |
+| WAP-31 | `[CR-010]` Items in use (§4.1, §5.1, §5.4): an actor's `running_action.items` and `items_used` list target, instruments and inputs with role, quantity and visible descriptors; a by-kind input taking units from two stacks of one archetype with different looks gives two entries. A watcher in sight sees the held vine cord, head and handle at `start`, and at `settle` the `snaps` phenomenon, the outputs and no cord; one packet with `start` and `settle` of one intent holds both observations in phase order and one `action_observed` report. A watcher out of sight sees nothing; no observation shows a true value or an `on_inspect` value, and an entity ID seen in `visible_items` is refused as a reference (`INVALID_TARGET`) |
+| WAP-32 | `[CR-010]` Sight while asleep (§5.1), compatibility pack against v1: Ella sleeps next to Ryan, who dies this tick; at the still-asleep boundary Ella's packet shows the corpse with an `entity_first_seen` report and her receipt for it, as v1, and on waking the policy receives the v1 triggers, deferred ones included, with no second sighting; a sleep that spans the start of daylight grows the explored footprint as v1; speech emitted during the final sleep tick is not heard, on natural and on early waking. In the starter pack the same set-up gives an empty sleeping packet and the corpse first seen on waking |
+| WAP-33 | `[CR-010]` When a stop is found (§4.4), against v1: a movement whose stamina reaches zero after the tick's physiology stops `EXHAUSTED` at that boundary and joins no completion shuffle; a step blocked in phase 2 stays `PATH_BLOCKED` when the actor dies later in the tick; exhaustion and death at the same check report `DEATH` |
 
 ## 14. Disposition of the ADR 0007 open questions
 

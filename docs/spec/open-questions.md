@@ -202,6 +202,80 @@ remove v1 code before the M12 conditions are met.
 scope above. ADR 0007 may now be accepted; `world-agent-protocol-v0.1.md` is
 written and frozen after that.
 
+## CR-010: protocol amendments from the P3.5-SP-01 review (approved 2026-11-18)
+
+Status: **approved by the owner on 2026-11-18: A1 and B1; C is part of the
+approved compatibility alignment.** Source: the P3.5-SP-01 Gate 2 reviews
+([world track](../tasks/p3.5/P3.5-SP-01-review-world.md) B01, B03, B14;
+[resident track](../tasks/p3.5/P3.5-SP-01-review-agent.md) B11, B13). The
+amendments are applied in place to the frozen
+[world–agent protocol](world-agent-protocol-v0.1.md), marked `[CR-010]`, as
+CR-005 amended the P3 specs. No v2 code, run or replay exists yet. The round-2
+Gate 2 of P3.5-SP-01 checks the amended text.
+
+**A. Sight while asleep in the compatibility pack.**
+
+- *Current rule.* §5.1: while not awake, the senses are off, in every pack.
+- *Problem.* v1 builds every living resident's sight at every boundary, asleep
+  or not, and suppresses only hearing (`world-rules-v0.1.md` §5.4 step 6,
+  `world/observation.py`). Example: Ella sleeps next to Ryan, who dies. In v1
+  she gets a receipt and a `NEW_SIGHT` for the corpse while asleep; with the
+  senses off she sees it only on waking, so the rule policy gets a different
+  trigger set and can later act on different receipts and explored tiles. The
+  compatibility pack then cannot reproduce v1 (§11.3). Sleeps are frequent in
+  the P2 matrix.
+- *Options.* **A1 (recommended):** a pack flag `sight_while_asleep`, set only by
+  the compatibility pack; hearing and observed actions stay off, and the
+  starter pack keeps the senses off. A2: a third domain exception in §11.3;
+  rejected, because the P2 matrix reaches it often and the equivalence check
+  would fail broadly. A3: the bridge keeps a private v1 sight shadow; rejected,
+  because the bridge would read world state beyond the policy's own results.
+
+**B. Items in use are visible to the actor and to watchers.**
+
+- *Current rule.* §5.4: `visible_items` shows only items in the watcher's
+  `visible_entities` or own inventory. Another resident's held items are never
+  there, so the items used by a held-item `act` are never seen. Observations
+  carry no phase. An actor's own feedback does not list the stacks a by-kind
+  choice took.
+- *Problem.* A watcher of a vine cord snapping sees "combine, snaps" with no
+  cord, so watching cannot teach the difference between vine and grass,
+  contrary to ADR 0007 D10 ("the visible items used"). Skill evidence cannot
+  tell which looks a by-kind input used across stacks, and a watcher cannot
+  tell a start from a settlement of one intent.
+- *Options.* **B1 (recommended):** an `ItemUse` view (apparent view, role,
+  quantity) in `running_action.items` and `ActionFeedback.items_used` for the
+  actor, and in `ObservedAction.visible_items` with a `phase` for watchers,
+  at the same range as items on the ground. B2: the same, but only at close
+  range; learning by watching becomes rarer. B3: no change; watching cannot
+  teach materials.
+
+**C. When a hard stop is found (clarification).**
+
+- *Current rule.* §4.4: when several stops apply at one boundary, the first in
+  the priority list is reported.
+- *Problem.* v1 settles a blocked step during progress and finds exhaustion
+  after the tick's physiology (world-track B01). Read literally, "one
+  boundary" could let a later death in the same tick replace a blocked step,
+  which v1 never does.
+- *Rule.* The priority applies among stops found at the same check. A stop
+  found during progress ends the action there. `DEATH`, `FAINTED` and
+  `EXHAUSTED` are found together after the tick's physiology. This changes no
+  v1-visible outcome; it is the wording the approved compatibility alignment
+  needs.
+
+**Impact.** Spec text only: WAP §4.1, §4.4, §5.1, §5.3, §5.4, §9 and tests
+WAP-01, 04, 08, 14, 23 and the new WAP-31 to WAP-33. The world-engine,
+memory-formation, decision-loop and evaluation specs use the new fields. No
+artifact exists under `wap/0.1`, so the schema version is unchanged.
+
+**Approval covers** these three amendments only.
+
+**Owner disposition (2026-11-18):** "All as recommended" on the P3.5-SP-01
+fix plan, whose points 1 and 2 are A1 and B1. C is the wording needed by the
+approved v1 alignment of the compatibility pack; the owner confirms it with
+the freeze of the P3.5 specs.
+
 ## Question register
 
 | ID | Date | Raised in task | Question | Assumption made | Status |
