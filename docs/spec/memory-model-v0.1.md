@@ -73,6 +73,7 @@ MemoryRecord {
   about_tick:{from:integer,to:integer}|null,   // the time the content describes (D2, D4)
   sources:array<Source>,                       // sorted (§4.1); at least one, except commitments (§3.5)
   confidence:integer,                          // 0..4
+  speech_derived:boolean,                      // code-owned, never written by the model (§4.2)
   last_used_tick:integer|null, use_count:integer,
   supersedes:string|null,                      // the record this one replaced
   superseded_by:string|null,                   // set when a later record replaces this one
@@ -88,6 +89,10 @@ MemoryKind = "episodic"|"belief"|"social"|"skill"|"commitment"|"intention"|"pers
   it whenever it creates or changes a record; code writes it for mechanical
   records from a fixed template (memory-formation spec).
 - `text` is at most 2000 characters.
+- `speech_derived` is computed by code from the record's own sources and the
+  revisions they cite whenever a write creates the record or changes its
+  sources (§4.2). A change set cannot set it. It is part of the content hash,
+  so each revision keeps the value it was written with.
 - `about_tick` is required on episodic records and on beliefs that describe a
   dated observation; it is `null` for stable knowledge (§4.3).
 - A record is **history** when `superseded_by` is set, or, for an intention,
@@ -113,6 +118,7 @@ The index lists one line per record in the store except archived commitments
 
 **Resident projection.** Use the same typed serializer for prefix, recall,
 index/gist, selected, mandatory, pending and changed mechanical records.
+The projection omits `speech_derived`; the resident sees its sources.
 Commitment hard fields shown are terms, role, counterpart, due tick and
 heard_counterpart, alongside its resident-authored status/note and safe
 sources. Omit agreement_id and raw acceptance/proposal/event references.
@@ -362,9 +368,22 @@ An integer 0–4: 0 doubt, 1 low, 2 moderate, 3 high, 4 certain.
 - Consolidation may change confidence, one change operation at a time, within
   a cap (owner, MM-D5 as changed on 2026-11-18):
   - A record is **speech-derived** when it has a `told` source, an `inferred`
-    source citing a speech-derived revision, or merges a speech-derived
-    record. A speech-derived record never exceeds 3, whatever `observed`
-    sources it gains later; the told source stays (ADR 0011 D4).
+    source citing a revision whose `speech_derived` is `true`, or merges a
+    record whose `speech_derived` is `true`. A speech-derived record never
+    exceeds 3, whatever `observed` sources it gains later; the told source
+    stays (ADR 0011 D4).
+  - Code stores the answer in the record's `speech_derived` field (§2). A
+    later check reads only the field of each directly cited or merged
+    revision, never that revision's own ancestors, so the answer survives
+    when an ancestor is forgotten, evicted or restored from a save. For
+    example, B infers I from a told belief T, so I is stored with
+    `speech_derived = true`; after T is forgotten, a record inferred from I
+    is still speech-derived.
+  - Code recomputes the field on every write that changes sources: an add, an
+    update that adds a source, a merge and a mechanical write. A write that
+    would make a record at confidence 4 speech-derived fails (memory formation
+    §3.5); to add the speech, an earlier op of the same set lowers the
+    confidence to 3 or below.
   - Confidence 4 needs a record that is not speech-derived and has an
     `observed` or `innate` source.
   - A resident may fully believe what it was told, but certainty needs a
@@ -373,9 +392,12 @@ An integer 0–4: 0 doubt, 1 low, 2 moderate, 3 high, 4 certain.
     sighting of the spring, stays at 3 at most.
 - **Possible relabelling** is flagged, not refused. When a change set
   creates a record that is not speech-derived and whose subject keys overlap
-  a live speech-derived record of the same resident, code marks it
-  `possible_relabel` in inspection (never in the model's view), naming the
-  told record. Whether the resident really saw it is a judgement the
+  a live record of the same resident whose `speech_derived` is `true`, code
+  writes a `possible_relabel` flag to the consolidation record (memory
+  formation §7), naming the flagged revision and each overlapping
+  speech-derived revision. The flag lives in the audit and the inspection
+  export (evaluation spec §1), never in the store, the index or any view the
+  model receives. Whether the resident really saw it is a judgement the
   validator cannot make without hidden truth; inspection and evaluation
   show the flag (evaluation spec §2).
 - Trust in a speaker falls only when a claim is contradicted at the time it
@@ -523,7 +545,7 @@ adds a test kind this way (M14 evidence).
 | MM-03 | Store version increases by one per mechanical write and per committed change set |
 | MM-04 | Index lines: format, sort order and flags, for a superseded, a `needs_review` and an open commitment record |
 | MM-05 | Looks: a skill hypothesis built from perceived descriptors stores archetype, material and words only; a hypothesis carrying an integer property value is refused |
-| MM-06 | Default confidence for each source kind and each trust level; a told-only record cannot be raised above 3; gaining an observed source does not lift a speech-derived record above 3; an observed-only record can reach 4; an inferred record citing a told record is speech-derived; an observed-only belief about the subject of a live told belief is flagged `possible_relabel` in inspection only |
+| MM-06 | Default confidence for each source kind and each trust level; a told-only record cannot be raised above 3; gaining an observed source does not lift a speech-derived record above 3; an observed-only record can reach 4; an inferred record citing a told record is speech-derived; an observed-only belief about the subject of a live told belief is flagged `possible_relabel` in inspection only; `speech_derived` is code-owned (a change set setting it fails `format`) and absent from the resident projection; adding a `told` source to a confidence-4 record fails unless an earlier op lowered it |
 | MM-07 | No relabelling: a change that turns a `told` source into `observed`, or adds an `observed` source citing a `heard_speech` entry, is refused |
 | MM-08 | Supersession: the old record gains `superseded_by`, stays recallable as history, and records inferred from it get `needs_review` |
 | MM-09 | Merge keeps the union of sources; forgetting moves the record to the audit, and no recall, index or context reaches it afterwards |
@@ -542,6 +564,7 @@ adds a test kind this way (M14 evidence).
 | MM-22 | Refute a skill at live cap without a successor: index refuted, zero recipe/evidence eligibility, still live; overflow evicts it first and preserves its evidence in audit. Superseded refuted skill counts as history only. |
 | MM-23 | Follow an inferred source after its ancestor changes and is evicted: audit resolves the original revision. Own repetition of another's claim proves speech only. |
 | MM-24 | Equal inventory increases after a successful watched merge and an unseen gift give different received counts. Only a delivered successful receipt increments the former. |
+| MM-25 | Speech ancestry after eviction: T told, I inferred from T, M merging T with an observed record; T then leaves the store (forget or history beyond its bound), and the save is restored. A new confidence-4 record inferred from I, or from M, fails `format`; the same record at 3 commits. Control: the same chain with an observed-only T reaches 4. The validator reads no audit content |
 
 ## 12. Disposition of open questions
 

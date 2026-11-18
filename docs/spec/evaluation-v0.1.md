@@ -78,8 +78,14 @@ InspectionIndexV2 {
 DecisionInspectionV2 { record:DecisionRecordV2, parts:array<StoredPart>, calls:array<CallRecord>,
                        outcome_event_ids:array<string> }
 ConsolidationInspection { record:ConsolidationRecord, parts:array<StoredPart>, calls:array<CallRecord> }
-StoreInspection { resident_id, period_id, store_version, records:array<MemoryRecord>, index_lines:array<string> }
+StoreInspection { resident_id, period_id, store_version, records:array<MemoryRecord>, index_lines:array<string>,
+                   relabel_flags:array<RelabelFlag> }
 ```
+
+- `relabel_flags` (`RelabelFlag`, memory formation §7) are copied from the
+  resident's consolidation records committed at or before `store_version`,
+  sorted by flagged ID then store version. They are an inspection sidecar:
+  the export never adds them to a `MemoryRecord` or an index line.
 
 - `parts` are the stored parts a record's manifests name, so a shard rebuilds
   its dispatched requests and measured floor on its own. Export every exact
@@ -101,7 +107,7 @@ D1). A decision jumps to its moment on the map replay.
 | View | Reads |
 |---|---|
 | Decision inspector | Decision shards: turn reasons, manifest sections with sources and tokens, rebuilt request, raw and parsed output, the submission, the world result (`outcome_event_ids`), memories written afterwards, guard and pressure entries |
-| Memory browser | Store shards: records by kind, supersession chains, `needs_review`, personality over time, the index as the resident's consolidation saw it; records flagged `possible_relabel` with the told record they overlap (memory model §4.2) |
+| Memory browser | Store shards: records by kind, supersession chains, `needs_review`, personality over time, the index as the resident's consolidation saw it; records flagged `possible_relabel` with the told record they overlap, from `relabel_flags` (memory model §4.2) |
 | Emergence metrics | The metrics shard (§3), with each instance linked to its events and records |
 | Comparison | Two runs' metrics side by side, by arm and seed (§5) |
 | Cost | The cost shard: calls, input and output tokens, cache hits, latency and fallback rate per resident and day; token share per manifest section; context size, pressure band and day-log growth per turn; guard events; fallback rate against context size (ADR 0013 D4, D8) |
@@ -633,6 +639,7 @@ As ADR 0014 D4:
 | EV-22 | A makes cord, B uses it for an axe then cuts: only B's cord use qualifies. Two split parts in one action count once. Target-only feed/strike appears in inspection only. Attribute shelter benefits before/after replacement separately; rerun EV-12 at and below threshold. |
 | EV-23 | Guarded selection only, omitted selected records, failed/abandoned change set and committed supplier each get an exposure row. Only the commit propagates by supplies_period. Retrieved but never dispatched memory leaves continuity unchanged. |
 | EV-24 | Split portions (§3.4): on the EN-36 log the returned head has maker A and A's creation day; B's later use of it counts once as a non-maker use; the remainder of S keeps maker B; no join uses the public S alone |
+| EV-25 | Relabel sidecar: export the MF-25 run; the store shard's `relabel_flags` names the observed-only spring belief's revision and the told belief's revision; the memory browser shows both; no exported `MemoryRecord`, index line or rebuilt resident request contains the flag or the link; a shard whose flag names a revision absent from the run fails validation before display |
 
 ## 11. What other specs must record
 

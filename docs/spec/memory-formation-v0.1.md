@@ -356,8 +356,14 @@ only that the resident spoke.
 
 **Confidence.** A `confidence` op or a new record's confidence above 3 fails
 `format` when the record is speech-derived (memory model §4.2), whether or not
-it also has `observed` sources. After commit, code sets the inspection-only
-`possible_relabel` flag of memory model §4.2.
+it also has `observed` sources. So does an `update` or `merge` that would
+leave a confidence-4 record speech-derived, for example adding a `told`
+source to it. Code computes the candidate's `speech_derived` on the staged
+copy from its sources and the `speech_derived` field of each cited or merged
+revision, read from the sent input or the staged store, never from the audit;
+an op that sets the field itself fails `format`. After commit, code writes
+the `possible_relabel` flags of memory model §4.2 to the consolidation
+record (§7).
 
 **Subject keys** of a record, for the witness test: a belief's `subject` (a
 place `x,y` gives `place:x,y`, an entity `entity:<id>`, a resident
@@ -534,10 +540,24 @@ ConsolidationRecord {
   selection_call_id:string|null, change_set_call_id:string|null,   // logical call records, decision-loop spec §10
   selection:SelectionOutput|null, change_set:ChangeSet|null,
   verdicts:array<{op_id, result:"committed"|"dropped", reason:string|null, depends_on:array<string>}>,
+  relabel_flags:array<RelabelFlag>,             // inspection only (memory model §4.2)
   pending:array<{period_id, state:"included"|"omitted"|"retained"|"evicted"}>,
   pending_after:array<string>                   // period IDs still pending
 }
+RevisionRef { id:string, store_version:integer, content_hash:string }
+RelabelFlag {
+  flagged:RevisionRef,                          // the committed record that is not speech-derived
+  overlaps:array<RevisionRef>,                  // live speech-derived records sharing a subject key, sorted by ID
+  shared_keys:array<string>,                    // the overlapping subject keys, sorted
+  store_version:integer, change_set_call_id:string
+}
 ```
+
+- `relabel_flags` are computed once, at commit, against the committed store,
+  sorted by flagged ID; replay recomputes them and checks they match. They
+  go to the audit with the verdicts (§3.5) and are not part of the store or
+  the agent checkpoint; no context, recall or consolidation input is built
+  from a consolidation record, so none can carry them (memory model §6).
 
 - Both calls are logical calls of the decision loop's record model
   (decision-loop spec §10): one record per logical call with its kind
@@ -597,8 +617,8 @@ ConsolidationRecord {
 | MF-21 | Interrupt before dispatch, after selection and after change-set preparation: replay same prefix and disposition. Unfit floor before early wake is abandoned; surviving K records stopped_unfit without a world submission. |
 | MF-22 | Resume model during and after fallback: current action visible, no rationale/result recall; an awake watcher with both phases may update its own skill. Exact packet and hypothesis revision identify the write. |
 | MF-23 | Selection floor contains open/review records in full; change-set floor adds changed mechanical records. Recount framed floors including notice and restore an in-flight attempt at its journal cursor. |
-| MF-24 | Observed witnesses (§3.5): B hears A say the spring is poisoned and never sees the spring; a belief about the spring citing A's `heard_speech` as `told` and B's hunger `body_change` as `observed`, at confidence 4, is refused with `provenance`; the same belief with only the `told` source commits at most at 3; when B's sent input holds an `observation` entry showing the spring tile, citing it as `observed` passes the witness test, but the record stays speech-derived and capped at 3 (MF-25). The check reads only B's delivered entries |
-| MF-25 | Hearsay cap (§3.5, memory model §4.2): B hears "the spring is poisoned" and later sees the spring tile; the belief citing the `heard_speech` as `told` and the sighting as `observed` is accepted (the sighting witnesses the spring) but a confidence of 4 is refused, so it stays at most 3. Positive control: a belief "the cord snapped" written only from B's own `action_result` with `snaps` reaches 4. A new observed-only "the spring is poisoned" belief commits and is flagged `possible_relabel` naming the told belief, never shown to B. Commitment control: A's own delivered proposal gives an `observed` source keyed `spoke:<id>`, the unheard acceptance gives no `told` source, and no source comes from an event ID |
+| MF-24 | Observed witnesses (§3.5): B hears A say the spring is poisoned and never sees the spring; a belief about the spring citing A's `heard_speech` as `told` and B's hunger `body_change` as `observed`, at confidence 3, is refused with `provenance` (at 4 it would fail `format` first, which MF-25 tests); the same belief with only the `told` source commits at most at 3; when B's sent input holds an `observation` entry showing the spring tile, citing it as `observed` passes the witness test, but the record stays speech-derived and capped at 3 (MF-25). The check reads only B's delivered entries |
+| MF-25 | Hearsay cap (§3.5, memory model §4.2): B hears "the spring is poisoned" and later sees the spring tile; the belief citing the `heard_speech` as `told` and the sighting as `observed` is accepted (the sighting witnesses the spring) but a confidence of 4 is refused, so it stays at most 3. Positive control: a belief "the cord snapped" written only from B's own `action_result` with `snaps` reaches 4. A new observed-only "the spring is poisoned" belief commits; the consolidation record and the exported `StoreInspection.relabel_flags` (evaluation spec §1) name its revision and the told belief's revision, and neither the flag nor that link appears in B's store, index or any serialized resident projection. Adding a `told` source to the cord belief at 4 fails `format`; lowering it to 3 in an earlier op lets the update commit. Commitment control: A's own delivered proposal gives an `observed` source keyed `spoke:<id>`, the unheard acceptance gives no `told` source, and no source comes from an event ID |
 
 ## 10. Disposition of open questions
 
