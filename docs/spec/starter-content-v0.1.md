@@ -459,7 +459,7 @@ need more than a phrase.
 | Rule | Trigger and slots | Conditions | Work | Chance | Effects and outputs | Phenomena |
 |---|---|---|---|---|---|---|
 | `gather_deposit` | `gather`; target `{archetype: deposit}` | `stamina` > min; `room` free slots ≥ 1; `stock` `store.count ≥ 1` | 3, `exhaustion_stops` | 1000 | move 1 from `target.store` to `actor`; stamina −150 | `takes_some`; `too_tired`, `hands_full`, `finds_nothing` |
-| `knap_flake` | `strike`; target `{archetype: flint_nodule}`; instrument `hammer {material: stone}` | — | 2 | 750, keep | consume 1 unit of the target; create 2 `sharp_flake`, material `flint`, at `actor` | `splits`; chance failed `slips` |
+| `knap_flake` | `strike`; target `{archetype: flint_nodule}`; instrument `hammer {material: stone}` | `nodule` target `quantity ≥ 1` (the declared bound for the one-unit debit, rule representation §8.1) | 2 | 750, keep | consume 1 unit of the target; create 2 `sharp_flake`, material `flint`, at `actor` | `splits`; chance failed `slips` |
 | `twist_cord` | `combine`; input `fibre {flexible: true}` × 3 | — | 4 | 1000 | create 1 `cord`, `material_from = "fibre"`, at `actor`; mixed vine and grass do not fill the slot, so they fall apart (unmatched) | `fits_together` |
 | `make_stone_axe` | `combine`; inputs `head {sharp: true, hardness_min: 4}` × 1, `handle {material: wood, long: true}` × 1, `bind {archetype: cord, strength_min: 3}` × 1 | — | 6 | 1000 | create 1 `stone_axe`, `material_from = "head"`, at `actor` | `fits_together`, `holds_firm` |
 | `bind_snaps` | `combine`; inputs `head`, `handle` as above and `bind {archetype: cord, strength_max: 2}` × 1, all consumed | — | 6 | 1000 | create the head and the handle back: 1 each with `archetype_from` and `material_from` of their slot, at `actor` (new IDs); the cord is gone | `snaps` |
@@ -598,6 +598,20 @@ conservation = "inputs_to_outputs"
 outputs = [{ archetype_from = "head",   material_from = "head",   quantity = 1, at = "actor" },
            { archetype_from = "handle", material_from = "handle", quantity = 1, at = "actor" }]
 phenomena = { success = ["snaps"], unmet = ["nothing_happens"], chance_failed = [] }
+
+[[rule]]
+id = "knap_flake"
+trigger = "verb:strike"
+target = { where = { archetype = "flint_nodule" } }
+instruments = [{ slot = "hammer", where = { material = "stone" }, qty = 1 }]
+conditions = [{ id = "nodule", kind = "state", of = "target", field = "quantity", op = ">=", value = 1 }]
+work_ticks = 2
+success_per_mille = 750
+on_chance_failed = "keep_inputs"
+conservation = "inputs_to_outputs"
+effects = [{ op = "consume", of = "target", quantity = 1 }]
+outputs = [{ archetype = "sharp_flake", material = "flint", quantity = 2, at = "actor" }]
+phenomena = { success = ["splits"], unmet = ["nothing_happens"], chance_failed = ["slips"] }
 
 [[rule]]
 id = "light_fire"
@@ -776,8 +790,8 @@ sleeping. It is measured, not tuned, in this version (owner, CT-D9):
 | CT-01 | `compat-v1` loads; its values equal `default.toml`'s; changing `default.toml` changes the pinned hash and the pack is refused |
 | CT-02 | The compatibility pack passes protocol §11.3's equivalence check on the 20 acceptance seeds, with the committed v1 fixtures |
 | CT-03 | The code table covers every slot, condition and `world_limit` of every verb rule; removing one entry makes the load fail (protocol WAP-25); `unreachable` on (`compat_sleep_cave`, `cave`) loads and on any pair the validator does not list is refused; a sleeper away from the cave gets plain sleep with no failure |
-| CT-04 | `starter-v1` loads and passes the validator; its pack hash includes the base pack's content; redefining an inherited ID without `replace = true` is refused; every row of §5.10 parses and validates as written |
-| CT-05 | Recipes: in a scripted scenario, a resident knaps a flake, twists grass cord, makes an axe, cuts wood three times faster than by hand, lights a fire, shapes and bakes a pot, fills it and drinks from it, and builds a shelter with others |
+| CT-04 | `starter-v1` loads and passes the validator; its pack hash includes the base pack's content; redefining an inherited ID without `replace = true` is refused; every row of §5.10 parses and validates as written; the composed pack loads with `knap_flake`'s `nodule` bound, and without it the validator refuses the rule for an unproven debit |
+| CT-05 | Recipes: in a scripted scenario, a resident knaps two flakes from a single held flint nodule (stack of 1, which is then gone), twists grass cord, makes an axe, cuts wood three times faster than by hand, lights a fire, shapes and bakes a pot, fills it and drinks from it, and builds a shelter with others |
 | CT-06 | Deception: vine shows `strength` "strong" and grass "weak"; vine cord makes `bind_snaps` settle with `snaps`, the cord gone and a head and a handle of the same archetypes and materials given back with new IDs; a watcher in sight sees the vine cord at the start and the `snaps` at the end (protocol WAP-31); grass cord makes the axe; a shelter site with vine cord gets no work until grass cord replaces it |
 | CT-07 | Conservation: every starter rule passes the validator; across a 7-day scripted run the units of each matter class equal placements plus source creation minus destruction |
 | CT-08 | World rules: deadwood regrows 1 per 72 ticks up to its stock; a fire lit at tick `k` burns ticks `k` to `k+17` and reaches zero fuel at `k+17` and releases its contents if spill admission passes; a pot put in at tick 5 bakes at tick 6; a pot in a fire on its last fuel tick still bakes; a stack of 4 fruit held 432 ticks becomes 4 rotten fruit where it was; an axe breaks after 20 cuts and leaves a branch where it was; a failed `light_fire` uses the tinder and leaves both branches |
