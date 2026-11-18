@@ -322,9 +322,12 @@ Source = {kind:"observed", entry_id:string}                     // a day-log ent
   is believed; it gains an `observed` source only when the resident sees for
   itself, citing that entry. The formation validator enforces this
   (memory-formation spec).
-- An `observed` source cites a day-log entry that directly witnesses the
-  record's subject (its witness keys, memory formation §3.5); an unrelated
-  perception never makes a claim observed. It cites an entry whose type is one of the resident's
+- An `observed` source in a change set cites a day-log entry that directly
+  witnesses the record's subject (its witness keys, memory formation §3.5);
+  an unrelated perception never makes a claim observed. Code-written sources
+  of mechanical records (commitments) are outside that test: they cite the
+  resident's own utterance feedback, whose `spoke:<utterance_id>` key means
+  only "I said this" (memory formation §1.1). An `observed` source cites an entry whose type is one of the resident's
   own perceptions (decision-loop spec), never a `heard_speech` entry. The
   feedback on the resident's own utterance proves only the act of speaking.
   It cannot add observed provenance about the subject of the words.
@@ -357,9 +360,24 @@ An integer 0–4: 0 doubt, 1 low, 2 moderate, 3 high, 4 certain.
 | Several kinds | The highest default among them |
 
 - Consolidation may change confidence, one change operation at a time, within
-  a cap: a record without an `observed` or `innate` source never exceeds 3. A
-  resident may fully believe what it was told, but certainty needs its own
-  eyes.
+  a cap (owner, MM-D5 as changed on 2026-11-18):
+  - A record is **speech-derived** when it has a `told` source, an `inferred`
+    source citing a speech-derived revision, or merges a speech-derived
+    record. A speech-derived record never exceeds 3, whatever `observed`
+    sources it gains later; the told source stays (ADR 0011 D4).
+  - Confidence 4 needs a record that is not speech-derived and has an
+    `observed` or `innate` source.
+  - A resident may fully believe what it was told, but certainty needs a
+    memory of its own seeing, not a heard claim with a sighting attached.
+    For example, "the spring is poisoned", heard and later joined by a
+    sighting of the spring, stays at 3 at most.
+- **Possible relabelling** is flagged, not refused. When a change set
+  creates a record that is not speech-derived and whose subject keys overlap
+  a live speech-derived record of the same resident, code marks it
+  `possible_relabel` in inspection (never in the model's view), naming the
+  told record. Whether the resident really saw it is a judgement the
+  validator cannot make without hidden truth; inspection and evaluation
+  show the flag (evaluation spec §2).
 - Trust in a speaker falls only when a claim is contradicted at the time it
   describes, never because the world changed later (ADR 0011 D4). That is a
   consolidation judgement; the formation guidance says so.
@@ -505,7 +523,7 @@ adds a test kind this way (M14 evidence).
 | MM-03 | Store version increases by one per mechanical write and per committed change set |
 | MM-04 | Index lines: format, sort order and flags, for a superseded, a `needs_review` and an open commitment record |
 | MM-05 | Looks: a skill hypothesis built from perceived descriptors stores archetype, material and words only; a hypothesis carrying an integer property value is refused |
-| MM-06 | Default confidence for each source kind and each trust level; a told-only record cannot be raised above 3; gaining an observed source lifts the cap |
+| MM-06 | Default confidence for each source kind and each trust level; a told-only record cannot be raised above 3; gaining an observed source does not lift a speech-derived record above 3; an observed-only record can reach 4; an inferred record citing a told record is speech-derived; an observed-only belief about the subject of a live told belief is flagged `possible_relabel` in inspection only |
 | MM-07 | No relabelling: a change that turns a `told` source into `observed`, or adds an `observed` source citing a `heard_speech` entry, is refused |
 | MM-08 | Supersession: the old record gains `superseded_by`, stays recallable as history, and records inferred from it get `needs_review` |
 | MM-09 | Merge keeps the union of sources; forgetting moves the record to the audit, and no recall, index or context reaches it afterwards |
@@ -544,4 +562,4 @@ adds a test kind this way (M14 evidence).
 | MM-D2 | Personality traits and drift | Five traits on 0–4 (curiosity, caution, sociability, trustfulness, diligence), drift one step from base | Few enough to read in the prefix, enough to tell the three profiles apart |
 | MM-D3 | Trust to default confidence of told claims | Trust 0 → 0, 1–2 → 1, 3 → 2, 4 → 3 | Hearsay starts below what one saw; full trust still falls short of certainty |
 | MM-D4 | Is a commitment to oneself a commitment? | No, it is an intention; commitments are accepted agreements only | Every commitment can then be judged from objective events |
-| MM-D5 | Confidence cap for hearsay | A record with no observed or innate source never exceeds 3 | A resident may believe a liar fully, but never be certain without seeing |
+| MM-D5 | Confidence cap for hearsay | Changed by the owner on 2026-11-18: a speech-derived record (a told source, directly or through inference or merge) never exceeds 3, even after an observed source is added; possible relabelling is flagged for inspection | A resident may believe a liar fully, but never be certain without seeing |

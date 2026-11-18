@@ -248,7 +248,8 @@ item alone, never from hidden state: `entity:<id>`, `archetype:<id>` and
 `material:<id>` of every entity or item it shows; `resident:<id>` of every
 resident it shows, the actor of a watched action and the speaker of heard
 speech; `place:<x>,<y>` of every tile position it shows; `verb:<id>` and
-`phenomenon:<id>` of an action it reports; `need:<id>` of a body change. The
+`phenomenon:<id>` of an action it reports; `need:<id>` of a body change;
+`spoke:<utterance_id>` of the resident's own utterance feedback. The
 keys say what the entry directly witnesses; memory formation §3.5 uses them
 to check `observed` sources.
 

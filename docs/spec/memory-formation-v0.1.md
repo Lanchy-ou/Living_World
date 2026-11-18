@@ -348,6 +348,17 @@ checking any op:
 | `innate` | Never in a change set |
 | Record named by `update`, `confidence`, `review_done`, `forget`, `commitment_status`, by `supersede` as either endpoint, or by `merge` as a merged record | The record is in the sent input **in full** (selected, mandatory or mechanical), or is an earlier accepted new ref with its full staged record; an index line alone cannot authorize mutation |
 
+**Scope.** The witness test and the allowlist apply to the sources a change
+set writes. The code-written sources of commitment records follow §1.1: an
+`observed` source there is the resident's own proposal or acceptance
+feedback, keyed `spoke:<utterance_id>` (decision-loop spec §4.3), and means
+only that the resident spoke.
+
+**Confidence.** A `confidence` op or a new record's confidence above 3 fails
+`format` when the record is speech-derived (memory model §4.2), whether or not
+it also has `observed` sources. After commit, code sets the inspection-only
+`possible_relabel` flag of memory model §4.2.
+
 **Subject keys** of a record, for the witness test: a belief's `subject` (a
 place `x,y` gives `place:x,y`, an entity `entity:<id>`, a resident
 `resident:<id>`, a kind of thing `archetype:<id>`; a `general` belief has
@@ -586,7 +597,8 @@ ConsolidationRecord {
 | MF-21 | Interrupt before dispatch, after selection and after change-set preparation: replay same prefix and disposition. Unfit floor before early wake is abandoned; surviving K records stopped_unfit without a world submission. |
 | MF-22 | Resume model during and after fallback: current action visible, no rationale/result recall; an awake watcher with both phases may update its own skill. Exact packet and hypothesis revision identify the write. |
 | MF-23 | Selection floor contains open/review records in full; change-set floor adds changed mechanical records. Recount framed floors including notice and restore an in-flight attempt at its journal cursor. |
-| MF-24 | Observed witnesses (§3.5): B hears A say the spring is poisoned and never sees the spring; a belief about the spring citing A's `heard_speech` as `told` and B's hunger `body_change` as `observed`, at confidence 4, is refused with `provenance`; the same belief with only the `told` source commits at most at 3; when B's sent input holds an `observation` entry showing the spring tile, citing it as `observed` is accepted and lifts the cap. The check reads only B's delivered entries |
+| MF-24 | Observed witnesses (§3.5): B hears A say the spring is poisoned and never sees the spring; a belief about the spring citing A's `heard_speech` as `told` and B's hunger `body_change` as `observed`, at confidence 4, is refused with `provenance`; the same belief with only the `told` source commits at most at 3; when B's sent input holds an `observation` entry showing the spring tile, citing it as `observed` passes the witness test, but the record stays speech-derived and capped at 3 (MF-25). The check reads only B's delivered entries |
+| MF-25 | Hearsay cap (§3.5, memory model §4.2): B hears "the spring is poisoned" and later sees the spring tile; the belief citing the `heard_speech` as `told` and the sighting as `observed` is accepted (the sighting witnesses the spring) but a confidence of 4 is refused, so it stays at most 3. Positive control: a belief "the cord snapped" written only from B's own `action_result` with `snaps` reaches 4. A new observed-only "the spring is poisoned" belief commits and is flagged `possible_relabel` naming the told belief, never shown to B. Commitment control: A's own delivered proposal gives an `observed` source keyed `spoke:<id>`, the unheard acceptance gives no `told` source, and no source comes from an event ID |
 
 ## 10. Disposition of open questions
 

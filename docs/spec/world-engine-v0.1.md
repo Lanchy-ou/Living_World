@@ -352,7 +352,7 @@ The checks are the protocol's (§4.2). Effects and events:
 
 **Transfer sequence.** For each source stack moved, in the order above:
 
-1. If only part of the stack moves, `stack_split {from_id, new_id, quantity}`
+1. If only part of the stack moves, `stack_split {from_id, new_id, quantity, cause:"transfer"}`
    allocates the moving part's new ID (§1).
 2. `item_transferred` with the frozen payload (protocol §9): the moving
    entity's ID, archetype, quantity, `from`, `to`, `via`, `owner_before` and
@@ -759,7 +759,7 @@ Q5; owner, EN-D6).
 | EN-14 | Mental fatigue: awake gain, per-utterance and per-sighting gains from the previous packet's counts, recovery asleep; reaching the maximum faints the resident, stops its action with `FAINTED` and makes it unconscious for `faint_ticks`; the world loader accepts a pack without reading K, and `sim` refuses composing a pack with `faint_ticks = 35` and an agent configuration with K = 36 |
 | EN-15 | Waking: natural completion wins over a crossing in the same tick; an early crossing stops with `WOKEN`; an unconscious resident is not woken by a crossing |
 | EN-16 | Hard stops: priority among phase 6 stops, including `DEATH` over end-of-tick `EXHAUSTED` at one check; a phase 2 `PATH_BLOCKED` or `EXHAUSTED` is not replaced by a death later in the tick; `on_interrupt` applies to every stop |
-| EN-17 | Kernel transfers: stack split and merge IDs with `stack_split` and `stack_merged`; owner set by `give`, unchanged by `pick_up`; `CONTAINER_FULL`; container contents do not use inventory slots. A tile pickup taking from two stacks emits, per stack in ascending ID, split, `item_transferred` with both owner values, merge, and then one `action_succeeded`; `drop` and `pick_up` end with `action_succeeded` |
+| EN-17 | Kernel transfers: stack split and merge IDs with `stack_split` (cause `transfer` for a partial give, pickup or drop) and `stack_merged`; owner set by `give`, unchanged by `pick_up`; `CONTAINER_FULL`; container contents do not use inventory slots. A tile pickup taking from two stacks emits, per stack in ascending ID, split, `item_transferred` with both owner values, merge, and then one `action_succeeded`; `drop` and `pick_up` end with `action_succeeded` |
 | EN-18 | Entity IDs: the two vectors of §1; IDs are identical on replay; an untouched stack observed hundreds of ticks later shows no creation tick; content IDs and `corpse@` IDs are kept; a collision moves to the next `k` |
 | EN-19 | Limits (§12): at a count one below the bound minus the living residents, a rule creating one unit is admitted and one creating two is refused with `world_limit`, nothing spent; splits, merges, kernel transfers and death drops leave the count unchanged and are never refused; a death at the bound still creates its corpse; a refused `keep_progress` falls back to `lose`; a pack whose placements break a bound is refused |
 | EN-20 | Library: a rule added in phase 1 is chosen by later starts, not by a running action; the snapshot hash changes and replay reproduces it from `rules/<content_hash>.json`; a missing or altered rule file refuses the replay; a snapshot with another hash is refused |

@@ -101,7 +101,7 @@ D1). A decision jumps to its moment on the map replay.
 | View | Reads |
 |---|---|
 | Decision inspector | Decision shards: turn reasons, manifest sections with sources and tokens, rebuilt request, raw and parsed output, the submission, the world result (`outcome_event_ids`), memories written afterwards, guard and pressure entries |
-| Memory browser | Store shards: records by kind, supersession chains, `needs_review`, personality over time, the index as the resident's consolidation saw it |
+| Memory browser | Store shards: records by kind, supersession chains, `needs_review`, personality over time, the index as the resident's consolidation saw it; records flagged `possible_relabel` with the told record they overlap (memory model §4.2) |
 | Emergence metrics | The metrics shard (§3), with each instance linked to its events and records |
 | Comparison | Two runs' metrics side by side, by arm and seed (§5) |
 | Cost | The cost shard: calls, input and output tokens, cache hits, latency and fallback rate per resident and day; token share per manifest section; context size, pressure band and day-log growth per turn; guard events; fallback rate against context size (ADR 0013 D4, D8) |
