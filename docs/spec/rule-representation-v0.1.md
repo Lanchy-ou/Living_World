@@ -1,5 +1,7 @@
 # Living Island — Rule Representation v0.1 (P3.5 v2 lane)
 
+> **Rework 2 (2026-11-18).** Defines branch admission, multipart matching, conservative proofs and normalized content. RR-33–38 cover the Round 2 counterexamples.
+
 > **Draft (2026-11-18), task P3.5-SP-01. Not frozen.** Owner decisions are
 > written with the author's recommended answer applied and are listed in
 > §13 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md).
@@ -331,14 +333,11 @@ signature (§6), so it can be evaluated on a recorded attempt.
   `failed_check` (protocol §4.3). The full check order of a rule is in §5.2.
 - `failed_check` is a slot name (`target` or an instrument or input slot) or a
   condition ID, from the rule's one namespace (§1).
-- **The implicit `world_limit` condition.** Every rule whose effects can
-  raise the engine's entity count or place an entity on a tile (a `create`
-  of an entity, a `move` out of a store, a `partial` or `keep_progress`
-  output) has one more condition, after its declared ones: `world_limit`, which holds when the engine's entity limits
-  admit every placement of the branch about to apply (engine spec §12). It is
-  a real condition of the rule, so a refusal is an ordinary `unmet` with
-  `failed_check = "world_limit"` (protocol §4.3), checked before anything is
-  spent. No slot or declared condition may use that name.
+- **Branch admission.** Reserve `world_limit` in the check namespace for
+  all branches with physical debits or placements, including automatic
+  spills. It is a settlement preflight after branch selection (§5.2,
+  engine §12). It is never a declared condition or a start-match filter.
+
 - A `need` condition whose need the same rule changes with a `per_tick`
   effect is refused (§7, `BAD_SHAPE`): the rule's own work would change the
   answer at completion. For example, a rest that requires stamina below its
@@ -369,6 +368,16 @@ a bounded change to the actor's own needs.
   | `slot:<name>.quantity` | The units resolved into that slot |
   | `fit:<place>` | How many units of the output's archetype fit at that place: a store's `capacity − count` if it holds that archetype, else 0; a container's free capacity divided by the archetype's `slots_per_unit`, rounded down, if `accepts` admits it, else 0 |
   | `<store place>.count` | A store's count, such as `target.store.count` |
+
+- **Operands.** Create accepts a positive literal, `of` or `upto/of`
+  over the references above. Consume and move accept a positive literal,
+  or the captured quantity/count of their own source (optionally capped);
+  only an entity consume may omit quantity. No debit reads destination
+  fit. A contents operation names its archetype and takes unreserved units
+  in ascending source ID. Resolve each field for all covered bindings at
+  validation; a missing component, ambiguous multipart container reference
+  or inapplicable place is BAD_SHAPE. A state predicate on a missing field
+  is false. Capture source and destination places before destroying holders.
 
 - **Capture.** Every reference is read once, before any effect of the
   settlement applies, and the effects use the captured values. For example,
@@ -404,7 +413,7 @@ a bounded change to the actor's own needs.
   are (protocol §3.2). A rule does not list `consume` for its inputs.
 - **One role per entity.** The target entity must be distinct from every
   resolved instrument and input stack; if it is not, the intent fills no slot
-  set and matches no rule (§5.2). So one item is never debited twice.
+  set and matches no rule (§5.2). Branch validation and preflight also check all debits within a role (§8.1).
 - `create` of a stackable item merges into an equal stack at the place (§4.5).
 - An item created by a verb rule records the actor as `owner_id` if it is not
   stackable (§4.6).
@@ -519,7 +528,9 @@ owner_id = "ryan"                 # optional
 - **Tells** (carried from protocol §5.2). An instance with an `apparent`
   override must list at least one tell: a `visible` or `on_inspect` property
   that the instance gives an own true value differing from its ordinary value
-  (§4.3), and that is not itself in `apparent`. So the instance carries a
+  (§4.3), and that is not itself in `apparent`. Project the ordinary baseline and
+  instance through the same visible or inspect descriptor table: their words
+  must differ. So the instance carries a
   genuine, perceivable difference. The example above is a grass tuft that is
   stronger than it looks, and its tell is that it is dry where ordinary grass
   is not; a resident who inspects or looks closely can notice. The validator
@@ -544,7 +555,8 @@ owner_id = "ryan"                 # optional
   equivalence projection compares the total per tile, which is the v1 ground
   pile (`world-rules-v0.1.md` §2, protocol §11.3).
 - `age` of a stack is that of its oldest unit: merging keeps the smaller
-  `created_tick`. A content author who wants fresh and old fruit kept apart
+  `created_tick`. Both parts of a split retain that timestamp regardless of
+  ID allocation. A content author who wants fresh and old fruit kept apart
   gives them different states.
 
 ### 4.6 Ownership
@@ -565,7 +577,7 @@ owner_id = "ryan"                 # optional
 [[rule]]
 id = "make_stone_axe"
 trigger = "verb:combine"
-target = {}                                  # omitted: the rule takes no target
+# No target field: the rule takes no target.
 instruments = []
 inputs = [{ slot = "head",   where = { hardness_min = 4, sharp = true }, qty = 1 },
           { slot = "handle", where = { material = "wood", long = true }, qty = 1 },
@@ -589,7 +601,7 @@ phenomena = { success = ["fits_together"], unmet = ["falls_apart"], chance_faile
 | `subject` | For world rules only: a predicate on the entities the rule runs over |
 | `instruments`, `inputs` | Lists of slots `{slot, where, qty}`; instruments have `qty = 1`. Inputs are always consumed at success (§3.4) |
 | `conditions` | Ordered list (§3.3) |
-| `work_ticks` | Integer ≥ 1, or `{ param = "<name>" }` when the verb has a `duration_param`. Omitted on process rules, whose work is the archetype's `work_required` |
+| `work_ticks` | Integer ≥ 1, or `{ param = "<name>" }` when the verb has a `duration_param`. Forbidden on ordinary world and process rules; a process uses its archetype's `work_required` |
 | `on_interrupt` | `"lose"`, `{ partial = [outputs] }` or `{ keep_progress = "<process archetype>" }` (§5.4) |
 | `exhaustion_stops` | `true` makes zero stamina a hard stop `EXHAUSTED` during the action (protocol §4.4) |
 | `success_per_mille` | Integer 0–1000, fixed per rule (§5.6) |
@@ -599,6 +611,24 @@ phenomena = { success = ["fits_together"], unmet = ["falls_apart"], chance_faile
 | `conservation` | How the outputs arise (ADR 0007 D9 item 4, ADR 0008 D3): `"inputs_to_outputs"` (made from consumed matter, the default), `"source"` (from declared sources only) or `"none"` (no outputs). The validator checks it against the outputs (§8) |
 | `phenomena` | Lists of phenomenon IDs for `success`, `unmet` and `chance_failed`, and an optional `unmet_by_check` table from a slot name or condition ID to its own list |
 | `provenance` | §5.9; added by the loader for authored rules |
+
+**Closed normalization.** Parse the composed pack before validation. All
+rules require id and trigger. Optional inputs, conditions, outputs, effects
+and phenomenon lists/tables default empty; conservation defaults to
+inputs_to_outputs and provenance to authored for file entries.
+
+| Trigger | Required | Optional and defaults | Forbidden |
+|---|---|---|---|
+| verb | work_ticks | target absent, instruments empty, on_interrupt lose, exhaustion_stops false, success_per_mille 1000, on_chance_failed keep_inputs, chance_failed_effects empty | subject |
+| every / ordinary when | subject (when also requires its named condition) | common collections above; chance is always 1000 | target, instruments, work_ticks, interruption, exhaustion, chance-failure fields and actor effects |
+| process when | exact process subject, named work_complete condition, one whole-subject consume on success | common world fields | same as ordinary world |
+
+An explicit world success_per_mille must be 1000. For each declared
+component require the static fields of §3.1 after instance composition.
+Initial store.count, durability.wear, fuel.ticks_left and process.work_done
+default to zero unless the archetype or instance supplies a bounded value.
+Contents default empty, instance quantity to one. Validate authored and
+defaulted forms identically; reject unknown fields.
 
 ### 5.2 Slots and exact matching
 
@@ -639,24 +669,26 @@ For one slot, an allocation is a vector of units taken from each eligible
 stack not yet used up, stacks in ascending entity ID, summing to the slot's
 `qty`. Allocations are tried in decreasing lexicographic order of that
 vector, so the first takes as much as possible from the lowest-ID stack.
-A unit is never used twice. When a later slot cannot be filled, the search
+Before descending or accepting a complete binding, test every part's
+predicate and quantity, remaining availability, alias exclusions and the
+homogeneity required by either inheritance field. Reject the allocation and
+try the next vector on any failure. A unit is never used twice. When a later slot cannot be filled, the search
 returns to the previous slot's next allocation. The first complete
 assignment is used; if none exists, the slots do not fill. The same binding
 serves the check, the effects and replay.
 
-**Check order.** At start and at completion a verb rule is checked in this
-order, and the first failure is the `failed_check`:
-
-1. `target`: it exists, is within the verb's reach and meets the slot's
-   predicate (or the tile has its terrain);
-2. instrument slots in declared order, then input slots in declared order:
-   the bound items still exist, are held and meet the predicates;
-3. the declared conditions in order;
-4. `world_limit` (§3.3).
-
-A world or process rule uses steps 2–4 over its subject. Matching (which
-rule applies) uses only steps 1–2 and the arity; specificity (§5.3) then
-orders the matched rules.
+**Check order.** At start apply WAP §4.3 generic checks first. A missing
+held choice is NO_ITEM. Then match arity, target and slot constraints,
+including homogeneity; select by the engine's eligibility and specificity
+order. A matched but ineligible rule reports its first false declared
+condition. At completion revalidate the chosen target, then reserved
+instruments and input slots in declaration order (parts, quantities,
+ownership, predicates, homogeneity), then declared conditions. Report the
+first failing check without reselection. A slot-level state predicate
+must hold for every part. World/process rules use the same allocation and
+condition semantics. Only after those checks select the actual branch
+(including chance) and run its physical preflight; refusal of that branch
+is world_limit. No other branch is tried.
 
 ### 5.3 Specificity
 
@@ -770,7 +802,8 @@ default = ["nothing_happens"]
   and compares them with `op` or with an integer.
 - The phenomena of an unmatched attempt are the union of the lists of every
   entry whose comparison holds, sorted and unique; if none holds, `default`.
-  A comparison whose operand is missing does not hold.
+  A missing operand does not match. A multipart input has a comparable
+  property only when all parts have the same value for it.
 - The tables give physical feel without naming a rule. They read true values,
   as the world would, so a deceptive vine that looks strong still behaves
   weak.
@@ -819,6 +852,10 @@ default = ["nothing_happens"]
   rule whose `work_complete` holds (ties by `rule_id`), and settles only that
   one. So the outcome never depends on how rule IDs sort against unrelated
   world rules.
+- Successful completion must consume the whole process exactly once in the
+  same transaction as its outputs (otherwise BAD_SHAPE). A refused branch
+  leaves it open. R7 is the owner-approved exception to ADR 0009 D3:
+  ordinary rules first; then the sorted snapshot of open process IDs.
 - Consuming the process subject places its remaining contents on its tile
   first (§3.4); contents the rule's slots did not use are therefore never
   lost.
@@ -872,6 +909,7 @@ AttemptDescriptor {
   context:ConditionContext
 }
 Signature {
+  local_key:integer,                            // shared by every occurrence of the same identity in this attempt
   ref_kind:"tile"|"entity"|"resident",
   archetype_id:string|null, material_id:string|null, terrain:Terrain|null,
   components:array<string>,                     // component names, sorted
@@ -889,6 +927,10 @@ ConditionContext {
 }
 ```
 
+- Assign local keys by first occurrence in target, instruments, input parts,
+  then nearby order. Repeated references to the same original stack have
+  the same key even after reservation splits. Distinct identical looks have
+  distinct keys. These keys have no meaning across attempts.
 - `components` makes `has_component` testable on a record, including marker
   components with no state, such as `shelter`.
 - `nearby_terrain` lists every distance at which a terrain occurs within the
@@ -901,8 +943,8 @@ ConditionContext {
 
 - The engine builds this for every `act` at its start check (protocol §2), and
   every condition of §3.3 is a function of a rule, the signatures and the
-  context. `work_complete` is the only exception; it applies to processes, not
-  attempts.
+  context, except process-only `work_complete` and the implicit branch
+  preflight. A local descriptor cannot reconstruct the physical ledger.
 - **Back-test.** A rule matches a recorded descriptor exactly when it would
   have matched the attempt: §5.2 on the signatures, then its conditions on the
   context.
@@ -938,16 +980,18 @@ The report also lists, deterministically sorted:
 - **Overlaps**: pairs of rules with the same trigger whose slots can be
   filled by the same items and whose specificity is equal. These are
   warnings; settlement still resolves them by `rule_id` (engine spec).
-- **Unreachable checks**: pairs (`rule_id`, check) that can never be the
-  reported `failed_check`. The validator proves a pair (R, c) unreachable
-  when another rule R′ has the same trigger and slot structure, each of its
-  slot predicates is a subset of the keys of R's corresponding predicate (so
-  R′ matches every intent R matches), and all its conditions are among R's
-  conditions declared before c. Whenever c is R's first failing check, R′ is
-  then eligible, and an eligible rule always wins over an unmet one (engine
-  spec §4.1). For example, (`compat_sleep_cave`, `cave`) is unreachable
-  because plain `compat_sleep` has the same slots and no conditions.
-  The compatibility code table uses this list (starter-content spec §4.5).
+- **Unreachable checks.** Report a pair only with proofs for both phases.
+  At start a competing rule must match every binding of R and have all its
+  conditions implied by R's preceding checks. Compare actual values and
+  ranges (subset of satisfying values), arity, alias, quantity, component
+  and homogeneous-part constraints; unknown implication fails the proof.
+  At completion the selected rule cannot be replaced. Require an invariant
+  preserved by every intervening transition for that check class. The
+  certified compatibility cave case has an unconditional plain sleep at
+  start and a stationary sleeper and immutable cave terrain through
+  completion. A disappearing fire has no such invariant. For slots,
+  declared checks or admission without both proofs require an ordinary
+  mapping or separately justified defect assertion, never unreachable.
 
 ## 8. Conservation
 
@@ -982,10 +1026,12 @@ The check is symbolic, so it holds for every runtime value:
   `subject` or `target` consume and `{ of = r }` as the reference, and
   `{ upto = n, of = r }` as 0, since its lower bound is unknown.
 - `slot:<name>.quantity` is that slot's `qty`, a constant, on either side.
-- A credit with `archetype_from = s` and a quantity of at most `s`'s `qty` is
-  covered by the debit of slot `s` itself, for every archetype that can fill
-  `s` (slot coverage, §7), because it returns the same archetype. This is how
-  `bind_snaps` passes.
+- For each possible slot coverage assignment sum all same-slot returns
+  first. Subtract their quantities from that slot's consumed quantity once;
+  only the residual matter enters the ordinary class budget. An unconsumed
+  source slot or excess summed returns fails. Evaluate remaining debits and
+  credits per class for that same assignment.
+
 - The branch passes when, per class, the credited constant is at most the
   debited constant and each reference's credited coefficient is at most its
   debited coefficient. A credit by `fit:` without a source never passes,
@@ -1000,8 +1046,16 @@ creates a two-unit partial output fails its `partial` branch.
 contents change only through `create`, `consume` and `move` (§3.4). Consuming
 an entity first places its contents and its store count on its tile (as a
 stack of the store's archetype), so a consume debits only the entity's own
-matter. With one role per entity (§3.4) and no unit used twice (§5.2), no
-unit is debited twice. The engine applies each branch atomically (engine
+matter. Build a branch ledger keyed by physical source and unit range. Reserve
+implicit slot consumption first. Reject overlapping whole/partial consumes,
+moves and consumed inputs, including two operations drawing on the same
+source without a provable joint bound. A constant debit requires a slot
+quantity or a declared lower bound sufficient for the total (e.g. pile ≥ 2
+for light_fire); a whole-source debit exhausts its key. Validate every branch
+including fallback/partial outputs. Reject uncertain static proofs. At runtime
+simulate the selected branch on a copy with captured operands and remaining
+units. Any shortage, capacity, acceptance or placement refusal discards the
+whole copy (engine §12); no debit or credit is published. The engine applies each branch atomically (engine
 spec §12).
 
 The rule's `conservation` field must agree with its outputs: `"none"` has no
@@ -1024,8 +1078,9 @@ max_per_application = 1
   tree's free stock through `fit:`).
 - **Static bound.** Each sourced output has a static upper bound: `n` for an
   integer or `{ upto = n, ... }`, and for `{ of = "fit:<place>" }` the largest
-  capacity of any archetype that can fill that place's slot (slot coverage,
-  §7). The bounds of all outputs of one settlement that name one source must
+  admitted capacity over archetypes and all permitted instance overrides
+  for the destination (divide by unit size for containers; reject an
+  unbounded source). The bounds of all outputs of one settlement that name one source must
   sum to at most its `max_per_application`.
 - A source used by an `every:<n>` rule creates at most
   `max_per_application` per `n` ticks per subject: its rate bound.
@@ -1132,11 +1187,17 @@ every unmet condition; the bridge, not the phenomena, carries the v1 code.
 | RR-25 | No pack can declare a component, condition kind, effect operation or trigger form that this spec does not define: each is refused with `UNKNOWN_TERM` |
 | RR-26 | Quantities (§3.4.1): `{ of = "fit:target.contents" }` on a two-serving container with one serving free creates one; `{ upto = 2, of = "fit:subject.store" }` on stock 4 of 5 creates one and on stock 3 creates two; references are read before any effect, so a whole-subject consume and a `subject.quantity` output use the same value |
 | RR-27 | Outputs: the material comes from `material`, else `material_from`, else the archetype default, else `null`; `archetype_from` copies the slot's archetype; `bind_snaps` gives back a head and a handle of the original archetype and material, with new IDs, and no cord |
-| RR-28 | Check order (§5.2): with a missing input and a failing condition, `failed_check` names the input slot, at start, at completion and after restore; with every declared check holding and a placement refused by the entity limits, it is `world_limit` and nothing is spent |
+| RR-28 | Check order (§5.2): with a missing input and a failing condition, start reports generic `NO_ITEM`; a reserved input lost by completion names its slot, also after restore; with every declared check holding and a placement refused by the entity limits, it is `world_limit` and nothing is spent |
 | RR-29 | Unreachable checks (§7): the report lists (`compat_sleep_cave`, `cave`); a pair whose less specific rule has a condition declared after the check is not listed |
 | RR-30 | Pack extension (§5.10): a base rule redeclared without `replace = true` is `DUPLICATE_ID`; with it, the composed library holds the new rule; a replaced comparison table takes the base table's place entirely; `disable` removes a base rule; the composed hashes differ from the base pack's |
 | RR-31 | Shapes: a portable container whose `accepts` matches an archetype with `container` is refused; an `on_use` property without a descriptor table loads, with one it is refused; a `visible` property without one is refused |
 | RR-32 | Progress words (§2.2): a process with `work_required = 24` reads `started`, `halfway` and `nearly_done` at work 7, 8 and 16; a six-tick personal action reads them at elapsed 1, 2 and 4; `move_to` and an unmet start have `progress = null` |
+| RR-33 | Same-band true strength 2→3 cannot serve as a tell; dry versus damp can. Explicit and default world/process fields normalize equally. Reject authored work_ticks on world rules. |
+| RR-34 | Cave is proved at both phases; weaker entity_near rule, changed predicate values and a disappearing fire do not certify unreachable completion. |
+| RR-35 | Skip mixed vine/grass for an inheriting two-unit slot; choose first all-grass allocation. Revalidate parts, reject target alias but accept identical distinct stacks. Multipart state needs every part; mixed comparison operands never match. |
+| RR-36 | Reject two whole consumes of one nodule, two water consumes with one proven serving, two returns over one slot's debit and fit beyond a source's instance capacity. A shortage leaves every balance unchanged. |
+| RR-37 | World-limit is tested only for the selected branch including implicit spills and acceptance. Recorded attempts reproduce local matching even when branch admission cannot be inferred. |
+| RR-38 | Reject a repeatable process completion lacking whole-subject consume. Benchmark dense overlapping contents against exhaustive search; infeasible-prefix pruning must return the identical first complete vector. |
 
 ## 12. Disposition of open questions
 
