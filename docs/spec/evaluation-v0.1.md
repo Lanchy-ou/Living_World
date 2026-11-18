@@ -1,5 +1,7 @@
 # Living Island — Evaluation, Observability and Engineering Constraints v0.1 (P3.5)
 
+> **Rework 2 (2026-11-18).** Pins retained evidence and the units, clocks and origin rules for M15. EV-18–23 give positive and negative threshold fixtures.
+
 > **Draft (2026-11-18), task P3.5-SP-01. Not frozen.** Owner decisions are
 > written with the author's recommended answer applied and are listed in
 > §14 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md).
@@ -69,6 +71,8 @@ InspectionIndexV2 {
   decisions:array<{turn_id, resident_id, tick, shard:ShardRef}>,
   consolidations:array<{period_id, resident_id, boundary_tick, shard:ShardRef}>,
   stores:array<{resident_id, period_id, store_version, shard:ShardRef}>,
+  deliveries:array<ShardRef>, revisions:array<ShardRef>, evidence_writes:array<ShardRef>,
+  calls:array<{call_id, call_kind, resident_id, turn_id:string|null, period_id, shard:ShardRef}>,
   metrics:ShardRef, cost:ShardRef, time_use:ShardRef, attempts:ShardRef
 }
 DecisionInspectionV2 { record:DecisionRecordV2, parts:array<StoredPart>, calls:array<CallRecord>,
@@ -78,7 +82,11 @@ StoreInspection { resident_id, period_id, store_version, records:array<MemoryRec
 ```
 
 - `parts` are the stored parts a record's manifests name, so a shard rebuilds
-  its requests on its own.
+  its dispatched requests and measured floor on its own. Export every exact
+  delivered packet (including no-turn intervals), typed member refs, versioned
+  memory and rendered bytes, per-attempt evidence writes, action intervals
+  and the owner's persisted content checks. Index morning independently.
+  Every shard family supports numbered parts within the §1 byte limits.
 - A store shard is written at every period boundary and at the run end.
 - **Limits** (ADR 0014 Q3; owner, EV-D8): a shard is at most 8 MiB and the
   index at most 32 MiB. A decision shard over the limit is split into numbered
@@ -119,7 +127,8 @@ D1). A decision jumps to its moment on the map replay.
   receive the `start` observation did not see the items.
 - **Lineage** of an item: `entity_created` (`made_from`, `process_id`),
   `stack_split`, `stack_merged` and `item_transferred` (engine §6, §11). An
-  item **descends from** an artifact when a chain of these events links them.
+  output's ingredients explain manufacture. Physical identity and eligible
+  use follow §3.4. Record recreated_from separately for each returned part.
 - **Joins** (§3.8): a day-log entry is joined to its objective counterpart by
   its `ref` and `delivery_id` (decision loop §4.3).
 - An instance's **trace** is the list of IDs that prove it; it is stored with
@@ -172,7 +181,7 @@ Q1; owner, EV-D1):
   | `own_failures` | Day-log entries of `X`'s own earlier model-origin attempts related to `R` that did not settle `applied` under `R` |
   | `watched` | Observation entries of another resident's attempt that settled `applied` under `R`, with both its `start` and `settle` observations delivered to `X` |
   | `told` | A `heard_speech` entry or a record with a `told` source, validly cited by the turn's output, whose utterance a checker marks `carries` for `R` (§3.7) |
-  | `earlier_period` | A prefix or recall record created in an earlier waking period (not an earlier calendar day) that is a skill with this verb or whose sources lead to an attempt related to `R` |
+  | `earlier_period` | A prefix or recall record created in an earlier waking period (not an earlier calendar day) whose pinned sources lead to a related attempt or whose prediction matches the successful slot looks, verb and delivered outcome of `R`; a shared verb alone fails |
   | `prior_knowledge` | None of the above: right on the first attempt, with no related experience |
 
   A first success with any flag other than `prior_knowledge` counts as
@@ -190,15 +199,17 @@ Q1; owner, EV-D1):
   `make_stone_axe` settlement `applied` by resident `X`, whose `bind` slot
   (`act_items`) holds a cord of material `grass`, where all of these hold:
   1. **An island event (the lesson).** Earlier in the run, an objective
-     settlement taught the rule: a `bind_snaps` whose `bind` slot held a vine
+     settlement taught the rule: a `bind_snaps` that settled `applied`, emitted
+     `snaps`, and whose `bind` slot held a vine
      cord, or a `make_stone_axe` `applied` whose `bind` slot held a grass cord.
      The material comes from `act_items`, never from what anyone said.
   2. **It reached `X`, with the material.** One of:
      - *own*: it was `X`'s own model-origin attempt, and its `items_used`
-       showed the cord's material;
+       showed the cord's material and its delivered feedback carried `snaps`
+       for vine or the successful axe phenomenon for grass;
      - *watched*: `X` received both the `start` observation, whose
        `visible_items` show that cord with its material, and the `settle`
-       observation with `snaps` or with the success phenomena;
+       observation with the matching `snaps` or axe-success phenomenon;
      - *told*: `X` heard an utterance that a checker marks `carries` for this
        event (§3.7).
   3. **It is linked to the choice.** The turn that chose `X`'s grass-cord
@@ -216,6 +227,16 @@ Q1; owner, EV-D1):
     experience. The trace names the event, the delivery, the cited entry or
     record, the check and the settlement. Causal claims beyond this link come
     only from probes (§6).
+  For a direct watch citation require both cited fragments as actually
+  rendered and sent (material at start and matching outcome at settle),
+  or one cited immutable memory revision carrying both, with provenance
+  back to those deliveries. Apply the same material/outcome test to the
+  rendered own-result or heard account. A full packet cannot restore text
+  trimmed from the cited representation. Bind each content check to the
+  antecedent settlement, delivery members, rendered hashes, adopted act
+  turn and resulting applied axe. Coverage joins hypothesis/attempt writes
+  to their exact revision and applied settlement; totals cannot prove it.
+
 - **Per-seed report for the axe.** For each run, per resident: whether it
   **met** both materials (an `ItemView` or `EntityView` with material `vine`
   and one with `grass`, in its own packets), **tried** (any settlement of
@@ -229,18 +250,28 @@ Q1; owner, EV-D1):
 
 ### 3.4 Artifacts persist and are used
 
-- An **artifact** is an entity created by a rule output whose settlement had
-  an actor (verb rules, model or fallback origin), or by a process rule. Its
-  **makers** are that actor, or the contributors of the process named by the
-  output's `process_id` (`process_progressed` of that process only). A stack
-  split from an artifact keeps its makers (`stack_split`); merged stacks carry
-  the union of their makers (`stack_merged`).
-- A **use** is an `act_items` slot part whose entity is the artifact or
-  descends from it (§3.1), in a model-origin `act` that settled `applied`, by
-  a resident who is not one of its makers. A shelter is used when a
-  non-maker's `sleep_in_shelter` settles `applied` and its `condition_witness`
-  names that shelter (engine §11); with two shelters in reach, the witness
-  decides which.
+- An **artifact** starts at an actor's manufactured output or a completed
+  process output. Its makers are the actor or all distinct contributors
+  recorded for that process before closure. Record its creation day.
+  Transport, splitting and merging preserve provenance; for a merged
+  stack use the union of maker sets and preserve constituent creation IDs
+  and days. For later partial splits assign constituent portions in
+  creation-event order, oldest first. An ordinary new output starts a new
+  artifact with its own makers; made_from edges explain ingredients only.
+  A snap's recreated parts have new physical IDs: map each returned portion
+  only to its recreated_from source for maker/day attribution.
+- A qualifying **use** is one model-origin applied act using a crafted
+  portion as instrument or input, or one model-origin shelter sleep with a
+  delivered physical benefit witnessed in EN §11. Use the event-local
+  artifact and maker set at the use: for a merged stack require the actor
+  outside the whole merged maker set. Count once per (run, actor, intent)
+  across slots, split parts, ancestors and repeated shelter benefit ticks;
+  list all qualifying artifact portions in the trace. Later-day credit
+  needs an actually used qualifying portion made on an earlier day.
+  Report target-only interactions from the canonical target part separately.
+  A replaced shelter earns attribution only on ticks its own ID witnessed
+  the benefit. No settlement-time substitution.
+
 - **Persistence**: an artifact counts as persisting across a day when it
   exists at a later day's start than the day it was made.
 
@@ -269,29 +300,41 @@ without one.
 - **Expired**: it became impossible without the promisor's act (a party
   died, a world rule destroyed the item, others removed the process) before it
   was kept.
-- **Unjudged**: the deadline is after the run end, and it was neither kept
-  nor made impossible by then.
-- **Open**: no due tick, and not kept by the run end.
-- **Judged** means kept, broken or expired. Only judged agreements count for
-  M15 (§7.2); unjudged and open ones are reported with their counts.
-- **Precedence.** A judgement is fixed by the first deciding event in event
-  order: a fulfilling event at or before the deadline makes it kept, even if a
-  breaking or impossibility event follows in the same tick; otherwise the
-  first breaking or impossibility event decides; otherwise the deadline
-  passing makes it broken. For example, a resident who reaches a `be_at`
-  place at `due_tick + 4` after a long sleep has kept it: nothing is judged at
-  `due_tick` itself.
-- Judgements read only objective events and positions (ADR 0014 D2), and a
-  fallback-origin action fulfils nothing. What the residents' commitment
-  records say (memory model §3.5) is reported beside them, as the residents'
-  view, so a forgotten promise and a broken one stay apart.
+- **Horizon first (M15).** If the effective deadline is beyond final_tick,
+  label unjudged and exclude from every M15 agreement count, even if already
+  fulfilled or impossible. Report that early physical outcome separately.
+  No deadline and no decisive event by run end is open. Otherwise judged
+  means kept, broken or expired. Only judged agreements spanning the
+  promisor's qualifying sleep enter the three-agreement line.
+- **Witness order.** Start strictly after acceptance; process committed
+  world events in sequence, including transfer (via give), contribution,
+  loss/destruction, process closure and death. The first decisive event
+  fixes the physical outcome. At each completed boundary, after world
+  events, insert the living promisor's confirmed K closure (either arm),
+  then the living position sample for be_at in its inclusive ±6 window,
+  then expiry of an inclusive deadline with no earlier decision. Thus death
+  in phase 5 precedes a same-boundary position test; earlier successful
+  transfer precedes a later death. Exact-K death contributes no closure.
+  For a spanning agreement acceptance precedes K and K precedes the
+  deciding witness in this same order. No deadline is required for an
+  agreement actually fulfilled or made impossible.
+- **Credit.** All physical acts, including fallback, can objectively
+  fulfill. Record the origin of each necessary witness and a separate
+  resident-kept flag. For quantity/work require sufficient model-origin
+  units by the objective fulfillment witness. For a position use the
+  intent that established the current uninterrupted stay (or the
+  model-origin action maintaining an initially occupied place during the
+  window); absent attributable choice gives no resident credit. A
+  fallback-only fulfillment counts as objectively kept, never toward the
+  two resident-kept minimum. Report the resident's subjective status
+  separately.
 
 ### 3.6 Time use
 
 Each awake tick of a living resident is assigned exactly one class by the
 action running in it, whatever its outcome (a failed start counts as the
 action it attempted) (ADR 0014 Q1, ADR 0010 Q6; owner, EV-D4). The table is
-exhaustive: every action and verb of the active packs has one row.
+applied with the ordered fall-through rules below.
 
 | Class | Actions |
 |---|---|
@@ -302,7 +345,21 @@ exhaustive: every action and verb of the active packs has one row.
 | `idle` | Any other `wait` |
 
 - The tick `t → t+1` belongs to the action running in it; when an action is
-  replaced at boundary `t`, the tick belongs to the new one.
+  replaced at boundary `t`, the tick belongs to the new one. Reconstruct the paid interval from
+  committed submission, action_started/progress/terminal events and EN §9.5
+  awareness during that interval (including the final living interval).
+  Remove asleep/unconscious intervals first. For each remaining interval
+  select exactly one active attempt, including a paid generic failure,
+  using its submitted action and the retained start target/choice or
+  objective act_items when available. Apply specific rows above first.
+  Awake unsuccessful sleep is survival. Gather with no proven fruit-tree
+  or deposit target is crafting (attempted resource collection); an unknown
+  pickup/drop item falls through to crafting. For move look only to the
+  immediately next started non-move action if it is also the next start:
+  use its start position, destination and the verb's reach (drink from a
+  spring uses adjacent terrain). No next start, missing target evidence or
+  failed reach test means exploring. A future unmapped verb is an export
+  schema error. Check class sums against living awake intervals.
 - Fallback-origin ticks are classified the same way and also counted in a
   `fallback` column.
 - Sleep and unconsciousness are reported apart, not as awake ticks.
@@ -329,6 +386,8 @@ instance in the replay (owner, EV-D1 and 2026-11-18):
   garbled or embellished retelling.
 - The verdicts are stored beside the run's analysis in `content-checks.json`:
   `{instance_id, check, ids:array<string>, verdict, checker, date, note}`.
+  For choice_link store cited sent fragment hashes, source revision/member
+  IDs, antecedent and chosen outcome IDs; display the exact as-sent texts.
   Only `carries` and `relevant` instances count for acceptance.
 - Acceptance needs only a few instances (§7.2), so this is a short review,
   not a labelling project. Instances outside acceptance stay `unchecked`.
@@ -345,7 +404,9 @@ instance in the replay (owner, EV-D1 and 2026-11-18):
   | `heard_speech` entry | `utterance_heard` event | `ref.utterance_id` and the listener |
   | `observation` entry of a watched action | `action_observed` event | `ref.intent_id`, `ref.phase` and the observer |
   | `action_result` entry | `act_settled` or `action_*` event | `ref.intent_id` |
-  | Any entry | Its packet | `delivery_id` |
+  | Packet-derived entry | Exact journal packet/member(s) | run, resident, delivery_id and ordered member path |
+  | Recall entry / own response | Producing call or recipe/off-empty turn / adopted turn | typed ref and revision |
+  | Evidence write / inferred source | Attempt and immutable hypothesis/ancestor revisions | intent, delivery members, store version and content hash |
   | Decision record | Call records, manifests | `call_ids` |
   | Call record | Parts | Manifest refs, by content hash |
   | Turn and intent | Origin | Decision record `origin` |
@@ -354,7 +415,10 @@ instance in the replay (owner, EV-D1 and 2026-11-18):
   by `delivery_id` all the same.
 - **Missing inputs.** A metric whose input record is missing is `null` with a
   reason (§0.2), per instance; the per-turn telemetry covers every turn,
-  including fallback turns and turns that stopped unfit, so a missing turn
+  including fallback turns and turns that stopped unfit (DL §10.3); join
+  each call and its dispatched attempts to full/sent tokens, guard, cache
+  hit/miss counts and pressure. Unavailable provider usage stays null with
+  a reason. Thus a missing turn
   record is a defect.
 
 ## 4. The two experimental questions
@@ -389,7 +453,8 @@ On the on arm, and against the off arm where the evidence exists in both
   later period), by kind;
 - skills carried over: first successes with the `earlier_period` flag (§3.3);
 - forgetting: records forgotten per consolidation, and how many of those were
-  ever used;
+  ever used (DL §6.1: first actual decision dispatch per record and turn;
+  retrieval trimmed from all dispatches earns no credit);
 - contradictory pairs left in a store, as a diagnostic: candidates are two
   live beliefs with the stance `stable` and the same subject; a checker marks
   each `contradicts` or `consistent` (§3.7), and the count is over checked
@@ -403,18 +468,19 @@ keeps two kinds of exposure record and joins them forward:
 
 ```text
 PeriodExposure        { period_id, resident_id, calls:array<{call_id, call_kind, omitted:array<Ref>}> }   // decision, recall, morning calls of the period
-ConsolidationExposure { period_id, resident_id, consolidation_attempt, call_id,
-                        omitted_entries:array<Ref>, omitted_pending:array<string>, supplies_period:string } // the period its commit starts
+ConsolidationExposure { period_id, resident_id, consolidation_attempt,
+                        selection_call_id:string|null, change_set_call_id:string|null,
+                        omissions:array<{call_id, ref:Ref}>, outcome, supplies_period:string|null }
 ```
 
-- A period's report shows its own calls' omissions and, inherited, the
-  consolidation exposures whose `supplies_period` is that period or an earlier
-  one. So a period whose own calls were never guarded is still marked exposed
-  when the consolidation before it left entries out.
-- Later outcomes are marked as possibly affected when they fall in an exposed
-  period: a skill missing after a consolidation that left entries out, or a
-  commitment forgotten after a guarded morning selection. The call IDs and
-  omitted refs are part of their trace.
+- Write an exposure row for every attempted consolidation, even if only
+  selection ran. Include all omitted references (records, entries and
+  pending periods) from each logical call and its terminal disposition.
+  Only a committed supplier names its new period. For a resident, propagate
+  omissions on a committed supplier to that period and later periods.
+  Failed/abandoned calls remain observable attempts with a null supplier;
+  report possible downstream effects and their evidence separately from
+  that join. Morning and turn calls keep their own period exposures.
 
 ## 5. Memory on and off
 
@@ -478,7 +544,7 @@ Across the three on-arm runs (ADR 0014 Q2; owner, EV-D7):
 | Information spreads | 3 claim chains with at least 2 hops, every counted hop content-checked (§3.7) |
 | Rules discovered and taught | 2 rules whose first success, by some resident, is learned on the island; at least 1 first success through `watched` or a checked `told`; and at least 1 learned grass-cord axe (§3.3) by some resident: lesson event, delivery with the material, a valid citation and a `relevant` check |
 | Artifacts persist and are used | 3 uses of artifacts by non-makers, at least 1 on a later day than the artifact was made |
-| Commitments hold across days | 3 agreements that span a sleep and are judged (kept, broken or expired, §3.5); at least 2 of them kept |
+| Commitments hold across days | 3 agreements that span a sleep and are judged (kept, broken or expired, §3.5); at least 2 with resident-kept credit |
 
 - The axe line needs one learned grass-cord axe across the three on-arm runs,
   not one per run (owner, EV-D7). Making an axe needs a resident to find the
@@ -550,6 +616,12 @@ As ADR 0014 D4:
 | EV-15 | Grass-cord axe: learned via own snapped vine cord, via a watched `bind_snaps` with both phases, and via a told account with a `carries` verdict, each with a valid citation marked `relevant`. Not learned: a first-try success; a context that holds the lesson uncited; a citation marked `not_relevant` (the stated reason is unrelated); a watch that saw only the start; a snap watched without the cord's material; a told account marked `different`; only another `combine` attempt in context. The trace names event, delivery, citation, check and settlement |
 | EV-16 | Per-seed report: fixtures for a resident that never met both materials, one that met them and never tried, one that tried and failed, and one that learned, each reported in its own column; an unmatched `combine` with head, handle and cord signatures counts as tried, and a cord-only attempt does not |
 | EV-17 | Instances and joins (§3.8): the same evidence gives the same instance ID in two exports; every join of the table resolves on a fixture run, including a delivery with no turn; a metric with a missing record is `null` with a reason |
+| EV-18 | Using only exported shards and saved content checks, rebuild a no-turn material sighting, an inferred lesson revised later, per-hypothesis coverage, off-arm intention citation and failed-turn telemetry. Missing usage is null, not zero. |
+| EV-19 | Unmet bind_snaps, own material without snap, truncated watch start, missing settle citation and unrelated same-verb earlier skill fail. Both rendered cited phases or one sourced combined revision with relevant check can pass. |
+| EV-20 | Due after horizon: early success and early impossibility both unjudged. Due+6 beyond horizon also excluded. Within horizon a fallback transfer is objectively kept with zero resident credit; death precedes boundary position; exact-K closure precedes living position. Exercise three judged/two resident-kept threshold. |
+| EV-21 | Failed non-store gather is crafting; awake failed sleep survival. A substituted action owns the next interval. Check no-next-action and absent-target move fall-through and sum all five classes to the awake denominator. |
+| EV-22 | A makes cord, B uses it for an axe then cuts: only B's cord use qualifies. Two split parts in one action count once. Target-only feed/strike appears in inspection only. Attribute shelter benefits before/after replacement separately; rerun EV-12 at and below threshold. |
+| EV-23 | Guarded selection only, omitted selected records, failed/abandoned change set and committed supplier each get an exposure row. Only the commit propagates by supplies_period. Retrieved but never dispatched memory leaves continuity unchanged. |
 
 ## 11. What other specs must record
 
