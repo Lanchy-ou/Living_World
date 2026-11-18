@@ -125,6 +125,12 @@ Q1; owner, EV-D1):
 - **Context-only candidates**, where the manifest held the source but `cite`
   did not name it, are reported as a separate count, never as hops: a model's
   citation can be wrong, but an uncited retelling cannot be traced.
+- **Content check** (owner, EV-D1). A citation alone does not show that `Uᵢ₊₁`
+  passes on `Uᵢ`: the resident may cite it and talk about something else.
+  Every hop counted for M15 acceptance is therefore checked by hand (§3.7):
+  the later utterance must carry the earlier message. A garbled or embellished
+  retelling still carries it. The automatic metric reports cited hops as
+  `unchecked` until then.
 
 ### 3.3 Rules discovered and taught
 
@@ -153,9 +159,33 @@ Q1; owner, EV-D1):
   one evidence attempt, `matched_expected ÷ attempts` from its code-counted
   evidence (memory model §3.4). A skill is never scored by mapping descriptors
   to true values. Accuracy is reported per skill and as a distribution.
-- **The rule against common sense** (starter content §5.3) is reported on its
-  own: first successes of `make_stone_axe` with grass cord, and whether the
-  resident had earlier seen `bind_snaps`.
+- **The rule against common sense** (starter content §5.3; owner, EV-D7). A
+  **learned grass-cord axe** is a non-fallback `make_stone_axe` settlement
+  `applied` by resident `X`, whose `bind` slot (`act_items`) holds a cord of
+  material `grass`, where all of these hold:
+  1. **An island event.** Earlier in the run, some resident's `act_settled`
+     was `bind_snaps` (a vine cord snapped) or `make_stone_axe` with a grass
+     cord.
+  2. **It reached `X`.** Through `X`'s own feedback (it made that attempt),
+     through an `ObservedAction` of it delivered to `X` (watched), or through
+     an utterance `X` heard whose content refers to it, checked by hand
+     (§3.7) (told).
+  3. **It is in the decision.** The manifest of the turn that chose the axe
+     attempt contains the day-log entry of that delivery, or a memory record
+     whose sources lead back to it by IDs: an `observed` source citing that
+     entry, a `told` source citing that utterance, or an `inferred` source
+     citing a record that does.
+  - Not enough: a success right on the first attempt with none of the above,
+    and a context that holds only some other `combine` experience (the general
+    `own_failures` flag). The trace names the event, the delivery, the
+    manifest entry and the settlement.
+- **Per-seed report for the axe.** For each run, per resident: whether it
+  **met** both materials (perceived vine and grass, or cords of both),
+  **tried** (a `combine` that offered a head, a handle and a cord: any
+  settlement of `make_stone_axe` or `bind_snaps`, or an unmatched attempt with
+  a cord among its inputs), **succeeded** (`make_stone_axe` applied) and
+  **learned** (a learned grass-cord axe). The report keeps "never got that
+  far" apart from "got there and did not learn".
 - Hidden values never enter resident memory; the true rules are read only by
   `analysis`.
 
@@ -217,6 +247,23 @@ Each awake resident-tick is assigned one class by the action running in it
   beside the classes, because speech rides alongside actions.
 - **Spare time** is the share of awake ticks outside `survival` (starter
   content §9.4).
+
+### 3.7 Content checks
+
+Some evidence needs a reader: whether a retelling passes on what was heard
+(§3.2), and whether a heard utterance refers to an event (§3.3). For M15
+acceptance a person checks each such instance in the replay (owner, EV-D1):
+
+- The checker is the owner or someone the owner names at Gate 3.
+- For each instance the analysis lists the two texts with their IDs, ticks
+  and speakers, and the replay moment. The checker marks it `carries` (the
+  later text passes on the earlier message or refers to the event, garbled or
+  embellished included) or `different`.
+- The verdicts are stored beside the run's analysis in `content-checks.json`:
+  `{instance_id, ids:array<string>, verdict:"carries"|"different", checker,
+  date, note}`. Only `carries` instances count for acceptance.
+- Acceptance needs only a few instances (§7.2), so this is a short review,
+  not a labelling project. Instances outside acceptance stay `unchecked`.
 
 ## 4. The two experimental questions
 
@@ -321,15 +368,21 @@ Across the three on-arm runs (ADR 0014 Q2; owner, EV-D7):
 
 | Capability | Minimum, each instance traced |
 |---|---|
-| Information spreads | 3 claim chains with at least 2 hops |
-| Rules discovered and taught | 2 rules whose first success, by some resident, is learned on the island; at least 1 first success through `watched` or `told` |
+| Information spreads | 3 claim chains with at least 2 hops, every counted hop content-checked (§3.7) |
+| Rules discovered and taught | 2 rules whose first success, by some resident, is learned on the island; at least 1 first success through `watched` or `told`; and at least 1 learned grass-cord axe (§3.3) by some resident, its evidence traced from an island event to the axe decision |
 | Artifacts persist and are used | 3 uses of artifacts by non-makers, at least 1 on a later day than the artifact was made |
 | Commitments hold across days | 3 agreements that span a sleep and are judged; at least 2 of them kept |
 
-- The rule against common sense is reported, not required: a learned first
-  success of `make_stone_axe` with grass cord is the strongest evidence (ADR
-  0014 D2), and its absence is stated with a diagnosis.
-- The on/off difference is reported (§5), with no threshold.
+- The axe line needs one learned grass-cord axe across the three on-arm runs,
+  not one per run (owner, EV-D7). Making an axe needs a resident to find the
+  materials, have time to spare and try, so with three seeds a per-seed
+  minimum would mix "never got that far" with "got there and did not learn".
+- The per-seed report of §3.3 is given for every run: met, tried, succeeded,
+  learned. A learned axe in one seed shows that the behaviour can arise on its
+  own; how often it recurs is stated as open.
+- Told evidence for the axe and every counted hop pass the content check of
+  §3.7.
+- The on/off difference is reported (§5), with no threshold, as planned.
 
 ### 7.3 The fake-model run
 
@@ -374,7 +427,7 @@ As ADR 0014 D4:
 | ID | Test |
 |---|---|
 | EV-01 | Export: a finished run exports to a fresh directory; every shard validates by hash and schema; the source run is unchanged; an oversized shard is split, never truncated |
-| EV-02 | Claim chains: a scripted three-resident fixture with cited retellings gives one chain of 2 hops; an uncited retelling is a context-only candidate, not a hop |
+| EV-02 | Claim chains: a scripted three-resident fixture with cited retellings gives one chain of 2 hops, marked `unchecked`; with `carries` verdicts it counts for acceptance, and with one `different` verdict it does not; an uncited retelling is a context-only candidate, not a hop |
 | EV-03 | Belief and doubt: told records at confidence 3 and 1 give believed and doubted; a cited later action gives acted on |
 | EV-04 | Learning paths: fixtures for each flag; a first success with only `prior_knowledge`; a mixed case reports both flags |
 | EV-05 | Skill accuracy from code-counted evidence; a deceptive-material fixture scores a correct lesson ("vine cord snaps") as accurate |
@@ -387,6 +440,8 @@ As ADR 0014 D4:
 | EV-12 | M15 counts: a synthetic metrics fixture at the minimum passes and one below fails each line |
 | EV-13 | The fake-model run of §7.3 passes |
 | EV-14 | Read-only: `analysis` passes the import-linter contract; the frontend computes no metric (its tests read values from the shards) |
+| EV-15 | Grass-cord axe: learned via own snapped vine cord, via a watched `bind_snaps`, and via a told account with a `carries` verdict; not learned when the axe succeeds on the first try, when the context holds only another `combine` attempt, or when the told account is marked `different`; the trace names event, delivery, manifest entry and settlement |
+| EV-16 | Per-seed report: fixtures for a resident that never met both materials, one that met them and never tried, one that tried and failed, and one that learned, each reported in its own column |
 
 ## 11. What other specs must record
 
@@ -403,7 +458,7 @@ As ADR 0014 D4:
 
 | Question | Disposition |
 |---|---|
-| ADR 0014 Q1 Metric definitions, "acted on", time-use classes | §3, owners EV-D1 to EV-D4 |
+| ADR 0014 Q1 Metric definitions, "acted on", time-use classes | §3, owners EV-D1 to EV-D4; content checks §3.7 |
 | ADR 0014 Q2 Minimum occurrences | §7.2, owner EV-D7 |
 | ADR 0014 Q3 Artifact size and sharding | §1, owner EV-D8 |
 | ADR 0014 Q4 Exploration registration | Reproducibility manifest only, owner EV-D9 (§9) |
@@ -420,12 +475,12 @@ As ADR 0014 D4:
 
 | ID | Question | Recommended answer, applied in this draft | Why |
 |---|---|---|---|
-| EV-D1 | What counts as a hop of information | A heard utterance retold at a turn whose context held it and whose output cites it; uncited retellings reported apart | Every counted hop is then traceable, as plan §4.1 requires |
+| EV-D1 | What counts as a hop of information | A heard utterance retold at a turn whose context held it and whose output cites it; uncited retellings reported apart. Each hop counted for acceptance is also checked by hand: the retelling must carry the earlier message, garbled or embellished included (owner, 2026-11-18) | Every counted hop is then traceable, as plan §4.1 requires; a citation alone may point at something else |
 | EV-D2 | How skills are scored | Code-counted evidence: expected phenomena seen ÷ applications | Matches ADR 0014 D2; deception cannot make a correct lesson look wrong |
 | EV-D3 | When a `be_at` promise is kept | At the place within 6 ticks (one hour) either side of `due_tick` | Residents cannot time a tick exactly; one hour is a fair meeting window |
 | EV-D4 | Time-use classes | Survival, crafting, exploring, social, idle; sleep apart; talking as an overlay | Covers ADR 0014 D1's four shares; speech rides alongside actions |
 | EV-D5 | Measures for the two questions | Repeat after failure, missed reply, forgotten intention, invalid output, by context size, pressure and fatigue; continuity by commitments, reuse, carried skills and forgetting | Behaviours that objective logs can show without judging text |
 | EV-D6 | Probe design | Up to 20 key turns per run, 5 + 5 samples, modal choice compared, both labels | Small enough to afford, enough to see a clear change |
-| EV-D7 | M15 minimum occurrences | 3 chains of 2+ hops; 2 learned rules with 1 via watching or telling; 3 non-maker uses with 1 on a later day; 3 judged cross-sleep agreements with 2 kept | Each capability must happen more than once to count as more than luck |
+| EV-D7 | M15 minimum occurrences | 3 content-checked chains of 2+ hops; 2 learned rules with 1 via watching or telling, plus at least 1 learned grass-cord axe across the three on-arm runs, traced from an island event to the axe decision; a per-seed report (met, tried, succeeded, learned) with no per-seed minimum; 3 non-maker uses with 1 on a later day; 3 judged cross-sleep agreements with 2 kept (owner, 2026-11-18) | The axe is the strongest sign of learning on the island; three seeds are too few to require it in two of them |
 | EV-D8 | Artifact limits | 8 MiB per shard, 32 MiB index, split never truncate | Fits a browser load; long runs shard instead of failing silently |
 | EV-D9 | Exploration registration | A reproducibility manifest only, no budget approval | P3.5 has no trial caps (ADR 0012 D4) |
