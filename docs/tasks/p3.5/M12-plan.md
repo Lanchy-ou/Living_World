@@ -13,8 +13,8 @@ the tests named below are the acceptance tests of those specs.
 ## 1. Decisions for the owner
 
 These are set by the M12 task cards (protocol §11.1 asks the cards to set
-the tag and the removal point). Each card applies the recommended answer
-until the owner decides otherwise.
+the tag and the removal point). The owner approved all five as recommended
+on 2026-11-19, so D5 now applies to every M12 card.
 
 | # | Decision | Recommended answer | Why |
 |---|---|---|---|
@@ -22,7 +22,7 @@ until the owner decides otherwise.
 | D2 | Archive tag and removal point | Tag `v1-archive` on the main commit where P3.5-PR-03 merges. Remove the v1 engine only after M14 Gate 3, in a separate task | The P3 LLM runtime (`sim/p3.py`, `agents/p3`) runs on the v1 world until the M14 decision loop replaces it; removing v1 earlier leaves no LLM path |
 | D3 | Round 3 edge cases with a memory or evaluation half | M12 tests the world side; the memory count (MF-18), the qualifying-use count (EV-22) and the recall manifest (DL-20, DL-27) go to the M14 cards | Memory, evaluation and the decision loop are not built in M12 |
 | D4 | Size of the v1 fixtures | At most 50 MiB in total; above that, P3.5-PR-03 stops and asks | Fixtures live in Git |
-| D5 | Review weight for code tasks (proposal, not yet applied) | Gate 1 plus one independent Gate 2 round and one recheck; an interface-preserving edge case found in review becomes a test in a named card instead of blocking | Spec review needed many rounds; code has tests that catch regressions |
+| D5 | Review weight for code tasks | Gate 1 plus one independent Gate 2 round and one recheck; an interface-preserving edge case found in review becomes a test in a named card instead of blocking | Spec review needed many rounds; code has tests that catch regressions |
 
 ## 2. Order and parallel work
 
