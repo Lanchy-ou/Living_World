@@ -1,0 +1,5 @@
+[[rule]]
+id = "nap"
+trigger = "verb:rest"
+replace = true
+work_ticks = 2

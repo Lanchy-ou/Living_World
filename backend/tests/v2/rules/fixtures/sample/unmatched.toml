@@ -1,0 +1,27 @@
+[unmatched.combine]
+entries = []
+default = ["nothing_happens"]
+
+[unmatched.strike]
+entries = []
+default = ["nothing_happens"]
+
+[unmatched.fill]
+entries = []
+default = ["nothing_happens"]
+
+[unmatched.sleep]
+entries = []
+default = ["nothing_happens"]
+
+[unmatched.drink]
+entries = []
+default = ["nothing_happens"]
+
+[unmatched.rest]
+entries = []
+default = ["nothing_happens"]
+
+[unmatched.build]
+entries = []
+default = ["nothing_happens"]

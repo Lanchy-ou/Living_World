@@ -789,3 +789,46 @@ are authorized. Required code work is listed in P3-02..07; implementation checks
 preserve the P1/P2 reference hashes in plan section 3.2. Refuse unsupported versions
 rather than guessing migrations. Recommendation: approve this scoped amendment and
 the decision sheet's recommended options; keep OQ-063 outside this task.
+
+## OQ-P3.5-RR-01: Pack encoding and proof defaults
+
+The frozen rule representation and starter content specs leave the following
+loader details open. The implementation uses reversible defaults pending owner
+confirmation.
+
+- **File representation.** Use whole-value quoted `${name}` placeholders with a
+  caller-provided typed binding table, and sibling directories for `extends`.
+  Use ID-keyed manifest source tables (also accept an array of ID-bearing
+  source rows), `timing.attempt_ticks` for attempts, and component-keyed
+  instance `state` tables. Use hyphenated pack IDs for the explicitly named
+  `compat-v1`, `starter-v1` and `engine-test`; retain the rule representation
+  ID grammar for members. Further engine-only physiology, timing and limit
+  keys remain opaque canonical data until those contracts name their fields.
+- **Pack hash envelope.** Hash the composed, bound and normalized object with
+  ID-keyed entry tables, retaining ordered condition, slot, effect and
+  comparison lists. Include the local compatibility code file when present
+  and exclude extension directives already applied to entries.
+- **Numeric forms.** Use the next integer after the preceding count cutoff
+  for the final open-ended descriptor and zero reach for a targetless verb.
+  The final count descriptor has the spec's unbounded semantics. A
+  non-stackable whole-entity debit has the known constant quantity one, so
+  the starter `axe_breaks` output can be compared with its debit.
+- **Reference and proof scope.** Follow the explicitly listed operation
+  sources for `consume` and `move`. Runtime-only facts such as a resident
+  holder ID are checked when the world is initialized. The unreachable report
+  certifies stationary-sleeper terrain checks with a start implication and a
+  completion invariant. Other checks are omitted when either proof is unknown.
+
+- **Disabled periodic rules.** Drop the disabled rule's placement offsets
+  during composition. This keeps inherited placements usable without adding an
+  instance replacement mechanism.
+- **Diagnostic precedence.** An unsourced branch with credits above debits
+  reports `CONSERVATION`. A named source with a missing or insufficient
+  declaration reports `UNDECLARED_SOURCE`. A declaration that disagrees
+  with the `conservation` mode reports `BAD_SHAPE`.
+- **Legacy registration in a shared Python process.** The frozen v1
+  registration validator examines the active `living_island` module inventory,
+  including modules imported during pytest collection. Import the new loader
+  during v2 test execution so the legacy checks run against the v1 inventory.
+  Downstream v2 suites need the same separation while the v1 registration
+  lane remains active.

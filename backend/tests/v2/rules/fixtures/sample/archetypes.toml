@@ -1,0 +1,69 @@
+[[archetype]]
+id = "head"
+kind = "item"
+stackable = true
+material = "stone"
+matter = { mineral = 1 }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "handle"
+kind = "item"
+stackable = true
+material = "wood"
+matter = { plant = 1 }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "binding"
+kind = "item"
+stackable = true
+matter = { plant = 1 }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "axe"
+kind = "item"
+stackable = false
+matter = { mineral = 1, plant = 2 }
+components = { portable = { slots_per_unit = 1 }, durability = { max_wear = 5 } }
+
+[[archetype]]
+id = "bottle"
+kind = "item"
+stackable = false
+matter = { mineral = 1 }
+components = { portable = { slots_per_unit = 1 }, container = { capacity = 2, accepts = { archetype = "water" } } }
+
+[[archetype]]
+id = "water"
+kind = "item"
+stackable = true
+matter = { water = 1 }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "fruit"
+kind = "item"
+stackable = true
+matter = { plant = 1 }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "rotten_fruit"
+kind = "item"
+stackable = true
+matter = { plant = 1 }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "site"
+kind = "process"
+stackable = false
+components = { process = { work_required = 6 }, container = { capacity = 3, accepts = { archetype = "handle" } } }
+
+[[archetype]]
+id = "fire"
+kind = "structure"
+stackable = false
+components = { fuel = {} }

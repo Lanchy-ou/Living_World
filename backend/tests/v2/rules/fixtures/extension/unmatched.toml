@@ -1,0 +1,4 @@
+[unmatched.combine]
+replace = true
+entries = [{when = {compare = ["input.strength", ">", 2]}, phenomena = ["holds_firm"]}]
+default = ["falls_apart"]

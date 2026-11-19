@@ -1,0 +1,27 @@
+pack_id = "sample"
+pack_version = "0.1"
+vocabulary_version = "vocab/0.1"
+vocabulary_hash = "${vocabulary_hash}"
+enabled_verbs = ["combine", "strike", "fill", "sleep", "drink", "rest", "build"]
+enabled_needs = ["stamina"]
+
+[needs.stamina]
+min = 0
+max = 10000
+initial = 8500
+band_cutoffs = [2000, 4000, 6000, 8000]
+max_gain_per_tick = 220
+max_loss_per_tick = 150
+
+[timing.attempt_ticks]
+combine = 1
+strike = 1
+fill = 1
+sleep = 1
+drink = 1
+rest = 1
+build = 1
+
+[sources.spring]
+archetype = "water"
+max_per_application = 2
