@@ -86,6 +86,223 @@ consumed allocations. The owner must separately approve the final code and
 registration hashes and caps before creating real authorization or using
 credentials and dispatch. See [P305-R2](../tasks/p3/P305-R2.md).
 
+## CR-009: P3.5 world–agent protocol, v2 lane (approved 2026-11-17)
+
+Status: **approved by the owner on 2026-11-17: option A.** Source:
+[ADR 0007](../adr/0007-world-agent-protocol.md) D8 and the
+[P3.5 plan](../plans/p3.5-implementation-plan-v0.1.md) §7. The design passed
+independent review ([P3.5-00 review](../tasks/p3.5/P3.5-00-review.md), rounds
+1, 2 and 4). The owner decides this CR before ADR 0007 is accepted; the
+successor spec `world-agent-protocol-v0.1.md` is written and frozen after both.
+
+**Current rule.** The v0.1 protocol is frozen (interface-contract header):
+
+- Actions: 11 `ActionType` values, one target kind and one parameter model each
+  (IC §2.4, `ACTION_SHAPES` in `world/protocol.py`), 17 failure codes (IC §4),
+  and legality and effects in engine code (WR §4.2).
+- Plans: one decision returns an `ActionPlan` of 1..`max_plan_actions` intents,
+  which the runtime executes without asking again (AG-02, AI §3.2).
+- Interrupts: the world interrupts a running action for an urgent need, direct
+  speech or a new sighting, and deferred triggers request a replan at the next
+  idle boundary (WR §4.3, §4.4; IC §2.2, §2.5 `InterruptionReason` and
+  `DecisionTrigger`; AG-03).
+- Speech: `talk` is an action lasting `talk_ticks`, with four speech acts; a
+  `request` carries only an item request (IC §2.4, §2.5; WR §4.2).
+- Ownership: no theft (WR §4.2).
+- Perception: fixed fields for two resources and one tool (IC §2.2).
+
+**Requested rule.** A new versioned v2 lane, as CR-005 added the P3 lane. The
+v0.1 specs stay unchanged as the v1 record. Per ADR 0007:
+
+1. Actions: kernel actions `move_to`, `give`, `pick_up`, `drop`, `wait`,
+   `inspect` and `contribute`, plus one generic `act` (verb, target,
+   instruments, inputs, closed parameters per verb) resolved against a content
+   rule library. `gather`, `eat`, `drink`, `fill_canteen`, `rest` and `sleep`
+   become rules; the resident chooses its sleep length within world bounds
+   (D2).
+2. Turns: one action or `continue` per turn, plus an optional utterance; no
+   world-side plan queue. Intentions, mute lists and memory citations stay on
+   the agent side and never reach the world (D7; ADR 0013 D2, D3).
+3. Interrupts: none from the world. Only hard stops end an action (death,
+   fainting, exhaustion, missing inputs or target, blocked path). Speech,
+   sightings, need bands and progress are notifications that offer a turn.
+   Each rule declares `on_interrupt` (D6).
+4. Feedback: kernel precondition failures keep failure codes. `act` returns
+   observed phenomena only, including a near-miss phenomenon. The objective log
+   records `rule_id` or `attempt_unmatched`, which residents never receive
+   (D5).
+5. Perception: property descriptors with declared observability (`visible`,
+   `on_inspect`, `on_use`) and apparent values; process entities with coarse
+   progress; other residents' attempts within perception range; and
+   `explored_static_tiles`, kept as world-delivered static map data (D4, D6,
+   D10).
+6. Speech: an utterance that any turn may carry, keeping hearing range,
+   dialogue sessions, the turn cap and reply checks. Agreements carry
+   structured terms from a closed, checkable set and need explicit acceptance;
+   they are recorded as objective facts and never enforced (D10).
+7. Ownership is recorded but restricts nothing (ADR 0008 D6).
+8. The model-facing schema is generated from the protocol version, the verb
+   vocabulary and the reference kinds only, and is sent once (D7).
+9. Migration (D8):
+   - A v1 compatibility pack expresses the 11 v1 actions on the v2 kernel.
+     Equivalence is checked on a projection for a fixed seed set, against v1
+     projections committed as fixtures.
+   - The rule-based policy runs through a perception adapter and an intent
+     adapter, and reproduces the v1 interrupts on its own side.
+   - The last v1 commit is tagged. v1 runs replay from that tag only, and the
+     v2 code base keeps no v1 engine. Unknown versions are refused, with no
+     implicit migration.
+
+Scope: this CR covers the world–agent protocol and the world rules it changes
+directly (WR §4.2–§4.4). The other successor specs of plan §2 supersede their
+v0.1 specs for new work when each is accepted; they change no world-facing
+contract beyond this CR.
+
+**Impact.**
+
+- Code: a new v2 protocol and engine in `world`; adapters and the new decision
+  loop in `agents`; turn scheduling in `sim`; new contract models and
+  regenerated frontend types; new save, replay and event versions; the viewer
+  renders v2 events and process entities. The module boundaries of AGENTS.md
+  are unchanged.
+- Tests: v2 gets its own invariant tests. Once the v1 engine is removed, the v1
+  tests and the P1/P2 reference hashes run only at the archive tag; the
+  committed projections keep the equivalence check running.
+- Runs: the P3 lane depends on the v1 protocol, so it leaves the current code
+  base together with the v1 engine. After that, P1–P3 runs replay only from the
+  tag. Deferred P3 work keeps its disposition (plan §10); nothing is restarted.
+
+**Options.**
+
+- **A (recommended): a v2 lane without the v1 engine**, as above. One engine to
+  maintain; history stays verifiable through the tag and the committed
+  projections.
+- **B: a v2 lane that keeps the v1 engine beside it.** Old runs replay on the
+  current code, but two engines and two event catalogs must be maintained and
+  tested, and every shared change puts the frozen hashes at risk.
+- **C: amend v0.1 in place.** Rejected: it rewrites frozen specs, breaks the
+  recorded replays of P1–P3, and still makes every new material a protocol
+  change, which the design exists to avoid.
+
+**Left to the spec, not decided here:** the exact DTOs; the verb, property and
+phenomenon vocabularies; the event catalog; hard-stop priorities; sleep-length
+bounds; agreement terms (ADR 0007 Q1–Q13); the equivalence projection and seed
+set (Q9); when the v1 engine is removed, which the M12 task cards set and never
+before the projections are committed; and whether the viewer keeps loading v1
+replay bundles.
+
+**Approval covers** the v2 lane under option A and writing
+`world-agent-protocol-v0.1.md`. It does not freeze any v2 shape (the spec does,
+after Gate 2), does not authorize live model calls or budget, and does not
+remove v1 code before the M12 conditions are met.
+
+**Recommendation:** approve option A.
+
+**Owner disposition (2026-11-17):** option A approved, within the approval
+scope above. ADR 0007 may now be accepted; `world-agent-protocol-v0.1.md` is
+written and frozen after that.
+
+## CR-011: compatibility profiles, legacy triggers and apparent action views (approved 2026-11-18)
+
+Status: **approved by the owner on 2026-11-18 (A, B and C)** for SP-01 Rework 2.
+The [world report](../tasks/p3.5/P3.5-SP-01-review-world.md) R2-B01–B03/B10
+and [resident report](../tasks/p3.5/P3.5-SP-01-review-agent.md) R2-B02/B04/B12
+supply the counterexamples. Amend the frozen [protocol](world-agent-protocol-v0.1.md)
+in place. Keep CR-010 annotations and the existing version (no v2 artifacts).
+
+| Clause | Previous contract and failure | Approved amendment and affected consumers |
+|---|---|---|
+| A | §11.2 admitted parameter ranges. A valid unlisted v1 canteen with 3999 servings exceeds the pack's bound and its descriptor cannot encode the count. | Limit equivalence to the enumerated, hash-pinned default, P2 inputs and committed fixtures in starter content §4.7. Preserve the P2 seed matrix and both §11.3 scripted-intent exceptions. |
+| B | §11.2 passed entity novelty through and allowed only the bridge to join speech. A moving recipient's first held fruit can interrupt a v2 policy alone. | Both policy modes derive v1 novelty and deferred triggers from the authorized v1 projection, with checkpointed receipts, queue and cursor. Visible mode privately joins its own speech and action feedback. |
+| C | §5.4 lacked a common sample clock, a self-target and a receipt witness after merge. Terminal feedback lacked a safe non-item target look. | Freeze apparent use and target looks at start, filter each phase for the watcher at delivery, and show successful received portions to the observing recipient. Memory reads only the delivered projection. |
+
+**Options and recommendation.** For A, keeping an open v1 parameter
+range would require pack-specific descriptor generation and bounds for that
+range. For B, passing v2 novelty through loses v1 identity and queue timing.
+For C, sampling every field at settlement loses consumed or merged inputs;
+reading private transfer events in memory crosses the perception boundary.
+The owner selected the pinned registry, independent legacy projection and
+start-look/delivery-visibility design in the table above.
+
+Impact: protocol §§4.1, 5.1, 5.4, 11.2–11.3 and WAP-34–37. M12 implements
+the fixtures. Round 3 checks these amendments and resulting consistency.
+
+## CR-010: protocol amendments from the P3.5-SP-01 review (approved 2026-11-18)
+
+Status: **approved by the owner on 2026-11-18: A1 and B1; C is part of the
+approved compatibility alignment.** Source: the P3.5-SP-01 Gate 2 reviews
+([world track](../tasks/p3.5/P3.5-SP-01-review-world.md) B01, B03, B14;
+[resident track](../tasks/p3.5/P3.5-SP-01-review-agent.md) B11, B13). The
+amendments are applied in place to the frozen
+[world–agent protocol](world-agent-protocol-v0.1.md), marked `[CR-010]`, as
+CR-005 amended the P3 specs. No v2 code, run or replay exists yet. The round-2
+Gate 2 of P3.5-SP-01 checks the amended text.
+
+**A. Sight while asleep in the compatibility pack.**
+
+- *Current rule.* §5.1: while not awake, the senses are off, in every pack.
+- *Problem.* v1 builds every living resident's sight at every boundary, asleep
+  or not, and suppresses only hearing (`world-rules-v0.1.md` §5.4 step 6,
+  `world/observation.py`). Example: Ella sleeps next to Ryan, who dies. In v1
+  she gets a receipt and a `NEW_SIGHT` for the corpse while asleep; with the
+  senses off she sees it only on waking, so the rule policy gets a different
+  trigger set and can later act on different receipts and explored tiles. The
+  compatibility pack then cannot reproduce v1 (§11.3). Sleeps are frequent in
+  the P2 matrix.
+- *Options.* **A1 (recommended):** a pack flag `sight_while_asleep`, set only by
+  the compatibility pack; hearing and observed actions stay off, and the
+  starter pack keeps the senses off. A2: a third domain exception in §11.3;
+  rejected, because the P2 matrix reaches it often and the equivalence check
+  would fail broadly. A3: the bridge keeps a private v1 sight shadow; rejected,
+  because the bridge would read world state beyond the policy's own results.
+
+**B. Items in use are visible to the actor and to watchers.**
+
+- *Current rule.* §5.4: `visible_items` shows only items in the watcher's
+  `visible_entities` or own inventory. Another resident's held items are never
+  there, so the items used by a held-item `act` are never seen. Observations
+  carry no phase. An actor's own feedback does not list the stacks a by-kind
+  choice took.
+- *Problem.* A watcher of a vine cord snapping sees "combine, snaps" with no
+  cord, so watching cannot teach the difference between vine and grass,
+  contrary to ADR 0007 D10 ("the visible items used"). Skill evidence cannot
+  tell which looks a by-kind input used across stacks, and a watcher cannot
+  tell a start from a settlement of one intent.
+- *Options.* **B1 (recommended):** an `ItemUse` view (apparent view, role,
+  quantity) in `running_action.items` and `ActionFeedback.items_used` for the
+  actor, and in `ObservedAction.visible_items` with a `phase` for watchers,
+  at the same range as items on the ground. B2: the same, but only at close
+  range; learning by watching becomes rarer. B3: no change; watching cannot
+  teach materials.
+
+**C. When a hard stop is found (clarification).**
+
+- *Current rule.* §4.4: when several stops apply at one boundary, the first in
+  the priority list is reported.
+- *Problem.* v1 settles a blocked step during progress and finds exhaustion
+  after the tick's physiology (world-track B01). Read literally, "one
+  boundary" could let a later death in the same tick replace a blocked step,
+  which v1 never does.
+- *Rule.* The priority applies among stops found at the same check. A stop
+  found during progress (`PATH_BLOCKED`, or `EXHAUSTED` when an action would
+  progress with no stamina) ends the action there. The others are found
+  together after the tick's physiology: `DEATH`, `FAINTED`, `EXHAUSTED` of an
+  unfinished action whose stamina reached zero, `TARGET_GONE` and `WOKEN`.
+  This changes no v1-visible outcome; it is the wording the approved
+  compatibility alignment needs.
+
+**Impact.** Spec text only: WAP §4.1, §4.4, §5.1, §5.3, §5.4, §9 and tests
+WAP-01, 04, 08, 14, 23 and the new WAP-31 to WAP-33. The world-engine,
+memory-formation, decision-loop and evaluation specs use the new fields. No
+artifact exists under `wap/0.1`, so the schema version is unchanged.
+
+**Approval covers** these three amendments only.
+
+**Owner disposition (2026-11-18):** "All as recommended" on the P3.5-SP-01
+fix plan, whose points 1 and 2 are A1 and B1. C is the wording needed by the
+approved v1 alignment of the compatibility pack; the owner confirms it with
+the freeze of the P3.5 specs.
+
 ## Question register
 
 | ID | Date | Raised in task | Question | Assumption made | Status |

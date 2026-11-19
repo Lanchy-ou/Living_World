@@ -15,8 +15,8 @@ intents; the frontend only displays state and sends commands.
   `balance-notes-v0.1.md`, `agent-interface-v0.1.md`, `p1-replay-frontend-v0.1.md`,
   `rule-policy-v0.1.md`, `p2-experiments-v0.1.md`, `frontend-design-v0.1.md`,
   `open-questions.md`).
-- Implementation plans: `docs/plans/p1-implementation-plan-v0.1.md` and
-  `docs/plans/p2-implementation-plan-v0.1.md` (tasks, milestones and change requests).
+- Implementation plans: `docs/plans/` (P1, P2, P3 and P3.5 plans: tasks, milestones
+  and change requests).
 - Decisions: `docs/adr/`. Task briefs and handoffs: `docs/tasks/<phase>/` (e.g. `docs/tasks/p1/`).
 
 ## Current phase and entry points
@@ -32,6 +32,27 @@ new work; do not silently restart deferred trials or merge parked candidates.
   [LLM decisions and recovery](docs/spec/llm-decision-v0.1.md), and
   [evaluation and inspection](docs/spec/p3-evaluation-v0.1.md)
 - [M9 acceptance and evidence](docs/tasks/p3/M9-evidence.md)
+
+P3.5 design (M11) is complete. The owner accepted ADRs 0007–0014 on
+2026-11-17, after approving the protocol change request CR-009
+(`docs/spec/open-questions.md`). The
+[world–agent protocol spec](docs/spec/world-agent-protocol-v0.1.md) was frozen
+on 2026-11-17, and amended by the approved CR-010 and CR-011. The other seven
+P3.5 specs were frozen on 2026-11-19 (task P3.5-SP-01); M12 task cards are
+written next. The P3 specs stay in force for v1 runs; each P3.5 spec states
+which P3 parts it replaces for new work.
+
+- [P3.5 plan](docs/plans/p3.5-implementation-plan-v0.1.md) (system index,
+  milestones M11–M15, acceptance runs, deferred P3 work)
+- [P3.5 design review brief](docs/tasks/p3.5/P3.5-00-review-brief.md)
+- P3.5 specifications for [rule representation](docs/spec/rule-representation-v0.1.md),
+  the [world engine](docs/spec/world-engine-v0.1.md),
+  [starter content](docs/spec/starter-content-v0.1.md),
+  the [memory model](docs/spec/memory-model-v0.1.md),
+  [memory formation](docs/spec/memory-formation-v0.1.md),
+  the [decision loop](docs/spec/decision-loop-v0.1.md) and
+  [evaluation](docs/spec/evaluation-v0.1.md), with the
+  [owner decision sheet](docs/tasks/p3.5/P3.5-SP-01-decisions.md)
 
 ## Source of truth order
 
