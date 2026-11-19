@@ -1,17 +1,18 @@
 # Living Island — Starter Content v0.1 (P3.5 v2 lane)
 
-> **Rework 2 (2026-11-18).** Enumerates compatibility pins, fixes fire and rot clocks, and extends policy calibration. CT-17–20 cover the new fixtures.
-
-> **Draft (2026-11-18), task P3.5-SP-01. Not frozen.** Owner decisions are
-> written with the author's recommended answer applied and are listed in
-> §12 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md).
-> Rework 1 (2026-11-18) answers the Gate 2 world-track review
-> ([review](../tasks/p3.5/P3.5-SP-01-review-world.md) B04, B06, B15, N03) and
-> uses the protocol as amended by CR-010.
+> **Frozen (owner, Gate 3, 2026-11-19), task P3.5-SP-01.** Any change goes
+> through the change-request steps
+> ([P3.5 plan](../plans/p3.5-implementation-plan-v0.1.md) §7). Gate 2 ran
+> three review rounds on the world and resident tracks and four rechecks
+> ([task card](../tasks/p3.5/P3.5-SP-01.md), Reworks 1–6); the fourth
+> recheck concluded "ready to freeze". Owner decisions are listed in
+> §12 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md),
+> whose §4 choices R1–R25 the owner confirmed with the freeze. Uses the
+> protocol as amended by CR-010 and CR-011.
 >
 > Implements [ADR 0010](../adr/0010-starter-content.md). Uses the formats of
 > [rule representation](rule-representation-v0.1.md) and the mechanisms of the
-> [world engine](world-engine-v0.1.md). When frozen, it supersedes
+> [world engine](world-engine-v0.1.md). It supersedes
 > `balance-notes-v0.1.md` for new content (ADR 0010). `content/worlds/
 > default.toml` and its map stay unchanged: they remain the v1 configuration
 > and the source of the compatibility pack's values.

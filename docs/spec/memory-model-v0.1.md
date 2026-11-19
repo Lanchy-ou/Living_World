@@ -1,15 +1,16 @@
 # Living Island — Memory Model v0.1 (P3.5)
 
-> **Rework 2 (2026-11-18).** Defines safe record projections, immutable evidence revisions and capacity for refuted skills. MM-21–24 exercise these paths.
-
-> **Draft (2026-11-18), task P3.5-SP-01. Not frozen.** Owner decisions are
-> written with the author's recommended answer applied and are listed in
-> §13 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md).
-> Rework 1 (2026-11-18) answers the Gate 2 resident-track review
-> ([review](../tasks/p3.5/P3.5-SP-01-review-agent.md) B01, B04, B08, B10,
-> N01, N03) and uses the protocol as amended by CR-010.
+> **Frozen (owner, Gate 3, 2026-11-19), task P3.5-SP-01.** Any change goes
+> through the change-request steps
+> ([P3.5 plan](../plans/p3.5-implementation-plan-v0.1.md) §7). Gate 2 ran
+> three review rounds on the world and resident tracks and four rechecks
+> ([task card](../tasks/p3.5/P3.5-SP-01.md), Reworks 1–6); the fourth
+> recheck concluded "ready to freeze". Owner decisions are listed in
+> §13 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md),
+> whose §4 choices R1–R25 the owner confirmed with the freeze. Uses the
+> protocol as amended by CR-010 and CR-011.
 >
-> Implements [ADR 0011](../adr/0011-memory-model.md). When frozen, it
+> Implements [ADR 0011](../adr/0011-memory-model.md). It
 > supersedes `resident-experience-v0.1.md` for new work; P3 experience capture
 > becomes the day log of the working context (decision-loop spec). How records
 > are written is the [memory-formation](memory-formation-v0.1.md) spec; how they

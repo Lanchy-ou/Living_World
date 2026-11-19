@@ -1,13 +1,14 @@
 # Living Island — Memory Formation v0.1 (P3.5)
 
-> **Rework 2 (2026-11-18).** Fixes agreement and skill evidence, transaction authorization, and the sleep/dispatch boundary. MF-18–23 pin the traces.
-
-> **Draft (2026-11-18), task P3.5-SP-01. Not frozen.** Owner decisions are
-> written with the author's recommended answer applied and are listed in
-> §12 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md).
-> Rework 1 (2026-11-18) answers the Gate 2 resident-track review
-> ([review](../tasks/p3.5/P3.5-SP-01-review-agent.md) B01–B06, B08, B09, B11)
-> and uses the protocol as amended by CR-010.
+> **Frozen (owner, Gate 3, 2026-11-19), task P3.5-SP-01.** Any change goes
+> through the change-request steps
+> ([P3.5 plan](../plans/p3.5-implementation-plan-v0.1.md) §7). Gate 2 ran
+> three review rounds on the world and resident tracks and four rechecks
+> ([task card](../tasks/p3.5/P3.5-SP-01.md), Reworks 1–6); the fourth
+> recheck concluded "ready to freeze". Owner decisions are listed in
+> §12 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md),
+> whose §4 choices R1–R25 the owner confirmed with the freeze. Uses the
+> protocol as amended by CR-010 and CR-011.
 >
 > Implements [ADR 0012](../adr/0012-memory-formation.md). Writes the records
 > of the [memory model](memory-model-v0.1.md). The working context it reads is

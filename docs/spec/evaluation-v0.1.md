@@ -1,22 +1,21 @@
 # Living Island — Evaluation, Observability and Engineering Constraints v0.1 (P3.5)
 
-> **Rework 2 (2026-11-18).** Pins retained evidence and the units, clocks and origin rules for M15. EV-18–23 give positive and negative threshold fixtures.
-
-> **Draft (2026-11-18), task P3.5-SP-01. Not frozen.** Owner decisions are
-> written with the author's recommended answer applied and are listed in
-> §14 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md).
-> Rework 1 (2026-11-18) answers the Gate 2 resident-track review
-> ([review](../tasks/p3.5/P3.5-SP-01-review-agent.md) B02, B12–B15, N04) and
-> the world-track B14 and B16, applies the owner's 2026-11-18 decisions on the
-> axe link and on judging agreements, and uses the protocol as amended by
-> CR-010.
+> **Frozen (owner, Gate 3, 2026-11-19), task P3.5-SP-01.** Any change goes
+> through the change-request steps
+> ([P3.5 plan](../plans/p3.5-implementation-plan-v0.1.md) §7). Gate 2 ran
+> three review rounds on the world and resident tracks and four rechecks
+> ([task card](../tasks/p3.5/P3.5-SP-01.md), Reworks 1–6); the fourth
+> recheck concluded "ready to freeze". Owner decisions are listed in
+> §14 and in the [decision sheet](../tasks/p3.5/P3.5-SP-01-decisions.md),
+> whose §4 choices R1–R25 the owner confirmed with the freeze. Uses the
+> protocol as amended by CR-010 and CR-011.
 >
 > Implements [ADR 0014](../adr/0014-evaluation.md). Reads what the other P3.5
 > specs record: objective events ([protocol](world-agent-protocol-v0.1.md) §9,
 > [engine](world-engine-v0.1.md) §11), decision and consolidation records
 > ([decision loop](decision-loop-v0.1.md) §10,
 > [memory formation](memory-formation-v0.1.md) §7) and memory stores
-> ([memory model](memory-model-v0.1.md)). When frozen, it supersedes
+> ([memory model](memory-model-v0.1.md)). It supersedes
 > `p3-evaluation-v0.1.md` for new work; its inspection-artifact rules are
 > reused as stated.
 
