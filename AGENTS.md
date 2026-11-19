@@ -38,8 +38,8 @@ P3.5 design (M11) is complete. The owner accepted ADRs 0007–0014 on
 (`docs/spec/open-questions.md`). The
 [world–agent protocol spec](docs/spec/world-agent-protocol-v0.1.md) was frozen
 on 2026-11-17, and amended by the approved CR-010 and CR-011. The other seven
-P3.5 specs were frozen on 2026-11-19 (task P3.5-SP-01); M12 task cards are
-written next. The P3 specs stay in force for v1 runs; each P3.5 spec states
+P3.5 specs were frozen on 2026-11-19 (task P3.5-SP-01). M12 (the new engine
+runs the old world) is planned in the [M12 plan](docs/tasks/p3.5/M12-plan.md). The P3 specs stay in force for v1 runs; each P3.5 spec states
 which P3 parts it replaces for new work.
 
 - [P3.5 plan](docs/plans/p3.5-implementation-plan-v0.1.md) (system index,
