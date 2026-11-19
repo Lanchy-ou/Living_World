@@ -358,10 +358,13 @@ only that the resident spoke.
 `format` when the record is speech-derived (memory model §4.2), whether or not
 it also has `observed` sources. So does an `update` or `merge` that would
 leave a confidence-4 record speech-derived, for example adding a `told`
-source to it. Code computes the candidate's `speech_derived` on the staged
-copy from its sources and the `speech_derived` field of each cited or merged
-revision, read from the sent input or the staged store, never from the audit;
-an op that sets the field itself fails `format`. After commit, code writes
+source to it. Code sets the candidate's `speech_derived` on the staged copy by
+the carry-forward rule of memory model §4.2: the field of the current staged
+revision (or of each merged revision) combined with the newly added sources
+only, whose cited revisions are read from the sent input or the staged store.
+It never re-reads a source already bound, and never reads the audit; an op
+that sets the field itself fails `format`. The cap is checked on the
+resulting candidate. After commit, code writes
 the `possible_relabel` flags of memory model §4.2 to the consolidation
 record (§7).
 

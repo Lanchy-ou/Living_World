@@ -89,9 +89,8 @@ MemoryKind = "episodic"|"belief"|"social"|"skill"|"commitment"|"intention"|"pers
   it whenever it creates or changes a record; code writes it for mechanical
   records from a fixed template (memory-formation spec).
 - `text` is at most 2000 characters.
-- `speech_derived` is computed by code from the record's own sources and the
-  revisions they cite whenever a write creates the record or changes its
-  sources (§4.2). A change set cannot set it. It is part of the content hash,
+- `speech_derived` is set by code whenever a write creates the record or
+  adds to its sources, carrying forward the value already stored (§4.2). A change set cannot set it. It is part of the content hash,
   so each revision keeps the value it was written with.
 - `about_tick` is required on episodic records and on beliefs that describe a
   dated observation; it is `null` for stable knowledge (§4.3).
@@ -379,11 +378,24 @@ An integer 0–4: 0 doubt, 1 low, 2 moderate, 3 high, 4 certain.
     example, B infers I from a told belief T, so I is stored with
     `speech_derived = true`; after T is forgotten, a record inferred from I
     is still speech-derived.
-  - Code recomputes the field on every write that changes sources: an add, an
-    update that adds a source, a merge and a mechanical write. A write that
-    would make a record at confidence 4 speech-derived fails (memory formation
-    §3.5); to add the speech, an earlier op of the same set lowers the
-    confidence to 3 or below.
+  - Code sets the field on every write that creates a record or adds sources,
+    and never looks again at a source already bound (sources are only ever
+    added, §4.1). A newly bound source contributes `true` when it is `told`,
+    or `inferred` citing a revision whose field is `true`, and `false`
+    otherwise. The field is then:
+    - for a new record (an add, or a mechanical record's first write): any
+      contribution of its sources;
+    - for an update or mechanical write that adds sources: the field of the
+      current staged revision, or any contribution of the added sources;
+    - for a merge: the field of any merged revision, or any contribution of
+      sources the merge newly adds.
+
+    For example, after T is forgotten and the save restored, adding a sighting
+    to I keeps I's stored `true` without reading T; with an observed-only T,
+    I keeps `false`.
+  - A write that would leave a record at confidence 4 speech-derived fails
+    (memory formation §3.5); to add the speech, an earlier op of the same set
+    lowers the confidence to 3 or below.
   - Confidence 4 needs a record that is not speech-derived and has an
     `observed` or `innate` source.
   - A resident may fully believe what it was told, but certainty needs a
@@ -564,7 +576,7 @@ adds a test kind this way (M14 evidence).
 | MM-22 | Refute a skill at live cap without a successor: index refuted, zero recipe/evidence eligibility, still live; overflow evicts it first and preserves its evidence in audit. Superseded refuted skill counts as history only. |
 | MM-23 | Follow an inferred source after its ancestor changes and is evicted: audit resolves the original revision. Own repetition of another's claim proves speech only. |
 | MM-24 | Equal inventory increases after a successful watched merge and an unseen gift give different received counts. Only a delivered successful receipt increments the former. |
-| MM-25 | Speech ancestry after eviction: T told, I inferred from T, M merging T with an observed record; T then leaves the store (forget or history beyond its bound), and the save is restored. A new confidence-4 record inferred from I, or from M, fails `format`; the same record at 3 commits. Control: the same chain with an observed-only T reaches 4. The validator reads no audit content |
+| MM-25 | Speech ancestry after eviction (§4.2): T told, I inferred from T, M merging T with an observed record; T then leaves the store (forget or history beyond its bound), and the save is restored. A fresh record with a valid direct `observed` source and an `inferred` source citing I, or M, at confidence 4 fails `format`; the same record at 3 commits. Updating I itself with a valid observation at confidence 3 commits without reading T and keeps `speech_derived = true`; a fresh record with a valid observation citing the updated I at 4 fails. Control: the same steps with an observed-only T keep `false` throughout, and both fresh records reach 4. The validator reads no audit content |
 
 ## 12. Disposition of open questions
 
