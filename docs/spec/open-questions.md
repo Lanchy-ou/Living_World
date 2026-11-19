@@ -202,6 +202,16 @@ remove v1 code before the M12 conditions are met.
 scope above. ADR 0007 may now be accepted; `world-agent-protocol-v0.1.md` is
 written and frozen after that.
 
+## WAP-23: sleeping stamina control (approved 2026-11-19)
+
+The owner approved the P3.5-PR-03 fixture clarification. v1 sleep raises
+stamina and applies no stamina decay, so a downward stamina crossing while
+asleep cannot occur. Keep an awake stamina crossing that emits
+`URGENT_NEED`. Use a sleeping control that raises stamina and emits no
+trigger. Keep within-band awake and asleep crossing fixtures for both
+satiety and hydration. This disposition applies to the v1 fixture
+assertions under the existing CR-011 registry.
+
 ## CR-011: compatibility profiles, legacy triggers and apparent action views (approved 2026-11-18)
 
 Status: **approved by the owner on 2026-11-18 (A, B and C)** for SP-01 Rework 2.
