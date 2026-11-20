@@ -122,3 +122,12 @@ and the owner's Round 3 decision (decision sheet §3, row 5).
   (plan §7); a missing or ambiguous rule goes to `docs/spec/open-questions.md`
   with the smallest reversible assumption, flagged in the handoff.
 - Each card's handoff follows the template, with the seven fields.
+- The frozen v1 registration check inspects the loaded `living_island`
+  modules, so a v2 import during pytest collection can fail v1 tests
+  (P3.5-RR-01 review, N2). Gate 1 runs
+  `tests/p3/test_trial_registration.py` in the same pytest session as the
+  card's own tests. If it fails, the card moves its v2 imports inside the
+  tests.
+- Validate once, at the boundary (AGENTS.md workflow rules). For example,
+  the engine wraps validated rules and packs in typed structures once, and
+  later code reads those structures without checking each field again.

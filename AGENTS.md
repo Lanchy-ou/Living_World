@@ -155,6 +155,13 @@ uv run --directory backend pytest --basetemp $pytestBase
 - Every world-rule change ships with tests; invariant tests (`backend/tests/invariants/`)
   must stay green.
 - Code, comments and docs are written in English.
+- Validate once, at the boundary (owner decision, 2026-11-20). Check data where it
+  enters: a file, a wire message, a model response, or another package's public
+  function. Turn it into typed data there. Inside, trust those types and earlier
+  checks. Add no re-validation, `isinstance` checks or fallbacks for states they
+  already rule out, and no compatibility shims for code that has not shipped. A
+  check for a real, reachable case ships with a test that reaches it. Gate 2
+  reviewers flag checks that no input can trigger.
 - Scripts must be cross-platform: Python scripts or `package.json` scripts only.
 - When done, append a "Handoff" section to `docs/tasks/<phase>/<id>.md`: what changed, commands
   run and their results, deviations, open questions, **plus** the seven required
