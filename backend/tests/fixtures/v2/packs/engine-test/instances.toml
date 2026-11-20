@@ -1,0 +1,30 @@
+[[instance]]
+id = "inst_a"
+archetype = "arch_a"
+at = { tile = [2, 1] }
+quantity = 2
+properties = { strength = 2 }
+apparent = { hardness = 1 }
+tell = ["strength"]
+
+[[instance]]
+id = "inst_b"
+archetype = "arch_b"
+at = { tile = [3, 2] }
+phase_offset = { rule_f = 1 }
+state = { store = { count = 1 } }
+
+[[instance]]
+id = "inst_c"
+archetype = "arch_c"
+at = { tile = [2, 2] }
+
+[[instance]]
+id = "inst_d"
+archetype = "arch_d"
+at = { tile = [1, 2] }
+
+[[instance]]
+id = "inst_f"
+archetype = "arch_f"
+at = { tile = [4, 2] }

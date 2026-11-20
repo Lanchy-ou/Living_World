@@ -1,0 +1,63 @@
+# Each variant applies one edit to a fresh copy of engine-test.
+[[variant]]
+code = "UNKNOWN_TERM"
+file = "rules.toml"
+old = 'trigger = "verb:rest"'
+new = 'trigger = "verb:missing"'
+path = "rule_a"
+
+[[variant]]
+code = "DUPLICATE_ID"
+file = "rules.toml"
+old = 'id = "rule_j"'
+new = 'id = "rule_i"'
+path = "rules.toml"
+
+[[variant]]
+code = "OUT_OF_RANGE"
+file = "rules.toml"
+old = "work_ticks = 4"
+new = "work_ticks = 0"
+path = "rule_e"
+
+[[variant]]
+code = "BAD_SHAPE"
+file = "rules.toml"
+old = 'target = { terrain = "grass" }'
+new = 'target = { where = {} }'
+path = "rule_e"
+
+[[variant]]
+code = "CONSERVATION"
+file = "rules.toml"
+old = 'outputs = [{ archetype = "arch_a", quantity = 1, at = "actor.tile" }]'
+new = 'outputs = [{ archetype = "arch_a", quantity = 2, at = "actor.tile" }]'
+path = "rule_d"
+
+[[variant]]
+code = "UNDECLARED_SOURCE"
+file = "pack.toml"
+old = "max_per_application = 4"
+new = ""
+path = "src_a"
+
+[[variant]]
+code = "NEED_RATE"
+file = "rules.toml"
+old = 'effects = [{ op = "need", need = "stamina", delta = 3, timing = "completion" }]'
+new = 'effects = [{ op = "need", need = "stamina", delta = 13, timing = "completion" }]'
+path = "rule_a"
+
+[[variant]]
+code = "TELL_MISSING"
+file = "instances.toml"
+old = 'tell = ["strength"]'
+new = "tell = []"
+path = "inst_a"
+
+[[variant]]
+code = "INTERRUPT_MODE"
+file = "rules.toml"
+old = 'on_interrupt = { keep_progress = "arch_e" }'
+new = 'on_interrupt = { keep_progress = "arch_c" }'
+path = "rule_e"

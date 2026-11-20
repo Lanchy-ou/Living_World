@@ -1,0 +1,27 @@
+pack_id = "engine-test"
+pack_version = "0.1"
+vocabulary_version = "vocab/0.1"
+vocabulary_hash = "57554435492d6f3db83006a4510b292f8b0d1ebc70c3393663fd1a9ad94cf286"
+enabled_verbs = ["build", "combine", "fill", "gather", "rest", "strike"]
+enabled_needs = ["stamina"]
+inventory_slots = 6
+
+[needs.stamina]
+min = 0
+max = 10000
+initial = 6000
+band_cutoffs = [2000, 4000, 6000, 8000]
+max_gain_per_tick = 4
+max_loss_per_tick = 4
+
+[timing.attempt_ticks]
+build = 1
+combine = 1
+fill = 1
+gather = 1
+rest = 1
+strike = 1
+
+[sources.src_a]
+archetype = "arch_a"
+max_per_application = 4

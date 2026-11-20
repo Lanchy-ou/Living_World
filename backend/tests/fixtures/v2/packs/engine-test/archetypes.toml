@@ -1,0 +1,41 @@
+[[archetype]]
+id = "arch_a"
+kind = "item"
+stackable = true
+material = "mat_a"
+matter = { mineral = 1 }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "arch_b"
+kind = "structure"
+stackable = false
+components = { store = { archetype = "arch_a", count = 2, capacity = 4 } }
+
+[[archetype]]
+id = "arch_c"
+kind = "item"
+stackable = false
+matter = { mineral = 1 }
+components = { portable = { slots_per_unit = 2 }, container = { capacity = 2, accepts = { archetype = "arch_a" } } }
+
+[[archetype]]
+id = "arch_d"
+kind = "item"
+stackable = false
+material = "mat_a"
+matter = { mineral = 1 }
+components = { portable = { slots_per_unit = 1 }, durability = { max_wear = 4 } }
+
+[[archetype]]
+id = "arch_e"
+kind = "process"
+stackable = false
+components = { process = { work_required = 4 }, container = { capacity = 2, accepts = { archetype = "arch_a" } } }
+
+[[archetype]]
+id = "arch_f"
+kind = "structure"
+stackable = false
+matter = { mineral = 1 }
+components = { fuel = { ticks_left = 2 }, shelter = {}, footprint = { blocks_movement = false, opaque = true } }
