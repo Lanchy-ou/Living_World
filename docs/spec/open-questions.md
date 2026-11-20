@@ -876,3 +876,40 @@ compatibility pack uses the same spelling for an archetype. EN-22 treats
 the two terrain declaration literals as terrain references and scans every
 other occurrence as a possible recipe ID. The scan test records the narrow
 exception until the owner confirms how to handle shared spellings.
+
+## OQ-P3.5-EN-01: Engine initialization input and core encoding
+
+EN-01 adopts CT-01's `world.toml` and `layout.map` for the test world.
+The fixture translates those files to the engine's typed `WorldSetup`
+boundary. The caller supplies decoded static terrain, its movement costs,
+the clock, resident and cue placements, run identity, input hashes, and
+the base-first list of pack IDs. RR-01's composed `Pack` carries the leaf
+and immediate parent IDs. The caller supplies the complete chain when
+there are more layers. The engine requires kernel timings, inventory
+capacity, and limits in the validated pack. The test extension supplies
+them for the CT-01 pack.
+
+WAP §9 names the transfer endpoints as `{kind,id}` without a tile ID
+format. The core uses engine place kinds and zero-based `"x,y"` for a
+tile ID. Until EN-07 defines the durable snapshot encoding, the
+`world_initialized` event hashes the canonical tick-zero core state.
+Equal initial stacks emit their named placement events, then merge into
+the lowest content ID at that place before cap checks.
+
+## CR-P3.5-EN-01: Footprint flags in v0.1 packs
+
+Rejected by the owner (2026-11-20); engine §6 stays; the refusal goes to P3.5-RR-02.
+
+- Current rule. Engine §6 requires static-terrain movement and sight and
+  says the loader refuses footprint flags set to true. The merged RR-01
+  loader and required CT-01 fixture admit such a flag.
+- Requested rule. Confirm whether the flags are inert stored data or must
+  be false during v0.1 pack admission. In either case, movement and sight
+  keep reading static terrain.
+- Impact and options. Enforcing the frozen admission rule requires an RR
+  validator correction and a CT-01 fixture adjustment. Accepting inert
+  flags preserves the merged fixtures and requires an owner-approved
+  correction to the engine contract. The engine core preserves the
+  validated component state and does not interpret footprint flags.
+- Recommendation. Accept the flags as inert stored data for v0.1. Keep
+  footprint-based movement and sight outside this task.
