@@ -876,3 +876,28 @@ compatibility pack uses the same spelling for an archetype. EN-22 treats
 the two terrain declaration literals as terrain references and scans every
 other occurrence as a possible recipe ID. The scan test records the narrow
 exception until the owner confirms how to handle shared spellings.
+
+## OQ-P3.5-EN-01: Engine initialization input and core encoding
+
+EN-01 adopts CT-01's `world.toml` and `layout.map` for the test world.
+The fixture translates those files to the engine's typed `WorldSetup`
+boundary. The caller supplies decoded static terrain, its movement costs,
+the clock, resident and cue placements, run identity, input hashes, and
+the base-first list of pack IDs. RR-01's composed `Pack` carries the leaf
+and immediate parent IDs. The caller supplies the complete chain when
+there are more layers. The engine requires kernel timings, inventory
+capacity, and limits in the validated pack. The test extension supplies
+them for the CT-01 pack.
+
+WAP §9 names the transfer endpoints as `{kind,id}` without a tile ID
+format. The core uses engine place kinds and zero-based `"x,y"` for a
+tile ID. Until EN-07 defines the durable snapshot encoding, the
+`world_initialized` event hashes the canonical tick-zero core state.
+Equal initial stacks emit their named placement events, then merge into
+the lowest content ID at that place before cap checks.
+
+Engine §6 says RR-01 refuses true footprint flags, but its merged loader
+and the required CT-01 fixture admit them. Movement stays static-terrain
+only. The engine keeps the already-validated flags in component state.
+The owner can resolve this discrepancy through the plan §7 change-request
+process without changing kernel movement.
