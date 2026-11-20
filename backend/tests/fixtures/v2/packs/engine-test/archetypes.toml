@@ -38,4 +38,4 @@ id = "arch_f"
 kind = "structure"
 stackable = false
 matter = { mineral = 1 }
-components = { fuel = { ticks_left = 2 }, shelter = {}, footprint = { blocks_movement = false, opaque = true } }
+components = { fuel = { ticks_left = 2 }, shelter = {}, footprint = { blocks_movement = false, opaque = false } }

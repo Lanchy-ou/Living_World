@@ -913,3 +913,10 @@ Rejected by the owner (2026-11-20); engine §6 stays; the refusal goes to P3.5-R
   validated component state and does not interpret footprint flags.
 - Recommendation. Accept the flags as inert stored data for v0.1. Keep
   footprint-based movement and sight outside this task.
+
+## OQ-P3.5-RR-02: Footprint flag refusal code
+
+World engine §6 requires the v0.1 loader to refuse footprint flags set to
+`true`. RR-02 uses `OUT_OF_RANGE` at the individual flag's path because the
+only allowed boolean value is `false` (rule representation §7). The
+diagnostic code is pending owner confirmation.

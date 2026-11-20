@@ -161,7 +161,15 @@ def component(catalog: Catalog, key: str, data: object, path: str, *, complete: 
                 "store must hold a portable archetype",
             )
         elif field in ("blocks_movement", "opaque"):
-            boolean(val, path)
+            # The complete pass merges fields already checked on input.
+            if not complete:
+                field_path = f"{path}.{key}.{field}"
+                require(
+                    not boolean(val, field_path),
+                    "OUT_OF_RANGE",
+                    field_path,
+                    "footprint flags must be false in v0.1",
+                )
         else:
             integer(val, path, 1 if field in ("slots_per_unit", "work_required") else 0)
     if complete:

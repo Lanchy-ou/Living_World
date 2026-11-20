@@ -52,12 +52,14 @@ def add_rule(path: Path, body: str) -> None:
         stream.write("\n\n[[rule]]\n" + body.strip() + "\n")
 
 
-def refused(path: Path, vocab: Vocabulary, code: str) -> None:
+def refused(path: Path, vocab: Vocabulary, code: str, *, expected_path: str | None = None) -> None:
     from living_island.world.v2.rules import ContentError
 
     with pytest.raises(ContentError) as error:
         load(path, vocab)
     assert error.value.code == code
+    if expected_path is not None:
+        assert error.value.issue.path == expected_path
 
 
 def test_rr01_canonical_content_encoding() -> None:
@@ -119,7 +121,7 @@ def test_rr03_each_refusal_has_a_positive_control(
 ) -> None:
     assert load(sample, vocab).rules
     replace(sample / case["file"], case["old"], case["new"])
-    refused(sample, vocab, case["code"])
+    refused(sample, vocab, case["code"], expected_path=case.get("path"))
 
 
 def test_rr04_axe_and_symbolic_rot(sample: Path, vocab: Vocabulary) -> None:
