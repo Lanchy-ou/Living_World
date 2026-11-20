@@ -1,2 +1,2 @@
-# Bound to the authored rows in rule-templates.toml, with optional regrowth.
+# Bound by load_compat_pack from rule-templates.toml and, for positive growth, rule-regrowth.toml.
 rule = "${rules}"

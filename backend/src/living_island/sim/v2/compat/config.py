@@ -184,11 +184,15 @@ def _bindings(config: CompatConfig, directory: Path) -> Table:
         "sources": sources,
         "instances": _placements(config, bool(regrowth)),
     }
-    path = directory / "rule-templates.toml"
-    templates = fields(read_toml(path), path.name, "rule regrowth")
-    rules = array(templates["rule"], f"{path.name}:rule")
-    active = [*rules, templates["regrowth"]] if regrowth else rules
-    values["rules"] = bind(active, values, path.name)
+    rule_files = ["rule-templates.toml"]
+    if regrowth:
+        rule_files.append("rule-regrowth.toml")
+    active: list[Table] = []
+    for filename in rule_files:
+        template = fields(read_toml(directory / filename), filename, "rule")
+        rules = array(template["rule"], f"{filename}:rule")
+        active.extend(bind(rules, values, filename))
+    values["rules"] = active
     return values
 
 
@@ -257,7 +261,7 @@ def load_compat_pack(
     map_raw = layout.read_bytes()
     check_digest(map_raw, expected_map, "map blob")
     if seed is not None:
-        if type(seed) is not int or (seed != config["meta"]["seed"] and seed not in P2_SEEDS):
+        if seed != config["meta"]["seed"] and seed not in P2_SEEDS:
             raise ValueError(f"unregistered P2 seed override: {seed}")
         config["meta"]["seed"] = seed
     pack = load_pack(directory, vocabulary, bindings=_bindings(config, directory))

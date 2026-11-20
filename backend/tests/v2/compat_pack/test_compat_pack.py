@@ -218,9 +218,21 @@ def test_wap34_wrong_map_and_seed_refused(tmp_path: Path) -> None:
     wrong_map.write_bytes(ISLAND.read_bytes() + b"\n")
     with pytest.raises(ValueError, match="map blob SHA-256"):
         load(map_path=wrong_map)
-    for seed in (1, True):
-        with pytest.raises(ValueError, match="unregistered P2 seed"):
-            load(seed=seed)
+    with pytest.raises(ValueError, match="unregistered P2 seed"):
+        load(seed=1)
+
+
+def test_wap34_production_manifest_and_registered_p2_seeds() -> None:
+    from living_island.sim.v2.compat.config import P2_SEEDS
+
+    matrix = FIXTURES / "matrix"
+    seed = 1007489817
+    assert_fixture_manifest(load(seed=seed), matrix / f"acceptance-production-base-{seed}.json.gz")
+    fixture_seeds = {
+        int(path.name.removesuffix(".json.gz").rsplit("-", 1)[1])
+        for path in matrix.glob("*.json.gz")
+    }
+    assert P2_SEEDS == fixture_seeds
 
 
 def test_wap34_materialization_requires_production_pin() -> None:
@@ -270,13 +282,13 @@ def test_ct03_reject_bad_code_table(
         load(pack=copy)
 
 
-def test_template_rule_array_is_validated_at_load(tmp_path: Path) -> None:
+@pytest.mark.parametrize("filename", ["rule-templates.toml", "rule-regrowth.toml"])
+def test_template_rule_array_is_validated_at_load(tmp_path: Path, filename: str) -> None:
     from living_island.world.v2.rules import ContentError
 
     copy = shutil.copytree(PACK, tmp_path / PACK.name)
-    path = copy / "rule-templates.toml"
-    path.write_text("rule = false\n[regrowth]\n", encoding="utf-8")
-    with pytest.raises(ContentError, match="rule-templates.toml:rule.*expected an array"):
+    (copy / filename).write_text("rule = false\n", encoding="utf-8")
+    with pytest.raises(ContentError, match=rf"{filename}:rule.*expected an array"):
         load(pack=copy)
 
 

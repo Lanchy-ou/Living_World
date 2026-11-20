@@ -84,11 +84,3 @@ conditions = [{ id = "cave", kind = "terrain_near", terrain = "cave", distance =
 work_ticks = { param = "duration_ticks" }
 effects = [{ op = "need", need = "stamina", delta = "${cave_stamina_gain}", timing = "per_tick" }]
 phenomena = { success = ["sleeps"], unmet = ["nothing_happens"], unmet_by_check = { cave = ["nothing_happens"] } }
-
-[regrowth]
-id = "compat_regrow_fruit"
-trigger = "${regrowth_trigger}"
-subject = { archetype = "fruit_tree" }
-conditions = [{ id = "room", kind = "state", of = "subject", field = "store.free", op = ">=", value = 1 }]
-conservation = "source"
-outputs = [{ archetype = "fruit", at = "subject.store", quantity = { upto = "${regrow_per_cycle}", of = "fit:subject.store" }, source = "fruit_regrowth" }]
