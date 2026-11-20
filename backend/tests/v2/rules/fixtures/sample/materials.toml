@@ -1,0 +1,7 @@
+[[material]]
+id = "stone"
+properties = { hardness = 4 }
+
+[[material]]
+id = "wood"
+properties = { long = true, strength = 2 }

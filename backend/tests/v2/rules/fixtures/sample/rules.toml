@@ -1,0 +1,54 @@
+[[rule]]
+id = "make_axe"
+trigger = "verb:combine"
+work_ticks = 6
+inputs = [{slot = "head", where = { archetype = "head", hardness_min = 4 }, qty = 1}, {slot = "handle", where = { archetype = "handle" }, qty = 1}, {slot = "binding", where = { archetype = "binding" }, qty = 1}]
+outputs = [{archetype = "axe", material_from = "head", quantity = 1, at = "actor"}]
+
+[[rule]]
+id = "compat_sleep_cave"
+trigger = "verb:sleep"
+work_ticks = { param = "duration_ticks" }
+conditions = [{id = "cave", kind = "terrain_near", terrain = "cave", distance = {min = 0, max = 1}}]
+effects = [{op = "need", need = "stamina", delta = 220, timing = "per_tick"}]
+
+[[rule]]
+id = "compat_sleep_plain"
+trigger = "verb:sleep"
+work_ticks = { param = "duration_ticks" }
+
+[[rule]]
+id = "fill_bottle"
+trigger = "verb:fill"
+work_ticks = 1
+target = {where = {archetype = "bottle"}}
+conservation = "source"
+outputs = [{archetype = "water", quantity = {of = "fit:target.contents"}, at = "target.contents", source = "spring"}]
+
+[[rule]]
+id = "fruit_rots"
+trigger = "when:old"
+subject = { archetype = "fruit" }
+conditions = [{id = "old", kind = "state", of = "subject", field = "age", op = ">=", value = 432}]
+outputs = [{archetype = "rotten_fruit", quantity = {of = "subject.quantity"}, at = "subject.place"}]
+effects = [{op = "consume", of = "subject"}]
+
+[[rule]]
+id = "finish_site"
+trigger = "when:done"
+subject = { archetype = "site" }
+conditions = [{id = "done", kind = "work_complete"}]
+effects = [{op = "consume", of = "subject"}]
+
+[[rule]]
+id = "nap"
+trigger = "verb:rest"
+work_ticks = 6
+effects = [{op = "need", need = "stamina", delta = 120, timing = "per_tick"}]
+
+[[rule]]
+id = "mark_site"
+trigger = "verb:build"
+target = { terrain = "grass" }
+work_ticks = 2
+outputs = [{archetype = "site", quantity = 1, at = "target.tile"}]

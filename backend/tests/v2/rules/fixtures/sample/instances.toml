@@ -1,0 +1,8 @@
+[[instance]]
+id = "placed_handle"
+archetype = "handle"
+at = { tile = [1, 2] }
+quantity = 3
+properties = { dry = true }
+apparent = { strength = 5 }
+tell = ["dry"]

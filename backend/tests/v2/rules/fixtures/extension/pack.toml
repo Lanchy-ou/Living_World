@@ -1,0 +1,6 @@
+pack_id = "extension"
+pack_version = "0.1"
+vocabulary_version = "vocab/0.1"
+vocabulary_hash = "${vocabulary_hash}"
+extends = "sample"
+disable = ["compat_sleep_cave"]

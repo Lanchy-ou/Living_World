@@ -1,0 +1,55 @@
+# Each row changes one property of the common positive-control pack.
+[[case]]
+code = "UNKNOWN_TERM"
+file = "rules.toml"
+old = 'trigger = "verb:rest"'
+new = 'trigger = "verb:missing"'
+
+[[case]]
+code = "DUPLICATE_ID"
+file = "rules.toml"
+old = 'id = "nap"'
+new = 'id = "make_axe"'
+
+[[case]]
+code = "OUT_OF_RANGE"
+file = "rules.toml"
+old = "work_ticks = 6"
+new = "work_ticks = 0"
+
+[[case]]
+code = "BAD_SHAPE"
+file = "rules.toml"
+old = 'target = { terrain = "grass" }'
+new = 'target = { where = {} }'
+
+[[case]]
+code = "CONSERVATION"
+file = "archetypes.toml"
+old = "mineral = 1, plant = 2"
+new = "mineral = 1, plant = 3"
+
+[[case]]
+code = "UNDECLARED_SOURCE"
+file = "pack.toml"
+old = "max_per_application = 2"
+new = ""
+
+[[case]]
+code = "NEED_RATE"
+file = "rules.toml"
+old = "delta = 120"
+new = "delta = 221"
+
+[[case]]
+code = "TELL_MISSING"
+file = "instances.toml"
+old = 'tell = ["dry"]'
+new = "tell = []"
+
+[[case]]
+code = "INTERRUPT_MODE"
+file = "rules.toml"
+old = 'trigger = "when:old"'
+new = '''trigger = "when:old"
+on_interrupt = "lose"'''

@@ -1,0 +1,378 @@
+vocabulary_version = "vocab/0.1"
+
+[[need]]
+id = "satiety"
+polarity = "higher_is_better"
+
+[[need]]
+id = "hydration"
+polarity = "higher_is_better"
+
+[[need]]
+id = "stamina"
+polarity = "higher_is_better"
+
+[[need]]
+id = "health"
+polarity = "higher_is_better"
+
+[[need]]
+id = "mental_fatigue"
+polarity = "higher_is_worse"
+
+[[matter_class]]
+id = "mineral"
+
+[[matter_class]]
+id = "plant"
+
+[[matter_class]]
+id = "water"
+
+[[property]]
+id = "hardness"
+domain = "scale"
+observability = "visible"
+descriptors = [{ upto = 1, word = "soft" }, { upto = 3, word = "firm" }, { upto = 5, word = "hard" }]
+default = 0
+
+[[property]]
+id = "strength"
+domain = "scale"
+observability = "visible"
+descriptors = [{ upto = 1, word = "weak" }, { upto = 3, word = "sturdy" }, { upto = 5, word = "strong" }]
+default = 0
+
+[[property]]
+id = "weight"
+domain = "scale"
+observability = "on_inspect"
+descriptors = [{ upto = 1, word = "light" }, { upto = 3, word = "heavy" }, { upto = 5, word = "very heavy" }]
+default = 0
+
+[[property]]
+id = "sharp"
+domain = "bool"
+observability = "visible"
+descriptors = [{ value = true, word = "sharp" }, { value = false, word = "blunt" }]
+default = false
+
+[[property]]
+id = "long"
+domain = "bool"
+observability = "visible"
+descriptors = [{ value = true, word = "long" }, { value = false, word = "short" }]
+default = false
+
+[[property]]
+id = "dry"
+domain = "bool"
+observability = "visible"
+descriptors = [{ value = true, word = "dry" }, { value = false, word = "damp" }]
+default = false
+
+[[property]]
+id = "flexible"
+domain = "bool"
+observability = "on_inspect"
+descriptors = [{ value = true, word = "bends easily" }, { value = false, word = "stiff" }]
+default = false
+
+[[property]]
+id = "malleable"
+domain = "bool"
+observability = "on_inspect"
+descriptors = [{ value = true, word = "can be shaped" }, { value = false, word = "keeps its shape" }]
+default = false
+
+[[property]]
+id = "flammable"
+domain = "bool"
+observability = "on_use"
+descriptors = []
+default = false
+
+[[property]]
+id = "edible"
+domain = "bool"
+observability = "on_use"
+descriptors = []
+default = false
+
+[[property]]
+id = "brittle"
+domain = "bool"
+observability = "on_use"
+descriptors = []
+default = false
+
+[[property]]
+id = "watertight"
+domain = "bool"
+observability = "on_use"
+descriptors = []
+default = false
+
+[[property]]
+id = "fruit_amount"
+domain = "count"
+observability = "visible"
+descriptors = [{ upto = 0, word = "empty" }, { upto = 2, word = "few" }, { upto = 3, word = "many" }]
+
+[[property]]
+id = "stock_amount"
+domain = "count"
+observability = "visible"
+descriptors = [{ upto = 0, word = "empty" }, { upto = 3, word = "a little" }, { upto = 4, word = "plenty" }]
+
+[[property]]
+id = "water_amount"
+domain = "count"
+observability = "visible"
+descriptors = [{ upto = 0, word = "empty" }, { upto = 1, word = "one serving" }, { upto = 2, word = "two servings" }]
+
+[[property]]
+id = "wear_state"
+domain = "count"
+observability = "visible"
+descriptors = [{ upto = 2, word = "nearly broken" }, { upto = 9, word = "worn" }, { upto = 10, word = "sound" }]
+
+[[property]]
+id = "fire_state"
+domain = "count"
+observability = "visible"
+descriptors = [{ upto = 0, word = "out" }, { upto = 3, word = "embers" }, { upto = 4, word = "burning" }]
+
+[[verb]]
+id = "gather"
+description = "Take something from a plant, a pile or a deposit next to you"
+target = { kinds = ["entity"], class = "store", must_be_held = false }
+reach = { min = 1, max = 1 }
+params = []
+
+[[verb]]
+id = "eat"
+description = "Eat something you hold"
+target = { kinds = [], must_be_held = false }
+reach = { min = 0, max = 0 }
+params = []
+
+[[verb]]
+id = "drink"
+description = "Drink, from a spring next to you or from something you hold"
+target = { kinds = [], must_be_held = false }
+reach = { min = 0, max = 0 }
+params = []
+
+[[verb]]
+id = "fill"
+description = "Fill something you hold with water"
+target = { kinds = ["entity"], class = "container", must_be_held = true }
+reach = { min = 0, max = 1 }
+params = []
+
+[[verb]]
+id = "rest"
+description = "Rest without sleeping"
+target = { kinds = [], must_be_held = false }
+reach = { min = 0, max = 0 }
+params = []
+
+[[verb]]
+id = "sleep"
+description = "Sleep for a number of ticks you choose (6–54)"
+target = { kinds = [], must_be_held = false }
+reach = { min = 0, max = 0 }
+params = [ { name = "duration_ticks", type = "integer", min = 6, max = 54 } ]
+awareness_during = "asleep"
+duration_param = "duration_ticks"
+
+[[verb]]
+id = "combine"
+description = "Try to put held things together"
+target = { kinds = [], must_be_held = false }
+reach = { min = 0, max = 0 }
+params = []
+
+[[verb]]
+id = "strike"
+description = "Strike something with a held tool"
+target = { kinds = ["entity"], must_be_held = false }
+reach = { min = 0, max = 1 }
+params = []
+
+[[verb]]
+id = "cut"
+description = "Cut something with a held tool"
+target = { kinds = ["entity"], must_be_held = false }
+reach = { min = 0, max = 1 }
+params = []
+
+[[verb]]
+id = "light"
+description = "Try to set something burning, or feed a fire"
+target = { kinds = ["entity"], must_be_held = false }
+reach = { min = 0, max = 1 }
+params = []
+
+[[verb]]
+id = "build"
+description = "Start building on a tile next to you"
+target = { kinds = ["tile"], must_be_held = false }
+reach = { min = 0, max = 1 }
+params = []
+
+[[phenomenon]]
+id = "picks_fruit"
+text = "You pick a fruit."
+watcher_visible = true
+
+[[phenomenon]]
+id = "takes_some"
+text = "You take some."
+watcher_visible = true
+
+[[phenomenon]]
+id = "finds_nothing"
+text = "There is nothing to take."
+watcher_visible = true
+
+[[phenomenon]]
+id = "hands_full"
+text = "Your hands are full."
+watcher_visible = false
+
+[[phenomenon]]
+id = "too_tired"
+text = "You are too tired."
+watcher_visible = false
+
+[[phenomenon]]
+id = "tastes_good"
+text = "It tastes good."
+watcher_visible = false
+
+[[phenomenon]]
+id = "tastes_bad"
+text = "It tastes bad."
+watcher_visible = false
+
+[[phenomenon]]
+id = "not_hungry"
+text = "You are not hungry."
+watcher_visible = false
+
+[[phenomenon]]
+id = "drinks"
+text = "You drink."
+watcher_visible = true
+
+[[phenomenon]]
+id = "not_thirsty"
+text = "You are not thirsty."
+watcher_visible = false
+
+[[phenomenon]]
+id = "no_water_here"
+text = "There is no water to drink."
+watcher_visible = true
+
+[[phenomenon]]
+id = "fills_up"
+text = "It fills with water."
+watcher_visible = true
+
+[[phenomenon]]
+id = "already_full"
+text = "It is already full."
+watcher_visible = false
+
+[[phenomenon]]
+id = "rests"
+text = "You rest."
+watcher_visible = true
+
+[[phenomenon]]
+id = "sleeps"
+text = "You sleep."
+watcher_visible = true
+
+[[phenomenon]]
+id = "nothing_happens"
+text = "Nothing happens."
+watcher_visible = true
+
+[[phenomenon]]
+id = "leaves_dent"
+text = "It leaves a dent."
+watcher_visible = true
+
+[[phenomenon]]
+id = "chips_off"
+text = "A chip flies off."
+watcher_visible = true
+
+[[phenomenon]]
+id = "splits"
+text = "It splits."
+watcher_visible = true
+
+[[phenomenon]]
+id = "cuts_through"
+text = "It cuts through."
+watcher_visible = true
+
+[[phenomenon]]
+id = "does_not_cut"
+text = "It does not cut."
+watcher_visible = true
+
+[[phenomenon]]
+id = "fits_together"
+text = "The pieces fit together."
+watcher_visible = true
+
+[[phenomenon]]
+id = "falls_apart"
+text = "It falls apart."
+watcher_visible = true
+
+[[phenomenon]]
+id = "slips"
+text = "It slips."
+watcher_visible = true
+
+[[phenomenon]]
+id = "snaps"
+text = "It snaps."
+watcher_visible = true
+
+[[phenomenon]]
+id = "holds_firm"
+text = "It holds firm."
+watcher_visible = true
+
+[[phenomenon]]
+id = "smokes"
+text = "It smokes."
+watcher_visible = true
+
+[[phenomenon]]
+id = "catches_fire"
+text = "It catches fire."
+watcher_visible = true
+
+[[phenomenon]]
+id = "fizzles"
+text = "It fizzles out."
+watcher_visible = true
+
+[[phenomenon]]
+id = "site_marked"
+text = "You mark out the ground."
+watcher_visible = true
+
+[[phenomenon]]
+id = "ground_unsuitable"
+text = "The ground is not right for this."
+watcher_visible = true
