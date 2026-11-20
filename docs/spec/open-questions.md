@@ -842,3 +842,20 @@ confirmation.
   during v2 test execution so the legacy checks run against the v1 inventory.
   Downstream v2 suites need the same separation while the v1 registration
   lane remains active.
+
+## OQ-P3.5-CT-02: Compatibility rule templates
+
+Starter content §1 names the pack files, and §4.7 requires the compatibility
+pack to omit the regrowth rule when the admitted v1 config has zero growth.
+RR-01 has no conditional entry within a pack's rule array. The compatibility
+pack keeps its verb rules in `rule-templates.toml` and the periodic rule in
+`rule-regrowth.toml`. Both files use `[[rule]]` so tools can discover every
+authored rule ID.
+
+The pack loads only through `load_compat_pack`. After it admits the v1
+configuration, the loader reads the verb templates and includes the
+regrowth template only for positive growth. It fills `rules.toml` with that
+whole typed `rule` array using the confirmed OQ-P3.5-RR-01 whole-value
+placeholder format. The zero-growth binding also omits the corresponding
+source and phase offsets. The recommendation is to keep this layout as
+a compatibility pack encoding choice.

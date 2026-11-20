@@ -1,0 +1,30 @@
+[compat_gather_fruit]
+target = "OUT_OF_REACH"
+stamina = "EXHAUSTED"
+room = "INVENTORY_FULL"
+stock = "RESOURCE_TAKEN"
+world_limit = "defect"
+
+[compat_eat_fruit]
+food = "NO_ITEM"
+need = "NO_NEED"
+world_limit = "defect"
+
+[compat_drink_spring]
+need = "NO_NEED"
+spring = "OUT_OF_REACH"
+
+[compat_drink_canteen]
+canteen = "NO_ITEM"
+need = "NO_NEED"
+water = "NO_WATER"
+world_limit = "defect"
+
+[compat_fill_canteen]
+target = "NO_ITEM"
+spring = "OUT_OF_REACH"
+room = "ALREADY_FULL"
+world_limit = "defect"
+
+[compat_sleep_cave]
+cave = "unreachable"

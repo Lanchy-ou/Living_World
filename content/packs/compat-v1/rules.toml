@@ -1,0 +1,2 @@
+# Bound by load_compat_pack from rule-templates.toml and, for positive growth, rule-regrowth.toml.
+rule = "${rules}"

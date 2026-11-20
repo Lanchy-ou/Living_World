@@ -1,0 +1,10 @@
+[[material]]
+id = "wood"
+properties = { hardness = 2, strength = 3, weight = 2, flammable = true }
+
+[[material]]
+id = "fruit"
+properties = { hardness = 1, weight = 1, edible = true }
+
+[[material]]
+id = "water"

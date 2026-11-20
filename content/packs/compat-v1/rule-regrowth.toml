@@ -1,0 +1,7 @@
+[[rule]]
+id = "compat_regrow_fruit"
+trigger = "${regrowth_trigger}"
+subject = { archetype = "fruit_tree" }
+conditions = [{ id = "room", kind = "state", of = "subject", field = "store.free", op = ">=", value = 1 }]
+conservation = "source"
+outputs = [{ archetype = "fruit", at = "subject.store", quantity = { upto = "${regrow_per_cycle}", of = "fit:subject.store" }, source = "fruit_regrowth" }]

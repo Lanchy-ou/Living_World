@@ -1,0 +1,32 @@
+[[archetype]]
+id = "fruit_tree"
+kind = "feature"
+material = "wood"
+stackable = false
+components = { store = { archetype = "fruit", capacity = "${max_stock_per_tree}" } }
+observe = [{ field = "store.count", as = "fruit_amount" }]
+
+[[archetype]]
+id = "fruit"
+kind = "item"
+material = "fruit"
+stackable = true
+matter = { plant = 1 }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "canteen"
+kind = "item"
+stackable = false
+matter = { mineral = 1 }
+properties = { watertight = true }
+components = { portable = { slots_per_unit = 1 }, container = { capacity = "${capacity_servings}", accepts = { archetype = "water" } } }
+observe = [{ field = "container.count:water", as = "water_amount" }]
+
+[[archetype]]
+id = "water"
+kind = "item"
+material = "water"
+stackable = true
+matter = { water = 1 }
+components = { portable = { slots_per_unit = 1 } }

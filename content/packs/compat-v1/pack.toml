@@ -1,0 +1,78 @@
+pack_id = "compat-v1"
+pack_version = "0.1"
+vocabulary_version = "vocab/0.1"
+vocabulary_hash = "57554435492d6f3db83006a4510b292f8b0d1ebc70c3393663fd1a9ad94cf286"
+enabled_verbs = ["gather", "eat", "drink", "fill", "rest", "sleep"]
+enabled_needs = ["satiety", "hydration", "stamina", "health"]
+inventory_slots = "${slot_capacity}"
+sight_while_asleep = true
+sources = "${sources}"
+
+[needs.satiety]
+min = "${min_value}"
+max = "${max_value}"
+initial = "${initial_satiety}"
+band_cutoffs = "${need_band_cutoffs}"
+max_gain_per_tick = "${satiety_gain_bound}"
+max_loss_per_tick = "${satiety_loss_bound}"
+thresholds = [{ id = "urgent", at = "${urgent_satiety_below}", wakes = true }]
+
+[needs.hydration]
+min = "${min_value}"
+max = "${max_value}"
+initial = "${initial_hydration}"
+band_cutoffs = "${need_band_cutoffs}"
+max_gain_per_tick = "${hydration_gain_bound}"
+max_loss_per_tick = "${hydration_loss_bound}"
+thresholds = [{ id = "urgent", at = "${urgent_hydration_below}", wakes = true }]
+
+[needs.stamina]
+min = "${min_value}"
+max = "${max_value}"
+initial = "${initial_stamina}"
+band_cutoffs = "${need_band_cutoffs}"
+max_gain_per_tick = "${stamina_gain_bound}"
+max_loss_per_tick = "${stamina_loss_bound}"
+thresholds = [{ id = "urgent", at = "${urgent_stamina_below}", wakes = true }]
+
+[needs.health]
+min = "${min_value}"
+max = "${max_value}"
+initial = "${initial_health}"
+band_cutoffs = "${need_band_cutoffs}"
+max_gain_per_tick = "${health_gain_bound}"
+max_loss_per_tick = "${health_loss_bound}"
+
+[physiology]
+satiety_awake_decay_per_tick = "${satiety_decay_per_tick}"
+satiety_asleep_decay_per_tick = "${satiety_decay_per_tick}"
+hydration_awake_decay_per_tick = "${hydration_decay_per_tick}"
+hydration_asleep_decay_per_tick = "${hydration_decay_per_tick}"
+stamina_awake_decay_per_tick = "${stamina_awake_decay_per_tick}"
+stamina_move_extra_cost_per_tick = "${stamina_move_extra_cost_per_tick}"
+health_loss_per_tick_if_deprived = "${health_loss_per_tick_if_deprived}"
+health_recovery_sleep_per_tick = "${health_recovery_sleep_per_tick}"
+health_recovery_min_satiety = "${health_recovery_min_satiety}"
+health_recovery_min_hydration = "${health_recovery_min_hydration}"
+
+[timing]
+invalid_attempt_ticks = "${invalid_attempt_ticks}"
+give_ticks = "${give_ticks}"
+pick_up_ticks = "${pick_up_ticks}"
+wait_ticks = "${wait_ticks}"
+talk_ticks = "${talk_ticks}"
+sleep_ticks = "${sleep_ticks}"
+drop_ticks = 1
+inspect_ticks = 1
+
+[timing.attempt_ticks]
+gather = "${invalid_attempt_ticks}"
+eat = "${invalid_attempt_ticks}"
+drink = "${invalid_attempt_ticks}"
+fill = "${invalid_attempt_ticks}"
+rest = "${invalid_attempt_ticks}"
+sleep = "${invalid_attempt_ticks}"
+
+[limits]
+max_entities_per_tile = 16
+max_entity_units_world = "${max_entity_units_world}"
