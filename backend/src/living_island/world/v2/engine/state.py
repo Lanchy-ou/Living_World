@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass
 from typing import Literal, NotRequired, TypedDict
+
+from pydantic import BaseModel
+from pydantic_core import to_jsonable_python
 
 from ..protocol import (
     Action,
@@ -24,7 +27,7 @@ from ..protocol import (
     WorldReport,
 )
 from ..rules import Rule
-from ..rules.schema import Table
+from ..rules.schema import Table, canonical_json_bytes, content_hash
 from .ids import EntityCounter
 
 type PropertyValues = dict[str, int | bool]
@@ -455,6 +458,36 @@ class WorldState:
     proposals: dict[str, Proposal] = field(default_factory=dict)
     agreements: dict[str, Agreement] = field(default_factory=dict)
     turn_ordinals: dict[str, int] = field(default_factory=dict)
+
+
+def _set_member_key(member: object) -> tuple[int, int | str | bytes]:
+    if type(member) is int:
+        return (0, member)
+    if isinstance(member, str):
+        return (1, member)
+    return (2, canonical_json_bytes(to_jsonable_python(member)))
+
+
+def _ordered_snapshot_value(value: object) -> object:
+    if is_dataclass(value):
+        return {
+            entry.name: _ordered_snapshot_value(getattr(value, entry.name))
+            for entry in fields(value)
+        }
+    if isinstance(value, BaseModel):
+        return _ordered_snapshot_value(value.model_dump(mode="python"))
+    if isinstance(value, dict):
+        return {key: _ordered_snapshot_value(item) for key, item in value.items()}
+    if isinstance(value, (set, frozenset)):
+        return sorted(map(_ordered_snapshot_value, value), key=_set_member_key)
+    if isinstance(value, (tuple, list)):
+        return [_ordered_snapshot_value(item) for item in value]
+    return value
+
+
+def state_snapshot_hash(state: WorldState) -> str:
+    """Hash the engine state with canonical ordering at every unordered collection."""
+    return content_hash(to_jsonable_python(_ordered_snapshot_value(state)))
 
 
 @dataclass(frozen=True)

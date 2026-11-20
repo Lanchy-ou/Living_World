@@ -2,10 +2,8 @@
 
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import dataclass, field, replace
 from typing import Literal, cast
-
-from pydantic_core import to_jsonable_python
 
 from ..protocol import (
     ActionFeedback,
@@ -59,6 +57,7 @@ from .state import (
     TimedKernel,
     Wait,
     WorldState,
+    state_snapshot_hash,
 )
 from .validate import EnginePack, WorldSetup, bind_turns, check_acknowledgements
 
@@ -532,13 +531,6 @@ def place_entities(state: WorldState, pack: EnginePack) -> None:
             parent = state.entities[place.container_id]
             if "container" not in parent.components or not accepts(pack, parent, entity):
                 raise ValueError(f"container rejects placement {entity.entity_id!r}")
-        seen = {entity.entity_id}
-        while isinstance(place, Inside):
-            if place.container_id in seen:
-                raise ValueError("placement container cycle")
-            seen.add(place.container_id)
-            place = state.entities[place.container_id].place
-
         contents_place = Inside(entity.entity_id)
         declared = pack.placements[entity.entity_id].contents
         if declared and set(declared) != {
@@ -649,8 +641,6 @@ def initialize(pack: Pack, setup: WorldSetup) -> World:
     validate_initial_limits(state, content.limits)
     perception.build_deliveries(TickContext(state, content, writer))
     # EN-07 owns the persistent snapshot format. This hash commits the initial core state.
-    canonical = asdict(state)
-    canonical["static_map"]["opaque_terrains"] = sorted(smap.opaque_terrains)
-    payload["initial_snapshot_hash"] = content_hash(to_jsonable_python(canonical))
+    payload["initial_snapshot_hash"] = state_snapshot_hash(state)
     writer.events[0] = first.model_copy(update={"payload": payload})
     return World(state, content, tuple(writer.events))

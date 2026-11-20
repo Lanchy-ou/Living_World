@@ -1,4 +1,4 @@
-"""Synthetic content and world setup for engine core tests."""
+"""Synthetic content and world setup for shared engine tests."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from living_island.world.v2.engine import World, WorldSetup
     from living_island.world.v2.rules import Pack
 
-BACKEND = Path(__file__).resolve().parents[4]
+BACKEND = Path(__file__).resolve().parents[3]
 ENGINE_TEST = BACKEND / "tests/fixtures/v2/packs/engine-test"
 
 

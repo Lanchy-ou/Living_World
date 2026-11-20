@@ -437,8 +437,6 @@ def complete_kernel(
     action: ActiveAction,
     writer: EventWriter,
 ) -> KernelResult:
-    if not actor.alive:
-        return KernelResult("DEAD")
     command = action.command
     match command:
         case Give() | Drop():

@@ -896,7 +896,9 @@ tile ID. Until EN-07 defines the durable snapshot encoding, the
 Equal initial stacks emit their named placement events, then merge into
 the lowest content ID at that place before cap checks.
 
-## CR-P3.5-EN-01: Footprint flags in v0.1 packs (proposed)
+## CR-P3.5-EN-01: Footprint flags in v0.1 packs
+
+Rejected by the owner (2026-11-20); engine §6 stays; the refusal goes to P3.5-RR-02.
 
 - Current rule. Engine §6 requires static-terrain movement and sight and
   says the loader refuses footprint flags set to true. The merged RR-01
