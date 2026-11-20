@@ -66,10 +66,9 @@ forbidden_modules = [
 [[tool.importlinter.contracts]]
 name = "agents see world only via world.protocol"
 type = "forbidden"
-source_modules = ["living_island.agents"]
-forbidden_modules = ["living_island.world"]
-# Both direct and memory-mediated paths end at the same permitted pure protocol.
-# Other world paths remain forbidden, including indirect memory paths.
+source_modules = ["living_island.agents", "living_island.agents.**"]
+forbidden_modules = ["living_island.world", "living_island.world.*"]
+as_packages = false
 ignore_imports = [
     "living_island.agents.** -> living_island.world.protocol",
     "living_island.memory.** -> living_island.world.protocol",
@@ -79,10 +78,79 @@ unmatched_ignore_imports_alerting = "error"
 [[tool.importlinter.contracts]]
 name = "memory sees world only via world.protocol"
 type = "forbidden"
-source_modules = ["living_island.memory"]
-forbidden_modules = ["living_island.world"]
+source_modules = ["living_island.memory", "living_island.memory.**"]
+forbidden_modules = ["living_island.world", "living_island.world.*"]
+as_packages = false
 ignore_imports = ["living_island.memory.** -> living_island.world.protocol"]
 unmatched_ignore_imports_alerting = "error"
+
+[[tool.importlinter.contracts]]
+name = "agents and memory see world only via the v1 and v2 protocols"
+type = "forbidden"
+source_modules = ["living_island.agents", "living_island.memory"]
+forbidden_modules = ["living_island.world"]
+ignore_imports = [
+    "living_island.agents.** -> living_island.world.protocol",
+    "living_island.memory.** -> living_island.world.protocol",
+    "living_island.agents.** -> living_island.world.v2.protocol",
+    "living_island.memory.** -> living_island.world.v2.protocol",
+]
+# The v1 contracts above keep their exceptions strict. V2 may have no consumers yet.
+unmatched_ignore_imports_alerting = "none"
+
+[[tool.importlinter.contracts]]
+name = "agents and memory initializers do not import world directly"
+type = "forbidden"
+source_modules = ["living_island.agents", "living_island.memory"]
+forbidden_modules = ["living_island.world", "living_island.world.**"]
+as_packages = false
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "world.v2 imports no other living_island subpackage"
+type = "forbidden"
+source_modules = ["living_island.world.v2"]
+forbidden_modules = ["living_island.*"]
+
+[[tool.importlinter.contracts]]
+name = "world.v2 does not import v1 world modules"
+type = "forbidden"
+# Match the v1 package initializer as a module without including its v2 subtree.
+as_packages = false
+source_modules = ["living_island.world.v2", "living_island.world.v2.**"]
+forbidden_modules = [
+    "living_island.world",
+    "living_island.world.actions",
+    "living_island.world.canteen",
+    "living_island.world.content",
+    "living_island.world.death",
+    "living_island.world.dialogue",
+    "living_island.world.engine",
+    "living_island.world.facts",
+    "living_island.world.interrupts",
+    "living_island.world.movement",
+    "living_island.world.observation",
+    "living_island.world.pathfinding",
+    "living_island.world.perception",
+    "living_island.world.physiology",
+    "living_island.world.ports",
+    "living_island.world.protocol",
+    "living_island.world.receipts",
+    "living_island.world.resources",
+    "living_island.world.results",
+    "living_island.world.rng",
+    "living_island.world.rulefacts",
+    "living_island.world.space",
+    "living_island.world.state",
+]
+
+[[tool.importlinter.contracts]]
+name = "world.v2.protocol is standalone: no other living_island modules"
+type = "forbidden"
+source_modules = ["living_island.world.v2.protocol"]
+forbidden_modules = ["living_island", "living_island.**"]
+as_packages = false
+allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 name = "events is read-only: no sim, no persistence"
