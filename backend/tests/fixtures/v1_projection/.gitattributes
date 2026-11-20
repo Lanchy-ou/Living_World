@@ -1,0 +1,3 @@
+# Registry digests are over exact TOML bytes.
+configs/*.toml -text
+*.json.gz binary
