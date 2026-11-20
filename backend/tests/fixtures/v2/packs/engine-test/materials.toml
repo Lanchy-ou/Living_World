@@ -1,0 +1,3 @@
+[[material]]
+id = "mat_a"
+properties = { hardness = 4, dry = true }

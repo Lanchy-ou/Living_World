@@ -859,3 +859,20 @@ whole typed `rule` array using the confirmed OQ-P3.5-RR-01 whole-value
 placeholder format. The zero-growth binding also omits the corresponding
 source and phase offsets. The recommendation is to keep this layout as
 a compatibility pack encoding choice.
+
+## OQ-P3.5-CT-01: Synthetic world setup encoding
+
+Starter content §7 gives engine-test a map and two residents. The RR-01 pack
+format has no manifest fields for either. Until the v2 world initialization
+interface is available, the fixture keeps `layout.map` and a separate
+`world.toml` with `map.layout_file` and two `residents` rows (ID and
+zero-based tile position). This is test setup for the engine tasks. The pack
+loader reads the rule files through the RR-01 boundary.
+
+## OQ-P3.5-CT-01-EN-22: Shared terrain and archetype spelling
+
+The protocol and rule validator declare the terrain `fruit_tree`. The
+compatibility pack uses the same spelling for an archetype. EN-22 treats
+the two terrain declaration literals as terrain references and scans every
+other occurrence as a possible recipe ID. The scan test records the narrow
+exception until the owner confirms how to handle shared spellings.

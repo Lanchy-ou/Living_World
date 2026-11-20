@@ -1,0 +1,113 @@
+# Exercise actor and nearby conditions without per-tick self-invalidation.
+[[rule]]
+id = "rule_a"
+trigger = "verb:rest"
+work_ticks = 3
+on_interrupt = "lose"
+conditions = [
+  { id = "check_a", kind = "awareness", value = "awake" },
+  { id = "check_b", kind = "need", need = "stamina", op = "<", value = "max" },
+  { id = "check_c", kind = "free_slots", op = ">=", value = 1 },
+  { id = "check_d", kind = "terrain_near", terrain = "cave", distance = { min = 0, max = 2 } },
+  { id = "check_e", kind = "entity_near", where = { has_component = "shelter" }, distance = { min = 0, max = 2 } },
+  { id = "check_f", kind = "terrain_at", of = "actor", terrain = "grass" },
+  { id = "check_g", kind = "time_phase", value = "day" },
+]
+effects = [{ op = "need", need = "stamina", delta = 3, timing = "completion" }]
+
+[[rule]]
+id = "rule_b"
+trigger = "verb:gather"
+work_ticks = 1
+target = { where = { archetype = "arch_b" } }
+conditions = [{ id = "check_a", kind = "state", of = "target", field = "store.count", op = ">=", value = 1 }]
+effects = [{ op = "move", from = "target.store", to = "actor", quantity = 1 }]
+
+[[rule]]
+id = "rule_c"
+trigger = "verb:fill"
+work_ticks = 1
+target = { where = { archetype = "arch_c" } }
+conservation = "source"
+outputs = [{ archetype = "arch_a", quantity = { of = "fit:target.contents" }, at = "target.contents", source = "src_a" }]
+
+[[rule]]
+id = "rule_d"
+trigger = "verb:combine"
+work_ticks = 3
+outputs = [{ archetype = "arch_a", quantity = 1, at = "actor.tile" }]
+on_interrupt = { partial = [{ archetype_from = "slot_a", material_from = "slot_a", quantity = 1, at = "actor" }] }
+
+[[rule.inputs]]
+slot = "slot_a"
+qty = 1
+
+[rule.inputs.where]
+archetype = "arch_a"
+material = "mat_a"
+has_component = "portable"
+hardness_min = 3
+hardness_max = 5
+strength_min = 0
+strength_max = 5
+weight_min = 0
+weight_max = 5
+sharp = false
+long = false
+dry = true
+flexible = false
+malleable = false
+flammable = false
+edible = false
+brittle = false
+watertight = false
+
+[[rule]]
+id = "rule_e"
+trigger = "verb:build"
+work_ticks = 4
+target = { terrain = "grass" }
+inputs = [{ slot = "slot_a", where = { archetype = "arch_a" }, qty = 1 }]
+outputs = [{ archetype = "arch_f", quantity = 1, at = "target.tile" }]
+on_interrupt = { keep_progress = "arch_e" }
+
+[[rule]]
+id = "rule_f"
+trigger = "every:3"
+subject = { archetype = "arch_b" }
+conservation = "source"
+outputs = [{ archetype = "arch_a", quantity = { of = "fit:subject.store" }, at = "subject.store", source = "src_a" }]
+
+[[rule]]
+id = "rule_g"
+trigger = "when:check_a"
+subject = { archetype = "arch_e" }
+conditions = [{ id = "check_a", kind = "work_complete" }]
+inputs = [{ slot = "slot_a", where = { archetype = "arch_a" }, qty = 1 }]
+effects = [{ op = "consume", of = "subject" }]
+outputs = [{ archetype = "arch_f", quantity = 1, at = "subject.tile" }]
+
+[[rule]]
+id = "rule_h"
+trigger = "verb:strike"
+work_ticks = 1
+target = { where = { archetype = "arch_b" } }
+instruments = [{ slot = "slot_a", where = { archetype = "arch_d" }, qty = 1 }]
+conservation = "source"
+outputs = [{ archetype = "arch_a", quantity = 1, at = "target.store", source = "src_a" }]
+effects = [{ op = "set_state", of = "slot:slot_a", field = "durability.wear", add = 1 }]
+
+[[rule]]
+id = "rule_i"
+trigger = "when:check_a"
+subject = { archetype = "arch_d" }
+conditions = [{ id = "check_a", kind = "state", of = "subject", field = "durability.left", op = "==", value = 0 }]
+effects = [{ op = "consume", of = "subject" }]
+outputs = [{ archetype = "arch_a", quantity = 1, at = "subject.place" }]
+
+[[rule]]
+id = "rule_j"
+trigger = "every:4"
+subject = { archetype = "arch_c" }
+conservation = "source"
+outputs = [{ archetype = "arch_a", quantity = 1, at = "subject.contents", source = "src_a" }]
