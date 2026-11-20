@@ -1,0 +1,23 @@
+[unmatched.gather]
+entries = []
+default = ["nothing_happens"]
+
+[unmatched.eat]
+entries = [{ when = { compare = ["input.edible", "==", false] }, phenomena = ["tastes_bad"] }]
+default = ["nothing_happens"]
+
+[unmatched.drink]
+entries = []
+default = ["nothing_happens"]
+
+[unmatched.fill]
+entries = []
+default = ["nothing_happens"]
+
+[unmatched.rest]
+entries = []
+default = ["nothing_happens"]
+
+[unmatched.sleep]
+entries = []
+default = ["nothing_happens"]

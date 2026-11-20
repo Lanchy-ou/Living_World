@@ -1,0 +1,2 @@
+# Bound to the authored rows in rule-templates.toml, with optional regrowth.
+rule = "${rules}"

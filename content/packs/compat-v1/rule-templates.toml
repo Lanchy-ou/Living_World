@@ -1,0 +1,94 @@
+[[rule]]
+id = "compat_gather_fruit"
+trigger = "verb:gather"
+target = { where = { archetype = "fruit_tree" } }
+conditions = [
+  { id = "stamina", kind = "need", need = "stamina", op = ">", value = "min" },
+  { id = "room", kind = "free_slots", op = ">=", value = 1 },
+  { id = "stock", kind = "state", of = "target", field = "store.count", op = ">=", value = 1 },
+]
+work_ticks = "${gather_ticks}"
+exhaustion_stops = true
+effects = [
+  { op = "move", from = "target.store", to = "actor", quantity = 1 },
+  { op = "need", need = "stamina", delta = "${gather_stamina_delta}", timing = "completion" },
+]
+phenomena = { success = ["picks_fruit"], unmet = ["nothing_happens"], unmet_by_check = { stamina = ["too_tired"], room = ["hands_full"], stock = ["finds_nothing"] } }
+
+[[rule]]
+id = "compat_eat_fruit"
+trigger = "verb:eat"
+inputs = [{ slot = "food", where = { archetype = "fruit" }, qty = 1 }]
+conditions = [{ id = "need", kind = "need", need = "satiety", op = "<", value = "max" }]
+work_ticks = "${eat_ticks}"
+effects = [{ op = "need", need = "satiety", delta = "${satiety_gain_per_fruit}", timing = "completion" }]
+phenomena = { success = ["tastes_good"], unmet = ["nothing_happens"], unmet_by_check = { need = ["not_hungry"] } }
+
+[[rule]]
+id = "compat_drink_spring"
+trigger = "verb:drink"
+conditions = [
+  { id = "need", kind = "need", need = "hydration", op = "<", value = "max" },
+  { id = "spring", kind = "terrain_near", terrain = "spring", distance = { min = 1, max = 1 } },
+]
+work_ticks = "${drink_ticks}"
+effects = [{ op = "need", need = "hydration", delta = "${hydration_gain_per_serving}", timing = "completion" }]
+phenomena = { success = ["drinks"], unmet = ["nothing_happens"], unmet_by_check = { need = ["not_thirsty"], spring = ["no_water_here"] } }
+
+[[rule]]
+id = "compat_drink_canteen"
+trigger = "verb:drink"
+instruments = [{ slot = "canteen", where = { archetype = "canteen" }, qty = 1 }]
+conditions = [
+  { id = "need", kind = "need", need = "hydration", op = "<", value = "max" },
+  { id = "water", kind = "state", of = "slot:canteen", field = "container.count:water", op = ">=", value = 1 },
+]
+work_ticks = "${drink_ticks}"
+effects = [
+  { op = "consume", of = "slot:canteen.contents", archetype = "water", quantity = 1 },
+  { op = "need", need = "hydration", delta = "${hydration_gain_per_serving}", timing = "completion" },
+]
+phenomena = { success = ["drinks"], unmet = ["nothing_happens"], unmet_by_check = { need = ["not_thirsty"], water = ["no_water_here"] } }
+
+[[rule]]
+id = "compat_fill_canteen"
+trigger = "verb:fill"
+target = { where = { archetype = "canteen" } }
+conditions = [
+  { id = "spring", kind = "terrain_near", terrain = "spring", distance = { min = 1, max = 1 } },
+  { id = "room", kind = "state", of = "target", field = "container.free", op = ">=", value = 1 },
+]
+work_ticks = "${fill_canteen_ticks}"
+conservation = "source"
+outputs = [{ archetype = "water", at = "target.contents", quantity = { of = "fit:target.contents" }, source = "spring_water" }]
+phenomena = { success = ["fills_up"], unmet = ["nothing_happens"], unmet_by_check = { spring = ["no_water_here"], room = ["already_full"] } }
+
+[[rule]]
+id = "compat_rest"
+trigger = "verb:rest"
+work_ticks = "${rest_ticks}"
+effects = [{ op = "need", need = "stamina", delta = "${stamina_rest_gain_per_tick}", timing = "per_tick" }]
+phenomena = { success = ["rests"], unmet = ["nothing_happens"] }
+
+[[rule]]
+id = "compat_sleep"
+trigger = "verb:sleep"
+work_ticks = { param = "duration_ticks" }
+effects = [{ op = "need", need = "stamina", delta = "${stamina_sleep_gain_per_tick}", timing = "per_tick" }]
+phenomena = { success = ["sleeps"], unmet = ["nothing_happens"] }
+
+[[rule]]
+id = "compat_sleep_cave"
+trigger = "verb:sleep"
+conditions = [{ id = "cave", kind = "terrain_near", terrain = "cave", distance = { min = 0, max = 1 } }]
+work_ticks = { param = "duration_ticks" }
+effects = [{ op = "need", need = "stamina", delta = "${cave_stamina_gain}", timing = "per_tick" }]
+phenomena = { success = ["sleeps"], unmet = ["nothing_happens"], unmet_by_check = { cave = ["nothing_happens"] } }
+
+[regrowth]
+id = "compat_regrow_fruit"
+trigger = "${regrowth_trigger}"
+subject = { archetype = "fruit_tree" }
+conditions = [{ id = "room", kind = "state", of = "subject", field = "store.free", op = ">=", value = 1 }]
+conservation = "source"
+outputs = [{ archetype = "fruit", at = "subject.store", quantity = { upto = "${regrow_per_cycle}", of = "fit:subject.store" }, source = "fruit_regrowth" }]
