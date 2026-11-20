@@ -550,9 +550,19 @@ def test_configuration_refuses_invalid_terrain_and_pack_chain(
     from living_island.world.v2.engine import MapConfig, initialize
 
     with pytest.raises(ValidationError, match="rectangle"):
-        MapConfig(rows=(("grass",), ()), step_costs={"grass": 1}, walk_budget=1)
+        MapConfig(
+            rows=(("grass",), ()),
+            step_costs={"grass": 1},
+            walk_budget=1,
+            opaque_terrains=frozenset(),
+        )
     with pytest.raises(ValidationError, match="impassable"):
-        MapConfig(rows=(("sea",),), step_costs={"grass": 1, "sea": 1}, walk_budget=1)
+        MapConfig(
+            rows=(("sea",),),
+            step_costs={"grass": 1, "sea": 1},
+            walk_budget=1,
+            opaque_terrains=frozenset(),
+        )
     with pytest.raises(ValueError, match="base-first"):
         initialize(pack, setup.model_copy(update={"pack_ids": ("engine_core",)}))
 

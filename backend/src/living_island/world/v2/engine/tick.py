@@ -14,7 +14,9 @@ from ..protocol import (
     Coord,
     FailureCode,
     HardStop,
+    HeardUtterance,
     InspectView,
+    TransientSighting,
     Utterance,
     UtteranceFeedback,
     WorldEvent,
@@ -65,7 +67,7 @@ from .validate import EnginePack, WorldSetup, bind_turns, check_acknowledgements
 class TickResult:
     events: tuple[WorldEvent, ...]
     actions: tuple[ActionResult, ...]
-    utterances: tuple[UtteranceFeedback, ...]
+    utterances: dict[str, UtteranceFeedback]
 
 
 @dataclass
@@ -86,7 +88,9 @@ class TickContext:
     results: list[ActionResult] = field(default_factory=list)
     completed_actions: dict[str, ActiveAction] = field(default_factory=dict)
     started_actions: dict[str, ActiveAction] = field(default_factory=dict)
-    utterances: list[UtteranceFeedback] = field(default_factory=list)
+    utterances: dict[str, UtteranceFeedback] = field(default_factory=dict)
+    heard: dict[str, list[HeardUtterance]] = field(default_factory=dict)
+    transient_sightings: dict[str, dict[str, TransientSighting]] = field(default_factory=dict)
 
     @property
     def tick(self) -> int:
@@ -247,7 +251,7 @@ class World:
         state.entities = dict(sorted(state.entities.items()))
         self.state = state
         self.pack = next_pack
-        return TickResult(tuple(writer.events), tuple(ctx.results), tuple(ctx.utterances))
+        return TickResult(tuple(writer.events), tuple(ctx.results), ctx.utterances)
 
 
 def prepare_rules(pack: EnginePack, additions: Sequence[Table]) -> tuple[EnginePack, list[Rule]]:
@@ -576,6 +580,8 @@ def initialize(pack: Pack, setup: WorldSetup) -> World:
         static_map_ref=setup.static_map_ref,
         static_map=smap,
         clock=clock,
+        senses=setup.world_senses(),
+        dialogue_limits=setup.dialogue_limits(),
         residents=residents,
         library=Library(
             pack.vocabulary_hash, pack.rule_library_hash, setup.pack_ids, tuple(sorted(pack.rules))
@@ -643,6 +649,8 @@ def initialize(pack: Pack, setup: WorldSetup) -> World:
     validate_initial_limits(state, content.limits)
     perception.build_deliveries(TickContext(state, content, writer))
     # EN-07 owns the persistent snapshot format. This hash commits the initial core state.
-    payload["initial_snapshot_hash"] = content_hash(to_jsonable_python(asdict(state)))
+    canonical = asdict(state)
+    canonical["static_map"]["opaque_terrains"] = sorted(smap.opaque_terrains)
+    payload["initial_snapshot_hash"] = content_hash(to_jsonable_python(canonical))
     writer.events[0] = first.model_copy(update={"payload": payload})
     return World(state, content, tuple(writer.events))

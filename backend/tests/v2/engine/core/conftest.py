@@ -72,7 +72,14 @@ at = { tile = [2, 3] }
 
 @pytest.fixture
 def setup() -> WorldSetup:
-    from living_island.world.v2.engine import ClockConfig, MapConfig, ResidentSetup, WorldSetup
+    from living_island.world.v2.engine import (
+        ClockConfig,
+        DialogueConfig,
+        MapConfig,
+        ResidentSetup,
+        SensesConfig,
+        WorldSetup,
+    )
     from living_island.world.v2.protocol import Coord, Terrain
 
     raw = (ENGINE_TEST / "world.toml").read_bytes()
@@ -100,10 +107,21 @@ def setup() -> WorldSetup:
             ),
             step_costs={"grass": 1, "beach": 1, "cave": 1, "woods": 2},
             walk_budget=2,
+            opaque_terrains=frozenset({"woods"}),
         ),
         clock=ClockConfig(
             tick_minutes=10, start_minute=360, day_start_minute=360, day_end_minute=1200
         ),
+        senses=SensesConfig(
+            day_radius=4,
+            night_radius=2,
+            hearing_radius=2,
+            cue_detail_radius=1,
+            visible_weakness_below=1000,
+            visible_dehydration_below=1000,
+            visible_fatigue_below=1000,
+        ),
+        dialogue=DialogueConfig(max_turns=4, gap_ticks=2, cooldown_ticks=2),
         residents=tuple(
             ResidentSetup(id=row["id"], position=Coord(x=row["position"][0], y=row["position"][1]))
             for row in fixture["residents"]

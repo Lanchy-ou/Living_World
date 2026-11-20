@@ -896,8 +896,18 @@ tile ID. Until EN-07 defines the durable snapshot encoding, the
 Equal initial stacks emit their named placement events, then merge into
 the lowest content ID at that place before cap checks.
 
-Engine §6 says RR-01 refuses true footprint flags, but its merged loader
-and the required CT-01 fixture admit them. Movement stays static-terrain
-only. The engine keeps the already-validated flags in component state.
-The owner can resolve this discrepancy through the plan §7 change-request
-process without changing kernel movement.
+## CR-P3.5-EN-01: Footprint flags in v0.1 packs (proposed)
+
+- Current rule. Engine §6 requires static-terrain movement and sight and
+  says the loader refuses footprint flags set to true. The merged RR-01
+  loader and required CT-01 fixture admit such a flag.
+- Requested rule. Confirm whether the flags are inert stored data or must
+  be false during v0.1 pack admission. In either case, movement and sight
+  keep reading static terrain.
+- Impact and options. Enforcing the frozen admission rule requires an RR
+  validator correction and a CT-01 fixture adjustment. Accepting inert
+  flags preserves the merged fixtures and requires an owner-approved
+  correction to the engine contract. The engine core preserves the
+  validated component state and does not interpret footprint flags.
+- Recommendation. Accept the flags as inert stored data for v0.1. Keep
+  footprint-based movement and sight outside this task.

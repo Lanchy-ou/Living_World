@@ -339,6 +339,7 @@ class StaticMap:
     rows: tuple[tuple[Terrain, ...], ...]
     step_costs: dict[Terrain, int]
     walk_budget: int
+    opaque_terrains: frozenset[Terrain]
 
     @property
     def width(self) -> int:
@@ -362,6 +363,27 @@ class Cue:
     id: str
     kind: str
     position: Coord
+    visible_description: str
+    near_description: str
+    direction: str | None
+
+
+@dataclass(frozen=True)
+class Senses:
+    day_radius: int
+    night_radius: int
+    hearing_radius: int
+    cue_detail_radius: int
+    visible_weakness_below: int
+    visible_dehydration_below: int
+    visible_fatigue_below: int
+
+
+@dataclass(frozen=True)
+class DialogueLimits:
+    max_turns: int
+    gap_ticks: int
+    cooldown_ticks: int
 
 
 @dataclass(frozen=True)
@@ -405,6 +427,8 @@ class WorldState:
     static_map_ref: str
     static_map: StaticMap
     clock: Clock
+    senses: Senses
+    dialogue_limits: DialogueLimits
     residents: dict[str, Resident]
     library: Library
     resolution_rng_state_uint32: int

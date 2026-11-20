@@ -5,7 +5,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Annotated, Literal, cast
 
-from pydantic import Field, PositiveInt, model_validator
+from pydantic import Field, NonNegativeInt, PositiveInt, model_validator
 
 from ..protocol import (
     Coord,
@@ -34,6 +34,7 @@ from .state import (
     Components,
     Contribute,
     Cue,
+    DialogueLimits,
     Drop,
     Give,
     Inside,
@@ -47,6 +48,7 @@ from .state import (
     PickupEntity,
     PickupTile,
     PropertyValues,
+    Senses,
     StaticMap,
     TimedKernel,
     Wait,
@@ -58,6 +60,7 @@ class MapConfig(ProtocolModel):
     rows: tuple[tuple[Terrain, ...], ...]
     step_costs: dict[Terrain, PositiveInt]
     walk_budget: PositiveInt
+    opaque_terrains: frozenset[Terrain]
 
     @model_validator(mode="after")
     def validate_map(self) -> "MapConfig":
@@ -99,6 +102,25 @@ class CueSetup(ProtocolModel):
     id: str
     kind: str
     position: Coord
+    visible_description: str
+    near_description: str
+    direction: str | None = None
+
+
+class SensesConfig(ProtocolModel):
+    day_radius: NonNegativeInt
+    night_radius: NonNegativeInt
+    hearing_radius: NonNegativeInt
+    cue_detail_radius: NonNegativeInt
+    visible_weakness_below: NonNegativeInt
+    visible_dehydration_below: NonNegativeInt
+    visible_fatigue_below: NonNegativeInt
+
+
+class DialogueConfig(ProtocolModel):
+    max_turns: NonNegativeInt
+    gap_ticks: NonNegativeInt
+    cooldown_ticks: NonNegativeInt
 
 
 class WorldSetup(ProtocolModel):
@@ -111,6 +133,8 @@ class WorldSetup(ProtocolModel):
     pack_ids: Annotated[tuple[str, ...], Field(min_length=1)]
     terrain: MapConfig
     clock: ClockConfig
+    senses: SensesConfig
+    dialogue: DialogueConfig
     residents: tuple[ResidentSetup, ...]
     cues: tuple[CueSetup, ...] = ()
 
@@ -131,7 +155,12 @@ class WorldSetup(ProtocolModel):
         return self
 
     def static_map(self) -> StaticMap:
-        return StaticMap(self.terrain.rows, dict(self.terrain.step_costs), self.terrain.walk_budget)
+        return StaticMap(
+            self.terrain.rows,
+            dict(self.terrain.step_costs),
+            self.terrain.walk_budget,
+            self.terrain.opaque_terrains,
+        )
 
     def world_clock(self) -> Clock:
         return Clock(
@@ -142,7 +171,34 @@ class WorldSetup(ProtocolModel):
         )
 
     def world_cues(self) -> tuple[Cue, ...]:
-        return tuple(Cue(cue.id, cue.kind, cue.position) for cue in self.cues)
+        return tuple(
+            Cue(
+                cue.id,
+                cue.kind,
+                cue.position,
+                cue.visible_description,
+                cue.near_description,
+                cue.direction,
+            )
+            for cue in self.cues
+        )
+
+    def world_senses(self) -> Senses:
+        senses = self.senses
+        return Senses(
+            senses.day_radius,
+            senses.night_radius,
+            senses.hearing_radius,
+            senses.cue_detail_radius,
+            senses.visible_weakness_below,
+            senses.visible_dehydration_below,
+            senses.visible_fatigue_below,
+        )
+
+    def dialogue_limits(self) -> DialogueLimits:
+        return DialogueLimits(
+            self.dialogue.max_turns, self.dialogue.gap_ticks, self.dialogue.cooldown_ticks
+        )
 
 
 TIMED_ACTIONS: tuple[TimedKernel, ...] = ("give", "pick_up", "drop", "wait", "inspect")
