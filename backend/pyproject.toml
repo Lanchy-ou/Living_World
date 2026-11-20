@@ -112,6 +112,37 @@ type = "forbidden"
 source_modules = ["living_island.world.v2"]
 forbidden_modules = ["living_island.*"]
 
+[[tool.importlinter.contracts]]
+name = "world.v2 does not import v1 world modules"
+type = "forbidden"
+# Match the v1 package initializer as a module without including its v2 subtree.
+as_packages = false
+source_modules = ["living_island.world.v2", "living_island.world.v2.**"]
+forbidden_modules = [
+    "living_island.world",
+    "living_island.world.actions",
+    "living_island.world.canteen",
+    "living_island.world.content",
+    "living_island.world.death",
+    "living_island.world.dialogue",
+    "living_island.world.engine",
+    "living_island.world.facts",
+    "living_island.world.interrupts",
+    "living_island.world.movement",
+    "living_island.world.observation",
+    "living_island.world.pathfinding",
+    "living_island.world.perception",
+    "living_island.world.physiology",
+    "living_island.world.ports",
+    "living_island.world.protocol",
+    "living_island.world.receipts",
+    "living_island.world.resources",
+    "living_island.world.results",
+    "living_island.world.rng",
+    "living_island.world.rulefacts",
+    "living_island.world.space",
+    "living_island.world.state",
+]
 
 [[tool.importlinter.contracts]]
 name = "world.v2.protocol is standalone: no other living_island modules"

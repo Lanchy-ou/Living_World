@@ -42,9 +42,18 @@ def test_protocol_import_boundaries(tmp_path):
     passed = lint()
     assert passed.returncode == 0, passed.stdout + passed.stderr
 
-    # Use a new v2 internal module to prove the contract protects future modules too.
     world_v2 = package / "world" / "v2"
     internal = world_v2 / "wap_internal.py"
+    internal.write_text(
+        "from living_island.world.content import canonical_json_bytes\n", encoding="utf-8"
+    )
+    v1_import = lint()
+    assert v1_import.returncode == 1, v1_import.stdout + v1_import.stderr
+    output = " ".join(v1_import.stdout.split())
+    assert "world.v2 does not import v1 world modules BROKEN" in output
+    assert "living_island.world.v2.wap_internal -> living_island.world.content" in output
+
+    # Use a new v2 internal module to prove the contract protects future modules too.
     internal.write_text("VALUE = 1\n", encoding="utf-8")
     agent_probe.write_text(
         "from living_island.world.v2.wap_internal import VALUE\n", encoding="utf-8"
