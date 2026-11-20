@@ -268,3 +268,22 @@ def test_ct03_reject_bad_code_table(
     path.write_text(original.replace(before, after, 1), encoding="utf-8")
     with pytest.raises(ContentError, match=diagnostic):
         load(pack=copy)
+
+
+def test_template_rule_array_is_validated_at_load(tmp_path: Path) -> None:
+    from living_island.world.v2.rules import ContentError
+
+    copy = shutil.copytree(PACK, tmp_path / PACK.name)
+    path = copy / "rule-templates.toml"
+    path.write_text("rule = false\n[regrowth]\n", encoding="utf-8")
+    with pytest.raises(ContentError, match="rule-templates.toml:rule.*expected an array"):
+        load(pack=copy)
+
+
+def test_ct03_reject_missing_code_file(tmp_path: Path) -> None:
+    from living_island.world.v2.rules import ContentError
+
+    copy = shutil.copytree(PACK, tmp_path / PACK.name)
+    (copy / "compat-codes.toml").unlink()
+    with pytest.raises(ContentError, match="missing compatibility code table"):
+        load(pack=copy)

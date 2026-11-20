@@ -8,7 +8,7 @@ from typing import TypedDict, cast
 
 from living_island.world.v2.rules import ContentError, Pack, Vocabulary, load_pack
 from living_island.world.v2.rules.loader import bind, read_toml
-from living_island.world.v2.rules.schema import Table, content_hash, table
+from living_island.world.v2.rules.schema import Table, array, content_hash, fields, table
 
 from .registry import check_digest, map_pin
 
@@ -141,8 +141,8 @@ def _placements(config: CompatConfig, regrowth: bool) -> list[Table]:
     ]
 
 
-def _rule_rate(work_ticks: int, *, per_tick: int = 0, completion: int = 0) -> int:
-    return per_tick + (completion + work_ticks - 1) // work_ticks
+def _completion_rate(magnitude: int, work_ticks: int) -> int:
+    return (magnitude + work_ticks - 1) // work_ticks
 
 
 def _bindings(config: CompatConfig, directory: Path) -> Table:
@@ -154,16 +154,14 @@ def _bindings(config: CompatConfig, directory: Path) -> Table:
     max_live_units = len(config["world"]["fruit_trees"]) + 1 + canteen
     max_live_units += len(config["residents"]) * (slots + 1)
     gain_bounds = {
-        "satiety": _rule_rate(actions["eat_ticks"], completion=needs["satiety_gain_per_fruit"]),
-        "hydration": _rule_rate(
-            actions["drink_ticks"], completion=needs["hydration_gain_per_serving"]
-        ),
+        "satiety": _completion_rate(needs["satiety_gain_per_fruit"], actions["eat_ticks"]),
+        "hydration": _completion_rate(needs["hydration_gain_per_serving"], actions["drink_ticks"]),
         "stamina": max(needs["stamina_rest_gain_per_tick"], sleep_gain),
         "health": 0,
     }
     loss_bounds = {
-        "stamina": _rule_rate(
-            actions["gather_ticks"], completion=needs["stamina_gather_cost_per_completion"]
+        "stamina": _completion_rate(
+            needs["stamina_gather_cost_per_completion"], actions["gather_ticks"]
         )
     }
     sources = {"spring_water": {"archetype": "water", "max_per_application": canteen}}
@@ -186,17 +184,19 @@ def _bindings(config: CompatConfig, directory: Path) -> Table:
         "sources": sources,
         "instances": _placements(config, bool(regrowth)),
     }
-    templates = read_toml(directory / "rule-templates.toml")
-    rules = templates["rule"]
-    if regrowth:
-        rules.append(templates["regrowth"])
-    values["rules"] = bind(rules, values, "rule-templates.toml")
+    path = directory / "rule-templates.toml"
+    templates = fields(read_toml(path), path.name, "rule regrowth")
+    rules = array(templates["rule"], f"{path.name}:rule")
+    active = [*rules, templates["regrowth"]] if regrowth else rules
+    values["rules"] = bind(active, values, path.name)
     return values
 
 
 def _load_codes(pack: Pack) -> dict[str, dict[str, str]]:
     path = "compat-codes.toml"
-    raw = table(pack.data.get("compat_codes"), path)
+    if "compat_codes" not in pack.data:
+        raise ContentError("BAD_SHAPE", path, "missing compatibility code table")
+    raw: Table = pack.data["compat_codes"]
     proven = set(pack.report.unreachable_checks)
     codes: dict[str, dict[str, str]] = {}
     for rule_id, rule in pack.rules.items():
