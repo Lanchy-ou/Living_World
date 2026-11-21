@@ -608,3 +608,51 @@ state = { process = { work_done = 4 } }
         for event in result.events
         if event.type == "action_succeeded"
     ] == [(B, "move_to")]
+
+    assert [(row.actor_id, row.outcome) for row in result.actions] == [(B, "success")]
+    pending = world.state.active_actions[A]
+    assert pending.pending_failure == "OUT_OF_REACH"
+    assert pending.due_tick == 2
+
+    finished = world.step()
+    [failure] = finished.actions
+    assert (failure.actor_id, failure.intent_id) == (A, pending.intent.intent_id)
+    assert (failure.tick_finished, failure.outcome, failure.failure_code) == (
+        2,
+        "failure",
+        "OUT_OF_REACH",
+    )
+    assert A not in world.state.active_actions
+
+
+@pytest.mark.parametrize(
+    ("invalid_shape", "error_path", "detail"),
+    [
+        ("missing_container", "outer_process", "a process requires a container"),
+        ("authored_work_ticks", "finish_outer", "work_ticks"),
+    ],
+)
+def test_rr20_invalid_process_shapes_are_refused(process_world, invalid_shape, error_path, detail):
+    from living_island.world.v2.rules import ContentError
+
+    archetypes = OUTER_PROCESS.replace('archetype = "worksite"', 'archetype = "arch_a"')
+    rule = """
+[[rule]]
+id = "finish_outer"
+trigger = "when:ready"
+subject = { archetype = "outer_process" }
+conditions = [{ id = "ready", kind = "work_complete" }]
+effects = [{ op = "consume", of = "subject" }]
+"""
+    if invalid_shape == "missing_container":
+        archetypes = archetypes.replace(
+            'container = { capacity = 1, accepts = { archetype = "arch_a" } }\n', ""
+        )
+    else:
+        rule += "work_ticks = 1\n"
+
+    with pytest.raises(ContentError, match=detail) as error:
+        process_world(archetypes=archetypes, rules=rule)
+
+    assert error.value.code == "BAD_SHAPE"
+    assert error.value.issue.path == error_path
