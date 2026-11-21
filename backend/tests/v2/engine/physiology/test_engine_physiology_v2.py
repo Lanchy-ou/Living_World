@@ -8,14 +8,13 @@ A, B = "res_a", "res_b"
 
 
 @pytest.fixture
-def body(world, pack, tmp_path):
-    from living_island.world.v2.engine.validate import EnginePack
+def physiology_pack(pack, tmp_path):
     from living_island.world.v2.rules import load_pack
 
     path = tmp_path / pack.pack_id / "pack.toml"
     text = path.read_text(encoding="utf-8")
     text = text.replace(
-        "[timing]",
+        "[physiology]",
         """
 enabled_needs = ["health", "hydration", "mental_fatigue", "satiety", "stamina"]
 enabled_verbs = ["sleep"]
@@ -25,8 +24,6 @@ satiety_awake_decay_per_tick = 40
 satiety_asleep_decay_per_tick = 25
 hydration_awake_decay_per_tick = 150
 hydration_asleep_decay_per_tick = 100
-stamina_awake_decay_per_tick = 2
-stamina_move_extra_cost_per_tick = 4
 health_loss_per_tick_if_deprived = 70
 health_recovery_sleep_per_tick = 15
 health_recovery_min_satiety = 2500
@@ -35,10 +32,13 @@ awake_per_tick = 50
 per_utterance_heard = 20
 per_first_sighting = 30
 recovery_per_tick_asleep = 150
-faint_ticks = 35
-
-[timing]""",
-    ).replace("strike = 1", "strike = 1\nsleep = 1")
+faint_ticks = 35""",
+    )
+    text = (
+        text.replace("strike = 1", "strike = 1\nsleep = 1")
+        .replace("stamina_awake_decay_per_tick = 0", "stamina_awake_decay_per_tick = 2")
+        .replace("stamina_move_extra_cost_per_tick = 0", "stamina_move_extra_cost_per_tick = 4")
+    )
     for key in ("health", "hydration", "mental_fatigue", "satiety"):
         initial = 0 if key == "mental_fatigue" else 9000
         text += f"""
@@ -59,12 +59,76 @@ max_loss_per_tick = 0
         '[unmatched.sleep]\nentries = []\ndefault = ["nothing_happens"]\n',
         encoding="utf-8",
     )
-    world.pack = EnginePack.from_pack(load_pack(path.parent, pack.vocabulary))
+    return load_pack(path.parent, pack.vocabulary)
+
+
+@pytest.fixture
+def body(world, physiology_pack):
+    from living_island.world.v2.engine.validate import EnginePack
+
+    world.pack = EnginePack.from_pack(physiology_pack)
     world.state.needs = {
         actor: {key: spec.initial for key, spec in world.pack.needs.items()}
         for actor in world.state.residents
     }
     return world
+
+
+NONNEGATIVE_PHYSIOLOGY_KEYS = (
+    "satiety_awake_decay_per_tick",
+    "satiety_asleep_decay_per_tick",
+    "hydration_awake_decay_per_tick",
+    "hydration_asleep_decay_per_tick",
+    "stamina_awake_decay_per_tick",
+    "stamina_move_extra_cost_per_tick",
+    "health_loss_per_tick_if_deprived",
+    "health_recovery_sleep_per_tick",
+    "awake_per_tick",
+    "per_utterance_heard",
+    "per_first_sighting",
+    "recovery_per_tick_asleep",
+)
+REQUIRED_PHYSIOLOGY_KEYS = (
+    *NONNEGATIVE_PHYSIOLOGY_KEYS,
+    "health_recovery_min_satiety",
+    "health_recovery_min_hydration",
+    "faint_ticks",
+)
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "error"),
+    [
+        *(
+            pytest.param(key, None, "lacks engine setting", id=f"{key}-missing")
+            for key in REQUIRED_PHYSIOLOGY_KEYS
+        ),
+        *(
+            pytest.param(key, "0", "expected an integer", id=f"{key}-wrong-type")
+            for key in REQUIRED_PHYSIOLOGY_KEYS
+        ),
+        *(
+            pytest.param(key, -1, "outside bounds", id=f"{key}-negative")
+            for key in NONNEGATIVE_PHYSIOLOGY_KEYS
+        ),
+        pytest.param("faint_ticks", 0, "outside bounds", id="faint_ticks-zero"),
+        pytest.param("faint_ticks", True, "expected an integer", id="faint_ticks-boolean"),
+    ],
+)
+def test_initialization_refuses_missing_or_invalid_physiology(
+    physiology_pack, setup, key, value, error
+):
+    from living_island.world.v2.engine import initialize
+
+    settings = dict(physiology_pack.data["physiology"])
+    if value is None:
+        del settings[key]
+    else:
+        settings[key] = value
+    candidate = replace(physiology_pack, data={**physiology_pack.data, "physiology": settings})
+
+    with pytest.raises(ValueError, match=rf"(?=.*physiology\.{key})(?=.*{error})"):
+        initialize(candidate, setup)
 
 
 def _turn(world, actor, action, *, target=None, verb=None, params=None):

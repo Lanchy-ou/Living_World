@@ -920,3 +920,21 @@ World engine §6 requires the v0.1 loader to refuse footprint flags set to
 `true`. RR-02 uses `OUT_OF_RANGE` at the individual flag's path because the
 only allowed boolean value is `false` (rule representation §7). The
 diagnostic code is pending owner confirmation.
+
+## OQ-P3.5-EN-04: Required physiology settings per enabled need
+
+Which `[physiology]` keys must a pack supply for each enabled need? Engine
+§9.2–§9.3 names the pack values. The P3.5-EN-04 Gate 2 owner decision approved
+validating the following requirements at engine initialization on 2026-11-21.
+
+| Enabled need | Required keys |
+| --- | --- |
+| `satiety` | `satiety_awake_decay_per_tick`, `satiety_asleep_decay_per_tick`, `health_recovery_min_satiety` |
+| `hydration` | `hydration_awake_decay_per_tick`, `hydration_asleep_decay_per_tick`, `health_recovery_min_hydration` |
+| `stamina` | `stamina_awake_decay_per_tick`, `stamina_move_extra_cost_per_tick` |
+| `health` | `health_loss_per_tick_if_deprived`, `health_recovery_sleep_per_tick` |
+| `mental_fatigue` | `awake_per_tick`, `per_utterance_heard`, `per_first_sighting`, `recovery_per_tick_asleep`, `faint_ticks` |
+
+All listed values are integers. Rates, costs, and coefficients are nonnegative.
+`faint_ticks` is at least one. Carry this requirement into the next revision
+of the pack specification.

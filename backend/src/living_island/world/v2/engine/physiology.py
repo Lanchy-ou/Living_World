@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, TypedDict, cast
 
 from ..protocol import NeedBand
 from .events import coord_payload, json_object
+from .ids import corpse_id
 from .items import entities_at, equal_stacks, merge, transfer_endpoint
 from .state import Awareness, Entity, Held, Lineage, OnTile
 from .stops import resolve_stops
@@ -104,44 +105,53 @@ def _adjust(needs: dict[str, int], specs: Mapping[str, NeedSpec], key: str, delt
     needs[key] = min(spec.maximum, max(spec.minimum, needs[key] + delta))
 
 
-def _metabolism(ctx: TickContext, actor_id: str, awake: bool, rates: Mapping[str, int]) -> None:
+def _metabolism(ctx: TickContext, actor_id: str, awake: bool) -> None:
     needs, specs = ctx.state.needs[actor_id], ctx.pack.needs
-    mode = "awake" if awake else "asleep"
-    for key in ("satiety", "hydration"):
-        if key in needs:
-            _adjust(needs, specs, key, -rates.get(f"{key}_{mode}_decay_per_tick", 0))
-    if "stamina" in needs:
+    config = ctx.pack.physiology
+    food_and_water = (("satiety", config.satiety), ("hydration", config.hydration))
+    for key, metabolism in food_and_water:
+        if metabolism is not None:
+            decay = metabolism.awake_decay if awake else metabolism.asleep_decay
+            _adjust(needs, specs, key, -decay)
+    if config.stamina is not None:
         if awake:
-            _adjust(needs, specs, "stamina", -rates.get("stamina_awake_decay_per_tick", 0))
+            _adjust(needs, specs, "stamina", -config.stamina.awake_decay)
         if ctx.activity[actor_id].tiles_traversed:
-            _adjust(needs, specs, "stamina", -rates.get("stamina_move_extra_cost_per_tick", 0))
-    if "health" in needs:
-        food_and_water = tuple(key for key in ("satiety", "hydration") if key in needs)
-        if any(needs[key] == specs[key].minimum for key in food_and_water):
-            _adjust(needs, specs, "health", -rates.get("health_loss_per_tick_if_deprived", 0))
-        elif not awake and all(
-            needs[key] > rates.get(f"health_recovery_min_{key}", specs[key].minimum)
-            for key in food_and_water
+            _adjust(needs, specs, "stamina", -config.stamina.movement_cost)
+    if config.health is not None:
+        if any(
+            needs[key] == specs[key].minimum
+            for key, metabolism in food_and_water
+            if metabolism is not None
         ):
-            _adjust(needs, specs, "health", rates.get("health_recovery_sleep_per_tick", 0))
+            _adjust(needs, specs, "health", -config.health.deprivation_loss)
+        elif not awake and all(
+            needs[key] > metabolism.recovery_minimum
+            for key, metabolism in food_and_water
+            if metabolism is not None
+        ):
+            _adjust(needs, specs, "health", config.health.sleep_recovery)
 
 
-def _fatigue(ctx: TickContext, actor_id: str, awake: bool, rates: Mapping[str, int]) -> bool:
+def _fatigue(ctx: TickContext, actor_id: str, awake: bool) -> int | None:
+    config = ctx.pack.physiology.mental_fatigue
+    if config is None:
+        return None
     key = "mental_fatigue"
     needs, specs = ctx.state.needs[actor_id], ctx.pack.needs
-    if key not in needs:
-        return False
     if awake:
         inputs = ctx.state.fatigue_inputs[actor_id]
         delta = (
-            rates["awake_per_tick"]
-            + rates["per_utterance_heard"] * inputs.utterances_heard
-            + rates["per_first_sighting"] * inputs.first_sightings
+            config.awake_per_tick
+            + config.per_utterance_heard * inputs.utterances_heard
+            + config.per_first_sighting * inputs.first_sightings
         )
     else:
-        delta = -rates["recovery_per_tick_asleep"]
+        delta = -config.recovery_per_tick_asleep
     _adjust(needs, specs, key, delta)
-    return awake and needs[key] == specs[key].maximum
+    if awake and needs[key] == specs[key].maximum:
+        return ctx.tick + config.faint_ticks
+    return None
 
 
 def _die(ctx: TickContext, actor: Resident) -> None:
@@ -154,9 +164,9 @@ def _die(ctx: TickContext, actor: Resident) -> None:
         {"resident_id": actor.id, "position": position, "cause": "DEPRIVATION"},
         actor_id=actor.id,
     )
-    corpse_id = f"corpse@{actor.id}"
-    state.entities[corpse_id] = Entity(
-        corpse_id,
+    remains_id = corpse_id(actor.id)
+    state.entities[remains_id] = Entity(
+        remains_id,
         None,
         None,
         1,
@@ -168,15 +178,15 @@ def _die(ctx: TickContext, actor: Resident) -> None:
         {},
         (),
         False,
-        (Lineage(corpse_id, ctx.tick, 1, state.event_log_cursor),),
+        (Lineage(remains_id, ctx.tick, 1, state.event_log_cursor),),
         corpse_resident_id=actor.id,
         death_tick=ctx.tick,
     )
     writer.emit(
         "corpse_created",
-        {"corpse_id": corpse_id, "resident_id": actor.id, "position": position},
+        {"corpse_id": remains_id, "resident_id": actor.id, "position": position},
         actor_id=actor.id,
-        target_id=corpse_id,
+        target_id=remains_id,
         caused_by=(death.event_id,),
     )
     held = Held(actor.id)
@@ -207,7 +217,6 @@ def _die(ctx: TickContext, actor: Resident) -> None:
 
 def apply_physiology(ctx: TickContext, progress: Mapping[str, ProgressNeeds] | None = None) -> None:
     """Apply phase 5 physiology, death and drops in resident order."""
-    rates = cast("Mapping[str, int]", ctx.pack.source.data["physiology"])
     for actor_id, actor in sorted(ctx.state.residents.items()):
         if not actor.alive:
             continue
@@ -219,8 +228,8 @@ def apply_physiology(ctx: TickContext, progress: Mapping[str, ProgressNeeds] | N
             before.update(during_progress.before)
             causes.extend(during_progress.rule_ids)
         awake = ctx.state.awareness[actor_id].kind == "awake"
-        _metabolism(ctx, actor_id, awake, rates)
-        fainted = _fatigue(ctx, actor_id, awake, rates)
+        _metabolism(ctx, actor_id, awake)
+        unconscious_until = _fatigue(ctx, actor_id, awake)
         changes = [
             {"need_id": key, "before": before[key], "after": value}
             for key, value in sorted(needs.items())
@@ -234,10 +243,8 @@ def apply_physiology(ctx: TickContext, progress: Mapping[str, ProgressNeeds] | N
                 ),
                 actor_id=actor_id,
             )
-        if fainted:
-            ctx.state.awareness[actor_id] = Awareness(
-                "unconscious", ctx.tick + rates["faint_ticks"]
-            )
+        if unconscious_until is not None:
+            ctx.state.awareness[actor_id] = Awareness("unconscious", unconscious_until)
             ctx.writer.emit("resident_fainted", {"resident_id": actor_id}, actor_id=actor_id)
         if "health" in needs and needs["health"] == ctx.pack.needs["health"].minimum:
             _die(ctx, actor)
