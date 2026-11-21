@@ -1016,3 +1016,15 @@ existing normalized effective-content hash. The loader validates the full
 leaf with its overlays, so a prefix can be pinned even when it fails
 standalone validation. Confirm this encoding for the coordinator's run
 package.
+
+## OQ-P3.5-PR-05: Read access to the frozen boundary
+
+Should the engine expose pending deliveries and resident turn ordinals
+through a dedicated read API? Phase A reads those fields from the current
+`World.state` in the runner. It derives turn eligibility from packets and
+leaves acknowledgements and binding to `World.step`. Phase B will verify
+this handoff with EN-05's real packets and EN-07's replay.
+
+At the pinned revision, the engine checks acknowledgement IDs separately
+and does not require a pending packet per submission. The runner submits
+only for delivered packets. Phase B should confirm binding after EN-05 merges.
