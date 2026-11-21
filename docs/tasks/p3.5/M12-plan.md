@@ -32,6 +32,7 @@ on 2026-11-19, so D5 now applies to every M12 card.
 | 2 | [P3.5-CT-01](P3.5-CT-01.md) engine-test pack; [P3.5-CT-02](P3.5-CT-02.md) compatibility pack | P3.5-RR-01 merged |
 | 3 | [P3.5-EN-01](P3.5-EN-01.md) engine core | P3.5-PR-04, P3.5-RR-01, P3.5-CT-01 merged |
 | 4 | [P3.5-EN-02](P3.5-EN-02.md) act settlement; [P3.5-EN-04](P3.5-EN-04.md) physiology and stops | P3.5-EN-01 merged |
+| 4b | [P3.5-RR-02](P3.5-RR-02.md) footprint flag refusal (owner decision on CR-P3.5-EN-01, 2026-11-20) | Now; touches no file of an open card |
 | 5 | [P3.5-EN-03](P3.5-EN-03.md) processes; [P3.5-EN-06](P3.5-EN-06.md) speech; [P3.5-PR-05](P3.5-PR-05.md) coordinator | P3.5-EN-02 merged (P3.5-PR-05 needs only P3.5-EN-01 to start) |
 | 6 | [P3.5-EN-05](P3.5-EN-05.md) perception and watching | P3.5-EN-02, P3.5-EN-04, P3.5-EN-06 merged |
 | 7 | [P3.5-EN-07](P3.5-EN-07.md) persistence and replay | P3.5-EN-01 to P3.5-EN-06 merged |
@@ -50,7 +51,7 @@ Each path has one owner. Concurrent branches never write the same file.
 |---|---|
 | `world/v2/__init__.py` | Shared: P3.5-PR-04 and P3.5-RR-01 both create it with exactly `"""Living Island v2 world lane (P3.5)."""` and a final newline, so identical additions merge cleanly |
 | `world/v2/protocol.py` (or `protocol/`), `backend/pyproject.toml` import-linter section | P3.5-PR-04 |
-| `world/v2/rules/**`, `content/vocabulary/**` | P3.5-RR-01 |
+| `world/v2/rules/**`, `content/vocabulary/**` | P3.5-RR-01; then P3.5-RR-02 |
 | `world/v2/engine/{__init__,ids,state,tick,validate,items,kernel,limits,events}.py` | P3.5-EN-01; after P3.5-EN-01, `tick.py` and `state.py` change in one branch at a time, noted in its handoff |
 | `world/v2/engine/settle.py`, `match.py`, `conditions.py`, `effects.py`, `chance.py`, `descriptors.py` | P3.5-EN-02 (P3.5-EN-01 creates the `settle.py` stub) |
 | `world/v2/engine/processes.py`, `world_rules.py` | P3.5-EN-03 (stub from P3.5-EN-01) |
@@ -64,7 +65,8 @@ Each path has one owner. Concurrent branches never write the same file.
 | `sim/v2/compat/{adapters,bridge,receipts,policy_host}.py` | P3.5-PR-06 |
 | `sim/equivalence/{__init__,projection,v1_extract}.py`, `scripts/gen_v1_projections.py`, `backend/tests/fixtures/v1_projection/**`, `backend/tests/equivalence/**` | P3.5-PR-03 |
 | `sim/equivalence/{v2_extract,compare}.py`, `sim/v2/cli.py`, `docs/tasks/p3.5/M12-equivalence-report.md` | P3.5-PR-07 |
-| `backend/tests/fixtures/v2/packs/engine-test*/**` | P3.5-CT-01 |
+| `backend/tests/fixtures/v2/packs/engine-test*/**` | P3.5-CT-01; then P3.5-RR-02 |
+| `backend/tests/v2/engine/conftest.py` | P3.5-EN-01 (shared engine test fixtures, owner decision 2026-11-20); after P3.5-EN-01, one branch at a time, noted in its handoff |
 | `backend/tests/v2/<area>/**` | The card that names that directory |
 
 Paths without a prefix are under `backend/src/living_island/`.
