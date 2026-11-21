@@ -47,6 +47,8 @@ From the P3.5-EN-03 and P3.5-EN-06 rechecks on, the rest of M12 runs under the
 [orchestration runbook](M12-orchestration.md) (owner decision, 2026-11-21).
 The runbook replaces the one-recheck limit of D5 with a fix-until-pass
 review loop, and records how decisions are made while the owner is away.
+On 2026-11-22 the owner extended the unattended run to all of P3.5, with
+provisional Gate 3 packages ([P3.5 runbook](P3.5-orchestration.md)).
 
 ## 3. File ownership
 
