@@ -32,14 +32,7 @@ from .descriptors import (
 from .effects import Ledger, Operands, Refused, branch_delta, clamp_need, extend_delta, release
 from .events import json_object
 from .items import inspect_view, split, still_held, tile_of
-from .match import (
-    Assignment,
-    inherited_slots,
-    match_attempt,
-    parts_match,
-    slot_signatures,
-    specificity,
-)
+from .match import Assignment, inherited_slots, match_attempt, parts_match, slot_signatures
 from .state import (
     Act,
     ActiveAction,
@@ -154,7 +147,7 @@ def start_act(ctx: TickContext, action: ActiveAction, groups: tuple[tuple[Part, 
             for rule in ctx.pack.source.rules.values()
             if rule.data["trigger"] == f"verb:{command.verb}"
         ),
-        key=lambda rule: (-specificity(rule), rule.id),
+        key=lambda rule: (-rule.specificity, rule.id),
     ):
         assignment = match_attempt(rule, attempt)
         if assignment is None:

@@ -97,13 +97,3 @@ def slot_signatures(
             for slot, index in zip(rule.data["inputs"], assignment.inputs, strict=True)
         },
     }
-
-
-def specificity(rule: Rule) -> int:
-    data = rule.data
-    target = data.get("target", {})
-    return (
-        len(target.get("where", target))
-        + sum(len(slot["where"]) for slot in (*data["instruments"], *data["inputs"]))
-        + len(data["conditions"])
-    )
