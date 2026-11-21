@@ -938,3 +938,20 @@ validating the following requirements at engine initialization on 2026-11-21.
 All listed values are integers. Rates, costs, and coefficients are nonnegative.
 `faint_ticks` is at least one. Carry this requirement into the next revision
 of the pack specification.
+
+## OQ-P3.5-EN-06: Speech deadline and term-reference checks
+
+Protocol §7.2 requires a deadline later than the current tick, and §7.1
+repeats the check at emission. The wording does not specify whether
+"current tick" stays at the opening boundary for both checks. EN-06 checks
+against boundary t at start and against the utterance's event tick t+1 at
+emission. A proposal due at t+1 passes the start deadline check and is
+refused at emission. An otherwise valid reply leaves the recorded deadline
+alone.
+
+For give-by-kind terms, the exposure list in §7.2 names entity IDs and
+positions but does not say whether the speaker must have seen an instance
+of the named archetype. EN-06 requires a declared archetype and uses live
+holding or exposure receipts for exact IDs. It does not test possession
+by the promisor or whether the promised performance remains possible.
+These interpretations are pending owner confirmation.
