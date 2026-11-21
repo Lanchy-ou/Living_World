@@ -37,14 +37,21 @@ merged PRs), not from this file.
 
 ### 2.1 Wave 5: finish P3.5-EN-03 and P3.5-EN-06
 
-Both cards are in Gate 2 rework. Their executor threads already exist and
-were last told to fix and report. Find them with `list_threads`, by branch or
-worktree:
+Both executors have finished their round 1 fixes and are waiting for the
+recheck. Their threads already exist; find them with `list_threads`, by
+branch or worktree. Each fix is committed locally, and nothing is pushed.
 
-| Card | Branch | Worktree | Round 1 findings |
-|---|---|---|---|
-| P3.5-EN-03 processes | `task/P3.5-EN-03-processes` (round 1 at `a09e9d3`) | `D:/Codex/.codex/worktrees/p35-en03-processes/Living_World` | B1: `TARGET_GONE` must be a phase 6 stop, outside the completion set. B2: three guards need a reaching test or removal |
-| P3.5-EN-06 speech | `task/P3.5-EN-06-speech` (round 1 at `b1d3571`) | `D:/Codex/.codex/worktrees/p35-en-06-speech/Living_World` | B1: events edited after emission; add `intent_id` and `self_id_field` to `EventWriter.emit` |
+| Card | Branch | Worktree | Round 1 (reviewed) | Fix ready for recheck | Round 1 findings |
+|---|---|---|---|---|---|
+| P3.5-EN-03 processes | `task/P3.5-EN-03-processes` | `D:/Codex/.codex/worktrees/p35-en03-processes/Living_World` | `a09e9d3` | fix `e8b115f`, handoff `6403063` | B1: `TARGET_GONE` must be a phase 6 stop, outside the completion set. B2: three guards need a reaching test or removal |
+| P3.5-EN-06 speech | `task/P3.5-EN-06-speech` | `D:/Codex/.codex/worktrees/p35-en-06-speech/Living_World` | `b1d3571` | fix `e73160d`, handoff `1ac359f` | B1: events edited after emission; add `intent_id` and `self_id_field` to `EventWriter.emit` |
+
+The executors report the following Gate 1 results. The recheck verifies them.
+
+| Card | `tests/v2` + registration | Full suite |
+|---|---|---|
+| EN-03 | 481 passed | 2,374 passed, 24 skipped |
+| EN-06 | 511 passed | 2,404 passed, 24 skipped |
 
 The round 1 owner decisions are recorded at the end of each review:
 
@@ -59,9 +66,13 @@ Wave 5 shared files:
 
 Steps:
 
-1. Wait for both executor threads with `wait_threads`. Read their reports
-   with `read_thread`. Neither has pushed.
+1. Confirm with Git that each worktree is clean at the handoff commit
+   above. If a branch has moved past it, read the executor thread's latest
+   report with `read_thread`.
 2. For each card, create a reviewer thread (§3 step 3) for the **recheck**.
+   Do both cards at once: they hold separate files. The reviewer reviews the
+   range from the round 1 commit to the handoff commit, then the whole card.
+   It also runs a combined scratch merge of both branches on `origin/main`.
    The prompt says:
    - the round 1 review is the file named above;
    - recheck every finding against the new commits, and append a "Recheck"
