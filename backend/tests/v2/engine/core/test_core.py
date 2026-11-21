@@ -58,6 +58,21 @@ def continue_turn(world: World, actor: str) -> dict:
     return {**turn(world, actor, "wait"), "action": {"kind": "continue"}}
 
 
+def assert_first_regrowth(result) -> None:
+    applied, refill = result.events[-2:]
+    assert applied.type == "world_rule_applied"
+    assert applied.payload == {"rule_id": "rule_f", "subject_id": "inst_b"}
+    assert refill.type == "store_count_changed"
+    assert refill.payload == {
+        "entity_id": "inst_b",
+        "archetype_id": "arch_a",
+        "before": 1,
+        "after": 4,
+        "rule_id": "rule_f",
+        "source": "src_a",
+    }
+
+
 def give_item(world: World, actor: str = A, id_: str = "inst_a") -> None:
     from living_island.world.v2.engine.state import Held
 
@@ -247,7 +262,8 @@ def test_wap20_kernel_failure_codes_and_precedence(
     result = world.step([turn(world, A, command, target, params)])
     assert result.actions[0].failure_code == expected
     assert result.actions[0].tick_finished == 1
-    assert [event.type for event in result.events] == ["action_started", "action_failed"]
+    assert [event.type for event in result.events[:-2]] == ["action_started", "action_failed"]
+    assert_first_regrowth(result)
 
 
 def test_wap22_named_choices_precede_by_kind(world: World) -> None:
@@ -282,12 +298,13 @@ def test_en17_wap10_transfer_order_split_merge_and_ownership(world: World) -> No
 
     world.state.residents[B].position = Coord(x=2, y=1)
     pickup = world.step([turn(world, A, "pick_up", subject("entity", "inst_a"), {"quantity": 1})])
-    assert [event.type for event in pickup.events] == [
+    assert [event.type for event in pickup.events[:-2]] == [
         "action_started",
         "stack_split",
         "item_transferred",
         "action_succeeded",
     ]
+    assert_first_regrowth(pickup)
     created = pickup.events[1].payload["new_id"]
     assert created == "e:380d791373097437"
     drop = world.step([turn(world, A, "drop", tile(2), named(created))])
@@ -331,7 +348,7 @@ def test_en17_distinct_tile_stacks_and_inventory_merge(world: World) -> None:
     result = world.step(
         [turn(world, A, "pick_up", tile(2), {"archetype_id": "arch_a", "quantity": 3})]
     )
-    assert [event.type for event in result.events] == [
+    assert [event.type for event in result.events[:-2]] == [
         "action_started",
         "item_transferred",
         "stack_merged",
@@ -339,6 +356,7 @@ def test_en17_distinct_tile_stacks_and_inventory_merge(world: World) -> None:
         "item_transferred",
         "action_succeeded",
     ]
+    assert_first_regrowth(result)
     assert result.events[1].payload["item_id"] == "inst_a"
     assert result.events[3].payload["from_id"] == "inst_z"
     assert world.state.entities["inst_z"].quantity == 2
@@ -583,11 +601,12 @@ def test_rule_additions_publish_before_actor_starts_and_refuse_duplicates(world:
     }
     initial_hash = world.state.library.rule_library_hash
     boundary = world.step([turn(world, A, "wait")], rule_additions=[rule])
-    assert [event.type for event in boundary.events] == [
+    assert [event.type for event in boundary.events[:-2]] == [
         "rule_added",
         "action_started",
         "action_succeeded",
     ]
+    assert_first_regrowth(boundary)
     library = world.state.library
     assert library.rule_library_hash != initial_hash
     assert library.added_rules["added_a"].content_hash == boundary.events[0].payload["content_hash"]

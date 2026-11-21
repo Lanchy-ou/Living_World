@@ -31,7 +31,7 @@ def _reason(
     )
     if exhaustion_stops and exhausted(ctx.state, ctx.pack, actor.id):
         return "EXHAUSTED"
-    if isinstance(command, Contribute):
+    if isinstance(command, Contribute) and action.pending_failure is None:
         process = ctx.state.entities.get(command.process_id)
         if process is None or distance(actor.position, tile_of(ctx.state, process.place)) > 1:
             return "TARGET_GONE"

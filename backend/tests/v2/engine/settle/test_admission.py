@@ -113,6 +113,22 @@ def test_rr26_captured_fit(world: World, cap: int, count: int) -> None:
         assert not any(row.type == "entity_created" for row in boundary.events)
 
 
+def assert_refill_and_update_expected(result, expected) -> None:
+    applied, refill = result.events[-2:]
+    assert applied.type == "world_rule_applied"
+    assert applied.payload == {"rule_id": "rule_f", "subject_id": "inst_b"}
+    assert refill.type == "store_count_changed"
+    assert refill.payload == {
+        "entity_id": "inst_b",
+        "archetype_id": "arch_a",
+        "before": 1,
+        "after": 4,
+        "rule_id": "rule_f",
+        "source": "src_a",
+    }
+    expected.entities["inst_b"].components["store"]["count"] = 4
+
+
 def test_en28_competing_fits_discard_every_effect(world: World) -> None:
     from living_island.world.v2.engine.state import Held, Lineage
 
@@ -149,10 +165,11 @@ def test_en28_competing_fits_discard_every_effect(world: World) -> None:
         rule_additions=[rule],
     )
     assert boundary.actions[0].settlement.failed_check == "world_limit"
+    assert_refill_and_update_expected(boundary, before)
     assert world.state.entities == before.entities
     assert world.state.needs == before.needs
     assert world.state.entity_counter == before.entity_counter
-    assert [row.type for row in boundary.events] == [
+    assert [row.type for row in boundary.events[:-2]] == [
         "rule_added",
         "action_started",
         "act_items",
@@ -439,6 +456,8 @@ def test_rr37_preflight_checks_live_capacity_and_surviving_references(
         [turn(world, verb="strike", target=target(source_id))], rule_additions=[rule]
     )
     assert boundary.actions[0].settlement.failed_check == "world_limit"
+    if failure != "store_full":
+        assert_refill_and_update_expected(boundary, before)
     assert world.state.entities == before.entities
     assert world.state.entity_counter == before.entity_counter
     assert not any(
@@ -450,7 +469,7 @@ def test_rr37_preflight_checks_live_capacity_and_surviving_references(
             "matter_moved",
             "store_count_changed",
         )
-        for event in boundary.events
+        for event in (boundary.events if failure == "store_full" else boundary.events[:-2])
     )
 
 
@@ -695,5 +714,6 @@ def test_rule_world_cap_preserves_corpse_room_after_merges(world: World, amount:
         assert world.state.entities["inst_a"].quantity == 3
     else:
         assert result.actions[0].settlement.failed_check == "world_limit"
+        assert_refill_and_update_expected(result, before)
         assert world.state.entities == before.entities
         assert world.state.entity_counter == before.entity_counter
