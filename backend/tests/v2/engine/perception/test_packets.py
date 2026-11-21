@@ -536,10 +536,10 @@ def test_en25_final_sleep_tick_never_hears_even_when_sleep_settles_first(make_wo
         rules=SLEEP_RULE,
         seed=seed,
     )
-    step(world, sleep(world, A, 6))
     if early:
-        world.state.needs[A]["satiety"] = 4
-    else:
+        world.state.needs[A]["satiety"] = 5
+    step(world, sleep(world, A, 6))
+    if not early:
         for _ in range(4):
             step(world)
     result = step(world, turn(world, B, "wait", speech=statement(A)))
@@ -552,7 +552,19 @@ def test_en25_final_sleep_tick_never_hears_even_when_sleep_settles_first(make_wo
     assert packet(world).perception.awareness == "awake"
     assert packet(world).perception.heard_utterances == []
     assert "utterance_heard" not in [r.kind for r in packet(world).reports]
-    assert packet(world).reports[-1].kind == "woke"
+    if early:
+        # WAP-19's wake array is separate from the awake dawn array with hearing.
+        intent = f"{A}:t000000:a"
+        assert report_rows(packet(world)) == [
+            report("action_ended", intent),
+            report("need_band_changed", "satiety", band="low"),
+            report("need_threshold_crossed", "satiety", threshold="urgent"),
+            report("action_observed", f"{B}:t000000:a"),
+            report("progress_step", intent),
+            report("woke"),
+        ]
+    else:
+        assert packet(world).reports[-1].kind == "woke"
     step(world)
     assert packet(world).perception.heard_utterances == []
     assert "woke" not in [r.kind for r in packet(world).reports]
@@ -633,10 +645,17 @@ def test_wap14_unconscious_never_has_senses_even_with_sleep_sight(make_world):
 
 
 def test_en06_addressed_listener_and_excluded_audiences_in_real_packets(make_world):
-    world = make_world([(A, 1, 1), (B, 2, 1), (C, 2, 2), (D, 5, 1)])
-    world.state.residents[C].alive = False
+    world = make_world([(A, 1, 1), (B, 2, 1), (C, 2, 2), (D, 5, 1)], settings=BODY)
+    world.state.needs[C].update(health=1, satiety=1)
+    (corpse,) = events(step(world), "corpse_created")
+    assert corpse.actor_id == C
     result = step(world, turn(world, A, "wait", speech=statement(B)))
     (spoken,) = events(result, "utterance_spoken")
+    assert [
+        event.payload["listener_id"]
+        for event in events(result, "utterance_heard")
+        if event.payload["utterance_id"] == spoken.event_id
+    ] == [B]
     (heard,) = packet(world, B).perception.heard_utterances
     assert (heard.utterance_id, heard.speaker_id, heard.addressee_id) == (spoken.event_id, A, B)
     assert report_rows(packet(world, B)) == [
@@ -653,6 +672,7 @@ def test_en06_addressed_listener_and_excluded_audiences_in_real_packets(make_wor
 
 
 def test_wap19_exact_mixed_report_order_and_no_repeat(make_world):
+    # Waking suppresses hearing for that recipient. EN-25 checks the separate wake array.
     world = make_world(
         [(A, 1, 1), (B, 3, 1), (C, 1, 1)],
         tick_minutes=240,
@@ -779,7 +799,7 @@ archetype = "arch_d"
 at = { holder = "res_a" }
 """,
     )
-    step(
+    started = step(
         world,
         turn(
             world,
@@ -793,6 +813,16 @@ at = { holder = "res_a" }
     )
     own = packet(world).perception.running_action
     (starting,) = packet(world, B).perception.observed_actions
+    (act_items,) = events(started, "act_items")
+    objective_parts = sorted(
+        (slot["role"], part["entity_id"], part["quantity"])
+        for slot in act_items.payload["slots"]
+        for part in slot["parts"]
+    )
+    assert act_items.intent_id == starting.intent_id == own.intent_id
+    assert objective_parts == sorted(
+        (item.role, item.entity_id, item.quantity) for item in starting.visible_items
+    )
     assert starting.phase == "start"
     assert starting.start_target == own.start_target
     assert starting.target.model_dump() == entity("inst_c")
@@ -808,6 +838,10 @@ at = { holder = "res_a" }
     result = step(world)
     (feedback,) = packet(world).perception.action_feedback
     assert feedback.items_used == own.items
+    assert feedback.intent_id == act_items.intent_id
+    assert objective_parts == sorted(
+        (item.role, item.entity_id, item.quantity) for item in feedback.items_used
+    )
     assert feedback.phenomena == ["snaps", "tastes_good"]
     (ending,) = packet(world, B).perception.observed_actions
     assert ending.phase == "settle" and ending.phenomena == ["snaps"]
@@ -860,6 +894,75 @@ at = { holder = "inst_c" }
         "band": None,
         "threshold_id": None,
     }
+
+
+@pytest.mark.parametrize("mode", ["advance", "settle", "refused"])
+def test_process_world_effect_changes_progress_report(make_world, mode):
+    final_work = 4 if mode == "settle" else 2
+    # The refused branch applies the work change before its output exceeds the tile cap.
+    output = ""
+    blocker = ""
+    if mode == "refused":
+        output = """
+conservation = "source"
+outputs = [{ archetype = "arch_a", quantity = 1, at = "subject.tile", source = "src_a" }]
+"""
+        blocker = """
+[[instance]]
+id = "tile_blocker"
+archetype = "arch_f"
+at = { tile = [2, 3] }
+"""
+    world = make_world(
+        [(A, 2, 2), (B, 3, 3)],
+        instances="""
+[[instance]]
+id = "open_part"
+archetype = "arch_a"
+at = { holder = "inst_e" }
+"""
+        + blocker,
+        rules=f"""
+[[rule]]
+id = "advance_work"
+trigger = "every:1"
+subject = {{ archetype = "arch_e" }}
+effects = [{{ op = "set_state", of = "subject", field = "process.work_done", set = {final_work} }}]
+{output}""",
+    )
+    opening = next(v for v in packet(world).perception.visible_entities if v.entity_id == "inst_e")
+    assert looks(opening)["progress"] == "started"
+    result = step(world, turn(world, A, "contribute", target=entity("inst_e")))
+    (contributed,) = events(result, "process_progressed")
+    assert contributed.payload["work_done"] == 1
+    changes = [
+        event
+        for event in events(result, "entity_state_changed")
+        if event.payload["field"] == "process.work_done"
+    ]
+    running = packet(world).perception.running_action
+    if mode == "refused":
+        assert changes == []
+        assert running.progress == "started"
+        assert report_rows(packet(world)) == []
+    else:
+        (changed,) = changes
+        assert (changed.target_id, changed.payload["before"], changed.payload["after"]) == (
+            "inst_e",
+            1,
+            final_work,
+        )
+        if mode == "advance":
+            assert running.progress == "halfway"
+            assert report_rows(packet(world)) == [report("progress_step", "inst_e")]
+        else:
+            assert running is None
+            assert "inst_e" not in world.state.entities
+            assert events(result, "entity_consumed")
+            assert [row for row in report_rows(packet(world)) if row[0] == "progress_step"] == [
+                report("progress_step", "inst_e"),
+            ]
+    assert all(row.kind != "progress_step" for row in packet(world, B).reports)
 
 
 def test_wap08_visible_walker_keeps_hidden_destination_private(make_world):

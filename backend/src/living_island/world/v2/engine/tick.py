@@ -81,11 +81,12 @@ class SpeechAttempt:
     intent_id: str | None = None
 
 
-@dataclass(frozen=True)
-class ProcessStep:
-    actor_id: str
-    before: str
-    after: str
+@dataclass
+class ProcessProgress:
+    opening: int
+    latest: int
+    required: int
+    contributors: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -106,17 +107,21 @@ class TickContext:
     previous_deliveries: dict[str, BoundaryDelivery] = field(default_factory=dict)
     opening_needs: Mapping[str, dict[str, int]] = field(default_factory=dict)
     progress_reports: dict[str, set[str]] = field(default_factory=dict)
-    process_progress: dict[str, list[ProcessStep]] = field(default_factory=dict)
+    process_progress: dict[str, ProcessProgress] = field(default_factory=dict)
     woke: set[str] = field(default_factory=set)
 
     @property
     def tick(self) -> int:
         return self.writer.tick
 
-    def record_process_step(self, process_id: str, actor_id: str, before: str, after: str) -> None:
-        self.process_progress.setdefault(process_id, []).append(
-            ProcessStep(actor_id, before, after)
+    def record_process_work(
+        self, process_id: str, *, before: int, after: int, required: int
+    ) -> ProcessProgress:
+        progress = self.process_progress.setdefault(
+            process_id, ProcessProgress(before, after, required)
         )
+        progress.latest = after
+        return progress
 
     def record_result(
         self,

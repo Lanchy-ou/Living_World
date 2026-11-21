@@ -74,6 +74,14 @@ class SetState:
 
 
 @dataclass(frozen=True)
+class ProcessWorkChange:
+    entity_id: str
+    before: int
+    after: int
+    required: int
+
+
+@dataclass(frozen=True)
 class Need:
     actor_id: str
     name: str
@@ -342,6 +350,7 @@ class Ledger:
         self.outputs: list[Part] = []
         self.output_looks: list[PhaseItem] = []
         self.withdrawn: dict[str, int] = {}
+        self.process_work: list[ProcessWorkChange] = []
 
     def publish(
         self, ctx: TickContext, action: ActiveAction, provisional: ActiveAction
@@ -364,6 +373,14 @@ class Ledger:
         ctx.state.next_event_seq_in_tick = self.state.next_event_seq_in_tick
         ctx.state.event_log_cursor = self.state.event_log_cursor
         ctx.writer.events.extend(self.writer.events)
+        for change in self.process_work:
+            # Keep committed work even if a later effect removes the process.
+            ctx.record_process_work(
+                change.entity_id,
+                before=change.before,
+                after=change.after,
+                required=change.required,
+            )
         return True
 
     def register(self, entity: Entity) -> None:
@@ -632,6 +649,12 @@ class Ledger:
                 after = min(after, values["max_wear"])
             values[field] = after
             if before != after:
+                if component == "process":
+                    self.process_work.append(
+                        ProcessWorkChange(
+                            key, before, after, entity.components["process"]["work_required"]
+                        )
+                    )
                 self.writer.emit(
                     "entity_state_changed",
                     {

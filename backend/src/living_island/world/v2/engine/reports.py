@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..protocol import NeedBand, Perception, ReportKind, WorldReport
+from .items import progress_descriptor
 from .physiology import need_crossings
 
 if TYPE_CHECKING:
@@ -59,9 +60,10 @@ def build_reports(
     steps = set(ctx.progress_reports.get(actor, ()))
     steps.update(
         key
-        for key, readings in ctx.process_progress.items()
-        if readings[0].before != readings[-1].after
-        and any(step.actor_id == actor for step in readings)
+        for key, work in ctx.process_progress.items()
+        if actor in work.contributors
+        and progress_descriptor(work.opening, work.required)
+        != progress_descriptor(work.latest, work.required)
     )
     reports.extend(report("progress_step", key) for key in sorted(steps))
     if actor in ctx.woke:

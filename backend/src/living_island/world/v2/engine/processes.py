@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from ..protocol import StateDelta
 from .effects import Create, Ledger, Operands, Refused, extend_delta
-from .items import progress_descriptor, tile_of
+from .items import tile_of
 from .kernel import distance
 from .state import ActiveAction, Contribute, Entity, Inside, OnTile, Part
 from .world_rules import RuleSchedule, apply, eligible, run
@@ -38,13 +38,13 @@ def contribute(
     progress = subject.components["process"]
     before = progress["work_done"]
     progress["work_done"] = before + 1
-    required = progress["work_required"]
-    ctx.record_process_step(
+    work = ctx.record_process_work(
         subject.entity_id,
-        actor_id,
-        progress_descriptor(before, required),
-        progress_descriptor(before + 1, required),
+        before=before,
+        after=before + 1,
+        required=progress["work_required"],
     )
+    work.contributors.add(actor_id)
     extend_delta(
         action,
         [
