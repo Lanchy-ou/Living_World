@@ -107,7 +107,16 @@ def test_en05_last_stock_obeys_action_shuffle(world: World) -> None:
     assert second.settlement.kind == "unmet"
     assert second.settlement.at == "completion"
     assert second.settlement.failed_check == "check_a"
-    assert world.state.entities["inst_b"].components["store"]["count"] == 0
+    assert world.state.entities["inst_b"].components["store"]["count"] == 4
+    refill = next(
+        row
+        for row in boundary.events
+        if row.type == "store_count_changed" and row.payload["rule_id"] == "rule_f"
+    )
+    assert (refill.payload["before"], refill.payload["after"]) == (0, 4)
+    settlements = [row for row in boundary.events if row.type == "act_settled"]
+    assert [row.intent_id for row in settlements] == [first.intent_id, second.intent_id]
+    assert all(row.seq_in_tick < refill.seq_in_tick for row in settlements)
     act_items = [row for row in boundary.events if row.type == "act_items"]
     for entry in act_items:
         assert entry.payload["slots"] == [

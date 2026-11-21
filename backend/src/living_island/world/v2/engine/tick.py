@@ -60,6 +60,7 @@ from .state import (
     state_snapshot_hash,
 )
 from .validate import EnginePack, WorldSetup, bind_turns, check_acknowledgements
+from .world_rules import RuleSchedule
 
 
 @dataclass(frozen=True)
@@ -220,6 +221,10 @@ class World:
     state: WorldState
     pack: EnginePack
     initial_events: tuple[WorldEvent, ...]
+    _schedule: RuleSchedule = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._schedule = RuleSchedule().with_rules(self.pack.source.rules.values())
 
     def step(
         self,
@@ -233,16 +238,17 @@ class World:
         acknowledgements = {} if acknowledged is None else acknowledged
         check_acknowledgements(self.state, acknowledgements)
         next_pack, added = prepare_rules(self.pack, rule_additions)
+        schedule = self._schedule.with_rules(added) if added else self._schedule
         state = deepcopy(self.state)
         state.next_event_seq_in_tick = 0
         writer = EventWriter(state, state.tick + 1)
         ctx = TickContext(state, next_pack, writer)
         boundary_input(ctx, turns, acknowledgements, added)
         progress_needs: dict[str, physiology.ProgressNeeds] = {}
-        completions = action_progress(ctx, turns, progress_needs)
+        completions = action_progress(ctx, turns, progress_needs, schedule)
         resolve_completions(ctx, completions)
-        processes.world_rules(ctx)
-        processes.finish_processes(ctx)
+        processes.world_rules(ctx, schedule)
+        processes.finish_processes(ctx, schedule)
         physiology.apply_physiology(ctx, progress_needs)
         physiology.hard_stops_and_waking(ctx, progress_needs)
         perception.build_deliveries(ctx)
@@ -251,6 +257,7 @@ class World:
         state.entities = dict(sorted(state.entities.items()))
         self.state = state
         self.pack = next_pack
+        self._schedule = schedule
         return TickResult(tuple(writer.events), tuple(ctx.results), ctx.utterances)
 
 
@@ -380,6 +387,7 @@ def progress_action(
     actor: Resident,
     action: ActiveAction,
     progress_needs: dict[str, physiology.ProgressNeeds],
+    schedule: RuleSchedule,
 ) -> bool:
     state = ctx.state
     command = action.command
@@ -407,7 +415,7 @@ def progress_action(
                 progress_needs[actor.id] = physiology.ProgressNeeds(opening, (rule_id,))
             done = action.due_tick == ctx.tick or action.pending_stop is not None
         elif isinstance(command, Contribute):
-            processes.contribute(ctx, action)
+            processes.contribute(ctx, action, command, schedule)
             done = action.pending_stop is not None
         if action.pending_stop is None:
             action.elapsed_ticks += 1
@@ -430,6 +438,7 @@ def action_progress(
     ctx: TickContext,
     turns: dict[str, BoundTurn],
     progress_needs: dict[str, physiology.ProgressNeeds],
+    schedule: RuleSchedule,
 ) -> list[Completion]:
     state = ctx.state
     completions = []
@@ -455,7 +464,7 @@ def action_progress(
         action = state.active_actions.get(actor_id)
         if action is None:
             ctx.activity[actor_id] = TickActivity(None, 0)
-        elif progress_action(ctx, actor, action, progress_needs):
+        elif progress_action(ctx, actor, action, progress_needs, schedule):
             completions.append(
                 Completion(
                     actor_id,

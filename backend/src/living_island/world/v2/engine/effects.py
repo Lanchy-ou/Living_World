@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from copy import deepcopy
 from dataclasses import dataclass, replace
@@ -71,6 +72,7 @@ class SetState:
 
 @dataclass(frozen=True)
 class Need:
+    actor_id: str
     name: str
     delta: int
 
@@ -79,11 +81,122 @@ type Operation = Create | Debit | SetState | Need
 
 
 @dataclass(frozen=True)
-class Operands:
+class EffectOperands(ABC):
     state: WorldState
     pack: EnginePack
-    action: ActiveAction
     slots: dict[str, tuple[Part, ...]]
+
+    @abstractmethod
+    def owner(self) -> str | None: ...
+
+    @abstractmethod
+    def entity(self, role: str) -> Entity: ...
+
+    @abstractmethod
+    def place(self, raw: str) -> Place: ...
+
+    def quantity(self, raw: int | Table, prototype: Entity | None = None) -> int:
+        if isinstance(raw, int):
+            return raw
+        reference = raw["of"]
+        if reference.startswith("fit:"):
+            place = self.place(reference[4:])
+            item = cast(Entity, prototype)
+            if isinstance(place, InStore):
+                store = self.state.entities[place.entity_id].components["store"]
+                available = (
+                    store["capacity"] - store["count"]
+                    if store["archetype"] == item.archetype_id
+                    else 0
+                )
+            else:
+                container = self.state.entities[cast(Inside, place).container_id]
+                available = (
+                    (container.components["container"]["capacity"] - slots_used(self.state, place))
+                    // item.components["portable"]["slots_per_unit"]
+                    if accepts(self.pack, container, item)
+                    else 0
+                )
+        else:
+            role, _, field = reference.partition(".")
+            if field == "store.count":
+                available = self.entity(role).components["store"]["count"]
+            elif role in ("target", "subject"):
+                available = self.entity(role).quantity
+            else:
+                available = sum(part.quantity for part in self.slots[role[5:]])
+        return min(available, cast(int, raw.get("upto", available)))
+
+    def prototype(
+        self, archetype: str, material: str | None, place: Place, quantity: int
+    ) -> Entity:
+        row = self.pack.source.data["archetype"][archetype]
+        stackable = self.pack.archetypes[archetype].stackable
+        return Entity(
+            "",
+            archetype,
+            material,
+            quantity,
+            0,
+            None if stackable else self.owner(),
+            place,
+            cast(Components, deepcopy(row["components"])),
+            {},
+            {},
+            (),
+            stackable,
+            (),
+        )
+
+    def output(self, row: Table) -> Create:
+        arch_from = row.get("archetype_from")
+        mat_from = row.get("material_from")
+        inherited_arch = None if arch_from is None else self.entity(slot_ref(arch_from))
+        inherited_mat = None if mat_from is None else self.entity(slot_ref(mat_from))
+        archetype: str = (
+            row["archetype"] if inherited_arch is None else cast(str, inherited_arch.archetype_id)
+        )
+        default = self.pack.source.data["archetype"][archetype].get("material")
+        material = row.get(
+            "material", default if inherited_mat is None else inherited_mat.material_id
+        )
+        prototype = self.prototype(archetype, material, self.place(row["at"]), 1)
+        prototype.quantity = self.quantity(row["quantity"], prototype)
+        return Create(prototype, row.get("source"), arch_from if arch_from == mat_from else None)
+
+    def effect(self, row: Table) -> Operation:
+        op = row["op"]
+        if op == "set_state":
+            role = row["of"]
+            ids = (
+                (self.entity(role).entity_id,)
+                if role in ("target", "subject")
+                else tuple(part.entity_id for part in self.slots[role[5:]])
+            )
+            return SetState(
+                ids, row["field"], row["add"] if "add" in row else row["set"], "add" in row
+            )
+        moving = op == "move"
+        ref = row["from"] if moving else row["of"]
+        role, _, field = ref.partition(".")
+        entity = self.entity(role)
+        source: str | Inside | InStore
+        if field == "store":
+            source = InStore(entity.entity_id)
+            archetype = entity.components["store"]["archetype"]
+        elif field == "contents":
+            source = Inside(entity.entity_id)
+            archetype = row["archetype"]
+        else:
+            source = entity.entity_id
+            archetype = cast(str, entity.archetype_id)
+        quantity = self.quantity(row.get("quantity", entity.quantity))
+        return Debit(source, archetype, quantity, self.place(row["to"]) if moving else None)
+
+
+@dataclass(frozen=True)
+class Operands(EffectOperands):
+    action: ActiveAction
 
     @property
     def actor_id(self) -> str:
@@ -115,105 +228,13 @@ class Operands:
             case _:
                 return InStore(self.entity("target").entity_id)
 
-    def quantity(self, raw: int | Table, prototype: Entity | None = None) -> int:
-        if isinstance(raw, int):
-            return raw
-        reference = raw["of"]
-        if reference.startswith("fit:"):
-            place = self.place(reference[4:])
-            item = cast(Entity, prototype)
-            if isinstance(place, InStore):
-                store = self.state.entities[place.entity_id].components["store"]
-                available = (
-                    store["capacity"] - store["count"]
-                    if store["archetype"] == item.archetype_id
-                    else 0
-                )
-            else:
-                container = self.state.entities[cast(Inside, place).container_id]
-                available = (
-                    (container.components["container"]["capacity"] - slots_used(self.state, place))
-                    // item.components["portable"]["slots_per_unit"]
-                    if accepts(self.pack, container, item)
-                    else 0
-                )
-        else:
-            role, _, field = reference.partition(".")
-            if field == "store.count":
-                available = self.entity(role).components["store"]["count"]
-            elif role == "target":
-                available = self.entity(role).quantity
-            else:
-                available = sum(part.quantity for part in self.slots[role[5:]])
-        return min(available, cast(int, raw.get("upto", available)))
-
-    def prototype(
-        self, archetype: str, material: str | None, place: Place, quantity: int
-    ) -> Entity:
-        row = self.pack.source.data["archetype"][archetype]
-        stackable = self.pack.archetypes[archetype].stackable
-        return Entity(
-            "",
-            archetype,
-            material,
-            quantity,
-            0,
-            None if stackable else self.actor_id,
-            place,
-            cast(Components, deepcopy(row["components"])),
-            {},
-            {},
-            (),
-            stackable,
-            (),
-        )
-
-    def output(self, row: Table) -> Create:
-        arch_from = row.get("archetype_from")
-        mat_from = row.get("material_from")
-        inherited_arch = None if arch_from is None else self.entity(slot_ref(arch_from))
-        inherited_mat = None if mat_from is None else self.entity(slot_ref(mat_from))
-        archetype: str = (
-            row["archetype"] if inherited_arch is None else cast(str, inherited_arch.archetype_id)
-        )
-        default = self.pack.source.data["archetype"][archetype].get("material")
-        material = row.get(
-            "material", default if inherited_mat is None else inherited_mat.material_id
-        )
-        prototype = self.prototype(archetype, material, self.place(row["at"]), 1)
-        prototype.quantity = self.quantity(row["quantity"], prototype)
-        return Create(prototype, row.get("source"), arch_from if arch_from == mat_from else None)
+    def owner(self) -> str:
+        return self.actor_id
 
     def effect(self, row: Table) -> Operation:
-        op = row["op"]
-        if op == "need":
-            return Need(row["need"], row["delta"])
-        if op == "set_state":
-            role = row["of"]
-            ids = (
-                (self.entity(role).entity_id,)
-                if role == "target"
-                else tuple(part.entity_id for part in self.slots[role[5:]])
-            )
-            return SetState(
-                ids, row["field"], row["add"] if "add" in row else row["set"], "add" in row
-            )
-        moving = op == "move"
-        ref = row["from"] if moving else row["of"]
-        role, _, field = ref.partition(".")
-        entity = self.entity(role)
-        source: str | Inside | InStore
-        if field == "store":
-            source = InStore(entity.entity_id)
-            archetype = entity.components["store"]["archetype"]
-        elif field == "contents":
-            source = Inside(entity.entity_id)
-            archetype = row["archetype"]
-        else:
-            source = entity.entity_id
-            archetype = cast(str, entity.archetype_id)
-        quantity = self.quantity(row.get("quantity", entity.quantity))
-        return Debit(source, archetype, quantity, self.place(row["to"]) if moving else None)
+        if row["op"] == "need":
+            return Need(self.actor_id, row["need"], row["delta"])
+        return super().effect(row)
 
 
 def slot_ref(slot: str) -> str:
@@ -240,7 +261,7 @@ def coalesce_stack(
     entity: Entity,
     reserved: set[str],
     writer: EventWriter,
-    action: ActiveAction,
+    action: ActiveAction | None,
 ) -> Entity:
     equal = [
         other
@@ -286,17 +307,28 @@ def release(state: WorldState, writer: EventWriter, action: ActiveAction) -> dic
 
 class Ledger:
     def __init__(
-        self, ctx: TickContext, action: ActiveAction, rule: Rule, operands: Operands
+        self,
+        ctx: TickContext,
+        action: ActiveAction | None,
+        rule: Rule,
+        operands: EffectOperands,
+        *,
+        process_id: str | None = None,
     ) -> None:
         state = ctx.state
+        needs = state.needs.copy()
+        if action is not None:
+            actor_id = action.intent.actor_id
+            needs[actor_id] = needs[actor_id].copy()
         self.state = replace(
             state,
             entities=deepcopy(state.entities),
             entity_counter=deepcopy(state.entity_counter),
-            needs={**state.needs, operands.actor_id: state.needs[operands.actor_id].copy()},
+            needs=needs,
         )
         self.writer = EventWriter(self.state, ctx.tick)
-        self.action = replace(action, event_ids=[])
+        self.action = action
+        self.process_id = process_id
         self.operands = operands
         self.pack = ctx.pack
         self.rule_id = rule.id
@@ -307,21 +339,28 @@ class Ledger:
         self.outputs: list[Part] = []
         self.withdrawn: dict[str, int] = {}
 
-    def publish(self, ctx: TickContext, action: ActiveAction) -> dict[str, str] | None:
-        merged = release(self.state, self.writer, self.action)
-        if not within_placement_limits(self.state, self.pack.limits, self.receiving):
-            return None
-        actor_id = self.operands.actor_id
+    def publish(
+        self, ctx: TickContext, action: ActiveAction, provisional: ActiveAction
+    ) -> dict[str, str] | None:
+        merged = release(self.state, self.writer, provisional)
+        actor_id = action.intent.actor_id
         changes = branch_delta(ctx.state, self.state, actor_id)
+        if not self.publish_world(ctx):
+            return None
+        ctx.state.needs[actor_id] = self.state.needs[actor_id]
+        action.event_ids.extend(provisional.event_ids)
+        extend_delta(action, changes)
+        return merged
+
+    def publish_world(self, ctx: TickContext) -> bool:
+        if not within_placement_limits(self.state, self.pack.limits, self.receiving):
+            return False
         ctx.state.entities = self.state.entities
         ctx.state.entity_counter = self.state.entity_counter
-        ctx.state.needs[actor_id] = self.state.needs[actor_id]
         ctx.state.next_event_seq_in_tick = self.state.next_event_seq_in_tick
         ctx.state.event_log_cursor = self.state.event_log_cursor
         ctx.writer.events.extend(self.writer.events)
-        action.event_ids.extend(self.action.event_ids)
-        extend_delta(action, changes)
-        return merged
+        return True
 
     def register(self, entity: Entity) -> None:
         entity.entity_id = self.state.entity_counter.allocate(self.state.seed)
@@ -429,6 +468,12 @@ class Ledger:
         else:
             for _ in range(quantity):
                 self.move(replace(deepcopy(prototype), quantity=1), origin, destination)
+
+    def consume_input(self, name: str, parts: tuple[Part, ...]) -> None:
+        self.returns[name] = list(parts)
+        for part in parts:
+            self.withdrawn[part.entity_id] = part.quantity + self.withdrawn.get(part.entity_id, 0)
+            self.consume(part)
 
     def consume(self, part: Part) -> None:
         entity = self.state.entities.get(part.entity_id)
@@ -551,7 +596,7 @@ class Ledger:
                         "source": operation.source,
                         "recreated_from": portions(returned),
                         "made_from": portions(self.consumed) if operation.source is None else [],
-                        "process_id": None,
+                        "process_id": self.process_id,
                     }
                 ),
                 action=self.action,
@@ -571,8 +616,6 @@ class Ledger:
             after = max(0, before + operation.value if operation.relative else operation.value)
             if component == "durability":
                 after = min(after, values["max_wear"])
-            elif component == "process":
-                after = min(after, values["work_required"])
             values[field] = after
             if before != after:
                 self.writer.emit(
@@ -598,8 +641,7 @@ class Ledger:
                 self.create(operation)
             case SetState():
                 self.set_state(operation)
-            case Need(name=name, delta=delta):
-                actor_id = self.operands.actor_id
+            case Need(actor_id=actor_id, name=name, delta=delta):
                 before, after = clamp_need(self.state, self.pack, actor_id, name, delta)
                 if before != after:
                     self.writer.emit(

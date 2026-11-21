@@ -19,7 +19,7 @@ from ..protocol import (
 )
 from ..rules import Rule
 from ..rules.schema import Table
-from . import kernel, physiology
+from . import kernel, physiology, processes
 from .chance import chance_roll
 from .conditions import first_failure, nearby_match, unmatched_phenomena
 from .descriptors import (
@@ -417,8 +417,9 @@ def apply_branch(
     data = rule.data
     names = [slot["slot"] for slot in (*data["instruments"], *data["inputs"])]
     slots = dict(zip(names, groups, strict=True))
-    operands = Operands(ctx.state, ctx.pack, action, slots)
-    ledger = Ledger(ctx, action, rule, operands)
+    operands = Operands(ctx.state, ctx.pack, slots, action)
+    provisional_action = replace(action, event_ids=[])
+    ledger = Ledger(ctx, provisional_action, rule, operands)
     effects = (
         data["effects"]
         if mode == "applied"
@@ -437,18 +438,16 @@ def apply_branch(
         if mode == "applied":
             # Keep witness publication provisional along with every effect event.
             provisional = replace(ctx, state=ledger.state, writer=ledger.writer)
-            record_witnesses(provisional, ledger.action, rule, "completion")
+            record_witnesses(provisional, provisional_action, rule, "completion")
         if consume:
             for slot in data["inputs"]:
                 name = slot["slot"]
-                ledger.returns[name] = list(slots[name])
-                for part in slots[name]:
-                    ledger.consume(part)
+                ledger.consume_input(name, slots[name])
         for operation in (*operations, *outputs):
             ledger.apply(operation)
     except Refused:
         return None
-    merged = ledger.publish(ctx, action)
+    merged = ledger.publish(ctx, action, provisional_action)
     return None if merged is None else AppliedBranch(tuple(ledger.outputs), merged)
 
 
@@ -553,13 +552,24 @@ def interrupt(ctx: TickContext, action: ActiveAction) -> None:
     if action.rule_id is not None:
         rule = ctx.pack.source.rules[action.rule_id]
         mode = rule.data["on_interrupt"]
-        if isinstance(mode, dict) and "partial" in mode:
+        if isinstance(mode, dict):
             groups = physical_groups(action)
             actor = ctx.state.residents[action.intent.actor_id]
             if actor.alive and all(still_held(ctx.state, actor.id, group) for group in groups):
-                branch = apply_branch(
-                    ctx, action, rule, groups, consume=True, mode="partial", partial=mode["partial"]
-                )
+                if "partial" in mode:
+                    branch = apply_branch(
+                        ctx,
+                        action,
+                        rule,
+                        groups,
+                        consume=True,
+                        mode="partial",
+                        partial=mode["partial"],
+                    )
+                else:
+                    branch = processes.keep_progress(
+                        ctx, action, rule, mode["keep_progress"], groups
+                    )
     if branch is None:
         branch = release_with_delta(ctx, action)
     action.stop_location = phase_location(ctx, action, AppliedBranch((), branch.merged))
