@@ -962,5 +962,7 @@ Engine §8 and EN-11 require silence when a full store receives no
 regrowth. Rule representation §3.4.1 describes zero quantities as
 no-ops for individual effects. Should an eligible world rule that has no
 effect events in another case, such as a state assignment to the current
-value, still emit `world_rule_applied`? EN-03 currently suppresses the
-application record if the branch produces no effect events.
+value, still emit `world_rule_applied`?
+
+The owner confirmed on 2026-11-21 that a branch with no effect events
+records no `world_rule_applied`.
