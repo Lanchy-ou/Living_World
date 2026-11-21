@@ -101,15 +101,19 @@ def emit_speech_event(
     actor_id: str,
     target_id: str | None,
     causes: tuple[str, ...] = (),
-    identity_field: str | None = None,
+    self_id_field: str | None = None,
 ) -> str:
     """Use the tick's event cursor while retaining the speech-specific actors and targets."""
-    event = ctx.writer.emit(kind, payload, actor_id=actor_id, target_id=target_id, caused_by=causes)
-    if identity_field is not None:
-        event.payload[identity_field] = event.event_id
+    event = ctx.writer.emit(
+        kind,
+        payload,
+        actor_id=actor_id,
+        target_id=target_id,
+        caused_by=causes,
+        intent_id=attempt.intent_id,
+        self_id_field=self_id_field,
+    )
     if attempt.intent_id is not None:
-        # The listener and addressee can differ from the companion action's actors.
-        ctx.writer.events[-1] = event.model_copy(update={"intent_id": attempt.intent_id})
         ctx.started_actions[attempt.intent_id].event_ids.append(event.event_id)
     return event.event_id
 
@@ -138,7 +142,7 @@ def settle_utterance(ctx: TickContext, attempt: SpeechAttempt) -> None:
         actor_id=speaker_id,
         target_id=addressee_id,
         causes=() if reply_id is None else (reply_id,),
-        identity_field="utterance_id",
+        self_id_field="utterance_id",
     )
     heard = HeardUtterance.model_construct(
         utterance_id=utterance_id,
@@ -195,7 +199,7 @@ def settle_utterance(ctx: TickContext, attempt: SpeechAttempt) -> None:
                 actor_id=speaker_id,
                 target_id=addressee_id,
                 causes=(reply_id, utterance_id),
-                identity_field="agreement_id",
+                self_id_field="agreement_id",
             )
             state.agreements[agreement_id] = Agreement(
                 agreement_id, reply_id, utterance_id, proposal.terms, ctx.tick

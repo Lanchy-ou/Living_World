@@ -954,4 +954,4 @@ positions but does not say whether the speaker must have seen an instance
 of the named archetype. EN-06 requires a declared archetype and uses live
 holding or exposure receipts for exact IDs. It does not test possession
 by the promisor or whether the promised performance remains possible.
-These interpretations are pending owner confirmation.
+The owner confirmed both interpretations on 2026-11-21.

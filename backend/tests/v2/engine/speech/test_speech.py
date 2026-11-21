@@ -194,6 +194,27 @@ def test_en08_attached_emission_precedes_action_settlement(world):
     assert result.utterances[A].utterance_id == spoken.event_id
 
 
+def test_attached_utterance_is_complete_when_logged(world, monkeypatch):
+    from living_island.world.v2.engine.events import EventWriter
+
+    emit = EventWriter.emit
+    logged = []
+
+    def capture_emission(writer, kind, payload, **kwargs):
+        event = emit(writer, kind, payload, **kwargs)
+        if kind == "utterance_spoken":
+            recorded = writer.events[-1]
+            logged.append((recorded.event_id, recorded.intent_id, recorded.payload["utterance_id"]))
+        return event
+
+    monkeypatch.setattr(EventWriter, "emit", capture_emission)
+    result = world.step([turn(world, A, utterance=statement(B))])
+    spoken, _ = speech_events(result)
+    (action,) = result.actions
+    assert logged == [(spoken.event_id, action.intent_id, spoken.event_id)]
+    assert spoken.event_id in action.event_ids
+
+
 def test_en08_speech_on_a_long_new_action_has_its_own_completion(world, monkeypatch):
     from living_island.world.v2.engine import tick
 

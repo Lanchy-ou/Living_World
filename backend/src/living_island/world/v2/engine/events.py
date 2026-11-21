@@ -143,9 +143,13 @@ class EventWriter:
         action: ActiveAction | None = None,
         llm_call_id: str | None = None,
         caused_by: tuple[str, ...] = (),
+        intent_id: str | None = None,
+        self_id_field: str | None = None,
     ) -> WorldEvent:
         seq = self.state.next_event_seq_in_tick
         event_id = f"{self.state.run_id}:{self.tick:010d}:{seq:06d}"
+        if self_id_field is not None:
+            payload = {**payload, self_id_field: event_id}
         if target_id is None and action is not None:
             target = action.intent.target
             if target is not None and target.kind != "tile":
@@ -159,7 +163,7 @@ class EventWriter:
             type=kind,
             actor_id=actor_id if action is None else action.intent.actor_id,
             target_id=target_id,
-            intent_id=None if action is None else action.intent.intent_id,
+            intent_id=intent_id if action is None else action.intent.intent_id,
             llm_call_id=llm_call_id,
             caused_by_event_ids=list(caused_by),
             payload=payload,
