@@ -23,7 +23,7 @@ from ..protocol import (
     validate_turn_shape,
 )
 from ..rules import Pack
-from ..rules.schema import Table
+from ..rules.schema import Table, integer
 from .ids import MASK
 from .state import (
     Act,
@@ -266,12 +266,93 @@ class Placement:
 
 
 @dataclass(frozen=True)
+class NeedMetabolism:
+    awake_decay: int
+    asleep_decay: int
+    recovery_minimum: int
+
+
+@dataclass(frozen=True)
+class StaminaMetabolism:
+    awake_decay: int
+    movement_cost: int
+
+
+@dataclass(frozen=True)
+class HealthMetabolism:
+    deprivation_loss: int
+    sleep_recovery: int
+
+
+@dataclass(frozen=True)
+class MentalFatigue:
+    awake_per_tick: int
+    per_utterance_heard: int
+    per_first_sighting: int
+    recovery_per_tick_asleep: int
+    faint_ticks: int
+
+
+@dataclass(frozen=True)
+class PhysiologyConfig:
+    satiety: NeedMetabolism | None
+    hydration: NeedMetabolism | None
+    stamina: StaminaMetabolism | None
+    health: HealthMetabolism | None
+    mental_fatigue: MentalFatigue | None
+
+    @classmethod
+    def from_table(cls, table: Table, needs: Table) -> "PhysiologyConfig":
+        def required(key: str, minimum: int | None) -> int:
+            label = f"physiology.{key}"
+            if key not in table:
+                raise KeyError(label)
+            return integer(table[key], label, minimum)
+
+        def metabolism(need: str) -> NeedMetabolism | None:
+            if need not in needs:
+                return None
+            return NeedMetabolism(
+                required(f"{need}_awake_decay_per_tick", 0),
+                required(f"{need}_asleep_decay_per_tick", 0),
+                required(f"health_recovery_min_{need}", None),
+            )
+
+        return cls(
+            satiety=metabolism("satiety"),
+            hydration=metabolism("hydration"),
+            stamina=StaminaMetabolism(
+                required("stamina_awake_decay_per_tick", 0),
+                required("stamina_move_extra_cost_per_tick", 0),
+            )
+            if "stamina" in needs
+            else None,
+            health=HealthMetabolism(
+                required("health_loss_per_tick_if_deprived", 0),
+                required("health_recovery_sleep_per_tick", 0),
+            )
+            if "health" in needs
+            else None,
+            mental_fatigue=MentalFatigue(
+                required("awake_per_tick", 0),
+                required("per_utterance_heard", 0),
+                required("per_first_sighting", 0),
+                required("recovery_per_tick_asleep", 0),
+                required("faint_ticks", 1),
+            )
+            if "mental_fatigue" in needs
+            else None,
+        )
+
+
+@dataclass(frozen=True)
 class EnginePack:
     """Typed engine projection of one RR-01 validated composed pack."""
 
     source: Pack
     timing: KernelTiming
     limits: Limits
+    physiology: PhysiologyConfig
     inventory_slots: int
     needs: dict[str, NeedSpec]
     verbs: dict[str, VerbSpec]
@@ -294,6 +375,7 @@ class EnginePack:
             )
             bounds = Limits(limits["max_entity_units_world"], limits["max_entities_per_tile"])
             inventory: int = data["inventory_slots"]
+            physiology = PhysiologyConfig.from_table(data["physiology"], data["needs"])
         except KeyError as exc:
             raise ValueError(f"pack {pack.pack_id!r} lacks engine setting {exc.args[0]}") from exc
         needs = {
@@ -353,6 +435,7 @@ class EnginePack:
             pack,
             kernel_timing,
             bounds,
+            physiology,
             inventory,
             needs,
             verbs,

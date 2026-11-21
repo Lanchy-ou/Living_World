@@ -34,6 +34,10 @@ extends = "engine-test"
 vocabulary_version = "vocab/0.1"
 vocabulary_hash = "57554435492d6f3db83006a4510b292f8b0d1ebc70c3393663fd1a9ad94cf286"
 
+[physiology]
+stamina_awake_decay_per_tick = 0
+stamina_move_extra_cost_per_tick = 0
+
 [timing]
 replace = true
 invalid_attempt_ticks = 1
