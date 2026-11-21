@@ -74,7 +74,7 @@ Each path has one owner. Concurrent branches never write the same file.
 | `sim/equivalence/{v2_extract,compare}.py`, `sim/v2/cli.py`, `docs/tasks/p3.5/M12-equivalence-report.md` | P3.5-PR-07 |
 | `backend/tests/fixtures/v2/packs/engine-test*/**` | P3.5-CT-01; then P3.5-RR-02 |
 | `backend/tests/v2/engine/conftest.py` | P3.5-EN-01 (shared engine test fixtures, owner decision 2026-11-20); after P3.5-EN-01, one branch at a time, noted in its handoff |
-| Wave 5 shared engine files | P3.5-EN-03: `tick.py`, `state.py`, `settle.py`, `effects.py`; P3.5-EN-06: `validate.py`, `events.py` (owner decisions, 2026-11-21) |
+| Wave 5 shared engine files | P3.5-EN-03: `tick.py`, `state.py`, `settle.py`, `effects.py`; P3.5-EN-06: `validate.py`, `events.py` (owner decisions, 2026-11-21). During recheck, the orchestrator allocated one additional edit to EN-03 in merged EN-04's `stops.py` under M12 runbook sections 5 and 6.1. It preserves a contribution's fixed start failure through its scheduled completion (B3, 2026-11-22) |
 | `backend/tests/v2/<area>/**` | The card that names that directory |
 
 Paths without a prefix are under `backend/src/living_island/`.
