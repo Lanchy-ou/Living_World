@@ -416,7 +416,6 @@ def progress_action(
             done = action.due_tick == ctx.tick or action.pending_stop is not None
         elif isinstance(command, Contribute):
             processes.contribute(ctx, action, command, schedule)
-            done = action.pending_stop is not None
         if action.pending_stop is None:
             action.elapsed_ticks += 1
     ctx.activity[actor.id] = TickActivity(action.intent.action, steps)

@@ -1,5 +1,6 @@
 """World-rule ordering, capacity, and exact contents search acceptance."""
 
+from copy import deepcopy
 from itertools import combinations
 from time import perf_counter_ns
 
@@ -370,7 +371,8 @@ def test_en30_rot_refused_by_original_container_preserves_fruit(world):
     assert "inst_a" not in world.state.entities
 
 
-def test_process_stops_in_phase2_when_an_earlier_actor_moves_it(process_world):
+@pytest.mark.parametrize("doomed", [False, True])
+def test_process_stops_in_phase6_when_an_earlier_actor_moves_it(process_world, doomed):
     from living_island.world.v2.protocol import Coord
 
     world = process_world(
@@ -383,17 +385,40 @@ archetype = "worksite"
 at = { holder = "res_a" }
 state = { process = { work_done = 0 } }
 """,
+        with_deprivation=doomed,
     )
     world.state.residents[A].position = Coord(x=2, y=1)
+    control = deepcopy(world)
+    control.step()
+
     first = world.step([contribute(world, B, "carried_site")])
     assert payloads(first, "process_progressed")[0]["work_done"] == 1
     assert not first.actions
-    move = turn(world, A, "move_to", {"kind": "tile", "position": {"x": 1, "y": 1}})
-    final = world.step([move])
+
+    if doomed:
+        for candidate in (world, control):
+            candidate.state.needs[B].update(health=1, satiety=0)
+
+    target = {"kind": "tile", "position": {"x": 1, "y": 1}}
+    control.step([turn(control, A, "move_to", target)])
+    final = world.step([turn(world, A, "move_to", target)])
+
+    assert world.state.resolution_rng_state_uint32 == control.state.resolution_rng_state_uint32
     assert not payloads(final, "process_progressed")
-    result = next(entry for entry in final.actions if entry.actor_id == B)
-    assert result.stop.reason == "TARGET_GONE"
     assert world.state.entities["carried_site"].components["process"]["work_done"] == 1
+    move, stopped = final.actions
+    assert (move.actor_id, move.outcome) == (A, "success")
+    assert (stopped.actor_id, stopped.tick_finished, stopped.outcome) == (B, 2, "stopped")
+    assert stopped.stop.reason == ("DEATH" if doomed else "TARGET_GONE")
+
+    action_events = [event.type for event in final.events if event.intent_id == stopped.intent_id]
+    assert action_events == ["action_progressed", "action_stopped"]
+    if doomed:
+        death = next(event for event in final.events if event.type == "resident_died")
+        stop = next(event for event in final.events if event.type == "action_stopped")
+        assert death.actor_id == B
+        assert death.seq_in_tick < stop.seq_in_tick
+        assert not world.state.residents[B].alive
 
 
 def test_subject_created_in_4a_can_run_in_later_ordinary_rule_with_default_offset(process_world):
@@ -478,3 +503,108 @@ outputs = [
         [{"physical_id": "item_c", "quantity": 1}],
     ]
     assert world.state.entities["item_a"].place == OnTile(Coord(x=3, y=3))
+
+
+OUTER_PROCESS = """
+[[archetype]]
+id = "outer_process"
+kind = "process"
+stackable = false
+[archetype.components]
+process = { work_required = 1, work_done = 1 }
+container = { capacity = 1, accepts = { archetype = "worksite" } }
+"""
+
+
+@pytest.mark.parametrize("world_phase", ["4a", "4b"])
+def test_rule_visit_skips_a_subject_consumed_earlier_in_its_phase(process_world, world_phase):
+    if world_phase == "4a":
+        subject = '{ has_component = "process" }'
+        condition = '{ id="ready", kind="state", of="subject", field="age", op=">=", value=1 }'
+        effects = "[]"
+    else:
+        subject = '{ archetype = "outer_process" }'
+        condition = '{ id = "ready", kind = "work_complete" }'
+        effects = '[{ op = "consume", of = "subject" }]'
+
+    world = process_world(
+        archetypes=PROCESS_ARCHETYPE + OUTER_PROCESS,
+        instances="""
+[[instance]]
+id = "a_outer"
+archetype = "outer_process"
+at = { tile = [3, 3] }
+
+[[instance]]
+id = "b_inner"
+archetype = "worksite"
+at = { holder = "a_outer" }
+state = { process = { work_done = 4 } }
+""",
+        rules=f"""
+[[rule]]
+id = "outer_rule"
+trigger = "when:ready"
+subject = {subject}
+conditions = [{condition}]
+inputs = [{{ slot = "nested", where = {{ archetype = "worksite" }}, qty = 1 }}]
+effects = {effects}
+
+[[rule]]
+id = "inner_completion"
+trigger = "when:ready"
+subject = {{ archetype = "worksite" }}
+conditions = [{{ id = "ready", kind = "work_complete" }}]
+effects = [{{ op = "consume", of = "subject" }}]
+""",
+    )
+    result = world.step()
+
+    relevant = [
+        (row["rule_id"], row["subject_id"])
+        for row in payloads(result, "world_rule_applied")
+        if row["rule_id"] in ("outer_rule", "inner_completion")
+    ]
+    assert relevant == [("outer_rule", "a_outer")]
+    consumed = [row["entity_id"] for row in payloads(result, "entity_consumed")]
+    assert consumed == (["b_inner"] if world_phase == "4a" else ["b_inner", "a_outer"])
+    assert "b_inner" not in world.state.entities
+    assert ("a_outer" in world.state.entities) == (world_phase == "4a")
+
+
+def test_pending_contribution_failure_cannot_succeed_on_closure(process_world):
+    world = process_world(
+        archetypes=PROCESS_ARCHETYPE,
+        rules=ORDER_RULES,
+        instances="""
+[[instance]]
+id = "carried_site"
+archetype = "worksite"
+at = { holder = "res_b" }
+state = { process = { work_done = 4 } }
+""",
+        invalid_attempt_ticks=2,
+    )
+
+    # At A's start the process is two tiles away. B takes it into reach in phase 2.
+    target = {"kind": "tile", "position": {"x": 2, "y": 1}}
+    result = world.step([contribute(world, A, "carried_site"), turn(world, B, "move_to", target)])
+    started = next(
+        event for event in result.events if event.type == "action_started" and event.actor_id == A
+    )
+    assert started.payload["duration_ticks"] == 2
+    assert not payloads(result, "process_progressed")
+    moved = next(event for event in result.events if event.type == "resident_moved")
+    closed = next(
+        event
+        for event in result.events
+        if event.type == "entity_consumed" and event.payload["entity_id"] == "carried_site"
+    )
+    assert moved.payload["to"] == target["position"]
+    assert moved.seq_in_tick < closed.seq_in_tick
+    assert "carried_site" not in world.state.entities
+    assert [
+        (event.actor_id, event.payload["action"])
+        for event in result.events
+        if event.type == "action_succeeded"
+    ] == [(B, "move_to")]

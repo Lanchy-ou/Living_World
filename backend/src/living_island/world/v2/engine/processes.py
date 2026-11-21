@@ -29,7 +29,6 @@ def contribute(
     subject = ctx.state.entities.get(command.process_id)
     actor_id = action.intent.actor_id
     if subject is None or not in_reach(ctx, actor_id, subject):
-        action.pending_stop = "TARGET_GONE"
         return
     if not any(
         eligible(ctx, subject, rule) is not None
