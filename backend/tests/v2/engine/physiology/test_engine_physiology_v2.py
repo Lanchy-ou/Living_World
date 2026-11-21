@@ -74,6 +74,9 @@ conditions = [{ id = "has_satiety", kind = "need", need = "satiety", op = ">", v
 
 @pytest.fixture
 def body(world, physiology_pack):
+    from living_island.world.v2.engine import perception
+    from living_island.world.v2.engine.events import EventWriter
+    from living_island.world.v2.engine.tick import TickContext
     from living_island.world.v2.engine.validate import EnginePack
 
     world.pack = EnginePack.from_pack(physiology_pack)
@@ -81,7 +84,21 @@ def body(world, physiology_pack):
         actor: {key: spec.initial for key, spec in world.pack.needs.items()}
         for actor in world.state.residents
     }
+    perception.build_deliveries(TickContext(world.state, world.pack, EventWriter(world.state, 0)))
     return world
+
+
+def _set_tick(body, tick):
+    state = body.state
+    state.tick = tick
+    for actor_id, packet in state.pending_deliveries.items():
+        state.pending_deliveries[actor_id] = packet.model_copy(
+            update={
+                "observed_tick": tick,
+                "delivery_id": f"{state.run_id}:perception:{tick:010d}:{actor_id}",
+                "perception": packet.perception.model_copy(update={"tick": tick}),
+            }
+        )
 
 
 NONNEGATIVE_PHYSIOLOGY_KEYS = (
@@ -220,12 +237,14 @@ def test_en24_first_and_final_sleep_tick(body, monkeypatch):
     from living_island.world.v2.engine import perception, physiology
 
     phase_flags = []
-    monkeypatch.setattr(
-        perception,
-        "build_deliveries",
-        lambda ctx: phase_flags.append((ctx.tick, physiology.hearing_awake(ctx, A))),
-    )
-    body.state.tick = 100
+    build = perception.build_deliveries
+
+    def capture(ctx):
+        phase_flags.append((ctx.tick, physiology.hearing_awake(ctx, A)))
+        build(ctx)
+
+    monkeypatch.setattr(perception, "build_deliveries", capture)
+    _set_tick(body, 100)
     assert body.state.awareness[A].kind == "awake"
     first = body.step([_sleep(body, 36)])
     (fell_asleep,) = _events(first, "resident_fell_asleep")
@@ -292,19 +311,32 @@ def test_en24_unmet_sleep_stays_awake(body):
 
 def test_en14_faint_and_unconscious_boundary(body, monkeypatch):
     from living_island.world.v2.engine import perception, physiology
-    from living_island.world.v2.engine.state import FatigueInputs
+    from living_island.world.v2.engine.reports import report
 
     flags = []
-    monkeypatch.setattr(
-        perception, "build_deliveries", lambda ctx: flags.append(physiology.hearing_awake(ctx, A))
-    )
-    body.state.tick = 100
+    build = perception.build_deliveries
+
+    def capture(ctx):
+        flags.append(physiology.hearing_awake(ctx, A))
+        build(ctx)
+
+    monkeypatch.setattr(perception, "build_deliveries", capture)
+    _set_tick(body, 100)
     body.state.needs[A].update(mental_fatigue=9879, satiety=3060)
-    body.state.fatigue_inputs[A] = FatigueInputs(2, 1)
+    packet = body.state.pending_deliveries[A]
+    body.state.pending_deliveries[A] = packet.model_copy(
+        update={
+            "reports": [
+                report("utterance_heard", "one", addressed=True),
+                report("utterance_heard", "two", addressed=False),
+                report("entity_first_seen", "item"),
+            ]
+        }
+    )
     body.step()
     assert body.state.needs[A]["mental_fatigue"] == 9999
     assert body.state.awareness[A].kind == "awake"
-    body.state.tick = 100
+    _set_tick(body, 100)
     movement = _turn(body, A, "move_to", target={"kind": "tile", "position": {"x": 5, "y": 1}})
     body.state.explored_tiles_by_resident[A] = set(range(35))
     # Exhaustion at the same check loses to fainting.

@@ -16,6 +16,7 @@ from .items import (
     accepts,
     entities_at,
     equal_stacks,
+    item_use,
     merge,
     place_payload,
     slots_used,
@@ -24,6 +25,7 @@ from .items import (
     transfer_state,
 )
 from .limits import within_placement_limits
+from .observe import phase_item
 from .state import (
     ActiveAction,
     Components,
@@ -34,6 +36,7 @@ from .state import (
     Lineage,
     OnTile,
     Part,
+    PhaseItem,
     Place,
     WorldState,
 )
@@ -337,6 +340,7 @@ class Ledger:
         self.consumed: list[Part] = []
         self.returns: dict[str, list[Part]] = {}
         self.outputs: list[Part] = []
+        self.output_looks: list[PhaseItem] = []
         self.withdrawn: dict[str, int] = {}
 
     def publish(
@@ -428,6 +432,14 @@ class Ledger:
         entity.place = place
         return coalesce_stack(self.state, entity, self.reserved, self.writer, self.action)
 
+    def capture_output(self, entity: Entity, place: OnTile | Held | Inside) -> None:
+        if self.action is None:
+            return
+        actor_id = self.action.intent.actor_id
+        if place in (Held(actor_id), OnTile(self.state.residents[actor_id].position)):
+            look = item_use(self.state, self.pack, entity, entity.quantity, "output")
+            self.output_looks.append(phase_item(self.state, look, place))
+
     def move(self, entity: Entity, origin: Place, destination: Place) -> None:
         place = self.destination(entity, destination)
         if isinstance(place, InStore):
@@ -438,6 +450,7 @@ class Ledger:
             materialized = not entity.entity_id
             if materialized:
                 self.register(entity)
+                self.capture_output(entity, place)
             result_id = self.place_entity(entity, place).entity_id
             if materialized:
                 self.outputs.append(Part(result_id, entity.quantity))
@@ -602,6 +615,7 @@ class Ledger:
                 action=self.action,
                 target_id=entity.entity_id,
             )
+            self.capture_output(entity, place)
             survivor = self.place_entity(entity, place)
             self.outputs.append(Part(survivor.entity_id, quantity))
 

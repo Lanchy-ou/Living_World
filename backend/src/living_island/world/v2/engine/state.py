@@ -285,6 +285,7 @@ class Route:
 class PhaseItem:
     look: ItemUse
     place: Place
+    sight_place: OnTile | Held | None
 
 
 @dataclass(frozen=True)

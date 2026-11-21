@@ -287,6 +287,7 @@ def hard_stops_and_waking(ctx: TickContext, progress: Mapping[str, ProgressNeeds
             or awareness.unconscious_until == ctx.tick
         ):
             ctx.state.awareness[actor_id] = Awareness("awake")
+            ctx.woke.add(actor_id)
             ctx.writer.emit(
                 "resident_woke", {"resident_id": actor_id, "early": early}, actor_id=actor_id
             )

@@ -331,7 +331,7 @@ def test_partial_falls_back_to_lose(world: World, refusal: str) -> None:
 
 
 def test_extension_pack_changes_settlement_and_refuses_nonconservation(
-    pack: Pack, setup: WorldSetup, tmp_path: Path
+    pack: Pack, setup: WorldSetup, tmp_path: Path, auto_acknowledge
 ) -> None:
     from living_island.world.v2.engine import initialize
     from living_island.world.v2.rules import ContentError, load_pack
@@ -364,6 +364,7 @@ phenomena = { success = ["nothing_happens"] }
     world = initialize(
         loaded, setup.model_copy(update={"pack_ids": (*setup.pack_ids, "engine_extension")})
     )
+    world = auto_acknowledge(world)
     result = world.step([turn(world, verb="rest")]).actions[0]
     assert result.settlement.rule_id == "new_rest"
     assert result.settlement.kind == "applied"
@@ -571,13 +572,13 @@ def test_rr27_en33_two_returns_use_disjoint_physical_debits(world: World, monkey
         ],
     )
     phases = []
-    monkeypatch.setattr(
-        perception,
-        "build_deliveries",
-        lambda ctx: phases.extend(
-            action.settle_location for action in ctx.completed_actions.values()
-        ),
-    )
+    build = perception.build_deliveries
+
+    def capture(ctx):
+        phases.extend(phase for phase in ctx.phases if phase.kind == "settle")
+        build(ctx)
+
+    monkeypatch.setattr(perception, "build_deliveries", capture)
     intent = turn(
         world,
         verb="combine",

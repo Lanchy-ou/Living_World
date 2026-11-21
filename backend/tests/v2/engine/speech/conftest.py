@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def audience(pack, setup):
+def audience(pack, setup, auto_acknowledge):
     from living_island.world.v2.engine import ResidentSetup, initialize
     from living_island.world.v2.engine.state import Exposure
     from living_island.world.v2.protocol import Coord
@@ -29,7 +29,7 @@ def audience(pack, setup):
             for resident in state.residents.values()
             if resident.id != actor_id
         )
-    return world
+    return auto_acknowledge(world)
 
 
 @pytest.fixture
@@ -37,5 +37,11 @@ def deliveries(monkeypatch) -> list[TickContext]:
     from living_island.world.v2.engine import perception
 
     boundaries: list[TickContext] = []
-    monkeypatch.setattr(perception, "build_deliveries", boundaries.append)
+    build = perception.build_deliveries
+
+    def capture(ctx):
+        build(ctx)
+        boundaries.append(ctx)
+
+    monkeypatch.setattr(perception, "build_deliveries", capture)
     return boundaries

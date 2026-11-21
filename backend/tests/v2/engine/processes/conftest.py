@@ -34,7 +34,7 @@ max_loss_per_tick = 0
 
 
 @pytest.fixture
-def process_world(tmp_path: Path, pack, setup):
+def process_world(tmp_path: Path, pack, setup, auto_acknowledge):
     from living_island.world.v2.engine import initialize
     from living_island.world.v2.engine.items import tile_of
     from living_island.world.v2.engine.state import Exposure
@@ -97,6 +97,6 @@ max_entities_per_tile = 10
                     entity.entity_id, tile_of(state, entity.place), entity.archetype_id
                 )
             state.visible_entities_by_resident[actor_id] = set(receipt.entities)
-        return world
+        return auto_acknowledge(world)
 
     return make
