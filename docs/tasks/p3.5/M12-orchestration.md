@@ -12,7 +12,7 @@ before you act. Where this runbook and the specs disagree, the specs win
 | Orchestrator | The owner's thread | `gpt-6.2-astra`, high | Thread prompts, PRs, notes branches, owner reports. Never card code or tests |
 | Executor | One thread per card, made with `create_thread`, in its own worktree on the card's branch | `gpt-6.2-sol`, high | The card's allowed files and its handoff |
 | Reviewer (Gate 2) | One thread per card, made with `create_thread`, separate from the executor | `gpt-6.2-sol`, xhigh | Only `docs/tasks/p3.5/<ID>-review.md`, on its own review branch |
-| Owner | The human user, out of the loop until Gate 3 | — | Gate 3 and the §6.3 report |
+| Owner | The human user, out of the loop until the final report | — | Gate 3 signatures and the decisions in the [P3.5 runbook](P3.5-orchestration.md) §6 |
 
 - A reviewer never reviews work it helped write (AGENTS.md). The executor
   and reviewer threads of a card are always different threads.
@@ -31,7 +31,7 @@ cards and committed its reviews with this runbook.
 **Start condition.** `origin/main` contains this file,
 [P3.5-EN-03-review.md](P3.5-EN-03-review.md) and
 [P3.5-EN-06-review.md](P3.5-EN-06-review.md). If not, tell the owner
-what is missing and wait. This is the one point before Gate 3 where you wait.
+what is missing and wait. This is the only point where you wait.
 Otherwise check the state below from Git (`git log origin/main`, branches,
 merged PRs), not from this file.
 
@@ -99,8 +99,9 @@ before it has merged.
 | 4 | [P3.5-PR-06](P3.5-PR-06.md) policy adapters and bridge | `task/P3.5-PR-06-compat-adapters` | PR-03, PR-05, CT-02, EN-02 to EN-07 merged |
 | 5 | [P3.5-PR-07](P3.5-PR-07.md) equivalence and the M12 report | `task/P3.5-PR-07-equivalence` | All other M12 cards merged |
 
-After PR-07 merges, stop. M12 Gate 3 belongs to the owner (§6.3). Do not
-start M13 work.
+After PR-07 merges, continue with the
+[P3.5 runbook](P3.5-orchestration.md): write the provisional M12 Gate 3
+package, then go on with M13 and M14.
 
 ### PR-05 phase B
 
@@ -287,7 +288,7 @@ in the card's handoff and in the next notes PR.
 
 ## 6. Decisions while the owner is away
 
-The owner is out of the loop until M12 Gate 3. Do not wait for answers.
+The owner is out of the loop until the final report. Do not wait for answers.
 Decide as follows, and record every decision in the handoff, the review and
 a running list in the final report (§6.3).
 
@@ -327,18 +328,17 @@ a running list in the final report (§6.3).
   or pending CI.
 - Restart deferred P3 trials or merge parked P3 candidates (AGENTS.md).
 - Commit secrets, `.env`, or `runs/` content.
-- Sign Gate 3, or start M13 work.
+- Sign Gate 3 for the owner. Provisional Gate 3 packages follow the
+  [P3.5 runbook](P3.5-orchestration.md) §4.
 
-### 6.3 Final report at M12 Gate 3
+### 6.3 Final report
 
-After PR-07 merges, stop. Give the owner, in Chinese:
-
-- the equivalence report (`docs/tasks/p3.5/M12-equivalence-report.md`);
-- every open question, proposed change request, scope decision and fixture
-  change made under §6.1, each with its card and your recommendation;
-- review round counts per card.
-
-The owner signs Gate 3 and may ask for an extra independent review first.
+The owner decided on 2026-11-22 that the unattended run covers all of P3.5.
+There is no stop at M12. Each milestone gets a provisional Gate 3 package,
+and one final report comes at the end ([P3.5 runbook](P3.5-orchestration.md)
+§4 and §7). The M12 package includes the equivalence report
+(`docs/tasks/p3.5/M12-equivalence-report.md`), every §6.1 decision of M12,
+and the review round counts per card.
 
 ## 7. Tools
 
