@@ -955,3 +955,12 @@ of the named archetype. EN-06 requires a declared archetype and uses live
 holding or exposure receipts for exact IDs. It does not test possession
 by the promisor or whether the promised performance remains possible.
 The owner confirmed both interpretations on 2026-11-21.
+
+## OQ-P3.5-EN-03: World rule application with no effect event
+
+Engine §8 and EN-11 require silence when a full store receives no
+regrowth. Rule representation §3.4.1 describes zero quantities as
+no-ops for individual effects. Should an eligible world rule that has no
+effect events in another case, such as a state assignment to the current
+value, still emit `world_rule_applied`? EN-03 currently suppresses the
+application record if the branch produces no effect events.
