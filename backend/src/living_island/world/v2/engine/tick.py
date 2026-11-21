@@ -238,12 +238,13 @@ class World:
         writer = EventWriter(state, state.tick + 1)
         ctx = TickContext(state, next_pack, writer)
         boundary_input(ctx, turns, acknowledgements, added)
-        completions = action_progress(ctx, turns)
+        progress_needs: dict[str, physiology.ProgressNeeds] = {}
+        completions = action_progress(ctx, turns, progress_needs)
         resolve_completions(ctx, completions)
         processes.world_rules(ctx)
         processes.finish_processes(ctx)
-        physiology.apply_physiology(ctx)
-        physiology.hard_stops_and_waking(ctx)
+        physiology.apply_physiology(ctx, progress_needs)
+        physiology.hard_stops_and_waking(ctx, progress_needs)
         perception.build_deliveries(ctx)
         state.tick = ctx.tick
         state.clock_minute = state.clock.minute_at(state.tick)
@@ -374,7 +375,12 @@ def start_action(ctx: TickContext, actor: Resident, action: ActiveAction) -> Non
         settle.record_act_started(ctx, action)
 
 
-def progress_action(ctx: TickContext, actor: Resident, action: ActiveAction) -> bool:
+def progress_action(
+    ctx: TickContext,
+    actor: Resident,
+    action: ActiveAction,
+    progress_needs: dict[str, physiology.ProgressNeeds],
+) -> bool:
     state = ctx.state
     command = action.command
     steps = 0
@@ -396,7 +402,9 @@ def progress_action(ctx: TickContext, actor: Resident, action: ActiveAction) -> 
                     lambda point, step: perception.observe_step(ctx, actor.id, point, step),
                 )
         elif isinstance(command, Act):
-            settle.progress_act(ctx, action)
+            opening, rule_id = settle.progress_act(ctx, action)
+            if opening:
+                progress_needs[actor.id] = physiology.ProgressNeeds(opening, (rule_id,))
             done = action.due_tick == ctx.tick or action.pending_stop is not None
         elif isinstance(command, Contribute):
             processes.contribute(ctx, action)
@@ -418,7 +426,11 @@ def progress_action(ctx: TickContext, actor: Resident, action: ActiveAction) -> 
     return done
 
 
-def action_progress(ctx: TickContext, turns: dict[str, BoundTurn]) -> list[Completion]:
+def action_progress(
+    ctx: TickContext,
+    turns: dict[str, BoundTurn],
+    progress_needs: dict[str, physiology.ProgressNeeds],
+) -> list[Completion]:
     state = ctx.state
     completions = []
     for actor_id, actor in sorted(state.residents.items()):
@@ -443,7 +455,7 @@ def action_progress(ctx: TickContext, turns: dict[str, BoundTurn]) -> list[Compl
         action = state.active_actions.get(actor_id)
         if action is None:
             ctx.activity[actor_id] = TickActivity(None, 0)
-        elif progress_action(ctx, actor, action):
+        elif progress_action(ctx, actor, action, progress_needs):
             completions.append(
                 Completion(
                     actor_id,

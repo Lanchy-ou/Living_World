@@ -215,13 +215,13 @@ def _die(ctx: TickContext, actor: Resident) -> None:
             merge(state, item, survivor, writer)
 
 
-def apply_physiology(ctx: TickContext, progress: Mapping[str, ProgressNeeds] | None = None) -> None:
+def apply_physiology(ctx: TickContext, progress: Mapping[str, ProgressNeeds]) -> None:
     """Apply phase 5 physiology, death and drops in resident order."""
     for actor_id, actor in sorted(ctx.state.residents.items()):
         if not actor.alive:
             continue
         needs = ctx.state.needs[actor_id]
-        during_progress = None if progress is None else progress.get(actor_id)
+        during_progress = progress.get(actor_id)
         before = dict(needs)
         causes = ["physiology"]
         if during_progress is not None:
@@ -251,10 +251,10 @@ def apply_physiology(ctx: TickContext, progress: Mapping[str, ProgressNeeds] | N
 
 
 def boundary_crossings(
-    ctx: TickContext, progress: Mapping[str, ProgressNeeds] | None = None
+    ctx: TickContext, progress: Mapping[str, ProgressNeeds]
 ) -> dict[str, tuple[Crossing, ...]]:
     """Read opening values from the objective changes, before phase 6 effects."""
-    opening = {} if progress is None else {key: dict(need.before) for key, need in progress.items()}
+    opening = {key: dict(need.before) for key, need in progress.items()}
     for event in ctx.writer.events:
         if event.type != "needs_changed":
             continue
@@ -268,9 +268,7 @@ def boundary_crossings(
     }
 
 
-def hard_stops_and_waking(
-    ctx: TickContext, progress: Mapping[str, ProgressNeeds] | None = None
-) -> None:
+def hard_stops_and_waking(ctx: TickContext, progress: Mapping[str, ProgressNeeds]) -> None:
     """Run phase 6 hard stops and wake transitions before perception."""
     waking = {
         actor_id
