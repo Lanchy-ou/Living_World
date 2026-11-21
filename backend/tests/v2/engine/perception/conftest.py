@@ -23,6 +23,7 @@ def make_world(pack, setup, tmp_path):
         radius=4,
         night=None,
         start=360,
+        tick_minutes=10,
         seed=1,
         cues=(),
         settings="",
@@ -70,7 +71,7 @@ vocabulary_hash = "{pack.vocabulary.vocabulary_hash}"
                         ResidentSetup(id=key, position=Coord(x=x, y=y)) for key, x, y in residents
                     ),
                     "clock": ClockConfig(
-                        tick_minutes=10,
+                        tick_minutes=tick_minutes,
                         start_minute=start,
                         day_start_minute=360,
                         day_end_minute=1200,

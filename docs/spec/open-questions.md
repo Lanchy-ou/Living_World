@@ -989,15 +989,13 @@ Status: proposed, awaiting owner.
   overheard speech, a cue upgrade, a progress step and a wake, among its
   other reports. Protocol §5.1 and engine §9.6 suppress hearing during the
   tick that ends a sleep, and unconsciousness also suppresses hearing.
-  Resident movement can bring a fixed cue into near range, while a move
-  has no progress descriptor under rule representation §2.2.
 - Requested rule. Accept exact ordered arrays from reachable packets. Use
   an awake packet for action feedback, band and threshold changes, both
-  speech cases, first exposure, watched actions and a progress step.
-  Use a movement packet for a cue upgrade and a wake packet for waking order.
+  speech cases, first exposure, a cue upgrade, watched actions and a progress
+  step. Use a wake packet for waking order.
   Preserve the section 5.3 order and the silence of the final sleep tick.
 - Impact and options. This changes the acceptance setup only. Making the
   combined packet possible would require changing what a resident can hear
-  or how a move exposes progress, which would change runtime behavior.
+  at a wake boundary, which would change runtime behavior.
 - Recommendation. Adopt the reachable packet setups. EN-05 exercises those
   cases through the regular boundary and leaves the frozen wording intact.

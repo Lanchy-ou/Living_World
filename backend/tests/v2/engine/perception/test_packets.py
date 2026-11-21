@@ -654,7 +654,10 @@ def test_en06_addressed_listener_and_excluded_audiences_in_real_packets(make_wor
 
 def test_wap19_exact_mixed_report_order_and_no_repeat(make_world):
     world = make_world(
-        [(A, 2, 1), (B, 3, 1), (C, 1, 1)],
+        [(A, 1, 1), (B, 3, 1), (C, 1, 1)],
+        tick_minutes=240,
+        night=0,
+        cues=(("water", 3, 1),),
         settings="""
 [needs.stamina]
 replace = true
@@ -675,15 +678,20 @@ effects = [{ op = "need", need = "stamina", delta = -4, timing = "completion" }]
 
 [[rule]]
 id = "packet_spawn"
-trigger = "every:2"
+trigger = "every:6"
 subject = { archetype = "arch_b" }
 conservation = "source"
 outputs = [{ archetype = "arch_a", quantity = 1, at = "subject.tile", source = "src_a" }]
 """,
     )
     assert report_rows(packet(world)) == []
+    assert packet(world).perception.environmental_cues[0].detail_level == "distant"
+    for _ in range(3):
+        step(world)
+    step(world, turn(world, A, "move_to", target=tile(2, 1)))
+    assert packet(world).perception.environmental_cues == []
     step(world, turn(world, A, "act", verb="rest"))
-    assert report_rows(packet(world)) == [report("progress_step", f"{A}:t000000:a")]
+    assert report_rows(packet(world)) == [report("progress_step", f"{A}:t000001:a")]
     result = step(
         world,
         turn(world, C, "wait", speech=statement(B)),
@@ -692,8 +700,9 @@ outputs = [{ archetype = "arch_a", quantity = 1, at = "subject.tile", source = "
     (created,) = events(result, "entity_created")
     messages = sorted((e.event_id, e.actor_id == B) for e in events(result, "utterance_spoken"))
     assert len(messages) == 2
+    assert packet(world).perception.environmental_cues[0].detail_level == "near"
     assert report_rows(packet(world)) == [
-        report("action_ended", f"{A}:t000000:a"),
+        report("action_ended", f"{A}:t000001:a"),
         report("need_band_changed", "stamina", band="moderate"),
         report("need_threshold_crossed", "stamina", threshold="a_low"),
         report("need_threshold_crossed", "stamina", threshold="z_high"),
@@ -702,9 +711,10 @@ outputs = [{ archetype = "arch_a", quantity = 1, at = "subject.tile", source = "
             for identity, addressed in messages
         ),
         report("entity_first_seen", created.target_id),
+        report("entity_first_seen", "water"),
         report("action_observed", f"{B}:t000000:a"),
         report("action_observed", f"{C}:t000000:a"),
-        report("progress_step", f"{A}:t000000:a"),
+        report("progress_step", f"{A}:t000001:a"),
     ]
     step(world)
     assert report_rows(packet(world)) == []

@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ...space import line_points
 from ..protocol import (
     ActionFeedback,
     BoundaryDelivery,
@@ -25,7 +24,16 @@ from ..protocol import (
 from . import observe, physiology, reports, settle
 from .items import entities_at, inspect_view, progress_descriptor
 from .kernel import distance
-from .state import Contribute, DeferredFeedback, Exposure, Held, OnTile, Resident, WorldState
+from .state import (
+    Contribute,
+    DeferredFeedback,
+    Exposure,
+    Held,
+    OnTile,
+    Resident,
+    StaticMap,
+    WorldState,
+)
 
 if TYPE_CHECKING:
     from .tick import TickContext
@@ -37,6 +45,26 @@ class Sight:
     entities: list[EntityView]
     item_tiles: set[tuple[str, Coord]]
     cues: dict[str, EnvironmentalCue]
+
+
+def has_line_of_sight(smap: StaticMap, position: Coord, target_x: int, target_y: int) -> bool:
+    """Use the frozen integer Bresenham rule, testing intervening tiles only."""
+    x, y = position.x, position.y
+    dx, dy = abs(target_x - x), -abs(target_y - y)
+    step_x = (target_x > x) - (target_x < x)
+    step_y = (target_y > y) - (target_y < y)
+    error = dx + dy
+    while (x, y) != (target_x, target_y):
+        doubled = 2 * error
+        if doubled >= dy:
+            error += dy
+            x += step_x
+        if doubled <= dx:
+            error += dx
+            y += step_y
+        if (x, y) != (target_x, target_y) and smap.rows[y][x] in smap.opaque_terrains:
+            return False
+    return True
 
 
 def visible_tiles(state: WorldState, position: Coord, tick: int) -> set[int]:
@@ -51,11 +79,7 @@ def visible_tiles(state: WorldState, position: Coord, tick: int) -> set[int]:
     for y in range(max(0, position.y - radius), min(len(smap.rows), position.y + radius + 1)):
         span = radius - abs(y - position.y)
         for x in range(max(0, position.x - span), min(smap.width, position.x + span + 1)):
-            if all(
-                smap.rows[cy][cx] not in smap.opaque_terrains
-                for cx, cy in line_points(position.x, position.y, x, y)
-                if (cx, cy) != (x, y)
-            ):
+            if has_line_of_sight(smap, position, x, y):
                 visible.add(y * smap.width + x)
     return visible
 
