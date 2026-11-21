@@ -66,4 +66,4 @@ components = { process = { work_required = 6 }, container = { capacity = 3, acce
 id = "fire"
 kind = "structure"
 stackable = false
-components = { fuel = {} }
+components = { fuel = {}, footprint = { blocks_movement = false, opaque = false } }

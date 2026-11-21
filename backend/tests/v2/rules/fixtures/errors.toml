@@ -53,3 +53,17 @@ file = "rules.toml"
 old = 'trigger = "when:old"'
 new = '''trigger = "when:old"
 on_interrupt = "lose"'''
+
+[[case]]
+code = "OUT_OF_RANGE"
+file = "archetypes.toml"
+old = "blocks_movement = false"
+new = "blocks_movement = true"
+path = "fire.footprint.blocks_movement"
+
+[[case]]
+code = "OUT_OF_RANGE"
+file = "archetypes.toml"
+old = "opaque = false"
+new = "opaque = true"
+path = "fire.footprint.opaque"
