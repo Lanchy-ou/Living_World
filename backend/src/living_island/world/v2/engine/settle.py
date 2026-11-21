@@ -19,7 +19,7 @@ from ..protocol import (
 )
 from ..rules import Rule
 from ..rules.schema import Table
-from . import kernel
+from . import kernel, physiology
 from .chance import chance_roll
 from .conditions import first_failure, nearby_match, unmatched_phenomena
 from .descriptors import (
@@ -36,7 +36,6 @@ from .match import Assignment, inherited_slots, match_attempt, parts_match, slot
 from .state import (
     Act,
     ActiveAction,
-    Awareness,
     Binding,
     Entity,
     Held,
@@ -270,15 +269,7 @@ def record_act_started(ctx: TickContext, action: ActiveAction) -> None:
     )
     verb = ctx.pack.source.vocabulary.verbs[cast(Act, action.command).verb]
     if rule is not None and verb.get("awareness_during") == "asleep":
-        state.awareness[action.intent.actor_id] = Awareness("asleep")
-        ctx.writer.emit(
-            "resident_fell_asleep",
-            {
-                "resident_id": action.intent.actor_id,
-                "duration_ticks": cast(int, action.due_tick) - action.tick_started,
-            },
-            action=action,
-        )
+        physiology.start_sleep(ctx, action, cast(int, action.due_tick) - action.tick_started)
 
 
 def physical_groups(action: ActiveAction) -> tuple[tuple[Part, ...], ...]:
@@ -314,13 +305,13 @@ def record_witnesses(
         )
 
 
-def progress_act(ctx: TickContext, action: ActiveAction) -> dict[str, int]:
-    """Advance rule effects and return pre-progress values for changed needs."""
+def progress_act(ctx: TickContext, action: ActiveAction) -> tuple[dict[str, int], str]:
+    """Advance rule effects and return opening need values and their rule ID."""
     rule = ctx.pack.source.rules[cast(str, action.rule_id)]
     actor_id = action.intent.actor_id
     if rule.data["exhaustion_stops"] and kernel.exhausted(ctx.state, ctx.pack, actor_id):
         action.pending_stop = "EXHAUSTED"
-        return {}
+        return {}, rule.id
     opening: dict[str, int] = {}
     effects = [
         effect
@@ -343,7 +334,7 @@ def progress_act(ctx: TickContext, action: ActiveAction) -> dict[str, int]:
                     )
                 ],
             )
-    return opening
+    return opening, rule.id
 
 
 def progress_word(action: ActiveAction) -> DescriptorValue | None:

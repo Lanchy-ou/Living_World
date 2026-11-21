@@ -371,8 +371,6 @@ def test_fixed_unmatched_preserves_start_descriptor_across_ticks(world: World) -
 
 
 def test_progress_returns_opening_values_for_phase_five(world: World) -> None:
-    from living_island.world.v2.engine import settle
-
     rule = proposal(
         "progress_need",
         "rest",
@@ -382,14 +380,11 @@ def test_progress_returns_opening_values_for_phase_five(world: World) -> None:
             {"op": "need", "need": "stamina", "delta": 2, "timing": "per_tick"},
         ],
     )
-    original = settle.progress_act
-    captures = []
-
-    def capture(ctx, action):
-        captures.append(original(ctx, action))
-
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(settle, "progress_act", capture)
-        world.step([turn(world, verb="rest")], rule_additions=[rule])
-        world.step()
-    assert captures == [{"stamina": 6000}, {"stamina": 6003}]
+    first = world.step([turn(world, verb="rest")], rule_additions=[rule])
+    second = world.step()
+    for result, opening in ((first, 6000), (second, 6003)):
+        changed = event(result, "needs_changed")
+        assert changed.payload["causes"] == ["physiology", "progress_need"]
+        assert changed.payload["changes"] == [
+            {"need_id": "stamina", "before": opening, "after": opening + 3}
+        ]

@@ -48,7 +48,7 @@ max = 10000
 initial = {initial}
 band_cutoffs = [2000, 4000, 6000, 8000]
 max_gain_per_tick = 0
-max_loss_per_tick = 0
+max_loss_per_tick = {26 if key == "satiety" else 0}
 """
         if key in ("satiety", "hydration"):
             text += 'thresholds = [{id = "urgent", at = 3000, wakes = true}]\n'
@@ -57,6 +57,16 @@ max_loss_per_tick = 0
     path.write_text(text, encoding="utf-8")
     (path.parent / "unmatched.toml").write_text(
         '[unmatched.sleep]\nentries = []\ndefault = ["nothing_happens"]\n',
+        encoding="utf-8",
+    )
+    (path.parent / "rules.toml").write_text(
+        """
+[[rule]]
+id = "test_sleep"
+trigger = "verb:sleep"
+work_ticks = { param = "duration_ticks" }
+conditions = [{ id = "has_satiety", kind = "need", need = "satiety", op = ">", value = 0 }]
+""",
         encoding="utf-8",
     )
     return load_pack(path.parent, pack.vocabulary)
@@ -161,18 +171,18 @@ def _sleep(world, duration):
     return _turn(world, A, "act", verb="sleep", params={"duration_ticks": duration})
 
 
-@pytest.fixture
-def sleep_settlement(monkeypatch):
-    from living_island.world.v2.engine import physiology, settle
-
-    # EN-02 owns the successful start, unmet settlement, and completion calls.
-    def start(ctx, action, groups):
-        duration = action.command.params["duration_ticks"]
-        action.due_tick = ctx.state.tick + duration
-        physiology.start_sleep(ctx, action, duration)
-
-    monkeypatch.setattr(settle, "start_act", start)
-    monkeypatch.setattr(settle, "complete_act", lambda ctx, action: ctx.record_result(action))
+def _proposed_rule(world, rule_id, verb, **fields):
+    return {
+        "id": rule_id,
+        "trigger": f"verb:{verb}",
+        "provenance": {
+            "kind": "proposed",
+            "llm_call_id": "call_a",
+            "approved_by": A,
+            "approved_at_tick": world.state.tick,
+        },
+        **fields,
+    }
 
 
 def _events(result, kind, actor=A):
@@ -190,7 +200,7 @@ def _events(result, kind, actor=A):
         (9000, 9000, 9015),
     ],
 )
-def test_en12_recovery_strict_after_decay(body, sleep_settlement, satiety, hydration, health):
+def test_en12_recovery_strict_after_decay(body, satiety, hydration, health):
     body.state.needs[A].update(satiety=satiety, hydration=hydration)
     result = body.step([_sleep(body, 6)])
     needs = body.state.needs[A]
@@ -206,7 +216,7 @@ def test_en12_recovery_strict_after_decay(body, sleep_settlement, satiety, hydra
     assert len(_events(result, "needs_changed")) == 1
 
 
-def test_en24_first_and_final_sleep_tick(body, sleep_settlement, monkeypatch):
+def test_en24_first_and_final_sleep_tick(body, monkeypatch):
     from living_island.world.v2.engine import perception, physiology
 
     phase_flags = []
@@ -216,8 +226,10 @@ def test_en24_first_and_final_sleep_tick(body, sleep_settlement, monkeypatch):
         lambda ctx: phase_flags.append((ctx.tick, physiology.hearing_awake(ctx, A))),
     )
     body.state.tick = 100
+    assert body.state.awareness[A].kind == "awake"
     first = body.step([_sleep(body, 36)])
-    assert _events(first, "resident_fell_asleep")[0].tick == 101
+    (fell_asleep,) = _events(first, "resident_fell_asleep")
+    assert fell_asleep.tick == body.state.tick == 101
     assert body.state.awareness[A].kind == "asleep"
     for _ in range(34):
         body.step()
@@ -225,13 +237,15 @@ def test_en24_first_and_final_sleep_tick(body, sleep_settlement, monkeypatch):
     last = body.step()
     assert body.state.tick == 136
     assert body.state.awareness[A].kind == "awake"
-    assert last.actions[0].outcome == "success"
+    assert last.actions[0].outcome == "settled"
+    assert last.actions[0].settlement.kind == "applied"
+    assert last.actions[0].settlement.rule_id == "test_sleep"
     assert _events(last, "resident_woke")[0].payload == {"resident_id": A, "early": False}
     assert body.state.needs[A]["health"] == 9015
     assert phase_flags == [(tick, False) for tick in range(101, 137)]
 
 
-def test_wap18_early_waking_and_already_critical(body, sleep_settlement, monkeypatch):
+def test_wap18_early_waking_and_already_critical(body, monkeypatch):
     from living_island.world.v2.engine import perception, physiology
 
     can_hear = []
@@ -253,7 +267,7 @@ def test_wap18_early_waking_and_already_critical(body, sleep_settlement, monkeyp
 
 
 @pytest.mark.parametrize("duration", [5, 6, 54, 55])
-def test_wap18_duration_bounds(body, sleep_settlement, duration):
+def test_wap18_duration_bounds(body, duration):
     from living_island.world.v2.protocol import InvalidTurn
 
     if duration in (5, 55):
@@ -266,16 +280,12 @@ def test_wap18_duration_bounds(body, sleep_settlement, duration):
         assert body.state.active_actions[A].due_tick == duration
 
 
-def test_en24_unmet_sleep_stays_awake(body, monkeypatch):
-    from living_island.world.v2.engine import settle
-
-    def unmet(ctx, action, groups):
-        action.due_tick = ctx.tick
-        action.pending_failure = "INVALID_TARGET"
-
-    monkeypatch.setattr(settle, "start_act", unmet)
+def test_en24_unmet_sleep_stays_awake(body):
+    body.state.needs[A]["satiety"] = 0
     result = body.step([_sleep(body, 6)])
-    assert result.actions[0].outcome == "failure"
+    assert result.actions[0].outcome == "settled"
+    assert result.actions[0].settlement.kind == "unmet"
+    assert result.actions[0].settlement.failed_check == "has_satiety"
     assert not _events(result, "resident_fell_asleep")
     assert body.state.awareness[A].kind == "awake"
 
@@ -346,7 +356,7 @@ def test_wap24_boundary_opening_includes_phase2_and_earlier_events(body):
     from living_island.world.v2.engine.tick import TickContext
 
     state = body.state
-    assert not boundary_crossings(TickContext(state, body.pack, EventWriter(state, 0)))
+    assert not boundary_crossings(TickContext(state, body.pack, EventWriter(state, 0)), {})
     ctx = TickContext(state, body.pack, EventWriter(state, 1))
     ctx.activity = {actor: TickActivity(None, 0) for actor in state.residents}
     ctx.writer.emit(
@@ -506,27 +516,37 @@ def test_en13_movement_charge_once_for_two_tiles(body):
 
 
 @pytest.mark.parametrize("higher_stop", ["DEATH", "EXHAUSTED", None])
-def test_wap04_waking_priority_and_interrupt(body, sleep_settlement, monkeypatch, higher_stop):
+def test_wap04_waking_priority_and_interrupt(body, monkeypatch, higher_stop):
     from living_island.world.v2.engine import settle
 
-    rule_id, rule = next(iter(body.pack.source.rules.items()))
-    body.pack.source.rules[rule_id] = replace(rule, data={**rule.data, "exhaustion_stops": True})
-    start_sleep = settle.start_act
-
-    def choose_sleep(ctx, action, groups):
-        start_sleep(ctx, action, groups)
-        action.rule_id = rule_id
-
-    monkeypatch.setattr(settle, "start_act", choose_sleep)
+    rule_id = "sleep_with_exhaustion"
+    rule = _proposed_rule(
+        body,
+        rule_id,
+        "sleep",
+        work_ticks={"param": "duration_ticks"},
+        exhaustion_stops=True,
+        conditions=[
+            {"id": "has_satiety", "kind": "need", "need": "satiety", "op": ">", "value": 0},
+            {"id": "has_room", "kind": "free_slots", "op": ">=", "value": 1},
+        ],
+        effects=[{"op": "need", "need": "stamina", "delta": -1, "timing": "per_tick"}],
+    )
+    interrupt = settle.interrupt
     calls = []
-    monkeypatch.setattr(settle, "interrupt", lambda ctx, action: calls.append(action.rule_id))
+
+    def record_interrupt(ctx, action):
+        calls.append(action.rule_id)
+        interrupt(ctx, action)
+
+    monkeypatch.setattr(settle, "interrupt", record_interrupt)
     body.state.needs[A]["satiety"] = 3025
     if higher_stop == "DEATH":
         body.state.needs[A].update(hydration=0, health=1)
     if higher_stop == "EXHAUSTED":
-        body.state.needs[A]["stamina"] = 0
+        body.state.needs[A]["stamina"] = 1
 
-    result = body.step([_sleep(body, 6)])
+    result = body.step([_sleep(body, 6)], rule_additions=[rule])
     assert result.actions[0].visible_feedback.stop_reason == (higher_stop or "WOKEN")
     assert calls == [rule_id]
     woke = _events(result, "resident_woke")
@@ -534,3 +554,74 @@ def test_wap04_waking_priority_and_interrupt(body, sleep_settlement, monkeypatch
         assert not woke
     else:
         assert woke[0].payload["early"] is (higher_stop is None)
+
+
+def test_en12_tick_combines_rule_and_metabolism_changes(body):
+    rule = _proposed_rule(
+        body,
+        "rest_with_gain",
+        "rest",
+        work_ticks=2,
+        effects=[{"op": "need", "need": "stamina", "delta": 3, "timing": "per_tick"}],
+    )
+
+    result = body.step([_turn(body, A, "act", verb="rest")], rule_additions=[rule])
+
+    (changed,) = _events(result, "needs_changed")
+    assert changed.payload["causes"] == ["physiology", "rest_with_gain"]
+    assert {"need_id": "stamina", "before": 6000, "after": 6001} in changed.payload["changes"]
+    assert body.state.needs[A]["stamina"] == 6001
+
+
+def test_wap24_tick_rule_band_crossing_wakes_sleeper(body):
+    from copy import deepcopy
+
+    from living_island.world.v2.engine.physiology import need_band
+
+    satiety = body.pack.needs["satiety"]
+    # The waking threshold is the first value in the critical band.
+    satiety = replace(satiety, band_cutoffs=(3001, *satiety.band_cutoffs[1:]))
+    body.pack = replace(body.pack, needs={**body.pack.needs, "satiety": satiety})
+    body.state.needs[A]["satiety"] = 3026
+    control = deepcopy(body)
+    rule = _proposed_rule(
+        body,
+        "sleep_with_hunger",
+        "sleep",
+        work_ticks={"param": "duration_ticks"},
+        conditions=[
+            {"id": "has_stamina", "kind": "need", "need": "stamina", "op": ">", "value": 0},
+            {"id": "has_room", "kind": "free_slots", "op": ">=", "value": 1},
+        ],
+        effects=[{"op": "need", "need": "satiety", "delta": -26, "timing": "per_tick"}],
+    )
+
+    assert not control.step([_sleep(control, 6)]).actions
+    assert control.state.needs[A]["satiety"] == 3001
+    assert need_band(control.pack, "satiety", 3001) == "low"
+    assert control.state.awareness[A].kind == "asleep"
+
+    result = body.step([_sleep(body, 6)], rule_additions=[rule])
+    (stopped,) = result.actions
+    assert body.state.needs[A]["satiety"] == 2975
+    assert need_band(body.pack, "satiety", 2975) == "critical"
+    assert stopped.visible_feedback.stop_reason == "WOKEN"
+    assert stopped.tick_finished == 1
+    (woke,) = _events(result, "resident_woke")
+    assert woke.payload == {"resident_id": A, "early": True}
+    assert body.state.awareness[A].kind == "awake"
+
+
+def test_en24_sleep_start_has_one_transition_at_next_boundary(body):
+    boundary = body.state.tick
+    assert body.state.awareness[A].kind == "awake"
+
+    result = body.step([_sleep(body, 6)])
+
+    assert not result.actions
+    (fell_asleep,) = _events(result, "resident_fell_asleep")
+    assert fell_asleep.tick == body.state.tick == boundary + 1
+    assert fell_asleep.payload == {"resident_id": A, "duration_ticks": 6}
+    assert body.state.awareness[A].kind == "asleep"
+    assert body.state.active_actions[A].rule_id == "test_sleep"
+    assert not _events(body.step(), "resident_fell_asleep")
