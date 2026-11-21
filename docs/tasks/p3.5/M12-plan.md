@@ -43,6 +43,11 @@ Each card is one branch (named in the card), one worktree and one Gate 2. A
 card may start before its dependencies merge only on its own new files, and
 it rebases before review.
 
+From the P3.5-EN-03 and P3.5-EN-06 rechecks on, the rest of M12 runs under the
+[orchestration runbook](M12-orchestration.md) (owner decision, 2026-11-21).
+The runbook replaces the one-recheck limit of D5 with a fix-until-pass
+review loop, and records how decisions are made while the owner is away.
+
 ## 3. File ownership
 
 Each path has one owner. Concurrent branches never write the same file.
@@ -67,6 +72,7 @@ Each path has one owner. Concurrent branches never write the same file.
 | `sim/equivalence/{v2_extract,compare}.py`, `sim/v2/cli.py`, `docs/tasks/p3.5/M12-equivalence-report.md` | P3.5-PR-07 |
 | `backend/tests/fixtures/v2/packs/engine-test*/**` | P3.5-CT-01; then P3.5-RR-02 |
 | `backend/tests/v2/engine/conftest.py` | P3.5-EN-01 (shared engine test fixtures, owner decision 2026-11-20); after P3.5-EN-01, one branch at a time, noted in its handoff |
+| Wave 5 shared engine files | P3.5-EN-03: `tick.py`, `state.py`, `settle.py`, `effects.py`; P3.5-EN-06: `validate.py`, `events.py` (owner decisions, 2026-11-21) |
 | `backend/tests/v2/<area>/**` | The card that names that directory |
 
 Paths without a prefix are under `backend/src/living_island/`.
