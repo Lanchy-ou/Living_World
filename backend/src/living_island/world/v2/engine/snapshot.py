@@ -60,7 +60,7 @@ def snapshot_hash(state: WorldState) -> str:
     return sha256(_encode_state(state)).hexdigest()
 
 
-def restore_snapshot(data: bytes, pack: Pack, *, pack_ids: tuple[str, ...]) -> World:
+def restore_snapshot(data: bytes, pack: Pack) -> World:
     """Restore against the original pack and the additions carried by the snapshot."""
     from .tick import World, prepare_rules
 
@@ -68,7 +68,11 @@ def restore_snapshot(data: bytes, pack: Pack, *, pack_ids: tuple[str, ...]) -> W
     library = state.library
     if library.vocabulary_hash != pack.vocabulary_hash:
         raise ValueError("snapshot vocabulary hash differs from loaded content")
-    if (library.pack_ids, library.pack_hash) != (pack_ids, pack.pack_hash):
+    if (library.pack_ids, library.pack_hash, library.ancestor_pack_hashes) != (
+        pack.pack_ids,
+        pack.pack_hash,
+        tuple(layer.pack_hash for layer in pack.ancestors),
+    ):
         raise ValueError("snapshot pack identity differs from loaded content")
     content, added = prepare_rules(
         EnginePack.from_pack(pack),

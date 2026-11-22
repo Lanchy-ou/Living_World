@@ -203,6 +203,7 @@ class Library:
     pack_ids: tuple[str, ...]
     active_rule_ids: tuple[str, ...]
     pack_hash: str
+    ancestor_pack_hashes: tuple[str, ...]
     added_rules: Annotated[dict[str, Rule], ValidateAs(list[tuple[str, Rule]], dict)] = field(
         default_factory=dict
     )

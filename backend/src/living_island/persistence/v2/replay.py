@@ -79,14 +79,14 @@ def _verify_rule(expected: Iterator[str], content_hash: str, _data: bytes) -> No
 def replay(
     snapshot: bytes,
     manifest: RunManifest,
-    packs: Sequence[Pack],
+    pack: Pack,
     journal: PacketJournal,
     store: RuleStore,
     boundaries: Iterable[RecordedBoundary],
 ) -> Iterator[ReplayedBoundary]:
     """Replay the log segment following the starting snapshot's event cursor."""
-    pack = manifest.check_content(packs)
-    world = restore_snapshot(snapshot, pack, pack_ids=manifest.pack_ids)
+    manifest.check_content(pack)
+    world = restore_snapshot(snapshot, pack)
     if world.run_id != manifest.run_id:
         raise ValueError("snapshot belongs to a different run than the manifest")
     for boundary in boundaries:

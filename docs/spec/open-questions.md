@@ -1009,8 +1009,10 @@ ending just before its pending boundary and carries the sim-owned checkpoint
 as opaque JSON. The world snapshot retains rule additions in admission order
 so verification can reproduce the library visible to each approval.
 
-The run manifest also needs a hash for each pack in the ordered composition.
-The composed pack exposes its effective hash and immediate parent, as in
-OQ-P3.5-EN-01. EN-07 takes the base-first sequence of separately loaded packs
-using the run's bindings and pins each effective hash from that sequence.
-Confirm this convention for the coordinator's run package.
+The loader supplies the actual base-first ancestry to the manifest and world
+snapshot. Each ancestor pin hashes the canonical bound composition through
+that layer before the next overlay is merged. The leaf pin remains its
+existing normalized effective-content hash. The loader validates the full
+leaf with its overlays, so a prefix can be pinned even when it fails
+standalone validation. Confirm this encoding for the coordinator's run
+package.

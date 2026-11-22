@@ -50,32 +50,32 @@ class PacketJournal:
     def _path(self, tick: int) -> Path:
         return self.directory / f"{tick}.json"
 
-    def _pending(self, world: World) -> PacketBatch:
+    def _pending(self, world: World) -> tuple[bytes, dict[str, str]]:
         if world.run_id != self.run_id:
             raise ValueError("packet journal belongs to a different run")
-        return PacketBatch.model_construct(
+        batch = PacketBatch.model_construct(
             schema_version="wap/0.1",
             run_id=self.run_id,
             observed_tick=world.tick,
             packets=world.pending_packets(),
         )
+        return (
+            canonical_json_bytes(batch.model_dump(mode="json")),
+            {packet.actor_id: packet.delivery_id for packet in batch.packets},
+        )
 
     def ingest(self, world: World) -> dict[str, str]:
         """Record exact packets before returning the IDs eligible to acknowledge."""
-        batch = self._pending(world)
-        store_once(
-            self._path(batch.observed_tick), canonical_json_bytes(batch.model_dump(mode="json"))
-        )
-        return {packet.actor_id: packet.delivery_id for packet in batch.packets}
+        data, acknowledgements = self._pending(world)
+        store_once(self._path(world.tick), data)
+        return acknowledgements
 
     def verify(self, world: World) -> dict[str, str]:
         """Compare the replayed packet batch against the recorded bytes."""
-        batch = self._pending(world)
-        if self._path(batch.observed_tick).read_bytes() != canonical_json_bytes(
-            batch.model_dump(mode="json")
-        ):
-            raise ValueError(f"packet journal differs at boundary {batch.observed_tick}")
-        return {packet.actor_id: packet.delivery_id for packet in batch.packets}
+        data, acknowledgements = self._pending(world)
+        if self._path(world.tick).read_bytes() != data:
+            raise ValueError(f"packet journal differs at boundary {world.tick}")
+        return acknowledgements
 
     def read(self, tick: int) -> tuple[BoundaryDelivery, ...]:
         data = self._path(tick).read_bytes()
@@ -87,7 +87,9 @@ class PacketJournal:
         return batch.packets
 
     def check_prefix(self, first_tick: int, next_tick: int) -> None:
-        """Check that all immutable batches in the checkpoint prefix exist."""
+        """Read and validate every immutable batch in the checkpoint prefix."""
         for tick in range(first_tick, next_tick):
-            if not self._path(tick).is_file():
-                raise ValueError(f"missing packet journal boundary {tick}")
+            try:
+                self.read(tick)
+            except FileNotFoundError as exc:
+                raise ValueError(f"missing packet journal boundary {tick}") from exc

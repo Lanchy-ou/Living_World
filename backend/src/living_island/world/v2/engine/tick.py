@@ -26,7 +26,8 @@ from ..protocol import (
     WorldStop,
 )
 from ..rules import Pack, Rule, validate_proposal
-from ..rules.schema import Table, canonical_json_bytes, content_hash
+from ..rules.loader import library_hash
+from ..rules.schema import Table, canonical_json_bytes
 from . import kernel, observe, perception, physiology, processes, settle, speech
 from .events import EventWriter, json_object
 from .ids import shuffle
@@ -275,7 +276,11 @@ class World:
         return self.state.run_id
 
     def pending_packets(self) -> tuple[BoundaryDelivery, ...]:
-        return tuple(packet for _, packet in sorted(self.state.pending_deliveries.items()))
+        """Return detached copies of the committed packets."""
+        return tuple(
+            packet.model_copy(deep=True)
+            for _, packet in sorted(self.state.pending_deliveries.items())
+        )
 
     def step(
         self,
@@ -290,6 +295,9 @@ class World:
         acknowledgements = {} if acknowledged is None else acknowledged
         check_acknowledgements(self.state, acknowledgements)
         next_pack, added = prepare_rules(self.pack, rule_additions)
+        for rule in added:
+            if rule.data["provenance"]["approved_at_tick"] > self.tick:
+                raise ValueError(f"rule {rule.id!r} is approved after the opening boundary")
         if store_rule is not None:
             for rule in added:
                 store_rule(rule.content_hash, canonical_json_bytes(rule.data))
@@ -334,7 +342,7 @@ def prepare_rules(
             source,
             rules=rules,
             data={**source.data, "rule": rule_data},
-            rule_library_hash=content_hash(list(rule_data.values())),
+            rule_library_hash=library_hash(rule_data),
         )
         added.append(rule)
     return replace(pack, source=source), added
@@ -645,12 +653,7 @@ def initialize(pack: Pack, setup: WorldSetup) -> World:
         row.id: Resident(row.id, row.position)
         for row in sorted(setup.residents, key=lambda row: row.id)
     }
-    parent = pack.data.get("extends")
-    if (
-        setup.pack_ids[-1] != pack.pack_id
-        or (parent is not None and (len(setup.pack_ids) < 2 or setup.pack_ids[-2] != parent))
-        or (parent is None and len(setup.pack_ids) != 1)
-    ):
+    if setup.pack_ids != pack.pack_ids:
         raise ValueError("pack IDs must enumerate the active composition in base-first order")
     state = WorldState(
         world_id=setup.world_id,
@@ -670,9 +673,13 @@ def initialize(pack: Pack, setup: WorldSetup) -> World:
             setup.pack_ids,
             tuple(sorted(pack.rules)),
             pack.pack_hash,
+            tuple(layer.pack_hash for layer in pack.ancestors),
         ),
         resolution_rng_state_uint32=setup.seed,
         clock_minute=clock.minute_at(0),
+        # Reserve sequence zero and its cursor position for world_initialized.
+        next_event_seq_in_tick=1,
+        event_log_cursor=1,
         cues=setup.world_cues(),
         explored_tiles_by_resident={
             key: {smap.index(actor.position)} for key, actor in residents.items()
@@ -690,17 +697,6 @@ def initialize(pack: Pack, setup: WorldSetup) -> World:
     )
     place_entities(state, content)
     writer = EventWriter(state, 0)
-    payload = json_object(
-        {
-            "config_hash": state.config_hash,
-            "map_hash": state.map_hash,
-            "vocabulary_hash": state.library.vocabulary_hash,
-            "rule_library_hash": state.library.rule_library_hash,
-            "pack_ids": list(state.library.pack_ids),
-            "initial_snapshot_hash": "",
-        }
-    )
-    first = writer.emit("world_initialized", payload)
     for entity in state.entities.values():
         writer.emit(
             "entity_created",
@@ -733,6 +729,17 @@ def initialize(pack: Pack, setup: WorldSetup) -> World:
             del state.phase_offsets[entity.entity_id]
     validate_initial_limits(state, content.limits)
     perception.build_deliveries(TickContext(state, content, writer))
-    payload["initial_snapshot_hash"] = state_snapshot_hash(state)
-    writer.events[0] = first.model_copy(update={"payload": payload})
-    return World(state, content, tuple(writer.events))
+    # The bootstrap writer staged sequences one and higher. Build sequence
+    # zero from the completed state without advancing its reserved cursor.
+    first = EventWriter(replace(state, next_event_seq_in_tick=0, event_log_cursor=0), 0).emit(
+        "world_initialized",
+        {
+            "config_hash": state.config_hash,
+            "map_hash": state.map_hash,
+            "vocabulary_hash": state.library.vocabulary_hash,
+            "rule_library_hash": state.library.rule_library_hash,
+            "pack_ids": list(state.library.pack_ids),
+            "initial_snapshot_hash": state_snapshot_hash(state),
+        },
+    )
+    return World(state, content, (first, *writer.events))

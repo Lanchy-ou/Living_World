@@ -1,6 +1,5 @@
 """Identity of the protocol and content at the start of a run."""
 
-from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated
 
@@ -27,32 +26,29 @@ class RunManifest(VersionedMessage):
     packs: Annotated[tuple[PackPin, ...], Field(min_length=1)]
 
     @classmethod
-    def capture(cls, run_id: str, packs: Sequence[Pack]) -> "RunManifest":
-        """Pin separately loaded pack identities in base-first composition order."""
-        if not packs:
-            raise ValueError("manifest requires at least one loaded pack")
-        parent = None
-        for pack in packs:
-            if pack.data.get("extends") != parent:
-                raise ValueError("manifest packs must enumerate the full base-first composition")
-            parent = pack.pack_id
-        effective = packs[-1]
+    def capture(cls, run_id: str, pack: Pack) -> "RunManifest":
+        """Pin the exact base-first composition of the loaded pack."""
         return cls(
             schema_version="wap/0.1",
             run_id=run_id,
-            vocabulary_hash=effective.vocabulary_hash,
-            rule_library_hash=effective.rule_library_hash,
-            packs=tuple(PackPin(pack_id=pack.pack_id, pack_hash=pack.pack_hash) for pack in packs),
+            vocabulary_hash=pack.vocabulary_hash,
+            rule_library_hash=pack.rule_library_hash,
+            packs=(
+                *(
+                    PackPin(pack_id=layer.pack_id, pack_hash=layer.pack_hash)
+                    for layer in pack.ancestors
+                ),
+                PackPin(pack_id=pack.pack_id, pack_hash=pack.pack_hash),
+            ),
         )
 
     @property
     def pack_ids(self) -> tuple[str, ...]:
         return tuple(pin.pack_id for pin in self.packs)
 
-    def check_content(self, packs: Sequence[Pack]) -> Pack:
-        if self != self.capture(self.run_id, packs):
+    def check_content(self, pack: Pack) -> None:
+        if self != self.capture(self.run_id, pack):
             raise ValueError("loaded content differs from the run manifest")
-        return packs[-1]
 
 
 def write_manifest(path: Path, manifest: RunManifest) -> None:

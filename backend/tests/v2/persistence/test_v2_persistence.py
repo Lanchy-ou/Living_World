@@ -19,7 +19,6 @@ def restore(world, snapshot=None, pack=None):
     return restore_snapshot(
         encode_snapshot(world) if snapshot is None else snapshot,
         world.pack.source if pack is None else pack,
-        pack_ids=world.state.library.pack_ids,
     )
 
 
@@ -105,18 +104,16 @@ def test_en20_en21_wap16_replay_rule_additions_and_store_refill(pack, setup, tmp
     from living_island.world.v2.engine import initialize
     from living_island.world.v2.engine.snapshot import encode_snapshot
     from living_island.world.v2.protocol import action_schema_sha256, encode_event_line
-    from living_island.world.v2.rules import load_pack
     from living_island.world.v2.rules.schema import canonical_json_bytes
 
-    base = load_pack(tmp_path / "engine-test", pack.vocabulary)
-    packs = (base, pack)
     world = initialize(pack, setup)
     journal, store = store_for(world, tmp_path / "run")
-    manifest = RunManifest.capture(world.run_id, packs)
+    manifest = RunManifest.capture(world.run_id, pack)
     manifest_path = tmp_path / "manifest.json"
     write_manifest(manifest_path, manifest)
     assert read_manifest(manifest_path) == manifest
-    assert tuple(pin.pack_hash for pin in manifest.packs) == tuple(p.pack_hash for p in packs)
+    assert manifest.pack_ids == setup.pack_ids
+    assert manifest.packs[-1].pack_hash == pack.pack_hash
     assert manifest.rule_library_hash == pack.rule_library_hash
     assert pack.rules["rule_b"].data["provenance"] == {"kind": "authored", "pack_id": "engine-test"}
 
@@ -178,7 +175,7 @@ def test_en20_en21_wap16_replay_rule_additions_and_store_refill(pack, setup, tmp
         (expected[0][0], records[1:], expected[1:]),
     ):
         for _ in range(2):
-            replayed = replay(start, manifest, packs, journal, store, segment)
+            replayed = replay(start, manifest, pack, journal, store, segment)
             assert [(frame.snapshot, frame.event_lines) for frame in replayed] == checkpoints
     assert encode_snapshot(restore(world, pack=pack)) == expected[-1][0]
 
@@ -188,25 +185,25 @@ def test_en20_en21_wap16_replay_rule_additions_and_store_refill(pack, setup, tmp
     del malformed["instruments"]
     world_rule.write_bytes(canonical_json_bytes(malformed))
     with pytest.raises(ValueError, match="canonical world rule must have empty instruments"):
-        list(replay(beginning, manifest, packs, journal, store, records))
+        list(replay(beginning, manifest, pack, journal, store, records))
     world_rule.write_bytes(periodic_bytes)
 
     rule_bytes = saved_rule.read_bytes()
     saved_rule.write_bytes(rule_bytes + b"\n")
     with pytest.raises(ValueError, match="canonical rule bytes"):
-        list(replay(beginning, manifest, packs, journal, store, records))
+        list(replay(beginning, manifest, pack, journal, store, records))
     altered = json.loads(rule_bytes)
     altered["provenance"]["approved_by"] = "different_approver"
     saved_rule.write_bytes(canonical_json_bytes(altered))
     with pytest.raises(ValueError, match="event log differs"):
-        list(replay(beginning, manifest, packs, journal, store, records))
+        list(replay(beginning, manifest, pack, journal, store, records))
     altered["work_ticks"] += 1
     saved_rule.write_bytes(canonical_json_bytes(altered))
     with pytest.raises(ValueError, match="rule content does not match"):
-        list(replay(beginning, manifest, packs, journal, store, records))
+        list(replay(beginning, manifest, pack, journal, store, records))
     saved_rule.unlink()
     with pytest.raises(FileNotFoundError, match=str(pin)):
-        list(replay(beginning, manifest, packs, journal, store, records))
+        list(replay(beginning, manifest, pack, journal, store, records))
 
 
 def test_rule_write_failure_keeps_boundary_pending(pack, setup, tmp_path, monkeypatch):
@@ -271,7 +268,7 @@ def test_en21_first_and_second_proposal_replies_after_checkpoint(pack, setup, tm
     sim_state = {"delivery_cursors": cursor}
     journal.ingest(world)
     save_checkpoint(checkpoint, world, journal, sim_state)
-    restored = load_checkpoint(checkpoint, pack, journal, pack_ids=setup.pack_ids)
+    restored = load_checkpoint(checkpoint, pack, journal)
     assert restored.sim_checkpoint == sim_state
     assert restored.first_journal_tick == 0
     assert encode_snapshot(restored.world) == encode_snapshot(world)
@@ -353,17 +350,11 @@ def test_snapshot_refuses_noncanonical_bytes_and_fractional_component_values(pac
 
 def test_manifest_rejects_wrong_protocol_and_loaded_content(pack, tmp_path):
     from living_island.persistence.v2.manifest import RunManifest, read_manifest, write_manifest
-    from living_island.world.v2.rules import load_pack
     from living_island.world.v2.rules.schema import canonical_json_bytes
 
-    base = load_pack(tmp_path / "engine-test", pack.vocabulary)
-    manifest = RunManifest.capture("test", (base, pack))
+    manifest = RunManifest.capture("test", pack)
     with pytest.raises(ValueError, match="loaded content differs"):
-        manifest.check_content((replace(base, pack_hash="0" * 64), pack))
-    with pytest.raises(ValueError, match="base-first"):
-        RunManifest.capture("test", (pack,))
-    with pytest.raises(ValueError, match="at least one"):
-        RunManifest.capture("test", ())
+        manifest.check_content(replace(pack, pack_hash="0" * 64))
     path = tmp_path / "manifest.json"
     write_manifest(path, manifest)
     original = path.read_bytes()
@@ -536,6 +527,7 @@ def test_checkpoint_refuses_inconsistent_prefix(pack, setup, tmp_path):
     from living_island.persistence.v2.journal import PacketJournal
     from living_island.persistence.v2.replay import record_boundary
     from living_island.world.v2.engine import initialize
+    from living_island.world.v2.rules.schema import canonical_json_bytes
 
     world = initialize(pack, setup)
     journal, store = store_for(world, tmp_path)
@@ -552,7 +544,368 @@ def test_checkpoint_refuses_inconsistent_prefix(pack, setup, tmp_path):
     assert not path.exists()
     save_checkpoint(path, world, journal, {})
     with pytest.raises(ValueError, match="missing packet journal boundary 0"):
-        load_checkpoint(path, pack, other_directory, pack_ids=setup.pack_ids)
-    path.write_bytes(path.read_bytes() + b"\n")
+        load_checkpoint(path, pack, other_directory)
+    valid = path.read_bytes()
+    payload = json.loads(valid)
+    path.write_bytes(canonical_json_bytes({**payload, "next_journal_tick": 0}))
+    with pytest.raises(ValueError, match="must end before the pending boundary"):
+        load_checkpoint(path, pack, journal)
+    path.write_bytes(canonical_json_bytes({**payload, "run_id": "foreign_run"}))
+    with pytest.raises(ValueError, match="checkpoint and world"):
+        load_checkpoint(path, pack, journal)
+    path.write_bytes(valid + b"\n")
     with pytest.raises(ValueError, match="canonical checkpoint"):
-        load_checkpoint(path, pack, journal, pack_ids=setup.pack_ids)
+        load_checkpoint(path, pack, journal)
+
+
+@pytest.mark.parametrize("entry", ["save", "load"])
+@pytest.mark.parametrize(
+    ("corruption", "message"),
+    [
+        ("foreign", "batch identity"),
+        ("malformed", "Invalid JSON"),
+        ("noncanonical", "canonical packet journal"),
+        ("row_tick", "one packet per resident"),
+        ("batch_tick", "batch identity"),
+    ],
+)
+def test_checkpoint_validates_every_referenced_batch(
+    pack, setup, tmp_path, entry, corruption, message
+):
+    from living_island.persistence.v2.checkpoint import load_checkpoint, save_checkpoint
+    from living_island.persistence.v2.replay import record_boundary
+    from living_island.world.v2.engine import initialize
+    from living_island.world.v2.engine.snapshot import encode_snapshot
+    from living_island.world.v2.rules.schema import canonical_json_bytes
+
+    world = initialize(pack, setup)
+    journal, store = store_for(world, tmp_path / "genuine")
+    record_boundary(world, journal, store)
+    record_boundary(world, journal, store)
+    path = tmp_path / "checkpoint.json"
+    # The coordinator owns this payload and can use its own cursor representation.
+    cursor = {"coordinator": {"opaque_cursor": ["checkpoint", 2]}}
+    save_checkpoint(path, world, journal, cursor)
+    valid = load_checkpoint(path, pack, journal)
+    assert valid.sim_checkpoint == cursor
+    assert encode_snapshot(valid.world) == encode_snapshot(world)
+
+    batch = journal.directory / "1.json"
+    data = batch.read_bytes()
+    payload = json.loads(data)
+    match corruption:
+        case "foreign":
+            other = initialize(pack, setup.model_copy(update={"run_id": "foreign_run"}))
+            foreign, other_store = store_for(other, tmp_path / "foreign")
+            record_boundary(other, foreign, other_store)
+            foreign.ingest(other)
+            data = (foreign.directory / "1.json").read_bytes()
+        case "malformed":
+            data = b"{"
+        case "noncanonical":
+            data += b"\n"
+        case "row_tick":
+            payload["packets"][0]["observed_tick"] = 2
+            data = canonical_json_bytes(payload)
+        case "batch_tick":
+            payload["observed_tick"] = 2
+            for packet in payload["packets"]:
+                packet["observed_tick"] = 2
+            data = canonical_json_bytes(payload)
+    batch.write_bytes(data)
+    if entry == "save":
+        target = tmp_path / "invalid_save.json"
+        with pytest.raises(ValueError, match=message):
+            save_checkpoint(target, world, journal, cursor)
+        assert not target.exists()
+    else:
+        with pytest.raises(ValueError, match=message):
+            load_checkpoint(path, pack, journal)
+
+
+@pytest.mark.parametrize("opening_tick", [0, 1])
+def test_future_approval_cannot_commit_rule_at_opening_boundary(
+    pack, setup, tmp_path, opening_tick
+):
+    from living_island.persistence.v2.replay import record_boundary
+    from living_island.world.v2.engine import initialize
+    from living_island.world.v2.engine.snapshot import encode_snapshot
+
+    world = initialize(pack, setup)
+    journal, store = store_for(world, tmp_path)
+    for _ in range(opening_tick):
+        record_boundary(world, journal, store)
+    before = encode_snapshot(world)
+    pending = world.pending_packets()
+    library = world.state.library
+    current = proposed("current_rule", "every:100", subject={"archetype": "arch_b"})
+    future = proposed("future_rule", "every:100", subject={"archetype": "arch_b"})
+    current["provenance"]["approved_at_tick"] = opening_tick
+    future["provenance"]["approved_at_tick"] = opening_tick + 1
+    with pytest.raises(ValueError, match="approved after the opening boundary"):
+        record_boundary(world, journal, store, rule_additions=(current, future))
+    assert encode_snapshot(world) == before
+    assert world.pending_packets() == pending
+    assert world.state.library == library
+    assert not (store.run_directory / "rules").exists()
+
+    result = record_boundary(world, journal, store, rule_additions=(current,))
+    added = result.events[0]
+    assert added.type == "rule_added"
+    assert added.tick == opening_tick + 1
+    assert added.payload["provenance"]["approved_at_tick"] == opening_tick
+
+
+def test_replay_refuses_a_recorded_rule_approved_after_the_opening_tick(pack, setup, tmp_path):
+    from living_island.persistence.v2.manifest import RunManifest
+    from living_island.persistence.v2.replay import RecordedBoundary, record_boundary, replay
+    from living_island.world.v2.engine import initialize
+    from living_island.world.v2.engine.snapshot import encode_snapshot
+    from living_island.world.v2.protocol import encode_event_line
+    from living_island.world.v2.rules.schema import canonical_json_bytes
+
+    world = initialize(pack, setup)
+    journal, store = store_for(world, tmp_path)
+    record_boundary(world, journal, store)
+    before = encode_snapshot(world)
+    rule = proposed("current_rule", "every:100", subject={"archetype": "arch_b"})
+    rule["provenance"]["approved_at_tick"] = world.tick
+    result = record_boundary(world, journal, store, rule_additions=(rule,))
+    added = result.events[0]
+    manifest = RunManifest.capture(world.run_id, pack)
+    original = RecordedBoundary((), b"".join(map(encode_event_line, result.events)))
+    (frame,) = replay(before, manifest, pack, journal, store, (original,))
+    assert frame.snapshot == encode_snapshot(world)
+
+    rule_file = store.run_directory / "rules" / f"{added.payload['content_hash']}.json"
+    changed = json.loads(rule_file.read_bytes())
+    changed["provenance"]["approved_at_tick"] = added.tick
+    rule_file.write_bytes(canonical_json_bytes(changed))
+    new_event = added.model_copy(
+        update={"payload": {**added.payload, "provenance": changed["provenance"]}},
+    )
+    recorded = RecordedBoundary(
+        (),
+        b"".join(map(encode_event_line, (new_event, *result.events[1:]))),
+    )
+    with pytest.raises(ValueError, match="approved after the opening boundary"):
+        list(replay(before, manifest, pack, journal, store, (recorded,)))
+
+
+def test_manifest_capture_uses_the_actual_loaded_ancestry(pack, setup, tmp_path):
+    from living_island.persistence.v2.manifest import RunManifest
+    from living_island.world.v2.engine import initialize
+    from living_island.world.v2.engine.snapshot import encode_snapshot, restore_snapshot
+    from living_island.world.v2.rules import ContentError, load_pack
+
+    world = initialize(pack, setup)
+    wrong_setup = setup.model_copy(update={"pack_ids": ("wrong_parent", pack.pack_id)})
+    with pytest.raises(ValueError, match="active composition"):
+        initialize(pack, wrong_setup)
+    original = RunManifest.capture(world.run_id, pack)
+    original.check_content(pack)
+    parent = tmp_path / "engine-test" / "pack.toml"
+    leaf = tmp_path / "engine_core" / "pack.toml"
+    text = parent.read_text(encoding="utf-8")
+    assert "inventory_slots = 6" in text
+    parent.write_text(text.replace("inventory_slots = 6", "inventory_slots = 7"), encoding="utf-8")
+    reloaded = load_pack(leaf.parent, pack.vocabulary)
+    assert reloaded.data["inventory_slots"] == 7
+    assert reloaded.pack_hash != pack.pack_hash
+    assert RunManifest.capture(world.run_id, reloaded).packs[0] != original.packs[0]
+    assert RunManifest.capture(world.run_id, pack) == original
+    with pytest.raises(ValueError, match="loaded content differs"):
+        original.check_content(reloaded)
+
+    # An ancestor can fail standalone validation and still participate in an
+    # admissible composition. The authorized overlay restores the original leaf.
+    assert "max_gain_per_tick = 4" in text
+    parent.write_text(
+        text.replace("max_gain_per_tick = 4", "max_gain_per_tick = 0"), encoding="utf-8"
+    )
+    leaf.write_text(
+        leaf.read_text(encoding="utf-8")
+        + """
+[needs.stamina]
+replace = true
+min = 0
+max = 10000
+initial = 6000
+band_cutoffs = [2000, 4000, 6000, 8000]
+max_gain_per_tick = 4
+max_loss_per_tick = 4
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ContentError, match="NEED_RATE"):
+        load_pack(parent.parent, pack.vocabulary)
+    repaired = load_pack(leaf.parent, pack.vocabulary)
+    assert repaired.pack_hash == pack.pack_hash
+    repaired_manifest = RunManifest.capture(world.run_id, repaired)
+    repaired_manifest.check_content(repaired)
+    assert repaired_manifest.pack_ids == original.pack_ids
+    assert repaired_manifest.packs[0] != original.packs[0]
+    assert repaired_manifest.packs[-1] == original.packs[-1]
+    with pytest.raises(ValueError, match="loaded content differs"):
+        original.check_content(repaired)
+    with pytest.raises(ValueError, match="pack identity"):
+        restore_snapshot(encode_snapshot(world), repaired)
+
+
+def test_pending_packet_accessor_cannot_mutate_world(pack, setup, tmp_path):
+    from living_island.persistence.v2.replay import record_boundary
+    from living_island.world.v2.engine import initialize
+    from living_island.world.v2.engine.snapshot import encode_snapshot
+    from living_island.world.v2.protocol import canonical_bytes
+
+    world = initialize(pack, setup)
+    journal, store = store_for(world, tmp_path)
+    original = tuple(map(canonical_bytes, world.pending_packets()))
+    pending_ids = {packet.actor_id: packet.delivery_id for packet in world.pending_packets()}
+    before = encode_snapshot(world)
+    packet = world.pending_packets()[0]
+    assert packet.perception.visible_tiles
+    packet.perception.visible_tiles.clear()
+    assert encode_snapshot(world) == before
+    assert journal.ingest(world) == pending_ids
+    assert tuple(map(canonical_bytes, journal.read(0))) == original
+    record_boundary(world, journal, store)
+    assert world.tick == 1
+    assert all(packet.delivery_id not in pending_ids.values() for packet in world.pending_packets())
+
+
+def test_initial_event_is_complete_when_appended(pack, setup, monkeypatch):
+    from living_island.world.v2.engine import initialize
+    from living_island.world.v2.engine.events import EventWriter
+    from living_island.world.v2.engine.snapshot import encode_snapshot
+    from living_island.world.v2.protocol import encode_event_line
+
+    emit = EventWriter.emit
+    initialized = []
+
+    def capture(writer, kind, payload, **fields):
+        event = emit(writer, kind, payload, **fields)
+        if kind == "world_initialized":
+            initialized.append(encode_event_line(writer.events[-1]))
+        return event
+
+    monkeypatch.setattr(EventWriter, "emit", capture)
+    world = initialize(pack, setup)
+    event = world.initial_events[0]
+    assert initialized == [encode_event_line(event)]
+    assert event.seq_in_tick == 0
+    assert event.payload["initial_snapshot_hash"] == sha256(encode_snapshot(world)).hexdigest()
+    sequences = range(len(world.initial_events))
+    assert [e.seq_in_tick for e in world.initial_events] == list(sequences)
+    assert [e.event_id for e in world.initial_events] == [
+        f"{world.run_id}:0000000000:{seq:06d}" for seq in sequences
+    ]
+    assert world.state.next_event_seq_in_tick == world.state.event_log_cursor == len(sequences)
+
+
+def test_replay_refuses_changed_journal_at_input_boundary(pack, setup, tmp_path):
+    from living_island.persistence.v2.manifest import RunManifest
+    from living_island.persistence.v2.replay import RecordedBoundary, record_boundary, replay
+    from living_island.world.v2.engine import initialize
+    from living_island.world.v2.engine.snapshot import encode_snapshot
+    from living_island.world.v2.protocol import encode_event_line
+    from living_island.world.v2.rules.schema import canonical_json_bytes
+
+    world = initialize(pack, setup)
+    initial = encode_snapshot(world)
+    initial_rng = world.state.resolution_rng_state_uint32
+    journal, store = store_for(world, tmp_path)
+    manifest = RunManifest.capture(world.run_id, pack)
+    turns = tuple(typed_turn(world, actor, "wait") for actor in (A, B))
+    result = record_boundary(world, journal, store, turns)
+    assert len(result.actions) == 2
+    assert world.state.resolution_rng_state_uint32 != initial_rng
+    rows = (RecordedBoundary(turns, b"".join(map(encode_event_line, result.events))),)
+    (frame,) = replay(initial, manifest, pack, journal, store, rows)
+    assert frame.snapshot == encode_snapshot(world)
+    assert frame.event_lines == rows[0].event_lines
+
+    with pytest.raises(ValueError, match="snapshot belongs to a different run"):
+        list(replay(initial, RunManifest.capture("wrong_run", pack), pack, journal, store, rows))
+
+    path = journal.directory / "0.json"
+    payload = json.loads(path.read_bytes())
+    assert payload["packets"][0]["perception"]["visible_tiles"]
+    payload["packets"][0]["perception"]["visible_tiles"].clear()
+    path.write_bytes(canonical_json_bytes(payload))
+    assert journal.read(0)[0].perception.visible_tiles == []
+    with pytest.raises(ValueError, match="packet journal differs at boundary 0"):
+        list(replay(initial, manifest, pack, journal, store, rows))
+
+
+def test_dependent_additions_keep_admission_order_in_restore_and_replay(make_world, pack, tmp_path):
+    from living_island.persistence.v2.manifest import RunManifest
+    from living_island.persistence.v2.replay import RecordedBoundary, record_boundary, replay
+    from living_island.world.v2.engine.snapshot import encode_snapshot, restore_snapshot
+    from living_island.world.v2.protocol import encode_event_line
+
+    world = make_world([(A, 3, 1), (B, 2, 1)], settings='disable = ["rule_e", "rule_g"]')
+    leaf = world.pack.source
+    initial = encode_snapshot(world)
+    manifest = RunManifest.capture(world.run_id, leaf)
+    journal, store = store_for(world, tmp_path / "run")
+    process = proposed(
+        "z_process",
+        "when:check_a",
+        **{
+            k: v
+            for k, v in pack.rules["rule_g"].data.items()
+            if k not in {"id", "trigger", "provenance", "instruments"}
+        },
+    )
+    builder = proposed(
+        "a_builder",
+        "verb:build",
+        **{
+            k: v
+            for k, v in pack.rules["rule_e"].data.items()
+            if k not in {"id", "trigger", "provenance"}
+        },
+    )
+    with pytest.raises(ValueError, match="no process rule"):
+        record_boundary(world, journal, store, rule_additions=(builder, process))
+    assert encode_snapshot(world) == initial
+    assert not (store.run_directory / "rules").exists()
+    result = record_boundary(world, journal, store, rule_additions=(process, builder))
+    added = tuple(event for event in result.events if event.type == "rule_added")
+    assert [event.payload["rule_id"] for event in added] == ["z_process", "a_builder"]
+    saved = encode_snapshot(world)
+    restored = restore_snapshot(saved, leaf)
+    assert restored.state == world.state
+    assert encode_snapshot(restored) == saved
+    rows = (RecordedBoundary((), b"".join(map(encode_event_line, result.events))),)
+    (frame,) = replay(initial, manifest, leaf, journal, store, rows)
+    assert frame.snapshot == saved
+    assert frame.event_lines == rows[0].event_lines
+    reversed_rows = (RecordedBoundary((), b"".join(map(encode_event_line, reversed(added)))),)
+    with pytest.raises(ValueError, match="no process rule"):
+        list(replay(initial, manifest, leaf, journal, store, reversed_rows))
+
+
+@pytest.mark.parametrize("published", [False, True])
+def test_store_once_propagates_failure_without_a_winning_file(tmp_path, monkeypatch, published):
+    from living_island.persistence.v2 import journal
+
+    path = tmp_path / "packet.json"
+    data = b"{}"
+    problem = journal.PersistenceError(path, "file", "publisher failed")
+
+    def competing_write(path, data):
+        if published:
+            path.write_bytes(data)
+        raise problem
+
+    monkeypatch.setattr(journal, "atomic_create", competing_write)
+    if published:
+        journal.store_once(path, data)
+        assert path.read_bytes() == data
+    else:
+        with pytest.raises(journal.PersistenceError) as raised:
+            journal.store_once(path, data)
+        assert raised.value is problem
+        assert not path.exists()

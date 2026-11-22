@@ -47,7 +47,7 @@ def save_checkpoint(
         world_snapshot=encode_snapshot(world).decode("utf-8"),
         sim_checkpoint=sim_checkpoint,
     )
-    _check_prefix(checkpoint, world, journal)
+    _check_prefix(checkpoint, journal)
     atomic_create(path, canonical_json_bytes(checkpoint.model_dump(mode="json")))
 
 
@@ -55,21 +55,23 @@ def load_checkpoint(
     path: Path,
     pack: Pack,
     journal: PacketJournal,
-    *,
-    pack_ids: tuple[str, ...],
 ) -> RestoredCheckpoint:
     data = path.read_bytes()
     checkpoint = _Checkpoint.model_validate_json(data)
     if canonical_json_bytes(checkpoint.model_dump(mode="json")) != data:
         raise ValueError("expected canonical checkpoint bytes")
-    world = restore_snapshot(checkpoint.world_snapshot.encode("utf-8"), pack, pack_ids=pack_ids)
-    _check_prefix(checkpoint, world, journal)
+    world = restore_snapshot(checkpoint.world_snapshot.encode("utf-8"), pack)
+    if checkpoint.run_id != world.run_id:
+        raise ValueError("checkpoint and world must belong to the same run")
+    if checkpoint.next_journal_tick != world.tick:
+        raise ValueError("checkpoint journal prefix must end before the pending boundary")
+    _check_prefix(checkpoint, journal)
     return RestoredCheckpoint(world, checkpoint.sim_checkpoint, checkpoint.first_journal_tick)
 
 
-def _check_prefix(checkpoint: _Checkpoint, world: World, journal: PacketJournal) -> None:
-    if checkpoint.run_id != world.run_id or checkpoint.run_id != journal.run_id:
-        raise ValueError("checkpoint, world and packet journal must belong to the same run")
-    if checkpoint.first_journal_tick > world.tick or checkpoint.next_journal_tick != world.tick:
+def _check_prefix(checkpoint: _Checkpoint, journal: PacketJournal) -> None:
+    if checkpoint.run_id != journal.run_id:
+        raise ValueError("checkpoint and packet journal must belong to the same run")
+    if checkpoint.first_journal_tick > checkpoint.next_journal_tick:
         raise ValueError("checkpoint journal prefix must end before the pending boundary")
     journal.check_prefix(checkpoint.first_journal_tick, checkpoint.next_journal_tick)
