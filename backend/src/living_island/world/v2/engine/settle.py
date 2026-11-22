@@ -12,7 +12,6 @@ from ..protocol import (
     DescriptorValue,
     EntityTarget,
     ItemRole,
-    ItemUse,
     Settlement,
     StateDelta,
     TileTarget,
@@ -31,15 +30,14 @@ from .descriptors import (
 )
 from .effects import Ledger, Operands, Refused, branch_delta, clamp_need, extend_delta, release
 from .events import json_object
-from .items import inspect_view, split, still_held, tile_of
+from .items import item_use, progress_descriptor, split, still_held, tile_of
 from .match import Assignment, inherited_slots, match_attempt, parts_match, slot_signatures
+from .observe import phase_item
 from .state import (
     Act,
     ActiveAction,
     Binding,
     Entity,
-    Held,
-    OnTile,
     Part,
     PendingSettlement,
     PhaseItem,
@@ -57,7 +55,7 @@ class Unmatched(PendingSettlement):
 
 @dataclass(frozen=True)
 class AppliedBranch:
-    outputs: tuple[Part, ...]
+    outputs: tuple[PhaseItem, ...]
     merged: dict[str, str]
 
 
@@ -84,17 +82,8 @@ def outcome(
 
 
 def look(ctx: TickContext, entity: Entity, quantity: int, role: ItemRole) -> PhaseItem:
-    view = inspect_view(ctx.state, ctx.pack, entity, inspect=False)
-    return PhaseItem(
-        ItemUse(
-            entity_id=view.entity_id,
-            archetype_id=view.archetype_id,
-            material_id=view.material_id,
-            descriptors=view.descriptors,
-            quantity=quantity,
-            role=role,
-        ),
-        entity.place,
+    return phase_item(
+        ctx.state, item_use(ctx.state, ctx.pack, entity, quantity, role), entity.place
     )
 
 
@@ -107,7 +96,12 @@ def capture_start(
     items = []
     target = action.intent.target
     if isinstance(target, EntityTarget) and phase.target_view is not None:
-        items.append(look(ctx, ctx.state.entities[target.id], 1, "target"))
+        entity = ctx.state.entities[target.id]
+        if (
+            entity.archetype_id is not None
+            and ctx.pack.archetypes[entity.archetype_id].kind == "item"
+        ):
+            items.append(look(ctx, entity, 1, "target"))
     instrument_count = len(action.intent.instruments)
     for index, group in enumerate(groups):
         for part in group:
@@ -347,8 +341,7 @@ def progress_word(action: ActiveAction) -> DescriptorValue | None:
     required = action.due_tick - action.tick_started
     if required == 1:
         return None
-    work = 3 * action.elapsed_ticks
-    return "started" if work < required else "halfway" if work < 2 * required else "nearly_done"
+    return progress_descriptor(action.elapsed_ticks, required)
 
 
 def completion_failure(
@@ -448,7 +441,7 @@ def apply_branch(
     except Refused:
         return None
     merged = ledger.publish(ctx, action, provisional_action)
-    return None if merged is None else AppliedBranch(tuple(ledger.outputs), merged)
+    return None if merged is None else AppliedBranch(tuple(ledger.output_looks), merged)
 
 
 def release_with_delta(ctx: TickContext, action: ActiveAction) -> AppliedBranch:
@@ -484,11 +477,8 @@ def phase_location(ctx: TickContext, action: ActiveAction, branch: AppliedBranch
         )
         entity = state.entities.get(branch.merged.get(physical, physical))
         if entity is not None:
-            items.append(PhaseItem(item, entity.place))
-    for part in branch.outputs:
-        entity = state.entities.get(branch.merged.get(part.entity_id, part.entity_id))
-        if entity is not None and entity.place in (Held(actor_id), OnTile(position)):
-            items.append(look(ctx, entity, part.quantity, "output"))
+            items.append(phase_item(state, item, entity.place))
+    items.extend(branch.outputs)
     return PhaseLocation(
         position, point, tuple(items), action.start_target if point is not None else None
     )

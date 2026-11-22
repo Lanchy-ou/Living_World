@@ -966,3 +966,36 @@ value, still emit `world_rule_applied`?
 
 The owner confirmed on 2026-11-21 that a branch with no effect events
 records no `world_rule_applied`.
+
+## OQ-P3.5-EN-05: Visible contents and progress at settlement
+
+Protocol §5.4 requires respecting container visibility without specifying
+which contents are visible. EN-05 treats a process as an open workspace.
+Its contents can be seen at their captured place when the workspace is in
+sight. Other containers and stores expose only their own descriptors.
+Items inside an inventory container do not appear in the resident's inventory.
+
+Protocol §5.3 and rule representation §2.2 call for a progress report when
+the word changes during the tick. EN-05 compares words across work, starting
+from zero elapsed work for a new action. It reports the final change even
+when the action or process settles before delivery. Removing the running
+view itself does not generate a report.
+
+## CR-P3.5-EN-05: Reachable packets for WAP-19 report order
+
+Status: proposed, awaiting owner.
+
+- Current rule. WAP-19 requires one packet containing addressed and
+  overheard speech, a cue upgrade, a progress step and a wake, among its
+  other reports. Protocol §5.1 and engine §9.6 suppress hearing during the
+  tick that ends a sleep, and unconsciousness also suppresses hearing.
+- Requested rule. Accept exact ordered arrays from reachable packets. Use
+  an awake packet for action feedback, band and threshold changes, both
+  speech cases, first exposure, a cue upgrade, watched actions and a progress
+  step. Use a wake packet for waking order.
+  Preserve the section 5.3 order and the silence of the final sleep tick.
+- Impact and options. This changes the acceptance setup only. Making the
+  combined packet possible would require changing what a resident can hear
+  at a wake boundary, which would change runtime behavior.
+- Recommendation. Adopt the reachable packet setups. EN-05 exercises those
+  cases through the regular boundary and leaves the frozen wording intact.

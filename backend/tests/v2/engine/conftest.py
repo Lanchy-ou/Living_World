@@ -134,7 +134,27 @@ def setup() -> WorldSetup:
 
 
 @pytest.fixture
-def world(pack: Pack, setup: WorldSetup) -> World:
+def auto_acknowledge():
+    from living_island.world.v2.engine import World
+
+    class AcknowledgingWorld(World):
+        def step(self, submissions=(), *, acknowledged=None, rule_additions=()):
+            if acknowledged is None:
+                acknowledged = {
+                    key: packet.delivery_id for key, packet in self.state.pending_deliveries.items()
+                }
+            return super().step(
+                submissions, acknowledged=acknowledged, rule_additions=rule_additions
+            )
+
+    def wrap(world):
+        return AcknowledgingWorld(world.state, world.pack, world.initial_events)
+
+    return wrap
+
+
+@pytest.fixture
+def world(pack: Pack, setup: WorldSetup, auto_acknowledge) -> World:
     from living_island.world.v2.engine import initialize
     from living_island.world.v2.engine.state import Exposure
 
@@ -155,4 +175,4 @@ def world(pack: Pack, setup: WorldSetup) -> World:
             )
             receipts.item_tiles.add((entity.archetype_id, point))
         state.visible_entities_by_resident[actor_id] = set(receipts.entities)
-    return world
+    return auto_acknowledge(world)

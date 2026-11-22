@@ -9,7 +9,9 @@ from ..protocol import (
     ActionFeedback,
     ActionResult,
     ActorStop,
+    BoundaryDelivery,
     Coord,
+    EnvironmentalCue,
     FailureCode,
     HardStop,
     HeardUtterance,
@@ -23,7 +25,7 @@ from ..protocol import (
 )
 from ..rules import Pack, Rule, validate_proposal
 from ..rules.schema import Table, content_hash
-from . import kernel, perception, physiology, processes, settle, speech
+from . import kernel, observe, perception, physiology, processes, settle, speech
 from .events import EventWriter, json_object
 from .ids import shuffle
 from .items import accepts, entities_at, equal_stacks, merge, place_payload, slots_used
@@ -80,21 +82,46 @@ class SpeechAttempt:
 
 
 @dataclass
+class ProcessProgress:
+    opening: int
+    latest: int
+    required: int
+    contributors: set[str] = field(default_factory=set)
+
+
+@dataclass
 class TickContext:
     state: WorldState
     pack: EnginePack
     writer: EventWriter
     activity: dict[str, TickActivity] = field(default_factory=dict)
     results: list[ActionResult] = field(default_factory=list)
-    completed_actions: dict[str, ActiveAction] = field(default_factory=dict)
+    phases: list[observe.Phase] = field(default_factory=list)
     started_actions: dict[str, ActiveAction] = field(default_factory=dict)
     utterances: dict[str, UtteranceFeedback] = field(default_factory=dict)
     heard: dict[str, list[HeardUtterance]] = field(default_factory=dict)
     transient_sightings: dict[str, dict[str, TransientSighting]] = field(default_factory=dict)
+    step_cues: dict[str, dict[str, EnvironmentalCue]] = field(default_factory=dict)
+    step_tiles: dict[str, set[int]] = field(default_factory=dict)
+    step_item_tiles: dict[str, set[tuple[str, Coord]]] = field(default_factory=dict)
+    previous_deliveries: dict[str, BoundaryDelivery] = field(default_factory=dict)
+    opening_needs: Mapping[str, dict[str, int]] = field(default_factory=dict)
+    progress_reports: dict[str, set[str]] = field(default_factory=dict)
+    process_progress: dict[str, ProcessProgress] = field(default_factory=dict)
+    woke: set[str] = field(default_factory=set)
 
     @property
     def tick(self) -> int:
         return self.writer.tick
+
+    def record_process_work(
+        self, process_id: str, *, before: int, after: int, required: int
+    ) -> ProcessProgress:
+        progress = self.process_progress.setdefault(
+            process_id, ProcessProgress(before, after, required)
+        )
+        progress.latest = after
+        return progress
 
     def record_result(
         self,
@@ -104,6 +131,7 @@ class TickContext:
         world_stop: HardStop | None = None,
         own_choice: bool = False,
         inspected: InspectView | None = None,
+        moved: Mapping[str, str] | None = None,
     ) -> None:
         intent = action.intent
         outcome: Literal["success", "failure", "settled", "stopped"]
@@ -175,12 +203,13 @@ class TickContext:
             start_target=action.start_target,
             items_used=list(action.start_items),
         )
+        finished = self.state.tick if own_choice else self.tick
         self.results.append(
             ActionResult(
                 intent_id=intent.intent_id,
                 actor_id=intent.actor_id,
                 tick_started=action.tick_started,
-                tick_finished=self.state.tick if own_choice else self.tick,
+                tick_finished=finished,
                 outcome=outcome,
                 failure_code=failure,
                 stop=stop,
@@ -190,7 +219,14 @@ class TickContext:
                 event_ids=action.event_ids,
             )
         )
-        self.completed_actions[intent.intent_id] = action
+        observe.capture_end(
+            self,
+            action,
+            "stop" if stop is not None else "settle",
+            finished,
+            {} if moved is None else moved,
+            phenomena,
+        )
         self.state.active_actions.pop(intent.actor_id)
         if own_choice:
             deferred = self.state.deferred_feedback[intent.actor_id]
@@ -242,7 +278,7 @@ class World:
         state = deepcopy(self.state)
         state.next_event_seq_in_tick = 0
         writer = EventWriter(state, state.tick + 1)
-        ctx = TickContext(state, next_pack, writer)
+        ctx = TickContext(state, next_pack, writer, opening_needs=self.state.needs)
         boundary_input(ctx, turns, acknowledgements, added)
         progress_needs: dict[str, physiology.ProgressNeeds] = {}
         completions = action_progress(ctx, turns, progress_needs, schedule)
@@ -287,6 +323,7 @@ def boundary_input(
     state = ctx.state
     for actor_id in sorted(acknowledged):
         packet = state.pending_deliveries.pop(actor_id)
+        ctx.previous_deliveries[actor_id] = packet
         state.fatigue_inputs[actor_id] = FatigueInputs(
             sum(report.kind == "utterance_heard" for report in packet.reports),
             sum(report.kind == "entity_first_seen" for report in packet.reports),
@@ -380,6 +417,7 @@ def start_action(ctx: TickContext, actor: Resident, action: ActiveAction) -> Non
     )
     if action.resolved_choices is not None:
         settle.record_act_started(ctx, action)
+    observe.capture_start(ctx, action)
 
 
 def progress_action(
@@ -395,6 +433,7 @@ def progress_action(
     done = action.due_tick == ctx.tick
     fixed = action.pending_failure is not None or action.pending_settlement is not None
     if not fixed:
+        prior = settle.progress_word(action)
         route = action.route
         if route is not None:
             if kernel.exhausted(state, ctx.pack, actor.id):
@@ -418,6 +457,8 @@ def progress_action(
             processes.contribute(ctx, action, command, schedule)
         if action.pending_stop is None:
             action.elapsed_ticks += 1
+        if prior != settle.progress_word(action):
+            ctx.progress_reports.setdefault(actor.id, set()).add(action.intent.intent_id)
     ctx.activity[actor.id] = TickActivity(action.intent.action, steps)
     if not done:
         ctx.writer.emit(
@@ -501,7 +542,9 @@ def resolve_completions(ctx: TickContext, completions: list[Completion]) -> None
             result = kernel.complete_kernel(
                 state, ctx.pack, state.residents[entry.actor_id], action, ctx.writer
             )
-            ctx.record_result(action, failure=result.failure, inspected=result.inspected)
+            ctx.record_result(
+                action, failure=result.failure, inspected=result.inspected, moved=result.moved
+            )
 
 
 def place_entities(state: WorldState, pack: EnginePack) -> None:

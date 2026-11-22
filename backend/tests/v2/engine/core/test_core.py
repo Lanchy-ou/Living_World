@@ -504,7 +504,9 @@ def test_actor_stop_is_deferred_and_continue_keeps_action(world: World) -> None:
     result = world.step([turn(world, A, "wait")])
     assert [action.outcome for action in result.actions] == ["stopped", "success"]
     assert result.actions[0].tick_finished == 2
-    assert world.state.deferred_feedback[A].feedback[0].stop_reason == "own_choice"
+    packet = world.state.pending_deliveries[A]
+    assert packet.perception.action_feedback[0].stop_reason == "own_choice"
+    assert not world.state.deferred_feedback[A].feedback
     assert world.state.turn_ordinals[A] == 3
 
 
@@ -618,61 +620,38 @@ def test_rule_additions_publish_before_actor_starts_and_refuse_duplicates(world:
 
 
 def test_delivery_acknowledgement_preserves_fatigue_counts(world: World) -> None:
-    from living_island.world.v2.protocol import (
-        BoundaryDelivery,
-        InvalidTurn,
-        Perception,
-        WorldReport,
-    )
+    from living_island.world.v2.protocol import InvalidTurn, WorldReport
 
-    packet = BoundaryDelivery(
-        delivery_id="packet_a",
-        actor_id=A,
-        observed_tick=0,
-        perception=Perception(
-            schema_version="wap/0.1",
-            actor_id=A,
-            tick=0,
-            awareness="awake",
-            needs=[],
-            own_position=world.state.residents[A].position,
-            inventory=[],
-            running_action=None,
-            visible_tiles=[],
-            explored_static_tiles=[],
-            visible_entities=[],
-            transient_sightings=[],
-            environmental_cues=[],
-            heard_utterances=[],
-            observed_actions=[],
-            action_feedback=[],
-            last_utterance_feedback=None,
-        ),
-        reports=[
-            WorldReport(
-                kind="utterance_heard",
-                subject_id="utterance_a",
-                addressed=True,
-                band=None,
-                threshold_id=None,
-            ),
-            WorldReport(
-                kind="entity_first_seen",
-                subject_id="inst_a",
-                addressed=None,
-                band=None,
-                threshold_id=None,
-            ),
-        ],
+    packet = world.state.pending_deliveries[A].model_copy(
+        update={
+            "reports": [
+                WorldReport(
+                    kind="utterance_heard",
+                    subject_id="utterance_a",
+                    addressed=True,
+                    band=None,
+                    threshold_id=None,
+                ),
+                WorldReport(
+                    kind="entity_first_seen",
+                    subject_id="inst_a",
+                    addressed=None,
+                    band=None,
+                    threshold_id=None,
+                ),
+            ]
+        }
     )
     world.state.pending_deliveries[A] = packet
+    acknowledged = {key: p.delivery_id for key, p in world.state.pending_deliveries.items()}
     with pytest.raises(InvalidTurn, match="acknowledged"):
-        world.step()
+        world.step(acknowledged={})
     with pytest.raises(InvalidTurn, match="match a pending"):
-        world.step(acknowledged={A: "older_packet"})
+        world.step(acknowledged={**acknowledged, A: "older_packet"})
     assert world.state.pending_deliveries[A] == packet and world.state.tick == 0
 
-    world.step(acknowledged={A: packet.delivery_id})
-    assert A not in world.state.pending_deliveries
+    world.step(acknowledged=acknowledged)
+    assert world.state.pending_deliveries[A].observed_tick == 1
+    assert world.state.pending_deliveries[A].delivery_id != packet.delivery_id
     assert world.state.fatigue_inputs[A].utterances_heard == 1
     assert world.state.fatigue_inputs[A].first_sightings == 1

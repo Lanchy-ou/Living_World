@@ -5,7 +5,16 @@ from copy import deepcopy
 from dataclasses import replace
 from typing import Literal, cast
 
-from ..protocol import Coord, Descriptor, InspectView, IntegerJson, ItemChoice, StateDelta
+from ..protocol import (
+    Coord,
+    Descriptor,
+    InspectView,
+    IntegerJson,
+    ItemChoice,
+    ItemRole,
+    ItemUse,
+    StateDelta,
+)
 from ..rules.catalog import Variant, matches
 from ..rules.schema import Table
 from ..rules.vocabulary import descriptor
@@ -163,6 +172,11 @@ def observed_count(state: WorldState, entity: Entity, field: str) -> int:
             )
 
 
+def progress_descriptor(done: int, required: int) -> str:
+    work = 3 * done
+    return "started" if work < required else "halfway" if work < 2 * required else "nearly_done"
+
+
 def inspect_view(
     state: WorldState, pack: EnginePack, entity: Entity, *, inspect: bool
 ) -> InspectView:
@@ -189,11 +203,33 @@ def inspect_view(
                 inspect and prop["observability"] == "on_inspect"
             ):
                 descriptors.append(Descriptor(property_id=key, value=descriptor(prop, value)))
+        if "process" in entity.components:
+            progress = entity.components["process"]
+            descriptors.append(
+                Descriptor(
+                    property_id="progress",
+                    value=progress_descriptor(progress["work_done"], progress["work_required"]),
+                )
+            )
     return InspectView(
         entity_id=entity.entity_id,
         archetype_id=entity.archetype_id,
         material_id=entity.material_id,
         descriptors=descriptors,
+    )
+
+
+def item_use(
+    state: WorldState, pack: EnginePack, entity: Entity, quantity: int, role: ItemRole
+) -> ItemUse:
+    view = inspect_view(state, pack, entity, inspect=False)
+    return ItemUse(
+        entity_id=view.entity_id,
+        archetype_id=view.archetype_id,
+        material_id=view.material_id,
+        descriptors=view.descriptors,
+        quantity=quantity,
+        role=role,
     )
 
 
@@ -327,7 +363,7 @@ def transfer(
     via: TransferKind,
     writer: EventWriter,
     action: ActiveAction,
-) -> None:
+) -> dict[str, str]:
     reserved = {
         binding.physical_id
         for running in state.active_actions.values()
@@ -335,6 +371,7 @@ def transfer(
     }
     initial: dict[str, str | int | None] = {}
     changed: set[str] = set()
+    moved: dict[str, str] = {}
     for part in parts:
         source = state.entities[part.entity_id]
         initial.update(transfer_state(source))
@@ -377,6 +414,7 @@ def transfer(
                 initial.update(transfer_state(survivor))
                 changed.add(survivor.entity_id)
             merge(state, moving, survivor, writer, action)
+        moved[part.entity_id] = moving.entity_id if survivor is None else survivor.entity_id
     final = {
         path: value
         for key in changed
@@ -388,3 +426,4 @@ def transfer(
         for path in sorted(initial.keys() | final.keys())
         if initial.get(path) != final.get(path)
     )
+    return moved

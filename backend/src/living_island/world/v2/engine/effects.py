@@ -16,6 +16,7 @@ from .items import (
     accepts,
     entities_at,
     equal_stacks,
+    item_use,
     merge,
     place_payload,
     slots_used,
@@ -24,6 +25,7 @@ from .items import (
     transfer_state,
 )
 from .limits import within_placement_limits
+from .observe import phase_item
 from .state import (
     ActiveAction,
     Components,
@@ -34,6 +36,7 @@ from .state import (
     Lineage,
     OnTile,
     Part,
+    PhaseItem,
     Place,
     WorldState,
 )
@@ -68,6 +71,14 @@ class SetState:
     field: str
     value: int
     relative: bool
+
+
+@dataclass(frozen=True)
+class ProcessWorkChange:
+    entity_id: str
+    before: int
+    after: int
+    required: int
 
 
 @dataclass(frozen=True)
@@ -337,7 +348,9 @@ class Ledger:
         self.consumed: list[Part] = []
         self.returns: dict[str, list[Part]] = {}
         self.outputs: list[Part] = []
+        self.output_looks: list[PhaseItem] = []
         self.withdrawn: dict[str, int] = {}
+        self.process_work: list[ProcessWorkChange] = []
 
     def publish(
         self, ctx: TickContext, action: ActiveAction, provisional: ActiveAction
@@ -360,6 +373,14 @@ class Ledger:
         ctx.state.next_event_seq_in_tick = self.state.next_event_seq_in_tick
         ctx.state.event_log_cursor = self.state.event_log_cursor
         ctx.writer.events.extend(self.writer.events)
+        for change in self.process_work:
+            # Keep committed work even if a later effect removes the process.
+            ctx.record_process_work(
+                change.entity_id,
+                before=change.before,
+                after=change.after,
+                required=change.required,
+            )
         return True
 
     def register(self, entity: Entity) -> None:
@@ -428,6 +449,14 @@ class Ledger:
         entity.place = place
         return coalesce_stack(self.state, entity, self.reserved, self.writer, self.action)
 
+    def capture_output(self, entity: Entity, place: OnTile | Held | Inside) -> None:
+        if self.action is None:
+            return
+        actor_id = self.action.intent.actor_id
+        if place in (Held(actor_id), OnTile(self.state.residents[actor_id].position)):
+            look = item_use(self.state, self.pack, entity, entity.quantity, "output")
+            self.output_looks.append(phase_item(self.state, look, place))
+
     def move(self, entity: Entity, origin: Place, destination: Place) -> None:
         place = self.destination(entity, destination)
         if isinstance(place, InStore):
@@ -438,6 +467,7 @@ class Ledger:
             materialized = not entity.entity_id
             if materialized:
                 self.register(entity)
+                self.capture_output(entity, place)
             result_id = self.place_entity(entity, place).entity_id
             if materialized:
                 self.outputs.append(Part(result_id, entity.quantity))
@@ -602,6 +632,7 @@ class Ledger:
                 action=self.action,
                 target_id=entity.entity_id,
             )
+            self.capture_output(entity, place)
             survivor = self.place_entity(entity, place)
             self.outputs.append(Part(survivor.entity_id, quantity))
 
@@ -618,6 +649,12 @@ class Ledger:
                 after = min(after, values["max_wear"])
             values[field] = after
             if before != after:
+                if component == "process":
+                    self.process_work.append(
+                        ProcessWorkChange(
+                            key, before, after, entity.components["process"]["work_required"]
+                        )
+                    )
                 self.writer.emit(
                     "entity_state_changed",
                     {

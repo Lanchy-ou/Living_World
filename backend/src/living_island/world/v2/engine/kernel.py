@@ -1,7 +1,7 @@
 """Kernel start checks, movement and completion effects."""
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from heapq import heappop, heappush
 
 from ..protocol import (
@@ -9,7 +9,6 @@ from ..protocol import (
     EntityTarget,
     FailureCode,
     InspectView,
-    ItemUse,
     StateDelta,
     SubjectStartTarget,
     TileStartTarget,
@@ -20,6 +19,7 @@ from .items import (
     accepts,
     entities_at,
     inspect_view,
+    item_use,
     resolve_choices,
     slots_for,
     slots_used,
@@ -28,6 +28,7 @@ from .items import (
     tile_of,
     transfer,
 )
+from .observe import phase_item
 from .state import (
     Act,
     ActiveAction,
@@ -40,7 +41,6 @@ from .state import (
     Move,
     OnTile,
     Part,
-    PhaseItem,
     PhaseLocation,
     PickupEntity,
     PickupTile,
@@ -372,21 +372,8 @@ def start_look(state: WorldState, pack: EnginePack, actor: Resident, action: Act
         entity = state.entities[part.entity_id]
         if entity.entity_id not in visible and entity.place != Held(actor.id):
             continue
-        look = inspect_view(state, pack, entity, inspect=False)
-        items.append(
-            PhaseItem(
-                ItemUse(
-                    entity_id=look.entity_id,
-                    archetype_id=look.archetype_id,
-                    material_id=look.material_id,
-                    descriptors=look.descriptors,
-                    quantity=part.quantity,
-                    role="item",
-                ),
-                entity.place,
-            )
-        )
-    action.start_items = tuple(item.look for item in items)
+        use = item_use(state, pack, entity, part.quantity, "item")
+        items.append(phase_item(state, use, entity.place))
     target = action.intent.target
     where = None
     match target:
@@ -411,6 +398,16 @@ def start_look(state: WorldState, pack: EnginePack, actor: Resident, action: Act
                     material_id=look.material_id,
                     descriptors=look.descriptors,
                 )
+                if (
+                    isinstance(action.command, Inspect)
+                    and subject.archetype_id is not None
+                    and pack.archetypes[subject.archetype_id].kind == "item"
+                ):
+                    items.append(
+                        phase_item(
+                            state, item_use(state, pack, subject, 1, "target"), subject.place
+                        )
+                    )
         case _:
             if target is not None and target.id in visible:
                 where = state.residents[target.id].position
@@ -421,6 +418,7 @@ def start_look(state: WorldState, pack: EnginePack, actor: Resident, action: Act
                     material_id=None,
                     descriptors=[],
                 )
+    action.start_items = tuple(item.look for item in items)
     action.start_location = PhaseLocation(actor.position, where, tuple(items), action.start_target)
 
 
@@ -428,6 +426,7 @@ def start_look(state: WorldState, pack: EnginePack, actor: Resident, action: Act
 class KernelResult:
     failure: FailureCode | None = None
     inspected: InspectView | None = None
+    moved: dict[str, str] = field(default_factory=dict)
 
 
 def complete_kernel(
@@ -444,15 +443,20 @@ def complete_kernel(
             if isinstance(parts, str):
                 return KernelResult(parts)
             if isinstance(command, Give):
-                transfer(state, parts, Held(command.recipient_id), "give", writer, action)
                 action.received_items = action.start_items
-            else:
-                transfer(state, parts, command.destination, "drop", writer, action)
+                return KernelResult(
+                    moved=transfer(state, parts, Held(command.recipient_id), "give", writer, action)
+                )
+            return KernelResult(
+                moved=transfer(state, parts, command.destination, "drop", writer, action)
+            )
         case PickupEntity() | PickupTile():
             parts = check_pickup(state, pack, actor, command)
             if isinstance(parts, str):
                 return KernelResult(parts)
-            transfer(state, parts, Held(actor.id), "pick_up", writer, action)
+            return KernelResult(
+                moved=transfer(state, parts, Held(actor.id), "pick_up", writer, action)
+            )
         case Inspect():
             target = check_subject(state, actor, command)
             if isinstance(target, str):

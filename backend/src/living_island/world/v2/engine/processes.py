@@ -38,6 +38,13 @@ def contribute(
     progress = subject.components["process"]
     before = progress["work_done"]
     progress["work_done"] = before + 1
+    work = ctx.record_process_work(
+        subject.entity_id,
+        before=before,
+        after=before + 1,
+        required=progress["work_required"],
+    )
+    work.contributors.add(actor_id)
     extend_delta(
         action,
         [
@@ -122,4 +129,4 @@ def keep_progress(
     except Refused:
         return None
     merged = ledger.publish(ctx, action, provisional)
-    return None if merged is None else AppliedBranch(tuple(ledger.outputs), merged)
+    return None if merged is None else AppliedBranch((), merged)
