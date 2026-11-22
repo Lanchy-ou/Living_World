@@ -159,16 +159,20 @@ def test_ct16_canteen_fill(world, servings, outcome, failed_check):
 def test_en01_last_fruit_settles_before_regrowth(world):
     from living_island.sim.equivalence.v1_extract import action, target
     from living_island.sim.equivalence.v2_extract import snapshot
-    from living_island.world.v2.engine.perception import build_deliveries
-    from living_island.world.v2.engine.tick import EventWriter, TickContext
+    from living_island.world.v2.protocol import boundary_delivery_id
 
     state = world.state
     state.tick = 142
     state.clock_minute = state.clock.minute_at(142)
     state.entities["fruit_01"].components["store"]["count"] = 1
-    context = TickContext(state, world.pack, EventWriter(state, 142))
-    context.previous_deliveries.update(state.pending_deliveries)
-    build_deliveries(context)
+    for actor, packet in state.pending_deliveries.items():
+        state.pending_deliveries[actor] = packet.model_copy(
+            update={
+                "observed_tick": state.tick,
+                "delivery_id": boundary_delivery_id(state.run_id, state.tick, actor),
+                "perception": packet.perception.model_copy(update={"tick": state.tick}),
+            }
+        )
     _, _, started = _step(world, "ella", action("gather", target("entity", "fruit_01")))
     assert not started.actions
     assert snapshot(world, "canteen_01").trees[0].stock == 1
@@ -216,6 +220,7 @@ def test_en12_compat_sleep_thresholds(world, satiety, hydration, health):
 def test_en12_compat_final_sleep_tick_recovers(world):
     from living_island.sim.equivalence.v1_extract import action
 
+    world.state.needs["ella"].update(satiety=9000, hydration=9000)
     _step(world, "ella", action("sleep"))
     while world.tick < 47:
         assert not _advance(world).actions
