@@ -565,7 +565,7 @@ def test_checkpoint_refuses_inconsistent_prefix(pack, setup, tmp_path):
         ("foreign", "batch identity"),
         ("malformed", "Invalid JSON"),
         ("noncanonical", "canonical packet journal"),
-        ("row_tick", "one packet per resident"),
+        ("row_tick", "packet identity"),
         ("batch_tick", "batch identity"),
         ("foreign_delivery", "packet identity"),
         ("perception_tick", "packet identity"),
@@ -925,3 +925,122 @@ def test_store_once_propagates_failure_without_a_winning_file(tmp_path, monkeypa
             journal.store_once(path, data)
         assert raised.value is problem
         assert not path.exists()
+
+
+@pytest.fixture(params=["snapshot", "checkpoint"])
+def restore_through(request, tmp_path):
+    """Read altered world bytes directly or inside a genuine checkpoint."""
+    from living_island.persistence.v2.checkpoint import load_checkpoint, save_checkpoint
+    from living_island.world.v2.engine.snapshot import restore_snapshot
+    from living_island.world.v2.rules.schema import canonical_json_bytes
+
+    def reader_for(world, pack, journal):
+        if request.param == "snapshot":
+            return lambda data: restore_snapshot(data, pack)
+
+        path = tmp_path / "restore_check.json"
+        coordinator = {"cursor": {"last_delivered": [world.tick - 1]}}
+        save_checkpoint(path, world, journal, coordinator)
+        checkpoint = json.loads(path.read_bytes())
+
+        def read_checkpoint(data):
+            checkpoint["world_snapshot"] = data.decode("utf-8")
+            path.write_bytes(canonical_json_bytes(checkpoint))
+            restored = load_checkpoint(path, pack, journal)
+            assert restored.sim_checkpoint == coordinator
+            return restored.world
+
+        return read_checkpoint
+
+    return reader_for
+
+
+@pytest.mark.parametrize(
+    ("corruption", "message"),
+    [
+        ("delivery_id", "packet identity"),
+        ("perception_actor", "packet identity"),
+        ("perception_tick", "packet identity"),
+        ("envelope_tick", "packet identity"),
+        ("map_key", "one pending packet per living resident"),
+        ("missing", "one pending packet per living resident"),
+        ("key_actor", "packet actor differs from its map key"),
+        ("dead_recipient", "one pending packet per living resident"),
+    ],
+)
+def test_restore_refuses_inconsistent_pending_packet(
+    pack, setup, tmp_path, restore_through, corruption, message
+):
+    from living_island.persistence.v2.replay import record_boundary
+    from living_island.world.v2.engine import initialize
+    from living_island.world.v2.engine.snapshot import encode_snapshot
+    from living_island.world.v2.protocol import boundary_delivery_id, canonical_bytes
+    from living_island.world.v2.rules.schema import canonical_json_bytes
+
+    world = initialize(pack, setup)
+    journal, store = store_for(world, tmp_path)
+    record_boundary(world, journal, store)
+    original = encode_snapshot(world)
+    read = restore_through(world, pack, journal)
+    control = read(original)
+    assert encode_snapshot(control) == original
+    assert tuple(map(canonical_bytes, control.pending_packets())) == tuple(
+        map(canonical_bytes, world.pending_packets())
+    )
+
+    state = json.loads(original)
+    pending = state["pending_deliveries"]
+    packet = pending[A]
+    match corruption:
+        case "delivery_id":
+            packet["delivery_id"] = boundary_delivery_id("foreign_run", world.tick, A)
+        case "perception_actor":
+            packet["perception"]["actor_id"] = B
+        case "perception_tick":
+            packet["perception"]["tick"] += 1
+        case "envelope_tick":
+            packet["observed_tick"] += 1
+        case "map_key":
+            pending["wrong_recipient"] = pending.pop(A)
+        case "missing":
+            del pending[A]
+        case "key_actor":
+            pending[A] = pending[B]
+        case "dead_recipient":
+            state["residents"][A]["alive"] = False
+    with pytest.raises(ValueError, match=message):
+        read(canonical_json_bytes(state))
+
+
+@pytest.mark.parametrize("approval", [1, 8])
+def test_restore_refuses_impossible_active_approval(
+    pack, setup, tmp_path, restore_through, approval
+):
+    from living_island.persistence.v2.replay import record_boundary
+    from living_island.world.v2.engine import initialize
+    from living_island.world.v2.engine.snapshot import encode_snapshot
+    from living_island.world.v2.rules.loader import library_hash
+    from living_island.world.v2.rules.schema import canonical_json_bytes, content_hash
+
+    world = initialize(pack, setup)
+    journal, store = store_for(world, tmp_path)
+    rule = proposed("candidate", "every:100", subject={"archetype": "arch_b"})
+    record_boundary(world, journal, store, rule_additions=(rule,))
+    assert world.tick == 1
+    original = encode_snapshot(world)
+    read = restore_through(world, pack, journal)
+    assert encode_snapshot(read(original)) == original
+
+    state = json.loads(original)
+    library = state["library"]
+    [[rule_id, added]] = library["added_rules"]
+    rules = {**{name: item.data for name, item in pack.rules.items()}, rule_id: added["data"]}
+    assert library_hash(rules) == library["rule_library_hash"]
+    added["data"]["provenance"]["approved_at_tick"] = approval
+    assert (
+        content_hash({key: value for key, value in added["data"].items() if key != "provenance"})
+        == added["content_hash"]
+    )
+    library["rule_library_hash"] = library_hash(rules)
+    with pytest.raises(ValueError, match="approved after the opening boundary"):
+        read(canonical_json_bytes(state))

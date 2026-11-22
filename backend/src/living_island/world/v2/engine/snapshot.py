@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, TypeAdapter
 
+from ..protocol import check_delivery_identity
 from ..rules import Pack
 from ..rules.schema import canonical_json_bytes
 from .state import Library, WorldState
@@ -74,9 +75,19 @@ def restore_snapshot(data: bytes, pack: Pack) -> World:
         tuple(layer.pack_hash for layer in pack.ancestors),
     ):
         raise ValueError("snapshot pack identity differs from loaded content")
+    living = {actor_id for actor_id, resident in state.residents.items() if resident.alive}
+    if state.pending_deliveries.keys() != living:
+        raise ValueError("snapshot must have one pending packet per living resident")
+    for actor_id, packet in state.pending_deliveries.items():
+        if packet.actor_id != actor_id:
+            raise ValueError("snapshot pending packet actor differs from its map key")
+        check_delivery_identity(packet, state.run_id, state.tick)
+
     content, added = prepare_rules(
         EnginePack.from_pack(pack),
         [rule.data for rule in library.added_rules.values()],
+        # Additions already active at this completed tick entered on an earlier opening.
+        latest_approval_tick=state.tick - 1,
         canonical=True,
     )
     if (library.rule_library_hash, library.active_rule_ids) != (

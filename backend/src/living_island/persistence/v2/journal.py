@@ -6,7 +6,11 @@ from pathlib import Path
 from pydantic import NonNegativeInt, model_validator
 
 from living_island.world.v2.engine import World
-from living_island.world.v2.protocol import BoundaryDelivery, VersionedMessage, boundary_delivery_id
+from living_island.world.v2.protocol import (
+    BoundaryDelivery,
+    VersionedMessage,
+    check_delivery_identity,
+)
 from living_island.world.v2.rules.schema import canonical_json_bytes
 
 from .._codec import PersistenceError
@@ -21,18 +25,10 @@ class PacketBatch(VersionedMessage):
     @model_validator(mode="after")
     def check_packets(self) -> "PacketBatch":
         actor_ids = [packet.actor_id for packet in self.packets]
-        if actor_ids != sorted(set(actor_ids)) or any(
-            packet.observed_tick != self.observed_tick for packet in self.packets
-        ):
+        if actor_ids != sorted(set(actor_ids)):
             raise ValueError("expected one packet per resident in boundary order")
         for packet in self.packets:
-            if (
-                packet.delivery_id
-                != boundary_delivery_id(self.run_id, self.observed_tick, packet.actor_id)
-                or packet.perception.actor_id != packet.actor_id
-                or packet.perception.tick != self.observed_tick
-            ):
-                raise ValueError("packet identity differs from its run, resident or boundary")
+            check_delivery_identity(packet, self.run_id, self.observed_tick)
         return self
 
 

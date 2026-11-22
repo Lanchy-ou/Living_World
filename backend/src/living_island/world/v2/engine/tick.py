@@ -294,10 +294,7 @@ class World:
         turns = bind_turns(self.state, self.pack, submissions)
         acknowledgements = {} if acknowledged is None else acknowledged
         check_acknowledgements(self.state, acknowledgements)
-        next_pack, added = prepare_rules(self.pack, rule_additions)
-        for rule in added:
-            if rule.data["provenance"]["approved_at_tick"] > self.tick:
-                raise ValueError(f"rule {rule.id!r} is approved after the opening boundary")
+        next_pack, added = prepare_rules(self.pack, rule_additions, latest_approval_tick=self.tick)
         if store_rule is not None:
             for rule in added:
                 store_rule(rule.content_hash, canonical_json_bytes(rule.data))
@@ -325,7 +322,11 @@ class World:
 
 
 def prepare_rules(
-    pack: EnginePack, additions: Sequence[Table | bytes], *, canonical: bool = False
+    pack: EnginePack,
+    additions: Sequence[Table | bytes],
+    *,
+    latest_approval_tick: int,
+    canonical: bool = False,
 ) -> tuple[EnginePack, list[Rule]]:
     added = []
     source = pack.source
@@ -336,6 +337,11 @@ def prepare_rules(
                 raise ValueError("expected canonical rule bytes")
         else:
             rule = validate_proposal(source, raw, canonical=canonical)
+        if rule.data["provenance"]["approved_at_tick"] > latest_approval_tick:
+            raise ValueError(
+                f"rule {rule.id!r} is approved after the opening boundary "
+                f"(latest approval tick {latest_approval_tick})"
+            )
         rules = dict(sorted({**source.rules, rule.id: rule}.items()))
         rule_data = {key: value.data for key, value in rules.items()}
         source = replace(
