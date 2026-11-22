@@ -344,6 +344,7 @@ def test_scripted_migration(archive, tmp_path, name, mode):
         before = {key: host.checkpoint() for key, host in hosts.items()}
         expected_queues = {plan["actor_id"]: plan["intents"] for plan in expected["queued_plans"]}
         expected_decisions = {record["actor_id"]: record for record in expected["decision_records"]}
+        settled = previous
         if previous is not None:
             spoken = []
             for event in previous.events:
@@ -382,12 +383,14 @@ def test_scripted_migration(archive, tmp_path, name, mode):
         for actor, host in hosts.items():
             legacy_outcomes = [item for item in frame.outcomes if item.actor_id == actor]
             if actor not in packets:
-                assert not host.checkpoint().queue
+                retired = host.checkpoint()
+                assert not retired.queue
+                assert retired.cursor < tick
                 assert actor not in {submission.actor_id for submission in opening.submissions}
                 if mode == "bridge":
                     assert [
                         outcome(item)
-                        for item in host.checkpoint().terminal_results
+                        for item in retired.terminal_results
                         if item.tick_finished == tick
                     ] == [
                         (
@@ -399,6 +402,23 @@ def test_scripted_migration(archive, tmp_path, name, mode):
                         )
                         for item in legacy_outcomes
                     ]
+                else:
+                    assert not retired.terminal_results
+                    assert all(item.tick_finished < tick for item in retired.boundary_results)
+                    actual = [item for item in settled.actions if item.actor_id == actor]
+                    for result, archived in zip(actual, legacy_outcomes, strict=True):
+                        assert (result.tick_started, result.tick_finished) == (
+                            archived.tick_started,
+                            archived.tick_finished,
+                        )
+                        if archived.status == "interrupted":
+                            assert result.outcome == "stopped"
+                            assert result.stop == v2.WorldStop(by="world", reason=archived.code)
+                        else:
+                            assert (result.outcome, result.failure_code) == (
+                                archived.status,
+                                archived.code,
+                            )
                 continue
             checkpoint = host.checkpoint()
             assert [
@@ -664,7 +684,14 @@ def test_wap25_model_fallback_model_after_restore(archive, tmp_path, mode, fallb
     turn = session.runner.manifest.boundaries[-1].fallback_turns[0].submission
     assert turn.utterance is None
     fallback_id = turn.action.intent.intent_id
-    assert any(event.type == "agent_fallback_used" for event in fallback.events)
+    [event] = [item for item in fallback.events if item.type == "agent_fallback_used"]
+    assert event.actor_id == "ella"
+    assert event.payload == {
+        "resident_id": "ella",
+        "turn_id": turn.turn_id,
+        "reason": "scripted model unavailable",
+        "fallback_policy_id": hosts["ella"].config.policy_id,
+    }
     assert not any(event.type == "utterance_spoken" for event in fallback.events)
     pending = next(p for p in world.pending_packets() if p.actor_id == "ella")
     assert pending.perception.action_feedback[0].intent_id == fallback_id
@@ -713,18 +740,18 @@ def test_wap25_model_fallback_model_after_restore(archive, tmp_path, mode, fallb
     assert fallback_id not in model_packet.model_dump_json()
     assert all(fallback_id not in memory for memory in recall)
     policy = hosts["ella"]
-    assert not policy.ingest(pending)
+    policy.ingest(pending)
     assert policy.checkpoint() == state
     session.advance()
     following = policy.checkpoint()
     assert following.boundary_results == ()
     assert following.policy_state.failed_targets == state.policy_state.failed_targets
-    assert not policy.ingest(pending)
+    policy.ingest(pending)
     assert policy.checkpoint() == following
 
 
 @pytest.mark.parametrize("mode", ("bridge", "visible"))
-def test_round_three_real_near_upgrade_restores_once(archive, tmp_path, mode):
+def test_round_three_real_near_upgrade_restores_once(archive, tmp_path, mode, monkeypatch):
     from dataclasses import replace
 
     from living_island.persistence.v2.checkpoint import load_checkpoint, save_checkpoint
@@ -735,6 +762,8 @@ def test_round_three_real_near_upgrade_restores_once(archive, tmp_path, mode):
         PolicySession,
         restore_policies,
     )
+    from living_island.world.v2 import protocol as v2
+    from living_island.world.v2.engine import World
 
     bound, content, original, _ = load_case(archive, tmp_path, "wap23-ct15-refused-profiles")
     case = replace(
@@ -780,13 +809,12 @@ def test_round_three_real_near_upgrade_restores_once(archive, tmp_path, mode):
     )
     pending_again = next(p for p in restore.world.pending_packets() if p.actor_id == "ella")
     assert pending_again == pending
-    assert old_hosts["ella"].ingest(pending_again)
+    old_hosts["ella"].ingest(pending_again)
     first = old_hosts["ella"].checkpoint()
-    assert first.boundary_triggers == ("ACTION_INTERRUPTED", "NEW_SIGHT")
+    assert first.boundary_triggers == ("NEW_SIGHT",)
     assert first.receipts.cue_detail == {upgraded.cue_id: "near"}
-    assert [outcome(item) for item in first.boundary_results] == [
-        ("ella:p000000:i0", "interrupted", "NEW_SIGHT", 0, 1)
-    ]
+    assert first.boundary_results == ()
+    assert old_hosts["ella"].interruption(pending_again) == "NEW_SIGHT"
     # Restore after taking the private receipt, with the exact same pending delivery.
     restored_hosts = hosts_for(
         bound,
@@ -799,10 +827,25 @@ def test_round_three_real_near_upgrade_restores_once(archive, tmp_path, mode):
         },
     )
     session = PolicySession(restore.world, restored_hosts, journal)
-    session.advance()
     host = restored_hosts["ella"]
+    original_step = World.step
+
+    def refuse_once(world, *args, **kwargs):
+        monkeypatch.setattr(World, "step", original_step)
+        raise v2.InvalidTurn("refuse the first replacement")
+
+    monkeypatch.setattr(World, "step", refuse_once)
+    with pytest.raises(v2.InvalidTurn, match="refuse the first replacement"):
+        session.advance()
+    assert host.checkpoint() == first
+    assert not host.decision_records
+    assert session.world.tick == 1
+    session.advance()
     [record] = host.decision_records
     assert record.triggers == ["ACTION_INTERRUPTED", "NEW_SIGHT"]
+    assert [outcome(item) for item in host.checkpoint().boundary_results] == [
+        ("ella:p000000:i0", "interrupted", "NEW_SIGHT", 0, 1)
+    ]
     assert host.checkpoint().handled_stops == ("ella:t000000:a",)
     assert host.checkpoint().policy_state.cue_impressions[0].detail_level == "near"
     unchanged = next(p for p in restore.world.pending_packets() if p.actor_id == "ella")
@@ -854,3 +897,17 @@ def test_transient_cue_keeps_last_sight_step_and_highest_detail(archive, tmp_pat
         6,
     )
     assert cue.cue_id not in world.state.exposure_receipts_by_resident["ella"].entities
+    # The public cue view also permits detail without a specific step observation.
+    without_step = project_perception(
+        packet.perception.model_copy(
+            update={
+                "transient_sightings": [
+                    entry
+                    for entry in packet.perception.transient_sightings
+                    if entry.entity_id != cue.cue_id
+                ],
+            }
+        )
+    )
+    assert without_step.environmental_cues == [cue]
+    assert all(entry.entity_id != cue.cue_id for entry in without_step.transient_sightings)

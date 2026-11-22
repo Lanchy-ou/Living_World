@@ -31,12 +31,14 @@ class LegacyReceipts(v2.ProtocolModel):
         canteen = view.own_inventory.canteen_id
         if canteen is not None:
             seen.add(receipt(canteen, "canteen", view.own_position))
-        prior_ids = {entity.entity_id for entity in self.entities}
-        novel = any(entity.entity_id not in prior_ids for entity in seen)
+        prior_ids = {entity.entity_id for entity in self.entities if entity.entity_type != "cue"}
+        novel = any(
+            entity.entity_type != "cue" and entity.entity_id not in prior_ids for entity in seen
+        )
         detail = dict(self.cue_detail)
         for cue in view.environmental_cues:
             prior = self.cue_detail.get(cue.cue_id)
-            if cue.detail_level == "near" and prior != "near":
+            if prior is None or (cue.detail_level == "near" and prior != "near"):
                 novel = True
             if prior is None or cue.detail_level == "near":
                 detail[cue.cue_id] = cue.detail_level
@@ -47,7 +49,8 @@ class LegacyReceipts(v2.ProtocolModel):
         )
         return LegacyReceipts(
             entities=sorted(
-                seen.union(self.entities), key=lambda entry: (entry.entity_id, entry.y, entry.x)
+                seen.union(self.entities),
+                key=lambda entry: (entry.entity_id, entry.y, entry.x, entry.entity_type),
             ),
             explored=sorted(explored, key=lambda point: (point.y, point.x)),
             cue_detail=detail,

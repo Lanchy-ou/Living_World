@@ -178,8 +178,9 @@ def observe_step(ctx: TickContext, actor_id: str, position: Coord, step: int) ->
             descriptors=view.descriptors,
             seen_at_step=step,
         )
+    cue_sightings = ctx.step_cue_sightings.setdefault(actor_id, {})
     for cue in sight.cues.values():
-        transient[cue.cue_id] = TransientSighting(
+        cue_sightings[cue.cue_id] = TransientSighting(
             entity_id=cue.cue_id,
             kind="feature",
             position=cue.position,
@@ -220,7 +221,6 @@ def expose(
     exposures = [
         Exposure(view.entity_id, view.position, view.archetype_id)
         for view in (*transient, *sight.entities)
-        if view.entity_id not in sight.cues
     ]
     exposures.extend(
         Exposure(item.entity_id, actor.position, item.archetype_id) for item in inventory
@@ -276,18 +276,23 @@ def build_perception(
     explored = state.explored_tiles_by_resident[actor_id]
     sight = Sight(set(), [], set(), {})
     transient = []
+    transient_cues = []
     visible: set[str] = set()
     if physiology.sight_enabled(ctx.pack, awareness):
         sight = sample_sight(ctx, actor_id, actor.position)
         visible = {view.entity_id for view in sight.entities}
-        seen_at_end = visible | sight.cues.keys()
+        transient_cues = [
+            view
+            for key, view in ctx.step_cue_sightings.get(actor_id, {}).items()
+            if key not in sight.cues
+        ]
         step_cues = ctx.step_cues.get(actor_id, {})
         retain_cues(step_cues, sight.cues)
         sight.cues = step_cues
         transient = [
             view
             for key, view in ctx.transient_sightings.get(actor_id, {}).items()
-            if key not in seen_at_end
+            if key not in visible
         ]
         explored.update(sight.tiles)
         explored.update(ctx.step_tiles.get(actor_id, ()))
@@ -311,7 +316,7 @@ def build_perception(
         visible_tiles=tile_views(state, sight.tiles),
         explored_static_tiles=tile_views(state, explored),
         visible_entities=sight.entities,
-        transient_sightings=transient,
+        transient_sightings=[*transient, *transient_cues],
         environmental_cues=list(sight.cues.values()),
         heard_utterances=ctx.heard.get(actor_id, []) if awake else [],
         observed_actions=observe.observations(

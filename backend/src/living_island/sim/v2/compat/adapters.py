@@ -108,6 +108,7 @@ def legacy_speech(
         return speech.speech_act, None, None
     if (
         terms is not None
+        and terms.due_tick is None
         and terms.promisor_id == speech.addressee_id
         and terms.promisee_id == speaker
         and terms.what.kind == "give_item"
@@ -142,7 +143,7 @@ def _tiles(tiles: list[v2.TileView]) -> list[v1.TileView]:
     return [v1.TileView(position=_coord(tile.position), terrain=tile.terrain) for tile in tiles]
 
 
-def _entity(view: v2.EntityView, cue_ids: set[str]) -> v1.VisibleEntity | None:
+def _entity(view: v2.EntityView) -> v1.VisibleEntity | None:
     entity_type: v1.EntityType
     band: v1.FruitBand | None = None
     if view.kind in ("resident", "corpse"):
@@ -154,8 +155,6 @@ def _entity(view: v2.EntityView, cue_ids: set[str]) -> v1.VisibleEntity | None:
         )
     elif view.archetype_id == "canteen":
         entity_type = "canteen"
-    elif view.entity_id in cue_ids:
-        entity_type = "cue"
     else:
         return None
     return v1.VisibleEntity(
@@ -195,27 +194,38 @@ def project_perception(view: v2.Perception) -> v1.Perception:
     tile_positions = {(tile.position.x, tile.position.y) for tile in tiles}
     visible = _ground(view.visible_entities)
     for sight in view.visible_entities:
-        if (entity := _entity(sight, cue_ids)) is not None:
+        if (entity := _entity(sight)) is not None:
             visible[entity.entity_id] = entity
-    for cue in view.environmental_cues:
-        if (cue.position.x, cue.position.y) in tile_positions:
-            visible[cue.cue_id] = v1.VisibleEntity(
-                entity_id=cue.cue_id,
-                entity_type="cue",
-                position=_coord(cue.position),
-                observable_signs=[],
-                fruit_band=None,
-                quantity=None,
-            )
     transient = _ground(view.transient_sightings)
     steps: dict[str, int] = {}
+    cue_steps: dict[str, int] = {}
     for sight in view.transient_sightings:
         if sight.archetype_id == "fruit":
             key = f"ground_fruit@{sight.position.x},{sight.position.y}"
             steps[key] = max(steps.get(key, 0), sight.seen_at_step)
-        elif (entity := _entity(sight, cue_ids)) is not None:
+        elif (entity := _entity(sight)) is not None:
             transient[entity.entity_id] = entity
             steps[entity.entity_id] = sight.seen_at_step
+        elif sight.kind == "feature" and sight.archetype_id is None and sight.entity_id in cue_ids:
+            cue_steps[sight.entity_id] = sight.seen_at_step
+
+    # v1 has one sighting ID space. Keep real entities there and cues in the cue view.
+    for cue in view.environmental_cues:
+        if cue.cue_id in visible or cue.cue_id in transient:
+            continue
+        entry = v1.VisibleEntity(
+            entity_id=cue.cue_id,
+            entity_type="cue",
+            position=_coord(cue.position),
+            observable_signs=[],
+            fruit_band=None,
+            quantity=None,
+        )
+        if (cue.position.x, cue.position.y) in tile_positions:
+            visible[cue.cue_id] = entry
+        elif (step := cue_steps.get(cue.cue_id)) is not None:
+            transient[cue.cue_id] = entry
+            steps[cue.cue_id] = step
 
     needs = {item.need_id: item.band for item in view.needs}
     canteen = next((item for item in view.inventory if item.archetype_id == "canteen"), None)
