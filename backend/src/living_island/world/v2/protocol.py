@@ -659,6 +659,10 @@ class BoundaryDelivery(ProtocolModel):
     reports: Annotated[list[WorldReport], _sorted_by(_report_key)]
 
 
+def boundary_delivery_id(run_id: str, observed_tick: int, actor_id: str) -> str:
+    return f"{run_id}:perception:{observed_tick:010d}:{actor_id}"
+
+
 def _reject_float(token: str) -> None:
     raise ValueError(f"non-integer JSON number {token!r}")
 

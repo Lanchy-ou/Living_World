@@ -567,6 +567,9 @@ def test_checkpoint_refuses_inconsistent_prefix(pack, setup, tmp_path):
         ("noncanonical", "canonical packet journal"),
         ("row_tick", "one packet per resident"),
         ("batch_tick", "batch identity"),
+        ("foreign_delivery", "packet identity"),
+        ("perception_tick", "packet identity"),
+        ("perception_actor", "packet identity"),
     ],
 )
 def test_checkpoint_validates_every_referenced_batch(
@@ -576,6 +579,7 @@ def test_checkpoint_validates_every_referenced_batch(
     from living_island.persistence.v2.replay import record_boundary
     from living_island.world.v2.engine import initialize
     from living_island.world.v2.engine.snapshot import encode_snapshot
+    from living_island.world.v2.protocol import boundary_delivery_id
     from living_island.world.v2.rules.schema import canonical_json_bytes
 
     world = initialize(pack, setup)
@@ -611,6 +615,18 @@ def test_checkpoint_validates_every_referenced_batch(
             payload["observed_tick"] = 2
             for packet in payload["packets"]:
                 packet["observed_tick"] = 2
+                packet["perception"]["tick"] = 2
+                packet["delivery_id"] = boundary_delivery_id(world.run_id, 2, packet["actor_id"])
+            data = canonical_json_bytes(payload)
+        case "foreign_delivery":
+            packet = payload["packets"][0]
+            packet["delivery_id"] = boundary_delivery_id("foreign_run", 1, packet["actor_id"])
+            data = canonical_json_bytes(payload)
+        case "perception_tick":
+            payload["packets"][0]["perception"]["tick"] = 2
+            data = canonical_json_bytes(payload)
+        case "perception_actor":
+            payload["packets"][0]["perception"]["actor_id"] = B
             data = canonical_json_bytes(payload)
     batch.write_bytes(data)
     if entry == "save":

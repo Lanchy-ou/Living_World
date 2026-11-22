@@ -20,6 +20,7 @@ from ..protocol import (
     TransientSighting,
     VisibleSign,
     WorldReport,
+    boundary_delivery_id,
 )
 from . import observe, physiology, reports, settle
 from .items import entities_at, inspect_view, progress_descriptor
@@ -332,7 +333,7 @@ def build_deliveries(ctx: TickContext) -> None:
             ctx, actor, deferred.feedback + feedback_by_actor.get(actor_id, [])
         )
         state.pending_deliveries[actor_id] = BoundaryDelivery(
-            delivery_id=f"{state.run_id}:perception:{ctx.tick:010d}:{actor_id}",
+            delivery_id=boundary_delivery_id(state.run_id, ctx.tick, actor_id),
             actor_id=actor_id,
             observed_tick=ctx.tick,
             perception=view,
