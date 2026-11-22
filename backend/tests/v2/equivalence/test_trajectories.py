@@ -7,26 +7,12 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
-SCRIPTED = (
-    "ct15-ct17-regrowth-0",
-    "ct15-ct17-regrowth-2",
-    "ct17-canteen-0-servings",
-    "ct17-canteen-1-servings",
-    "ct17-canteen-2-servings",
-    "ct17-one-tick-gather",
-    "wap23-gather-last-fruit-contested",
-    "wap23-pickup-contested-last-fruit",
-    "wap23-reply-first-reply",
-    "wap23-wap29-two-talks-last-slot-with-wait",
-    "wap23-wap32-daylight-footprint",
-    "wap23-wap32-early-wake-no-speech",
-    "wap23-wap32-natural-wake-no-speech",
-    "wap23-wap32-wap35-corpse-restore-before-wake",
-    "wap23-wap33-en23-gather-exhaustion",
-    "wap23-wap33-en23-move-exhaustion",
-    "wap27-completion-away",
-    "wap27-completion-returned",
-    "wap33-exhaustion-and-death",
+SCRIPTED = tuple(
+    file.name.removesuffix(".json.gz")
+    for file in sorted((ROOT / "backend/tests/fixtures/v1_projection/scripted").glob("*.json.gz"))
+    # This fixture seeds an already-running action at tick zero. Its test
+    # initializes that route explicitly below.
+    if file.name != "wap33-path-blocked-then-death.json.gz"
 )
 COMPLETION_CASES = {
     "wap23-gather-last-fruit-contested",
