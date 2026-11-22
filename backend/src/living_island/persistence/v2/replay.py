@@ -7,6 +7,7 @@ from pathlib import Path
 
 from living_island.world.v2.engine import TickResult, World
 from living_island.world.v2.engine.snapshot import encode_snapshot, restore_snapshot
+from living_island.world.v2.engine.tick import FallbackFact
 from living_island.world.v2.protocol import (
     ProtocolModel,
     TurnSubmission,
@@ -45,6 +46,7 @@ class RuleStore:
 class RecordedBoundary:
     submissions: tuple[TurnSubmission, ...]
     event_lines: bytes
+    fallbacks: tuple[FallbackFact, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -104,6 +106,7 @@ def replay(
             acknowledged=journal.verify(world),
             rule_additions=files,
             store_rule=partial(_verify_rule, expected),
+            fallbacks=boundary.fallbacks,
         )
         event_lines = b"".join(map(encode_event_line, result.events))
         if event_lines != boundary.event_lines:

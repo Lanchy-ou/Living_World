@@ -255,6 +255,16 @@ class Completion:
     utterance: SpeechAttempt | None
 
 
+@dataclass(frozen=True)
+class FallbackFact:
+    """Objective metadata supplied by the coordinator for a committed turn."""
+
+    actor_id: str
+    turn_id: str
+    reason: str
+    policy_id: str
+
+
 @dataclass
 class World:
     """A world boundary and its typed, validated engine pack."""
@@ -289,6 +299,7 @@ class World:
         acknowledged: Mapping[str, str] | None = None,
         rule_additions: Sequence[Table | bytes] = (),
         store_rule: Callable[[str, bytes], None] | None = None,
+        fallbacks: Sequence[FallbackFact] = (),
     ) -> TickResult:
         """Apply one boundary transaction and publish only a completed tick."""
         turns = bind_turns(self.state, self.pack, submissions)
@@ -312,6 +323,18 @@ class World:
         physiology.apply_physiology(ctx, progress_needs)
         physiology.hard_stops_and_waking(ctx, progress_needs)
         perception.build_deliveries(ctx)
+        # Tag the settled boundary without shifting the IDs emitted during settlement.
+        for fact in fallbacks:
+            writer.emit(
+                "agent_fallback_used",
+                {
+                    "resident_id": fact.actor_id,
+                    "turn_id": fact.turn_id,
+                    "reason": fact.reason,
+                    "fallback_policy_id": fact.policy_id,
+                },
+                actor_id=fact.actor_id,
+            )
         state.tick = ctx.tick
         state.clock_minute = state.clock.minute_at(state.tick)
         state.entities = dict(sorted(state.entities.items()))

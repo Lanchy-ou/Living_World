@@ -73,6 +73,8 @@ def wait_choice():
 class PacketWorld:
     """Publishes fixture packets and records calls at the World.step seam."""
 
+    run_id = "packet-test"
+
     def __init__(self, *boundaries):
         from types import SimpleNamespace
 
@@ -86,7 +88,14 @@ class PacketWorld:
             library=SimpleNamespace(vocabulary_hash="vocabulary", rule_library_hash="library"),
         )
 
-    def step(self, submissions, *, acknowledged):
+    @property
+    def tick(self):
+        return self.state.tick
+
+    def pending_packets(self):
+        return tuple(packet for _, packet in sorted(self.state.pending_deliveries.items()))
+
+    def step(self, submissions, *, acknowledged, fallbacks):
         from living_island.world.v2.engine import TickResult
 
         self.calls.append((submissions, acknowledged))
@@ -99,7 +108,8 @@ class PacketWorld:
         return TickResult((), (), {})
 
 
-def test_turn_eligibility_delivery_order_and_continue():
+def test_turn_eligibility_delivery_order_and_continue(tmp_path):
+    from living_island.persistence.v2.journal import PacketJournal
     from living_island.sim.v2.runner import Runner
     from living_island.world.v2.protocol import ContinueAction, ModelTurn
 
@@ -139,7 +149,7 @@ def test_turn_eligibility_delivery_order_and_continue():
             return request.bind(ModelTurn(action=ContinueAction(kind="continue"), utterance=None))
         return request.bind(wait_choice())
 
-    runner = Runner(world, decide, deliver=deliver)
+    runner = Runner(world, decide, deliver=deliver, journal=PacketJournal(tmp_path, world.run_id))
     for _ in range(4):
         assert runner.advance() is not None
 
@@ -168,9 +178,10 @@ def test_turn_eligibility_delivery_order_and_continue():
     assert world.calls[3][1] == {"b": "b/3"}
 
 
-def test_scripted_fallback_records_only_after_the_world_commits():
+def test_scripted_fallback_records_only_after_the_world_commits(tmp_path):
     from living_island.agents.v2.port import AgentPort
     from living_island.agents.v2.scripted import ScriptedAgent
+    from living_island.persistence.v2.journal import PacketJournal
     from living_island.sim.v2.manifest import FallbackTurn
     from living_island.sim.v2.runner import Runner
     from living_island.sim.v2.turns import TurnRequest
@@ -195,7 +206,9 @@ def test_scripted_fallback_records_only_after_the_world_commits():
             return FallbackTurn(fallback.submit(delivery), "test failure", "scripted")
         return primary.submit(delivery)
 
-    runner = Runner(world, decide, deliver=lambda _: False)
+    runner = Runner(
+        world, decide, deliver=lambda _: False, journal=PacketJournal(tmp_path, world.run_id)
+    )
     assert runner.advance() is not None
     assert world.calls[0][0] == (first, other)
     assert world.state.turn_ordinals == {"a": 1, "b": 1}
@@ -221,7 +234,8 @@ def test_scripted_fallback_records_only_after_the_world_commits():
     )
 
 
-def test_terminal_stop_keeps_the_frozen_boundary_and_witness():
+def test_terminal_stop_keeps_the_frozen_boundary_and_witness(tmp_path):
+    from living_island.persistence.v2.journal import PacketJournal
     from living_island.sim.v2.manifest import FallbackTurn, StopRecord, TerminalStop
     from living_island.sim.v2.runner import Runner
 
@@ -242,7 +256,7 @@ def test_terminal_stop_keeps_the_frozen_boundary_and_witness():
         assert actor_id == "b"
         return stop
 
-    runner = Runner(world, decide, deliver=deliver)
+    runner = Runner(world, decide, deliver=deliver, journal=PacketJournal(tmp_path, world.run_id))
     assert runner.advance() is None
     assert runner.advance() is None
     assert delivered == ["a", "b", "c"]
@@ -255,7 +269,8 @@ def test_terminal_stop_keeps_the_frozen_boundary_and_witness():
     assert runner.manifest.stop == StopRecord(0, "b", "b:t000000", stop)
 
 
-def test_invalid_submission_is_left_to_the_world(monkeypatch):
+def test_invalid_submission_is_left_to_the_world(monkeypatch, tmp_path):
+    from living_island.persistence.v2.journal import PacketJournal
     from living_island.sim.v2.manifest import FallbackTurn
     from living_island.sim.v2.runner import Runner
     from living_island.world.v2.protocol import InvalidTurn
@@ -263,7 +278,7 @@ def test_invalid_submission_is_left_to_the_world(monkeypatch):
     world = PacketWorld([packet("a", 0)])
     calls = []
 
-    def reject(submissions, *, acknowledged):
+    def reject(submissions, *, acknowledged, fallbacks):
         calls.append((submissions, acknowledged))
         raise InvalidTurn("stale")
 
@@ -273,7 +288,9 @@ def test_invalid_submission_is_left_to_the_world(monkeypatch):
         stale = request.bind(wait_choice()).model_copy(update={"observed_tick": 1})
         return FallbackTurn(stale, "test failure", "scripted")
 
-    runner = Runner(world, decide, deliver=lambda _: False)
+    runner = Runner(
+        world, decide, deliver=lambda _: False, journal=PacketJournal(tmp_path, world.run_id)
+    )
     with pytest.raises(InvalidTurn, match="stale"):
         runner.advance()
     [(submissions, acknowledgements)] = calls
@@ -283,3 +300,5 @@ def test_invalid_submission_is_left_to_the_world(monkeypatch):
     assert world.state.turn_ordinals == {"a": 0}
     assert runner.manifest.boundaries == []
     assert runner.manifest.stop is None
+    [refused] = runner.manifest.refusals
+    assert (refused.tick, refused.submissions, refused.reason) == (0, submissions, "stale")
