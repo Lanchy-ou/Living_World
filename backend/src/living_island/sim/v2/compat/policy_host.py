@@ -370,7 +370,8 @@ class PolicyHost:
             and running is not None
             and running.intent_id in state.issued
         ):
-            return _Proposal(request.bind(choice), None, None, state.queue)
+            # A model turn abandons the fallback tail even when the action continues.
+            return _Proposal(request.bind(choice), None, None, ())
         # Apply a fallback failure to the private policy state before dropping its tail.
         decision = None
         if any(result.status == "failure" for result in state.boundary_results):

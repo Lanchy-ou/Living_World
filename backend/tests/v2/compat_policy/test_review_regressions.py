@@ -482,7 +482,7 @@ def test_model_handback_resolves_real_stop_only(archive, tmp_path, mode, handbac
         [outcome] = [result for result in advanced.actions if result.intent_id == active.intent_id]
         assert outcome.outcome == "success"
         assert hosts["ella"].checkpoint().boundary_results == ()
-        assert hosts["ella"].checkpoint().queue == queue
+        assert hosts["ella"].checkpoint().queue == ()
         assert "NEW_SIGHT" in hosts["ella"].checkpoint().deferred
         session.advance()
         [result] = hosts["ella"].checkpoint().boundary_results
@@ -511,3 +511,94 @@ def test_model_handback_resolves_real_stop_only(archive, tmp_path, mode, handbac
         assert feedback.intent_id != active.intent_id and feedback.status == "done"
     assert not hosts["ella"].checkpoint().handled_stops
     assert not hosts["ella"].checkpoint().boundary_results
+
+
+@pytest.mark.parametrize("mode", ("bridge", "visible"))
+@pytest.mark.parametrize("continue_by", ("model", "fallback"))
+def test_model_continue_discards_fallback_tail_before_next_fallback(
+    archive, tmp_path, mode, continue_by, monkeypatch
+):
+    from living_island.persistence.v2.journal import PacketJournal
+    from living_island.sim.equivalence.v1_extract import action
+    from living_island.sim.v2.compat.policy_host import PolicySession, UseFallback
+    from living_island.world.v2 import protocol as v2
+
+    bound, content, case, _ = load_case(archive, tmp_path, "wap23-gather-empty-at-start")
+    case = replace(case, plans={("ella", 1): (action("rest"), action("wait"))})
+    world = seeded_world(bound, content, case)
+    hosts = hosts_for(bound, content, case, mode)
+    host = hosts["ella"]
+    model_turns = []
+    continue_openings = []
+
+    def notify(packet):
+        return packet.actor_id == "ella" and packet.observed_tick == 2
+
+    def choose(packet):
+        if packet.actor_id == "ella":
+            tick = packet.observed_tick
+            model_turns.append(tick)
+            if tick in (1, 7):
+                return UseFallback("offline probe")
+            if tick == 2:
+                continue_openings.append(host.checkpoint())
+                if continue_by == "fallback":
+                    return UseFallback("offline probe")
+                return v2.ModelTurn(action=v2.ContinueAction(kind="continue"), utterance=None)
+        return _wait_choice()
+
+    session = PolicySession(
+        world,
+        hosts,
+        PacketJournal(tmp_path / "journal", world.run_id),
+        model=choose,
+        model_delivery=notify,
+    )
+    session.advance()
+    session.advance()
+    [old_tail] = host.checkpoint().queue
+    assert old_tail.action_type == "wait"
+    opening = _packets(world)["ella"]
+    running = opening.perception.running_action
+    assert running is not None and running.verb == "rest"
+
+    if continue_by == "model":
+
+        def refuse(submissions, **kwargs):
+            turn = next(turn for turn in submissions if turn.actor_id == "ella")
+            assert turn.action.kind == "continue"
+            raise v2.InvalidTurn("refuse the model continue")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(world, "step", refuse)
+            with pytest.raises(v2.InvalidTurn, match="refuse the model continue"):
+                session.advance()
+        assert host.checkpoint() == continue_openings[0]
+        assert host.checkpoint().queue == (old_tail,)
+        assert [record.tick for record in host.decision_records] == [1]
+        assert world.tick == 2 and _packets(world)["ella"] == opening
+
+    session.advance()
+    continued = host.checkpoint()
+    assert continued.queue == (() if continue_by == "model" else (old_tail,))
+    assert continued.issued == continue_openings[-1].issued
+    assert continued.deferred == continue_openings[-1].deferred
+    assert continued.boundary_results == () and continued.handled_stops == ()
+    assert _packets(world)["ella"].perception.running_action.intent_id == running.intent_id
+
+    while world.tick <= 7:
+        session.advance()
+    ending = host.checkpoint()
+    [fallback] = session.runner.manifest.boundaries[-1].fallback_turns
+    [outcome] = ending.boundary_results
+    assert outcome.status == "success" and outcome.tick_finished == 7
+    next_intent = ending.issued[fallback.submission.action.intent.intent_id].intent
+    if continue_by == "model":
+        assert model_turns == [0, 1, 2, 2, 7]
+        assert [record.tick for record in host.decision_records] == [1, 7]
+        assert next_intent == host.decision_records[-1].plan.intents[0]
+        assert next_intent.intent_id != old_tail.intent_id
+    else:
+        assert model_turns == [0, 1, 2, 7]
+        assert [record.tick for record in host.decision_records] == [1]
+        assert next_intent == old_tail
