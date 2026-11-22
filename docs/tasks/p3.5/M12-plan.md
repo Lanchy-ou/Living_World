@@ -75,6 +75,7 @@ Each path has one owner. Concurrent branches never write the same file.
 | `backend/tests/fixtures/v2/packs/engine-test*/**` | P3.5-CT-01; then P3.5-RR-02 |
 | `backend/tests/v2/engine/conftest.py` | P3.5-EN-01 (shared engine test fixtures, owner decision 2026-11-20); after P3.5-EN-01, one branch at a time, noted in its handoff |
 | Wave 5 shared engine files | P3.5-EN-03: `tick.py`, `state.py`, `settle.py`, `effects.py`; P3.5-EN-06: `validate.py`, `events.py` (owner decisions, 2026-11-21). During recheck, the orchestrator allocated one additional edit to EN-03 in merged EN-04's `stops.py` under M12 runbook sections 5 and 6.1. It preserves a contribution's fixed start failure through its scheduled completion (B3, 2026-11-22) |
+| Wave 6 shared engine files | EN-05 held `tick.py`, `state.py` and the common engine test fixture for packet capture and acknowledgement. It updated `effects.py`, `settle.py`, `kernel.py`, `items.py`, `processes.py` and `physiology.py` for the packet data recorded in the [handoff](P3.5-EN-05.md). The [independent review](P3.5-EN-05-review.md) records the scope, adjusted tests, provisional container and progress assumptions, and proposed WAP-19 change. |
 | `backend/tests/v2/<area>/**` | The card that names that directory |
 
 Paths without a prefix are under `backend/src/living_island/`.
