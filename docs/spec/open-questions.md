@@ -999,3 +999,18 @@ Status: proposed, awaiting owner.
   at a wake boundary, which would change runtime behavior.
 - Recommendation. Adopt the reachable packet setups. EN-05 exercises those
   cases through the regular boundary and leaves the frozen wording intact.
+
+## OQ-P3.5-EN-07: Run content pins and packet prefix encoding
+
+Engine §§2 and 13 name the logical checkpoint contents but leave the v2 run
+package layout open. EN-07 records one immutable packet batch per observed
+tick in a run-local journal. The atomic checkpoint names a contiguous prefix
+ending just before its pending boundary and carries the sim-owned checkpoint
+as opaque JSON. The world snapshot retains rule additions in admission order
+so verification can reproduce the library visible to each approval.
+
+The run manifest also needs a hash for each pack in the ordered composition.
+The composed pack exposes its effective hash and immediate parent, as in
+OQ-P3.5-EN-01. EN-07 takes the base-first sequence of separately loaded packs
+using the run's bindings and pins each effective hash from that sequence.
+Confirm this convention for the coordinator's run package.

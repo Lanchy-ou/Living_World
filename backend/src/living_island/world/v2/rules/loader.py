@@ -404,12 +404,12 @@ def load_pack(directory: Path, vocabulary: Vocabulary, *, bindings: Table | None
     )
 
 
-def validate_proposal(pack: Pack, raw: Table) -> Rule:
+def validate_proposal(pack: Pack, raw: Table, *, canonical: bool = False) -> Rule:
     """Validate a proposed addition in context and leave the active library untouched."""
     ensure_canonical(raw, "proposal")
     data = deepcopy(pack.data)
     catalog = build_catalog(pack.vocabulary, data)
-    rule = normalize_rule(raw, catalog, data, pack_id=None)
+    rule = normalize_rule(raw, catalog, data, pack_id=None, canonical=canonical)
     key = rule["id"]
     require(key not in pack.rules, "DUPLICATE_ID", key, "rule ID is already active")
     combined = dict(sorted({**data["rule"], key: rule}.items()))
