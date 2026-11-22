@@ -18,6 +18,7 @@ from ..protocol import (
     HardStop,
     HeardUtterance,
     InspectView,
+    InvalidTurn,
     TransientSighting,
     Utterance,
     UtteranceFeedback,
@@ -303,6 +304,13 @@ class World:
     ) -> TickResult:
         """Apply one boundary transaction and publish only a completed tick."""
         turns = bind_turns(self.state, self.pack, submissions)
+        fallbacks = tuple(fallbacks)
+        tagged: set[str] = set()
+        for fact in fallbacks:
+            turn = turns.get(fact.actor_id)
+            if turn is None or turn.turn_id != fact.turn_id or fact.actor_id in tagged:
+                raise InvalidTurn("fallback fact does not name a unique committed turn")
+            tagged.add(fact.actor_id)
         acknowledgements = {} if acknowledged is None else acknowledged
         check_acknowledgements(self.state, acknowledgements)
         next_pack, added = prepare_rules(self.pack, rule_additions, latest_approval_tick=self.tick)

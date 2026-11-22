@@ -259,11 +259,32 @@ def test_wap16_real_notification_continue_and_fallback_replay(real_world, pack, 
     ] == [(f"{A}:t000000:a", 0, 2)]
     assert world.state.turn_ordinals == {A: 3, B: 3}
     assert [
-        (event.tick, event.actor_id, event.payload["turn_id"])
+        (event.tick, event.actor_id, event.payload)
         for batch in original_events
         for event in batch
         if event.type == "agent_fallback_used"
-    ] == [(2, A, f"{A}:t000001"), (3, B, f"{B}:t000002")]
+    ] == [
+        (
+            2,
+            A,
+            {
+                "resident_id": A,
+                "turn_id": f"{A}:t000001",
+                "reason": "fixture timeout",
+                "fallback_policy_id": "scripted",
+            },
+        ),
+        (
+            3,
+            B,
+            {
+                "resident_id": B,
+                "turn_id": f"{B}:t000002",
+                "reason": "fixture timeout",
+                "fallback_policy_id": "scripted",
+            },
+        ),
+    ]
     records = tuple(boundary.for_replay() for boundary in runner.manifest.boundaries)
     prior_calls = tuple(turns)
     prior_deliveries = tuple(received)

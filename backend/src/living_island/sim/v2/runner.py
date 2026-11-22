@@ -1,7 +1,8 @@
 """Deliver packets and settle one frozen v2 boundary at a time."""
 
 from collections.abc import Callable
-from operator import attrgetter
+from copy import deepcopy
+from dataclasses import dataclass, field
 
 from living_island.persistence.v2.journal import PacketJournal
 from living_island.world.v2.engine import TickResult, World
@@ -26,6 +27,13 @@ type DeliverPacket = Callable[[BoundaryDelivery], bool]
 type DecideTurn = Callable[[TurnRequest], TurnSubmission | FallbackTurn | TerminalStop]
 
 
+@dataclass
+class _Delivery:
+    packets: tuple[BoundaryDelivery, ...]
+    acknowledged: dict[str, str]
+    notifications: list[bool] = field(default_factory=list)
+
+
 class Runner:
     def __init__(
         self,
@@ -44,7 +52,7 @@ class Runner:
         self._decide = decide
         self._deliver = deliver
         self._journal = journal
-        self._delivered: tuple[tuple[BoundaryDelivery, bool], ...] | None = None
+        self._delivery: _Delivery | None = None
         self.manifest = RunManifest(
             vocabulary_hash=world.state.library.vocabulary_hash,
             rule_library_hash=world.state.library.rule_library_hash,
@@ -57,42 +65,49 @@ class Runner:
 
         world = self._world
         boundary_tick = world.tick
-        if self._delivered is None:
-            self._journal.ingest(world)
-            self._delivered = tuple(
-                (packet, self._deliver(packet)) for packet in world.pending_packets()
-            )
-        acknowledged = {packet.actor_id: packet.delivery_id for packet, _ in self._delivered}
+        if self._delivery is None:
+            acknowledged = self._journal.ingest(world)
+            self._delivery = _Delivery(world.pending_packets(), acknowledged)
+        delivery = self._delivery
+        for packet in delivery.packets[len(delivery.notifications) :]:
+            delivery.notifications.append(self._deliver(packet.model_copy(deep=True)))
 
         submissions: list[TurnSubmission] = []
         fallback_turns: list[FallbackTurn] = []
-        for packet, notification in self._delivered:
-            reasons = turn_reasons(packet, notification)
-            if not reasons:
-                continue
-            request = TurnRequest(packet, world.state.turn_ordinals[packet.actor_id], reasons)
-            decision = self._decide(request)
-            match decision:
-                case TerminalStop():
-                    self.manifest.stop = StopRecord(
-                        boundary_tick, packet.actor_id, request.turn_id, decision
-                    )
-                    return None
-                case FallbackTurn():
-                    submissions.append(decision.submission)
-                    fallback_turns.append(decision)
-                case TurnSubmission():
-                    submissions.append(decision)
-
-        ordered = tuple(sorted(submissions, key=attrgetter("actor_id")))
         try:
+            for packet, notification in zip(delivery.packets, delivery.notifications, strict=True):
+                reasons = turn_reasons(packet, notification)
+                if not reasons:
+                    continue
+                ordinal = world.state.turn_ordinals[packet.actor_id]
+                request = TurnRequest(packet, ordinal, reasons)
+                decision = self._decide(TurnRequest(packet.model_copy(deep=True), ordinal, reasons))
+                match decision:
+                    case TerminalStop():
+                        self.manifest.stop = StopRecord(
+                            boundary_tick, packet.actor_id, request.turn_id, deepcopy(decision)
+                        )
+                        return None
+                    case FallbackTurn():
+                        submission = decision.submission.model_copy(deep=True)
+                        fallback_turns.append(
+                            FallbackTurn(submission, decision.reason, decision.policy_id)
+                        )
+                    case TurnSubmission():
+                        submission = decision.model_copy(deep=True)
+                submissions.append(submission)
+                request.check_binding(submission)
+
+            ordered = tuple(submissions)
             result = world.step(
                 ordered,
-                acknowledged=acknowledged,
+                acknowledged=delivery.acknowledged,
                 fallbacks=tuple(turn.fact() for turn in fallback_turns),
             )
         except InvalidTurn as error:
-            self.manifest.refusals.append(RefusedBoundary(boundary_tick, ordered, str(error)))
+            self.manifest.refusals.append(
+                RefusedBoundary(boundary_tick, tuple(submissions), str(error))
+            )
             raise
 
         self.manifest.boundaries.append(
@@ -103,5 +118,5 @@ class Runner:
                 b"".join(map(encode_event_line, result.events)),
             )
         )
-        self._delivered = None
+        self._delivery = None
         return result

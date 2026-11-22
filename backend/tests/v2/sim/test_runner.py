@@ -269,7 +269,7 @@ def test_terminal_stop_keeps_the_frozen_boundary_and_witness(tmp_path):
     assert runner.manifest.stop == StopRecord(0, "b", "b:t000000", stop)
 
 
-def test_invalid_submission_is_left_to_the_world(monkeypatch, tmp_path):
+def test_invalid_submission_is_refused_before_the_world_port(monkeypatch, tmp_path):
     from living_island.persistence.v2.journal import PacketJournal
     from living_island.sim.v2.manifest import FallbackTurn
     from living_island.sim.v2.runner import Runner
@@ -278,11 +278,13 @@ def test_invalid_submission_is_left_to_the_world(monkeypatch, tmp_path):
     world = PacketWorld([packet("a", 0)])
     calls = []
 
-    def reject(submissions, *, acknowledged, fallbacks):
-        calls.append((submissions, acknowledged))
-        raise InvalidTurn("stale")
+    original_step = world.step
 
-    monkeypatch.setattr(world, "step", reject)
+    def track(*args, **kwargs):
+        calls.append((args, kwargs))
+        return original_step(*args, **kwargs)
+
+    monkeypatch.setattr(world, "step", track)
 
     def decide(request):
         stale = request.bind(wait_choice()).model_copy(update={"observed_tick": 1})
@@ -291,14 +293,14 @@ def test_invalid_submission_is_left_to_the_world(monkeypatch, tmp_path):
     runner = Runner(
         world, decide, deliver=lambda _: False, journal=PacketJournal(tmp_path, world.run_id)
     )
-    with pytest.raises(InvalidTurn, match="stale"):
+    with pytest.raises(InvalidTurn, match="does not answer the scheduled turn"):
         runner.advance()
-    [(submissions, acknowledgements)] = calls
-    assert submissions[0].observed_tick == 1
-    assert acknowledgements == {"a": "a/0"}
+    assert calls == []
     assert world.state.tick == 0
     assert world.state.turn_ordinals == {"a": 0}
     assert runner.manifest.boundaries == []
     assert runner.manifest.stop is None
     [refused] = runner.manifest.refusals
-    assert (refused.tick, refused.submissions, refused.reason) == (0, submissions, "stale")
+    assert refused.tick == 0
+    [submission] = refused.submissions
+    assert submission.observed_tick == 1

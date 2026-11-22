@@ -1031,8 +1031,9 @@ only for delivered packets. Phase B should confirm binding after EN-05 merges.
 
 
 Phase B verified the integration with EN-05's real packets. The runner
-uses EN-07's detached pending-packet accessor and reads only the turn
-ordinals from `World.state`. The `World.step` boundary validates submissions
-and acknowledgement IDs as separate inputs. The runner schedules turns
-from the packet batch and journals it before delivery. The read-only
+uses EN-07's detached pending-packet accessor and reads turn ordinals from
+`World.state` for scheduling. It also reads the initial vocabulary and
+rule-library hash pins for the manifest. The `World.step` boundary validates
+submissions and acknowledgement IDs as separate inputs. The runner schedules
+turns from the packet batch and journals it before delivery. The read-only
 ordinal access remains provisionally accepted.

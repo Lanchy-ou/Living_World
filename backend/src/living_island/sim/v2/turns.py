@@ -8,6 +8,7 @@ from living_island.world.v2.protocol import (
     ContinueAction,
     Intent,
     IntentAction,
+    InvalidTurn,
     ModelTurn,
     TurnSubmission,
 )
@@ -24,6 +25,25 @@ class TurnRequest:
     @property
     def turn_id(self) -> str:
         return f"{self.delivery.actor_id}:t{self.ordinal:06d}"
+
+    def check_binding(self, submission: TurnSubmission) -> None:
+        """Require the callback answer to address this particular request."""
+        actor_id = self.delivery.actor_id
+        turn_id = self.turn_id
+        if (submission.actor_id, submission.observed_tick, submission.turn_id) != (
+            actor_id,
+            self.delivery.observed_tick,
+            turn_id,
+        ):
+            raise InvalidTurn("submission does not answer the scheduled turn")
+        if submission.action.kind == "intent":
+            intent = submission.action.intent
+            if (intent.actor_id, intent.turn_id, intent.intent_id) != (
+                actor_id,
+                turn_id,
+                f"{turn_id}:a",
+            ):
+                raise InvalidTurn("nested intent identity does not match the scheduled turn")
 
     def bind(self, choice: ModelTurn) -> TurnSubmission:
         """Attach the harness-owned IDs to an already typed model choice."""
