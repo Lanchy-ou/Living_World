@@ -178,6 +178,19 @@ def observe_step(ctx: TickContext, actor_id: str, position: Coord, step: int) ->
             descriptors=view.descriptors,
             seen_at_step=step,
         )
+    cue_sightings = ctx.step_cue_sightings.setdefault(actor_id, {})
+    for cue in sight.cues.values():
+        cue_sightings[cue.cue_id] = TransientSighting(
+            entity_id=cue.cue_id,
+            kind="feature",
+            position=cue.position,
+            archetype_id=None,
+            material_id=None,
+            quantity=None,
+            observable_signs=[],
+            descriptors=[],
+            seen_at_step=step,
+        )
 
 
 def inventory_view(ctx: TickContext, actor_id: str) -> list[ItemView]:
@@ -263,10 +276,16 @@ def build_perception(
     explored = state.explored_tiles_by_resident[actor_id]
     sight = Sight(set(), [], set(), {})
     transient = []
+    transient_cues = []
     visible: set[str] = set()
     if physiology.sight_enabled(ctx.pack, awareness):
         sight = sample_sight(ctx, actor_id, actor.position)
         visible = {view.entity_id for view in sight.entities}
+        transient_cues = [
+            view
+            for key, view in ctx.step_cue_sightings.get(actor_id, {}).items()
+            if key not in sight.cues
+        ]
         step_cues = ctx.step_cues.get(actor_id, {})
         retain_cues(step_cues, sight.cues)
         sight.cues = step_cues
@@ -297,7 +316,7 @@ def build_perception(
         visible_tiles=tile_views(state, sight.tiles),
         explored_static_tiles=tile_views(state, explored),
         visible_entities=sight.entities,
-        transient_sightings=transient,
+        transient_sightings=[*transient, *transient_cues],
         environmental_cues=list(sight.cues.values()),
         heard_utterances=ctx.heard.get(actor_id, []) if awake else [],
         observed_actions=observe.observations(

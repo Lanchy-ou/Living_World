@@ -1037,3 +1037,60 @@ rule-library hash pins for the manifest. The `World.step` boundary validates
 submissions and acknowledgement IDs as separate inputs. The runner schedules
 turns from the packet batch and journals it before delivery. The read-only
 ordinal access remains provisionally accepted.
+
+## CR-P3.5-PR-06: A private trigger for an externally scheduled fallback
+
+Status: proposed, awaiting owner.
+
+- Current rule: protocol §11.2 enqueues `PLAN_FINISHED` only for a successful
+  legacy action with no queued intent. Decision loop §8.3 can invoke the
+  fallback on a native turn with neither a legacy action nor a deferred
+  legacy trigger. The frozen v1 decision request requires at least one
+  trigger after tick zero.
+- Requested rule: permit a scheduling-only `PLAN_FINISHED` in the private v1
+  request when a native turn invokes the fallback with an empty legacy
+  queue and no deferred trigger. The marker does not enter packet or
+  boundary triggers. The frozen rule-based planner does not read it.
+- Impact: lets the fallback start on a native turn and leaves standalone
+  equivalence and model input unchanged.
+- Options: use the existing private marker, amend the frozen v1 request,
+  or defer fallback on these native turns.
+- Recommendation and provisional implementation: use the private marker.
+
+## OQ-P3.5-PR-06: Mapping speech outside the v1 shapes
+
+Decision loop §8.3 asks sim to suppress a fallback talk, wait for its public
+completion and apply a private failed-talk back-off without choosing a v1
+failure code. PR-06 provisionally uses `INVALID_SPEECH_ACT`, an existing
+failed-talk back-off cell. A native broadcast has no addressee and a native
+proposal may lack v1 request terms. The private projection preserves the
+literal heard statement, using the empty addressee for broadcasts and
+treating nonrepresentable terms as a statement. It generates a reply trigger
+only for a representable addressed request. A v1 request has no deadline,
+so a native proposal with `due_tick` keeps its text and addressee as a
+statement, without `REPLY_REQUIRED`. Confirm these mappings before M14.
+
+## CR-P3.5-PR-06-B3: Private typed feedback input for the frozen planner
+
+Status: proposed, awaiting owner.
+
+- Current rule — WAP §11.2 confines bridge feedback to private policy state
+  and decision records and excludes every `Perception`. The frozen v1 rule
+  planner reads feedback only at
+  `request.context.perception.last_action_feedback`.
+- Requested rule — permit sim's legacy adapter to supply feedback solely in
+  that slot of an isolated typed v1 planner request. The adapter owns the
+  copy for the synchronous planner call and drops it afterwards. The
+  ordinary v1 runtime ingests a clean physical projection. The v2 world
+  packet, replay journal, model and memory callbacks, day log and recall
+  receive no copy of the private planner input.
+- Impact — the frozen planner applies the archived back-off without a v1
+  edit. V2 continues to journal the original boundary packet. The frozen
+  runtime's request hash identifies its clean request, while the planner
+  receives the temporary adapter overlay.
+- Options — allow the private typed carrier, alter the frozen planner API
+  to accept separate feedback, or disable translated back-off.
+- Recommendation and provisional implementation — use the scoped typed
+  carrier. The separate request-only marker CR keeps `PLAN_FINISHED` in the
+  private decision request, with `native_fallback` provenance in the sim
+  decision trace and no synthetic marker in the ingested delivery.

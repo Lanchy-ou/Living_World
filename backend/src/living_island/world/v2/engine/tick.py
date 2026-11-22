@@ -108,6 +108,7 @@ class TickContext:
     heard: dict[str, list[HeardUtterance]] = field(default_factory=dict)
     transient_sightings: dict[str, dict[str, TransientSighting]] = field(default_factory=dict)
     step_cues: dict[str, dict[str, EnvironmentalCue]] = field(default_factory=dict)
+    step_cue_sightings: dict[str, dict[str, TransientSighting]] = field(default_factory=dict)
     step_tiles: dict[str, set[int]] = field(default_factory=dict)
     step_item_tiles: dict[str, set[tuple[str, Coord]]] = field(default_factory=dict)
     previous_deliveries: dict[str, BoundaryDelivery] = field(default_factory=dict)
