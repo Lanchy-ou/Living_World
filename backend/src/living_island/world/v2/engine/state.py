@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields, is_dataclass
-from typing import Literal, NotRequired, TypedDict
+from dataclasses import dataclass, field
+from typing import Annotated, Literal, NotRequired, TypedDict
 
-from pydantic import BaseModel
-from pydantic_core import to_jsonable_python
+from pydantic import BeforeValidator, ValidateAs
 
 from ..protocol import (
     Action,
@@ -15,6 +14,7 @@ from ..protocol import (
     Coord,
     FailureCode,
     HardStop,
+    IntegerJson,
     Intent,
     ItemChoice,
     ItemUse,
@@ -27,7 +27,6 @@ from ..protocol import (
     WorldReport,
 )
 from ..rules import Rule
-from ..rules.schema import Table, canonical_json_bytes, content_hash
 from .ids import EntityCounter
 
 type PropertyValues = dict[str, int | bool]
@@ -70,7 +69,7 @@ class Store(TypedDict):
 
 class Container(TypedDict):
     capacity: int
-    accepts: Table
+    accepts: dict[str, IntegerJson]
 
 
 class Durability(TypedDict):
@@ -203,7 +202,11 @@ class Library:
     rule_library_hash: str
     pack_ids: tuple[str, ...]
     active_rule_ids: tuple[str, ...]
-    added_rules: dict[str, Rule] = field(default_factory=dict)
+    pack_hash: str
+    ancestor_pack_hashes: tuple[str, ...]
+    added_rules: Annotated[dict[str, Rule], ValidateAs(list[tuple[str, Rule]], dict)] = field(
+        default_factory=dict
+    )
 
 
 @dataclass(frozen=True)
@@ -421,6 +424,13 @@ class NeedThreshold:
     wakes: bool
 
 
+def _decode_dialogue_pair(key: str) -> tuple[str, ...]:
+    return tuple(key.split(":"))
+
+
+type DialoguePair = Annotated[tuple[str, str], BeforeValidator(_decode_dialogue_pair)]
+
+
 @dataclass
 class WorldState:
     world_id: str
@@ -444,7 +454,7 @@ class WorldState:
     exposure_receipts_by_resident: dict[str, Receipts] = field(default_factory=dict)
     visible_entities_by_resident: dict[str, set[str]] = field(default_factory=dict)
     visible_tiles_by_resident: dict[str, set[int]] = field(default_factory=dict)
-    dialogue_sessions: dict[tuple[str, str], DialogueSession] = field(default_factory=dict)
+    dialogue_sessions: dict[DialoguePair, DialogueSession] = field(default_factory=dict)
     next_event_seq_in_tick: int = 0
     event_log_cursor: int = 0
     entities: dict[str, Entity] = field(default_factory=dict)
@@ -461,34 +471,11 @@ class WorldState:
     turn_ordinals: dict[str, int] = field(default_factory=dict)
 
 
-def _set_member_key(member: object) -> tuple[int, int | str | bytes]:
-    if type(member) is int:
-        return (0, member)
-    if isinstance(member, str):
-        return (1, member)
-    return (2, canonical_json_bytes(to_jsonable_python(member)))
-
-
-def _ordered_snapshot_value(value: object) -> object:
-    if is_dataclass(value):
-        return {
-            entry.name: _ordered_snapshot_value(getattr(value, entry.name))
-            for entry in fields(value)
-        }
-    if isinstance(value, BaseModel):
-        return _ordered_snapshot_value(value.model_dump(mode="python"))
-    if isinstance(value, dict):
-        return {key: _ordered_snapshot_value(item) for key, item in value.items()}
-    if isinstance(value, (set, frozenset)):
-        return sorted(map(_ordered_snapshot_value, value), key=_set_member_key)
-    if isinstance(value, (tuple, list)):
-        return [_ordered_snapshot_value(item) for item in value]
-    return value
-
-
 def state_snapshot_hash(state: WorldState) -> str:
-    """Hash the engine state with canonical ordering at every unordered collection."""
-    return content_hash(to_jsonable_python(_ordered_snapshot_value(state)))
+    """Hash the authoritative snapshot bytes."""
+    from .snapshot import snapshot_hash
+
+    return snapshot_hash(state)
 
 
 @dataclass(frozen=True)

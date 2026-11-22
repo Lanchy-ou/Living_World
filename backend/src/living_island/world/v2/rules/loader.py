@@ -53,6 +53,12 @@ class Rule:
 
 
 @dataclass(frozen=True)
+class PackLayer:
+    pack_id: str
+    pack_hash: str
+
+
+@dataclass(frozen=True)
 class Pack:
     pack_id: str
     pack_version: str
@@ -62,10 +68,15 @@ class Pack:
     rules: dict[str, Rule]
     report: ValidationReport
     data: Table
+    ancestors: tuple[PackLayer, ...]
 
     @property
     def vocabulary_hash(self) -> str:
         return self.vocabulary.vocabulary_hash
+
+    @property
+    def pack_ids(self) -> tuple[str, ...]:
+        return (*(layer.pack_id for layer in self.ancestors), self.pack_id)
 
 
 def read_toml(path: Path) -> Table:
@@ -164,7 +175,7 @@ def merge_settings(base: Table, local: Table, path: str) -> Table:
 
 def compose(
     directory: Path, vocab: Vocabulary, bindings: Table, ancestry: tuple[str, ...] = ()
-) -> Table:
+) -> tuple[Table, tuple[PackLayer, ...]]:
     raw = bind(read_toml(directory / "pack.toml"), bindings, "pack.toml")
     fields(
         raw,
@@ -183,10 +194,14 @@ def compose(
         "vocabulary pin mismatch",
     )
     base: Table = {}
+    layers: tuple[PackLayer, ...] = ()
     if "extends" in raw:
         parent = pack_id(raw["extends"])
-        base = compose(directory.parent / parent, vocab, bindings, (*ancestry, key))
+        base, layers = compose(directory.parent / parent, vocab, bindings, (*ancestry, key))
         require(base["pack_id"] == parent, "UNKNOWN_TERM", key, "base pack ID mismatch")
+        # Pin the bound composition before this overlay can replace its content.
+        # A prefix is not required to pass leaf validation on its own.
+        layers = (*layers, PackLayer(parent, content_hash(base)))
 
     result = {
         name: raw[name]
@@ -249,7 +264,7 @@ def compose(
     codes = directory / "compat-codes.toml"
     if codes.exists():
         result["compat_codes"] = bind(read_toml(codes), bindings, codes.name)
-    return result
+    return result, layers
 
 
 def validate_settings(pack: Table, catalog: Catalog) -> None:
@@ -374,9 +389,13 @@ def wrap_rule(rule: Table) -> Rule:
     )
 
 
+def library_hash(rules: dict[str, Table]) -> str:
+    return content_hash([rules[key] for key in sorted(rules)])
+
+
 def load_pack(directory: Path, vocabulary: Vocabulary, *, bindings: Table | None = None) -> Pack:
     """Read a pack directory and its sibling ancestors, then validate the composed pack."""
-    parsed = compose(directory, vocabulary, bindings or {})
+    parsed, ancestors = compose(directory, vocabulary, bindings or {})
     catalog = build_catalog(vocabulary, parsed)
     validate_settings(parsed, catalog)
     comparison_tables(catalog, parsed["enabled_verbs"], parsed["unmatched"])
@@ -397,19 +416,20 @@ def load_pack(directory: Path, vocabulary: Vocabulary, *, bindings: Table | None
         parsed["pack_version"],
         content_hash(parsed),
         vocabulary,
-        content_hash(active),
+        library_hash(rules),
         {key: wrap_rule(rule) for key, rule in rules.items()},
         build_report(catalog, parsed, rules),
         parsed,
+        ancestors,
     )
 
 
-def validate_proposal(pack: Pack, raw: Table) -> Rule:
+def validate_proposal(pack: Pack, raw: Table, *, canonical: bool = False) -> Rule:
     """Validate a proposed addition in context and leave the active library untouched."""
     ensure_canonical(raw, "proposal")
     data = deepcopy(pack.data)
     catalog = build_catalog(pack.vocabulary, data)
-    rule = normalize_rule(raw, catalog, data, pack_id=None)
+    rule = normalize_rule(raw, catalog, data, pack_id=None, canonical=canonical)
     key = rule["id"]
     require(key not in pack.rules, "DUPLICATE_ID", key, "rule ID is already active")
     combined = dict(sorted({**data["rule"], key: rule}.items()))

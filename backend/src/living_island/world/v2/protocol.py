@@ -659,6 +659,21 @@ class BoundaryDelivery(ProtocolModel):
     reports: Annotated[list[WorldReport], _sorted_by(_report_key)]
 
 
+def boundary_delivery_id(run_id: str, observed_tick: int, actor_id: str) -> str:
+    return f"{run_id}:perception:{observed_tick:010d}:{actor_id}"
+
+
+def check_delivery_identity(packet: BoundaryDelivery, run_id: str, observed_tick: int) -> None:
+    """Bind a decoded packet and its perception to the expected boundary."""
+    if (
+        packet.observed_tick != observed_tick
+        or packet.delivery_id != boundary_delivery_id(run_id, observed_tick, packet.actor_id)
+        or packet.perception.actor_id != packet.actor_id
+        or packet.perception.tick != observed_tick
+    ):
+        raise ValueError("packet identity differs from its run, resident or boundary")
+
+
 def _reject_float(token: str) -> None:
     raise ValueError(f"non-integer JSON number {token!r}")
 

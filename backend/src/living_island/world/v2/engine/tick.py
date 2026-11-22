@@ -1,9 +1,11 @@
 """The atomic world boundary and deterministic seven-phase schedule."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from typing import Literal, cast
+
+from pydantic import TypeAdapter
 
 from ..protocol import (
     ActionFeedback,
@@ -24,7 +26,8 @@ from ..protocol import (
     WorldStop,
 )
 from ..rules import Pack, Rule, validate_proposal
-from ..rules.schema import Table, content_hash
+from ..rules.loader import library_hash
+from ..rules.schema import Table, canonical_json_bytes
 from . import kernel, observe, perception, physiology, processes, settle, speech
 from .events import EventWriter, json_object
 from .ids import shuffle
@@ -63,6 +66,8 @@ from .state import (
 )
 from .validate import EnginePack, WorldSetup, bind_turns, check_acknowledgements
 from .world_rules import RuleSchedule
+
+_RULE_DATA = TypeAdapter(Table)
 
 
 @dataclass(frozen=True)
@@ -262,18 +267,37 @@ class World:
     def __post_init__(self) -> None:
         self._schedule = RuleSchedule().with_rules(self.pack.source.rules.values())
 
+    @property
+    def tick(self) -> int:
+        return self.state.tick
+
+    @property
+    def run_id(self) -> str:
+        return self.state.run_id
+
+    def pending_packets(self) -> tuple[BoundaryDelivery, ...]:
+        """Return detached copies of the committed packets."""
+        return tuple(
+            packet.model_copy(deep=True)
+            for _, packet in sorted(self.state.pending_deliveries.items())
+        )
+
     def step(
         self,
         submissions: Sequence[object] = (),
         *,
         acknowledged: Mapping[str, str] | None = None,
-        rule_additions: Sequence[Table] = (),
+        rule_additions: Sequence[Table | bytes] = (),
+        store_rule: Callable[[str, bytes], None] | None = None,
     ) -> TickResult:
         """Apply one boundary transaction and publish only a completed tick."""
         turns = bind_turns(self.state, self.pack, submissions)
         acknowledgements = {} if acknowledged is None else acknowledged
         check_acknowledgements(self.state, acknowledgements)
-        next_pack, added = prepare_rules(self.pack, rule_additions)
+        next_pack, added = prepare_rules(self.pack, rule_additions, latest_approval_tick=self.tick)
+        if store_rule is not None:
+            for rule in added:
+                store_rule(rule.content_hash, canonical_json_bytes(rule.data))
         schedule = self._schedule.with_rules(added) if added else self._schedule
         state = deepcopy(self.state)
         state.next_event_seq_in_tick = 0
@@ -297,18 +321,34 @@ class World:
         return TickResult(tuple(writer.events), tuple(ctx.results), ctx.utterances)
 
 
-def prepare_rules(pack: EnginePack, additions: Sequence[Table]) -> tuple[EnginePack, list[Rule]]:
+def prepare_rules(
+    pack: EnginePack,
+    additions: Sequence[Table | bytes],
+    *,
+    latest_approval_tick: int,
+    canonical: bool = False,
+) -> tuple[EnginePack, list[Rule]]:
     added = []
     source = pack.source
     for raw in additions:
-        rule = validate_proposal(source, raw)
+        if isinstance(raw, bytes):
+            rule = validate_proposal(source, _RULE_DATA.validate_json(raw), canonical=True)
+            if canonical_json_bytes(rule.data) != raw:
+                raise ValueError("expected canonical rule bytes")
+        else:
+            rule = validate_proposal(source, raw, canonical=canonical)
+        if rule.data["provenance"]["approved_at_tick"] > latest_approval_tick:
+            raise ValueError(
+                f"rule {rule.id!r} is approved after the opening boundary "
+                f"(latest approval tick {latest_approval_tick})"
+            )
         rules = dict(sorted({**source.rules, rule.id: rule}.items()))
-        canonical = {key: value.data for key, value in rules.items()}
+        rule_data = {key: value.data for key, value in rules.items()}
         source = replace(
             source,
             rules=rules,
-            data={**source.data, "rule": canonical},
-            rule_library_hash=content_hash(list(canonical.values())),
+            data={**source.data, "rule": rule_data},
+            rule_library_hash=library_hash(rule_data),
         )
         added.append(rule)
     return replace(pack, source=source), added
@@ -619,12 +659,7 @@ def initialize(pack: Pack, setup: WorldSetup) -> World:
         row.id: Resident(row.id, row.position)
         for row in sorted(setup.residents, key=lambda row: row.id)
     }
-    parent = pack.data.get("extends")
-    if (
-        setup.pack_ids[-1] != pack.pack_id
-        or (parent is not None and (len(setup.pack_ids) < 2 or setup.pack_ids[-2] != parent))
-        or (parent is None and len(setup.pack_ids) != 1)
-    ):
+    if setup.pack_ids != pack.pack_ids:
         raise ValueError("pack IDs must enumerate the active composition in base-first order")
     state = WorldState(
         world_id=setup.world_id,
@@ -639,10 +674,18 @@ def initialize(pack: Pack, setup: WorldSetup) -> World:
         dialogue_limits=setup.dialogue_limits(),
         residents=residents,
         library=Library(
-            pack.vocabulary_hash, pack.rule_library_hash, setup.pack_ids, tuple(sorted(pack.rules))
+            pack.vocabulary_hash,
+            pack.rule_library_hash,
+            setup.pack_ids,
+            tuple(sorted(pack.rules)),
+            pack.pack_hash,
+            tuple(layer.pack_hash for layer in pack.ancestors),
         ),
         resolution_rng_state_uint32=setup.seed,
         clock_minute=clock.minute_at(0),
+        # Reserve sequence zero and its cursor position for world_initialized.
+        next_event_seq_in_tick=1,
+        event_log_cursor=1,
         cues=setup.world_cues(),
         explored_tiles_by_resident={
             key: {smap.index(actor.position)} for key, actor in residents.items()
@@ -660,17 +703,6 @@ def initialize(pack: Pack, setup: WorldSetup) -> World:
     )
     place_entities(state, content)
     writer = EventWriter(state, 0)
-    payload = json_object(
-        {
-            "config_hash": state.config_hash,
-            "map_hash": state.map_hash,
-            "vocabulary_hash": state.library.vocabulary_hash,
-            "rule_library_hash": state.library.rule_library_hash,
-            "pack_ids": list(state.library.pack_ids),
-            "initial_snapshot_hash": "",
-        }
-    )
-    first = writer.emit("world_initialized", payload)
     for entity in state.entities.values():
         writer.emit(
             "entity_created",
@@ -703,7 +735,17 @@ def initialize(pack: Pack, setup: WorldSetup) -> World:
             del state.phase_offsets[entity.entity_id]
     validate_initial_limits(state, content.limits)
     perception.build_deliveries(TickContext(state, content, writer))
-    # EN-07 owns the persistent snapshot format. This hash commits the initial core state.
-    payload["initial_snapshot_hash"] = state_snapshot_hash(state)
-    writer.events[0] = first.model_copy(update={"payload": payload})
-    return World(state, content, tuple(writer.events))
+    # The bootstrap writer staged sequences one and higher. Build sequence
+    # zero from the completed state without advancing its reserved cursor.
+    first = EventWriter(replace(state, next_event_seq_in_tick=0, event_log_cursor=0), 0).emit(
+        "world_initialized",
+        {
+            "config_hash": state.config_hash,
+            "map_hash": state.map_hash,
+            "vocabulary_hash": state.library.vocabulary_hash,
+            "rule_library_hash": state.library.rule_library_hash,
+            "pack_ids": list(state.library.pack_ids),
+            "initial_snapshot_hash": state_snapshot_hash(state),
+        },
+    )
+    return World(state, content, (first, *writer.events))

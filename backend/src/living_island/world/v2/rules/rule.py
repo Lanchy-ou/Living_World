@@ -275,7 +275,9 @@ def shape_effect(
             term(row["archetype"], catalog.archetypes, path)
 
 
-def normalize_rule(raw: Table, catalog: Catalog, pack: Table, *, pack_id: str | None) -> Table:
+def normalize_rule(
+    raw: Table, catalog: Catalog, pack: Table, *, pack_id: str | None, canonical: bool = False
+) -> Table:
     rule = deepcopy(raw)
     path = identifier(rule.get("id"), "rule")
     trigger = string(rule.get("trigger"), path)
@@ -302,6 +304,14 @@ def normalize_rule(raw: Table, catalog: Catalog, pack: Table, *, pack_id: str | 
         term(rule["on_chance_failed"], ("keep_inputs", "consume_inputs"), path)
         rule.setdefault("chance_failed_effects", [])
     else:
+        if canonical:
+            # The normalized engine record always has an empty instrument list.
+            require(
+                rule.pop("instruments", None) == [],
+                "BAD_SHAPE",
+                path,
+                "canonical world rule must have empty instruments",
+            )
         require("on_interrupt" not in rule, "INTERRUPT_MODE", path, "world rule interrupt")
         fields(rule, path, "id trigger subject", common)
         catalog.predicate(rule["subject"], path)
