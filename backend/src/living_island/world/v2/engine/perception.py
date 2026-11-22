@@ -178,6 +178,18 @@ def observe_step(ctx: TickContext, actor_id: str, position: Coord, step: int) ->
             descriptors=view.descriptors,
             seen_at_step=step,
         )
+    for cue in sight.cues.values():
+        transient[cue.cue_id] = TransientSighting(
+            entity_id=cue.cue_id,
+            kind="feature",
+            position=cue.position,
+            archetype_id=None,
+            material_id=None,
+            quantity=None,
+            observable_signs=[],
+            descriptors=[],
+            seen_at_step=step,
+        )
 
 
 def inventory_view(ctx: TickContext, actor_id: str) -> list[ItemView]:
@@ -208,6 +220,7 @@ def expose(
     exposures = [
         Exposure(view.entity_id, view.position, view.archetype_id)
         for view in (*transient, *sight.entities)
+        if view.entity_id not in sight.cues
     ]
     exposures.extend(
         Exposure(item.entity_id, actor.position, item.archetype_id) for item in inventory
@@ -267,13 +280,14 @@ def build_perception(
     if physiology.sight_enabled(ctx.pack, awareness):
         sight = sample_sight(ctx, actor_id, actor.position)
         visible = {view.entity_id for view in sight.entities}
+        seen_at_end = visible | sight.cues.keys()
         step_cues = ctx.step_cues.get(actor_id, {})
         retain_cues(step_cues, sight.cues)
         sight.cues = step_cues
         transient = [
             view
             for key, view in ctx.transient_sightings.get(actor_id, {}).items()
-            if key not in visible
+            if key not in seen_at_end
         ]
         explored.update(sight.tiles)
         explored.update(ctx.step_tiles.get(actor_id, ()))
