@@ -69,6 +69,14 @@ class DialogueState:
         self.gap_ticks = gap_ticks
         self._sessions: dict[str, DialogueSession] = {}
 
+    @classmethod
+    def restore(
+        cls, resident_id: str, gap_ticks: int, sessions: tuple[DialogueSession, ...]
+    ) -> "DialogueState":
+        state = cls(resident_id, gap_ticks)
+        state._sessions = {session.counterpart_id: session for session in sessions}
+        return state
+
     @property
     def sessions(self) -> tuple[DialogueSession, ...]:
         return tuple(self._sessions[key] for key in sorted(self._sessions))
