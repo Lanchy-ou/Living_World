@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -93,17 +92,8 @@ class Case:
 
 
 @pytest.fixture(scope="module")
-def case(tmp_path_factory: pytest.TempPathFactory) -> Case:
-    # Select production only for the post-PR-07 acceptance invocation.
-    production = Case(DEFAULT, CONTENT / "packs/starter-v1")
-    if os.environ.get("LI_CT03_PRODUCTION") == "1":
-        return production
-    root = tmp_path_factory.mktemp("give3")
-    copytree(CONTENT / "packs/compat-v1", root / "compat-v1")
-    leaf = copytree(production.leaf, root / "starter-fixture")
-    edit(leaf / "pack.toml", 'pack_id = "starter-v1"', 'pack_id = "starter-fixture"')
-    append(leaf / "instances.toml", PROBES.read_text(encoding="utf-8"))
-    return Case(ROOT / "backend/tests/fixtures/v1_projection/configs/give-3.toml", leaf)
+def case() -> Case:
+    return Case(DEFAULT, CONTENT / "packs/starter-v1")
 
 
 def test_ct04_composition(case: Case, tmp_path: Path) -> None:
@@ -113,15 +103,14 @@ def test_ct04_composition(case: Case, tmp_path: Path) -> None:
     scenario = case.load()
     pack = scenario.pack
     data = pack.data
-    assert pack.pack_ids == ("compat-v1", case.leaf.name) == scenario.setup.pack_ids
+    assert pack.pack_ids == ("compat-v1", "starter-v1") == scenario.setup.pack_ids
     assert pack.pack_version == "0.1"
     assert "compat_codes" not in data
     assert (
         pack.vocabulary_hash == "57554435492d6f3db83006a4510b292f8b0d1ebc70c3393663fd1a9ad94cf286"
     )
-    registration = "production" if case.config == DEFAULT else "give-3"
-    assert scenario.manifest.config_blob_sha256 == REGISTRY[registration].digest
-    assert data["timing"]["give_ticks"] == (1 if registration == "production" else 3)
+    assert scenario.manifest.config_blob_sha256 == REGISTRY["production"].digest
+    assert data["timing"]["give_ticks"] == 1
     assert set(data["timing"]["attempt_ticks"].values()) == {1}
     assert data["sight_while_asleep"] is False
     assert data["physiology"]["satiety_asleep_decay_per_tick"] == 15
@@ -309,8 +298,7 @@ def test_ct18_normalization_and_corpse_reserve(case: Case, tmp_path: Path) -> No
 
     # The witness worlds start with actual zero-wear and zero-work entities.
     implicit = case.copy(tmp_path / "implicit")
-    if case.config == DEFAULT:
-        append(implicit.leaf / "instances.toml", PROBES.read_text(encoding="utf-8"))
+    append(implicit.leaf / "instances.toml", PROBES.read_text(encoding="utf-8"))
     explicit = implicit.copy(tmp_path / "explicit")
     arches = explicit.leaf / "archetypes.toml"
     edit(arches, "max_wear = 20", "max_wear = 20, wear = 0")
