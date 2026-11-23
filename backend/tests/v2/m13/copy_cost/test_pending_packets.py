@@ -27,3 +27,41 @@ def test_pending_readers_own_exploration_and_nested_entity_lists(pack, setup, tm
     journal = PacketJournal(tmp_path, world.run_id)
     journal.ingest(world)
     assert tuple(map(canonical_bytes, journal.read(0))) == expected
+
+
+def test_model_packet_owns_lists_after_filtering(pack, setup):
+    from living_island.agents.types import OwnProfile, PolicyConfig, RuleParams
+    from living_island.sim.v2.compat.policy_host import NeutralActionEnd, PolicyHost
+    from living_island.world.v2.engine import initialize
+    from living_island.world.v2.protocol import canonical_bytes
+
+    host = PolicyHost(
+        PolicyConfig(
+            policy_id="rule-based-v0",
+            seed=setup.seed,
+            max_plan_actions=1,
+            map_width=len(setup.terrain.rows[0]),
+            map_height=len(setup.terrain.rows),
+            script_sha256=None,
+            source_trace_sha256=None,
+            rule_params=RuleParams(
+                rule_params_version="0.1",
+                canteen_use="enabled",
+                cue_use="enabled",
+                fruit_carry_target=2,
+                failed_target_retry_ticks=36,
+            ),
+        ),
+        OwnProfile(profile_id="test", initial_goal="Explore"),
+        sleep_ticks=1,
+    )
+    packet = initialize(pack, setup).pending_packets()[0]
+    first, second = host.model_packet(packet), host.model_packet(packet)
+    original_packet, original_view = canonical_bytes(packet), canonical_bytes(second)
+
+    first.perception.explored_static_tiles.clear()
+    first.perception.visible_entities[0].observable_signs.append("weak")
+    first.reports.append(NeutralActionEnd())
+
+    assert canonical_bytes(second) == original_view
+    assert canonical_bytes(packet) == original_packet

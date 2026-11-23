@@ -264,6 +264,7 @@ class PolicyHost:
                 ):
                     continue
             reports.append(report)
+        # ProtocolModel revalidates the supplied view and builds consumer-owned lists.
         return ModelBoundary(
             delivery_id=packet.delivery_id,
             actor_id=packet.actor_id,
@@ -280,7 +281,7 @@ class PolicyHost:
                 }
             ),
             reports=reports,
-        ).model_copy(deep=True)
+        )
 
     def _decision(
         self,
