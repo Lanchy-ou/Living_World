@@ -360,3 +360,16 @@ def build_deliveries(ctx: TickContext) -> None:
                 ctx, view, first_seen, deferred.reports + reports_by_actor.get(actor_id, [])
             ),
         )
+        for watched in view.observed_actions:
+            ctx.writer.emit(
+                "action_observed",
+                {
+                    "observer_id": actor_id,
+                    "actor_id": watched.actor_id,
+                    "observed_intent_id": watched.intent_id,
+                    "phase": watched.phase,
+                },
+                actor_id=actor_id,
+                target_id=watched.actor_id,
+                intent_id=watched.intent_id,
+            )

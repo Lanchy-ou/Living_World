@@ -1,6 +1,7 @@
 """Assert resident-visible packets published by the real world boundary."""
 
 from copy import deepcopy
+from hashlib import sha256
 
 import pytest
 
@@ -163,6 +164,90 @@ def looks(item):
 
 def events(result, kind):
     return [event for event in result.events if event.type == kind]
+
+
+def watched_payload(observer, actor, intent, phase):
+    return {
+        "observer_id": observer,
+        "actor_id": actor,
+        "observed_intent_id": intent,
+        "phase": phase,
+    }
+
+
+def watched_walk(make_world):
+    world = make_world([("mia", 2, 1), ("ella", 3, 1)])
+    first = step(world, turn(world, "mia", "move_to", target=tile(7, 1)))
+    first_packets = world.pending_packets()
+    second = step(world, turn(world, "mia", "wait"))
+    return (first, first_packets), (second, world.pending_packets())
+
+
+def test_ev17_watched_start_joins_to_event_at_delivery(make_world):
+    (first, packets), (second, _) = watched_walk(make_world)
+    ella = next(row for row in packets if row.actor_id == "ella")
+    (watched,) = ella.perception.observed_actions
+    assert (ella.observed_tick, watched.actor_id, watched.intent_id, watched.phase) == (
+        1,
+        "mia",
+        "mia:t000000:a",
+        "start",
+    )
+    (event,) = events(first, "action_observed")
+    assert (event.tick, event.intent_id, event.payload) == (
+        ella.observed_tick,
+        watched.intent_id,
+        watched_payload("ella", "mia", watched.intent_id, watched.phase),
+    )
+    assert [e.payload for e in events(second, "action_observed")] == [
+        watched_payload("ella", "mia", watched.intent_id, "stop"),
+        watched_payload("ella", "mia", "mia:t000001:a", "start"),
+        watched_payload("ella", "mia", "mia:t000001:a", "settle"),
+    ]
+
+
+def test_watched_start_and_settle_follow_packet_order_per_watcher(make_world):
+    world = make_world([(C, 2, 1), (A, 3, 1), (B, 4, 1)])
+    result = step(world, turn(world, A, "wait"))
+    intent = f"{A}:t000000:a"
+    assert [e.payload for e in events(result, "action_observed")] == [
+        watched_payload(watcher, A, intent, phase)
+        for watcher in (B, C)
+        for phase in ("start", "settle")
+    ]
+    for watcher in (B, C):
+        delivery = packet(world, watcher)
+        assert [row.phase for row in delivery.perception.observed_actions] == ["start", "settle"]
+        assert [r.subject_id for r in delivery.reports if r.kind == "action_observed"] == [intent]
+
+
+def test_sleeping_and_distant_watchers_get_no_observation_event(make_world):
+    world = make_world([(A, 1, 1), (B, 2, 1), (C, 8, 1)], settings=BODY, rules=SLEEP_RULE)
+    step(world, sleep(world, B))
+    result = step(world, turn(world, A, "wait"))
+    assert packet(world, B).perception.awareness == "asleep"
+    for watcher in (B, C):
+        assert packet(world, watcher).perception.observed_actions == []
+    assert events(result, "action_observed") == []
+
+
+def test_watched_events_repeat_and_packets_match_baseline(make_world):
+    run = watched_walk(make_world)
+    repeat = watched_walk(make_world)
+    for (result, _), (other, _) in zip(run, repeat, strict=True):
+        assert [e.model_dump_json() for e in result.events] == [
+            e.model_dump_json() for e in other.events
+        ]
+    # Packet bytes from the engine at 9397f85, in boundary and resident order.
+    hashes = [
+        sha256(row.model_dump_json().encode()).hexdigest() for _, packets in run for row in packets
+    ]
+    assert hashes == [
+        "8efac1ce58e071d98dcac7e6a97eb0c6590b99199625c5e5e8d569bc09d93804",
+        "5d022c53b4ad524e78bfd159b6dc5b6026deab17183f7ac20e9bd3f01fa922c9",
+        "bbad596f8fb0f8d450e3f66bac4c9c124b655395c5477a2a1fec6cd1976774c3",
+        "7e6e4ffeec8b5c61e1be07215758d2a7f8b2bb17f61cbd2dc77f920e985d0a11",
+    ]
 
 
 def test_wap05_replacement_feedback_is_delivered_once(make_world):
