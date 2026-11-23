@@ -109,10 +109,11 @@ class _LegacyPlanner:
     def decide(self, request: DecisionRequest) -> OkOutcome:
         if self.feedback is not None:
             # CR-P3.5-PR-06-B3: the frozen planner reads feedback only from this
-            # typed slot. The request copy lives only for this private planner call.
+            # typed slot. Runtime.decide gives the planner a private request.
+            # Detach the injected feedback from the host's checkpoint data.
             context = request.context
             private_view = context.perception.model_copy(
-                deep=True, update={"last_action_feedback": self.feedback.model_copy(deep=True)}
+                update={"last_action_feedback": self.feedback.model_copy(deep=True)}
             )
             private_context = context.model_copy(update={"perception": private_view})
             request = request.model_copy(update={"context": private_context})
@@ -263,6 +264,7 @@ class PolicyHost:
                 ):
                     continue
             reports.append(report)
+        # ProtocolModel revalidates the supplied view and builds consumer-owned lists.
         return ModelBoundary(
             delivery_id=packet.delivery_id,
             actor_id=packet.actor_id,
@@ -279,7 +281,7 @@ class PolicyHost:
                 }
             ),
             reports=reports,
-        ).model_copy(deep=True)
+        )
 
     def _decision(
         self,
