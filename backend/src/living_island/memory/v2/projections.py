@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from pydantic import SerializeAsAny
 
-from .records import Envelope, MemoryRecord, Model
+from living_island.memory.v2.records import Envelope, MemoryRecord, Model
 
 
 @dataclass(frozen=True)

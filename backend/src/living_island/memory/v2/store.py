@@ -7,11 +7,23 @@ from typing import Literal, Self
 from pydantic import ConfigDict
 from pydantic.dataclasses import dataclass as validated_dataclass
 
+from living_island.memory.v2.kinds import KindRegistry
+from living_island.memory.v2.projections import (
+    ProjectedRevision,
+    ResidentView,
+    RevisionRef,
+    _project,
+)
+from living_island.memory.v2.records import (
+    Commitment,
+    Intention,
+    MemoryRecord,
+    Observed,
+    Social,
+    digest,
+    single_line,
+)
 from living_island.world.v2.protocol import Tick
-
-from .kinds import KindRegistry
-from .projections import ProjectedRevision, ResidentView, RevisionRef, _project
-from .records import Commitment, Intention, MemoryRecord, Observed, Social, digest, single_line
 
 type WriteKind = Literal["mechanical", "change_set", "use"]
 

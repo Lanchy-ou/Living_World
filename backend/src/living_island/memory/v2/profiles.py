@@ -7,8 +7,16 @@ from typing import Annotated, Literal, Self, get_args
 
 from pydantic import Field, field_validator
 
-from .records import Innate, MemoryRecord, Model, Personality, Rating, Trait, TraitId
-from .store import MemoryStore, StoreWrite
+from living_island.memory.v2.records import (
+    Innate,
+    MemoryRecord,
+    Model,
+    Personality,
+    Rating,
+    Trait,
+    TraitId,
+)
+from living_island.memory.v2.store import MemoryStore, StoreWrite
 
 
 class TraitValues(Model):

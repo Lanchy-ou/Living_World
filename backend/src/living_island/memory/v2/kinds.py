@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from .records import (
+from living_island.memory.v2.records import (
     Belief,
     Commitment,
     Content,
