@@ -87,8 +87,7 @@ def compose(
         )
     state = restored[1]
     period = PeriodCoordinator.restore(state.period, journal, phenomena=phenomena)
-    dialogue = DialogueState(actor, gap)
-    dialogue._sessions = {s.counterpart_id: s for s in state.dialogue}
+    dialogue = DialogueState.restore(actor, gap, state.dialogue)
     resident = ResidentLoop(
         identity, verbs, period, dialogue, caller, muted=state.muted, awake_ticks=state.awake_ticks
     )
