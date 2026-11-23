@@ -1,0 +1,30 @@
+# CT-18 starting items. The site is in reach of Ella's registered spawn.
+[[instance]]
+id = "probe_axe"
+archetype = "stone_axe"
+material = "flint"
+at = { holder = "ryan" }
+
+[[instance]]
+id = "probe_site"
+archetype = "shelter_site"
+at = { tile = [33, 32] }
+contents = ["probe_frame", "probe_cover", "probe_tie"]
+
+[[instance]]
+id = "probe_frame"
+archetype = "branch"
+quantity = 4
+at = { holder = "probe_site" }
+
+[[instance]]
+id = "probe_cover"
+archetype = "grass_tuft"
+quantity = 4
+at = { holder = "probe_site" }
+
+[[instance]]
+id = "probe_tie"
+archetype = "cord"
+material = "grass"
+at = { holder = "probe_site" }

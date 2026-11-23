@@ -88,6 +88,7 @@ class BoundCompatPack:
     map_rows: tuple[str, ...]
     codes: dict[str, dict[str, str]]
     manifest: CompatManifest
+    bindings: Table
 
 
 def _p2_seeds() -> frozenset[int]:
@@ -264,7 +265,8 @@ def load_compat_pack(
         if seed != config["meta"]["seed"] and seed not in P2_SEEDS:
             raise ValueError(f"unregistered P2 seed override: {seed}")
         config["meta"]["seed"] = seed
-    pack = load_pack(directory, vocabulary, bindings=_bindings(config, directory))
+    bindings = _bindings(config, directory)
+    pack = load_pack(directory, vocabulary, bindings=bindings)
     codes = _load_codes(pack)
     manifest = CompatManifest(
         config_blob_sha256=config_digest,
@@ -274,5 +276,5 @@ def load_compat_pack(
         seed=config["meta"]["seed"],
     )
     return BoundCompatPack(
-        pack, config, tuple(map_raw.decode("utf-8").splitlines()), codes, manifest
+        pack, config, tuple(map_raw.decode("utf-8").splitlines()), codes, manifest, bindings
     )

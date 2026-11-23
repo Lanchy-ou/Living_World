@@ -28,6 +28,7 @@ from living_island.sim.equivalence.v2_extract import (
 )
 from living_island.world.content import EffectiveConfig
 from living_island.world.protocol import TERRAIN_BY_SYMBOL
+from living_island.world.space import OPAQUE_SYMBOLS
 from living_island.world.v2.engine import World, initialize
 from living_island.world.v2.engine.validate import (
     ClockConfig,
@@ -137,64 +138,68 @@ class DigestJournal(PacketJournal):
         return sha256(json.dumps(self._digests, sort_keys=True).encode("ascii")).hexdigest()
 
 
-def setup_world(bound: BoundCompatPack, config: EffectiveConfig) -> World:
-    """Translate pinned config data into a fresh world owned by the v2 engine."""
+def build_world_setup(
+    bound: BoundCompatPack, config: EffectiveConfig, *, pack_ids: tuple[str, ...]
+) -> WorldSetup:
+    """Translate the registered island and the active pack IDs into an engine setup."""
     perception = config.perception
-    return initialize(
-        bound.pack,
-        WorldSetup(
-            world_id=config.meta.world_id,
-            run_id=config.meta.run_id,
-            seed=config.meta.seed,
-            config_hash=bound.manifest.effective_config_sha256,
-            map_hash=bound.manifest.map_sha256,
-            static_map_ref=config.map.layout_file,
-            pack_ids=bound.pack.pack_ids,
-            terrain=MapConfig(
-                rows=tuple(
-                    tuple(TERRAIN_BY_SYMBOL[symbol] for symbol in row) for row in bound.map_rows
-                ),
-                step_costs={key: getattr(config.map, f"step_cost_{key}") for key in WALKABLE},
-                walk_budget=config.map.walk_cost_budget_per_tick,
-                opaque_terrains=frozenset(("woods", "fruit_tree", "rock")),
+    return WorldSetup(
+        world_id=config.meta.world_id,
+        run_id=config.meta.run_id,
+        seed=config.meta.seed,
+        config_hash=bound.manifest.effective_config_sha256,
+        map_hash=bound.manifest.map_sha256,
+        static_map_ref=config.map.layout_file,
+        pack_ids=pack_ids,
+        terrain=MapConfig(
+            rows=tuple(
+                tuple(TERRAIN_BY_SYMBOL[symbol] for symbol in row) for row in bound.map_rows
             ),
-            clock=ClockConfig(
-                tick_minutes=config.time.tick_minutes,
-                start_minute=config.time.start_hour * 60,
-                day_start_minute=config.time.day_start_hour * 60,
-                day_end_minute=config.time.day_end_hour * 60,
-            ),
-            senses=SensesConfig(
-                day_radius=perception.day_radius_tiles,
-                night_radius=perception.night_radius_tiles,
-                hearing_radius=perception.hearing_radius_tiles,
-                cue_detail_radius=perception.cue_detail_radius_tiles,
-                visible_weakness_below=perception.visible_weakness_health_below,
-                visible_dehydration_below=perception.visible_dehydration_hydration_below,
-                visible_fatigue_below=perception.visible_fatigue_stamina_below,
-            ),
-            dialogue=DialogueConfig(
-                max_turns=config.social.max_dialogue_turns,
-                gap_ticks=config.social.dialogue_gap_ticks,
-                cooldown_ticks=config.social.dialogue_cooldown_ticks,
-            ),
-            residents=tuple(
-                ResidentSetup(id=row.id, position=Coord(x=row.position[0], y=row.position[1]))
-                for row in config.residents
-            ),
-            cues=tuple(
-                CueSetup(
-                    id=cue.id,
-                    kind=cue.kind,
-                    position=Coord(x=cue.position[0], y=cue.position[1]),
-                    visible_description=cue.visible_description,
-                    near_description=cue.near_description,
-                    direction=cue.direction,
-                )
-                for cue in config.world.cues
-            ),
+            step_costs={key: getattr(config.map, f"step_cost_{key}") for key in WALKABLE},
+            walk_budget=config.map.walk_cost_budget_per_tick,
+            opaque_terrains=frozenset(TERRAIN_BY_SYMBOL[symbol] for symbol in OPAQUE_SYMBOLS),
+        ),
+        clock=ClockConfig(
+            tick_minutes=config.time.tick_minutes,
+            start_minute=config.time.start_hour * 60,
+            day_start_minute=config.time.day_start_hour * 60,
+            day_end_minute=config.time.day_end_hour * 60,
+        ),
+        senses=SensesConfig(
+            day_radius=perception.day_radius_tiles,
+            night_radius=perception.night_radius_tiles,
+            hearing_radius=perception.hearing_radius_tiles,
+            cue_detail_radius=perception.cue_detail_radius_tiles,
+            visible_weakness_below=perception.visible_weakness_health_below,
+            visible_dehydration_below=perception.visible_dehydration_hydration_below,
+            visible_fatigue_below=perception.visible_fatigue_stamina_below,
+        ),
+        dialogue=DialogueConfig(
+            max_turns=config.social.max_dialogue_turns,
+            gap_ticks=config.social.dialogue_gap_ticks,
+            cooldown_ticks=config.social.dialogue_cooldown_ticks,
+        ),
+        residents=tuple(
+            ResidentSetup(id=row.id, position=Coord(x=row.position[0], y=row.position[1]))
+            for row in config.residents
+        ),
+        cues=tuple(
+            CueSetup(
+                id=cue.id,
+                kind=cue.kind,
+                position=Coord(x=cue.position[0], y=cue.position[1]),
+                visible_description=cue.visible_description,
+                near_description=cue.near_description,
+                direction=cue.direction,
+            )
+            for cue in config.world.cues
         ),
     )
+
+
+def setup_world(bound: BoundCompatPack, config: EffectiveConfig) -> World:
+    setup = build_world_setup(bound, config, pack_ids=bound.pack.pack_ids)
+    return initialize(bound.pack, setup)
 
 
 def run_case(path: Path, evidence: Path, through: int) -> dict[str, object]:

@@ -1,0 +1,125 @@
+[[archetype]]
+id = "deposit"
+kind = "feature"
+stackable = false
+components = { store = {} }
+observe = [{ field = "store.count", as = "stock_amount" }]
+
+[[archetype]]
+id = "stone"
+kind = "item"
+material = "stone"
+stackable = true
+matter = { mineral = 1 }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "flint_nodule"
+kind = "item"
+material = "flint"
+stackable = true
+matter = { mineral = 2 }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "sharp_flake"
+kind = "item"
+stackable = true
+matter = { mineral = 1 }
+properties = { sharp = true }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "branch"
+kind = "item"
+material = "wood"
+stackable = true
+matter = { plant = 1 }
+properties = { long = true }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "vine"
+kind = "item"
+material = "vine"
+stackable = true
+matter = { plant = 1 }
+properties = { long = true }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "grass_tuft"
+kind = "item"
+material = "grass"
+stackable = true
+matter = { plant = 1 }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "cord"
+kind = "item"
+stackable = true
+matter = { plant = 3 }
+properties = { long = true }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "clay_lump"
+kind = "item"
+material = "clay"
+stackable = true
+matter = { mineral = 1 }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "unfired_pot"
+kind = "item"
+material = "clay"
+stackable = false
+matter = { mineral = 2 }
+components = { portable = { slots_per_unit = 3 } }
+
+[[archetype]]
+id = "clay_pot"
+kind = "item"
+material = "fired_clay"
+stackable = false
+matter = { mineral = 2 }
+components = { portable = { slots_per_unit = 3 }, container = { capacity = 1, accepts = { archetype = "water" } } }
+observe = [{ field = "container.count:water", as = "water_amount" }]
+
+[[archetype]]
+id = "stone_axe"
+kind = "item"
+stackable = false
+matter = { mineral = 1, plant = 4 }
+properties = { sharp = true }
+components = { portable = { slots_per_unit = 2 }, durability = { max_wear = 20 } }
+observe = [{ field = "durability.left", as = "wear_state" }]
+
+[[archetype]]
+id = "rotten_fruit"
+kind = "item"
+material = "rotten_fruit"
+stackable = true
+matter = { plant = 1 }
+components = { portable = { slots_per_unit = 1 } }
+
+[[archetype]]
+id = "campfire"
+kind = "structure"
+stackable = false
+components = { fuel = { ticks_left = 18 }, container = { capacity = 3, accepts = { archetype = "unfired_pot" } } }
+observe = [{ field = "fuel.ticks_left", as = "fire_state" }]
+
+[[archetype]]
+id = "shelter_site"
+kind = "process"
+stackable = false
+components = { process = { work_required = 24 }, container = { capacity = 30, accepts = { has_component = "portable" } } }
+
+[[archetype]]
+id = "shelter"
+kind = "structure"
+stackable = false
+components = { shelter = {}, footprint = { blocks_movement = false, opaque = false } }

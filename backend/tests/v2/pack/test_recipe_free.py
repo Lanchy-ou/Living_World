@@ -40,37 +40,104 @@ def real_pack_ids(root: Path, sections: tuple[str, ...]) -> set[str]:
     }
 
 
-def terrain_literal_lines(module: str, source: str) -> Counter[int]:
-    """Identify the protocol and validator declarations of the shared terrain term."""
-    match module:
-        case "protocol.py":
-            declaration_name = "Terrain"
-        case "rules/schema.py":
-            declaration_name = "TERRAINS"
-        case _:
-            return Counter()
-
-    lines: Counter[int] = Counter()
-    for statement in ast.parse(source).body:
-        if not isinstance(statement, ast.Assign):
-            continue
-        target, *extra = statement.targets
-        if extra or not isinstance(target, ast.Name) or target.id != declaration_name:
-            continue
-        match statement.value:
-            case ast.Subscript(value=ast.Name(id="Literal"), slice=ast.Tuple(elts=members)):
-                pass
-            case ast.Call(func=ast.Name(id="frozenset"), args=[ast.Set(elts=members)], keywords=[]):
-                pass
+def declaration_uses(module: str, source: str) -> Counter[tuple[int, str]]:
+    """Identify individual keys in the closed terrain and component declarations."""
+    uses: Counter[tuple[int, str]] = Counter()
+    if module not in ("protocol.py", "rules/schema.py", "rules/vocabulary.py", "engine/state.py"):
+        return uses
+    for stmt in ast.parse(source).body:
+        match module, stmt:
+            case "protocol.py", ast.Assign(
+                targets=[ast.Name(id="Terrain")],
+                value=ast.Subscript(value=ast.Name(id="Literal"), slice=ast.Tuple(elts=members)),
+            ):
+                allowed = {"fruit_tree", "grass"}
+            case "rules/schema.py", ast.Assign(
+                targets=[ast.Name(id="TERRAINS")],
+                value=ast.Call(func=ast.Name(id="frozenset"), args=[ast.Set(elts=members)]),
+            ):
+                allowed = {"fruit_tree", "grass"}
+            case "rules/vocabulary.py", ast.Assign(
+                targets=[ast.Name(id="COMPONENTS")], value=ast.Dict(keys=members)
+            ):
+                allowed = {"shelter"}
+            case "engine/state.py", ast.ClassDef(name="Components", body=body):
+                uses.update(
+                    (field.lineno, "shelter")
+                    for field in body
+                    if isinstance(field, ast.AnnAssign)
+                    and isinstance(field.target, ast.Name)
+                    and field.target.id == "shelter"
+                )
+                continue
             case _:
                 continue
-        lines.update(
-            node.lineno
-            for node in members
-            if isinstance(node, ast.Constant)
-            and ast.get_source_segment(source, node) in {'"fruit_tree"', "'fruit_tree'"}
-        )
-    return lines
+        for member in members:
+            if isinstance(member, ast.Constant) and member.value in allowed:
+                # Only subtract an actual lexical occurrence (escapes can spell the same value).
+                if ast.get_source_segment(source, member) in (
+                    f'"{member.value}"',
+                    f"'{member.value}'",
+                ):
+                    uses[member.lineno, member.value] += 1
+    return uses
+
+
+# These English phrases describe settlement or terrain in diagnostics, docs and comments.
+GENERIC_PROSE = {
+    "engine/validate.py": (
+        ("movement budget must cover all step costs, including grass", "grass"),
+    ),
+    "engine/effects.py": (
+        ("simulate a verb branch", "branch"),
+        ("# A partial branch can refer", "branch"),
+    ),
+    "engine/limits.py": (("initialization and branch preflight", "branch"),),
+    "engine/processes.py": (("transfer its inputs as one branch", "branch"),),
+    "rules/conservation.py": (
+        ("each settlement branch", "branch"),
+        ("branch credits exceed debits", "branch"),
+    ),
+    "engine/settle.py": (("admit only its selected branch", "branch"),),
+}
+
+
+def operation_uses(module: str, source: str) -> Counter[tuple[int, str]]:
+    uses: Counter[tuple[int, str]] = Counter()
+    if module == "engine/settle.py":
+        # The bound settlement local is an AppliedBranch. Literal IDs and
+        # attributes (e.g. archetypes.branch) are different AST nodes.
+        for fn in ast.parse(source).body:
+            if not isinstance(fn, ast.FunctionDef) or fn.name not in (
+                "phase_location",
+                "complete_act",
+                "interrupt",
+            ):
+                continue
+            for node in ast.walk(fn):
+                if isinstance(node, ast.Name) and node.id == "branch":
+                    uses[node.lineno, "branch"] += 1
+                elif isinstance(node, ast.arg) and node.arg == "branch":
+                    uses[node.lineno, "branch"] += 1
+    elif module in ("engine/kernel.py", "engine/validate.py"):
+        for node in ast.walk(ast.parse(source)):
+            match node:
+                case ast.Subscript(
+                    value=ast.Attribute(value=ast.Name(id="smap"), attr="step_costs"),
+                    slice=ast.Constant(value="grass") as member,
+                ) if module == "engine/kernel.py":
+                    pass
+                case ast.Compare(
+                    left=ast.Constant(value="grass") as member,
+                    ops=[ast.NotIn()],
+                    comparators=[ast.Attribute(value=ast.Name(id="self"), attr="step_costs")],
+                ) if module == "engine/validate.py":
+                    pass
+                case _:
+                    continue
+            if ast.get_source_segment(source, member) in ('"grass"', "'grass'"):
+                uses[member.lineno, "grass"] += 1
+    return uses
 
 
 def recipe_id_locations(source: Path, ids: set[str]) -> list[str]:
@@ -78,12 +145,16 @@ def recipe_id_locations(source: Path, ids: set[str]) -> list[str]:
     for path in sorted(source.rglob("*.py")):
         module = path.relative_to(source).as_posix()
         text = path.read_text(encoding="utf-8")
-        terrain_lines = terrain_literal_lines(module, text)
+        uses = declaration_uses(module, text)
+        uses.update(operation_uses(module, text))
         for number, line in enumerate(text.splitlines(), start=1):
             tokens = Counter(re.findall(r"\w+", line))
-            tokens["fruit_tree"] -= terrain_lines[number]
-            for member in sorted(ids.intersection(+tokens)):
-                locations.append(f"{module}:{number}: {member}")
+            for phrase, shared in GENERIC_PROSE.get(module, ()):
+                # Discount only the shared word, even if other IDs occur in the phrase.
+                uses[number, shared] += len(re.findall(rf"(?<!\w){re.escape(phrase)}(?!\w)", line))
+            for member in sorted(ids.intersection(tokens)):
+                if tokens[member] > uses[number, member]:
+                    locations.append(f"{module}:{number}: {member}")
     return locations
 
 
@@ -154,23 +225,20 @@ def test_en22_scan_detects_rules_from_a_second_file(tmp_path: Path) -> None:
     ]
 
 
-@pytest.mark.parametrize(
-    ("module", "declaration"),
-    [
-        ("protocol.py", 'Terrain = Literal["fruit_tree", "grass"]'),
-        ("rules/schema.py", 'TERRAINS = frozenset({"fruit_tree", "grass"})'),
-    ],
-)
-def test_en22_distinguishes_terrain_declarations_from_recipe_ids(
-    tmp_path: Path, module: str, declaration: str
-) -> None:
-    path = tmp_path / module
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f'{declaration}\nrecipe = "fruit_tree"\n', encoding="utf-8")
-    assert recipe_id_locations(tmp_path, {"fruit_tree", "grass"}) == [
-        f"{module}:1: grass",
-        f"{module}:2: fruit_tree",
-    ]
-
-    path.write_text(f'{declaration}; recipe = "fruit_tree"\n', encoding="utf-8")
-    assert recipe_id_locations(tmp_path, {"fruit_tree"}) == [f"{module}:1: fruit_tree"]
+def test_en22_distinguishes_generic_uses_from_same_line_recipes(tmp_path: Path) -> None:
+    for module, context, member in (
+        ("protocol.py", 'Terrain = Literal["fruit_tree", "grass"]', "fruit_tree"),
+        ("rules/schema.py", 'TERRAINS = frozenset({"fruit_tree", "grass"})', "grass"),
+        ("engine/kernel.py", 'cost = smap.step_costs["grass"]', "grass"),
+        ("engine/validate.py", 'missing = "grass" not in self.step_costs', "grass"),
+        ("rules/vocabulary.py", 'COMPONENTS = {"shelter": ("", "")}', "shelter"),
+        ("engine/state.py", "class Components(TypedDict): shelter: NotRequired[dict]", "shelter"),
+        ("engine/settle.py", "def interrupt(): branch = None", "branch"),
+        ("rules/conservation.py", '"each settlement branch"', "branch"),
+    ):
+        path = tmp_path / module
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f'{context}; recipe = archetypes["{member}"]\n', encoding="utf-8")
+        assert recipe_id_locations(tmp_path, {member}).count(f"{module}:1: {member}") == 1
+        path.write_text(context + "\n", encoding="utf-8")
+        assert f"{module}:1: {member}" not in recipe_id_locations(tmp_path, {member})

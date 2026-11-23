@@ -1,0 +1,33 @@
+[unmatched.gather]
+replace = true
+entries = []
+default = ["finds_nothing"]
+
+[unmatched.combine]
+entries = []
+default = ["falls_apart"]
+
+[unmatched.strike]
+entries = [
+  { when = { compare = ["instrument.hardness", ">", "target.hardness"] }, phenomena = ["leaves_dent"] },
+  { when = { compare = ["instrument.hardness", "<=", "target.hardness"] }, phenomena = ["nothing_happens"] },
+]
+default = ["nothing_happens"]
+
+[unmatched.cut]
+entries = [
+  { when = { compare = ["instrument.sharp", "==", false] }, phenomena = ["does_not_cut"] },
+  { when = { compare = ["instrument.sharp", "==", true] }, phenomena = ["leaves_dent"] },
+]
+default = ["does_not_cut"]
+
+[unmatched.light]
+entries = [
+  { when = { compare = ["target.flammable", "==", true] }, phenomena = ["smokes"] },
+  { when = { compare = ["target.flammable", "==", false] }, phenomena = ["nothing_happens"] },
+]
+default = ["fizzles"]
+
+[unmatched.build]
+entries = []
+default = ["ground_unsuitable"]

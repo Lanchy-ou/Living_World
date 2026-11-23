@@ -1,0 +1,29 @@
+[[material]]
+id = "stone"
+properties = { hardness = 4, strength = 4, weight = 3 }
+
+[[material]]
+id = "flint"
+properties = { hardness = 5, strength = 2, weight = 2, brittle = true }
+
+[[material]]
+id = "vine"
+properties = { strength = 1, weight = 1, flexible = true }
+apparent = { strength = 4 }
+
+[[material]]
+id = "grass"
+properties = { strength = 3, flexible = true, dry = true, flammable = true }
+apparent = { strength = 1 }
+
+[[material]]
+id = "clay"
+properties = { hardness = 1, strength = 1, weight = 3, malleable = true }
+
+[[material]]
+id = "fired_clay"
+properties = { hardness = 3, strength = 2, weight = 3, brittle = true, watertight = true }
+
+[[material]]
+id = "rotten_fruit"
+properties = { weight = 1 }
