@@ -51,6 +51,10 @@ INSTRUCTIONS: dict[CallKind, str] = {
 }
 
 
+def prompt_version_for(kind: CallKind) -> str:
+    return f"{kind}/0.1"
+
+
 def json_bytes(value: object) -> bytes:
     return json.dumps(
         value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
@@ -167,7 +171,7 @@ class Contract:
 
     @property
     def prompt_version(self) -> str:
-        return f"{self.kind}/0.1"
+        return prompt_version_for(self.kind)
 
     def __post_init__(self) -> None:
         kind = self.kind

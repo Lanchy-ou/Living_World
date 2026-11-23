@@ -7,7 +7,7 @@ from typing import Literal, Self
 
 from living_island.agents.llm import provider as p3
 
-from .contracts import CallKind, Contract, digest
+from .contracts import CallKind, Contract, digest, prompt_version_for
 from .journal import Fact, Journal
 from .wire import (
     FRAMING_VERSION,
@@ -295,9 +295,6 @@ def prepare(call: Call, contract: Contract, assembly: Assembly, journal: Journal
         else:
             removed.add(order[count])
             count += 1
-    if candidates[-1].manifest.tokens_total > WINDOW:
-        admitted = None
-        admitted_index = None
     record = PreparedRecord(
         call=call,
         settings=settings,
@@ -323,7 +320,7 @@ def rebuild(candidate: Candidate, settings: Settings, resolved_parts: tuple[byte
     instructions_bytes, *user, shape = resolved_parts
     instructions = instructions_bytes.decode()
     expected = Settings(
-        prompt_version=f"{manifest.call_kind}/0.1",
+        prompt_version=prompt_version_for(manifest.call_kind),
         prompt_sha256=digest(instructions_bytes),
         schema_sha256=digest(shape),
     )

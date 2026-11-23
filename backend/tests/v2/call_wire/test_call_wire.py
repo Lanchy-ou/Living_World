@@ -174,6 +174,28 @@ def test_dl_11_omission_notice_changes_fit_and_protects_floor(tmp_path, audit):
     )
     assert len(transport.dispatches) == len(list(tmp_path.glob("*.dispatch.json"))) == 1
 
+    # Replacing one short entry with the notice makes the floor larger than the full request.
+    short_log = log[:21]
+    full_user = "\n".join([p.text for p in short_log] + [base, cue])
+    exact_state = base + "x" * (WINDOW - oracle(small.body, user=full_user))
+    exact_parts = (*short_log, part("current_state", "state", exact_state))
+    exact = prepare(
+        call("full-at-window"),
+        contract,
+        Assembly.decision(
+            exact_parts, prefix_memories=(), day_log=tuple(range(21)), pressure_at=len(exact_parts)
+        ),
+        audit,
+    )
+    full, floor = exact.record.candidates
+    assert exact.record.admitted_candidate == 0 and exact.admitted.candidate == full
+    assert full.omitted == () and exact.record.reason is None
+    assert oracle(exact.admitted.wire.body) == full.manifest.tokens_total == WINDOW
+    assert exact.record.floor_candidate == 1 and floor.omitted == (short_log[0].source,)
+    floor_wire = (tmp_path / floor.wire_sha256).read_bytes()
+    assert oracle(floor_wire) == floor.manifest.tokens_total > WINDOW
+    assert json.loads(floor_wire)["input"][1]["content"].startswith(NOTICE + "\n")
+
 
 def test_assembler_partition_pressure_and_index_floor(audit):
     from living_island.agents.v2.calls.contracts import Contract
@@ -403,33 +425,50 @@ def test_provider_faults_never_adopt_partial_or_malformed_output(tmp_path, audit
     prepared = prepare(call(), Contract("morning"), Assembly((), (), frozenset(), 0), audit)
     ok = reply('{"ids":[]}').response
     envelope = json.loads(ok.body)
+    missing_status = envelope.copy()
+    del missing_status["status"]
+    timeout_ms = 10
     cases = [
-        (TransportResponse(None, None, False, "timeout"), "timeout"),
-        (TransportResponse(None, None, False, "transport_error"), "server_error"),
-        (replace(ok, status=503), "server_error"),
-        (replace(ok, status=400), "provider_error"),
-        (replace(ok, complete=False), "invalid_output"),
-        (replace(ok, body=b""), "invalid_output"),
-        (replace(ok, body=b"\xff"), "invalid_output"),
-        (replace(ok, body=b"z" * (MAX_RESPONSE_BYTES + 1)), "invalid_output"),
-        (reply("{broken").response, "invalid_output"),
-        (reply('{"ids":"wrong"}').response, "invalid_output"),
+        (ScriptedReply(TransportResponse(None, None, False, "timeout")), "timeout"),
+        (ScriptedReply(ok, delay_ms=timeout_ms + 1), "timeout"),
+        (ScriptedReply(TransportResponse(None, None, False, "transport_error")), "server_error"),
+        (ScriptedReply(replace(ok, status=503)), "server_error"),
+        (ScriptedReply(replace(ok, status=429)), "rate_limit"),
+        (ScriptedReply(replace(ok, status=400)), "provider_error"),
+        (ScriptedReply(replace(ok, complete=False)), "invalid_output"),
+        (ScriptedReply(replace(ok, body=b"")), "invalid_output"),
+        (ScriptedReply(replace(ok, body=b"\xff")), "invalid_output"),
+        (ScriptedReply(replace(ok, body=b"z" * (MAX_RESPONSE_BYTES + 1))), "invalid_output"),
+        (ScriptedReply(replace(ok, body=json.dumps(missing_status).encode())), "invalid_output"),
+        (reply("{broken"), "invalid_output"),
+        (reply('{"ids":"wrong"}'), "invalid_output"),
     ]
     for change, expected in [
         ({"status": "incomplete"}, "invalid_output"),
+        ({"status": "failed"}, "provider_error"),
         ({"error": {"code": "x"}}, "provider_error"),
         ({"model": "different"}, "provider_error"),
         ({"usage": {"output_tokens": 8001}}, "invalid_output"),
         ({"output": []}, "invalid_output"),
     ]:
-        cases.append((replace(ok, body=json.dumps(envelope | change).encode()), expected))
-    transport = FakeTransport(clock, (ScriptedReply(raw) for raw, _ in cases))
-    for n, (raw, expected) in enumerate(cases):
+        cases.append(
+            (ScriptedReply(replace(ok, body=json.dumps(envelope | change).encode())), expected)
+        )
+    transport = FakeTransport(clock, (script for script, _ in cases))
+    for n, (script, expected) in enumerate(cases):
         returned = attempt(
-            prepared, n=n, journal=audit, transport=transport, clock=clock, has_running_action=False
+            prepared,
+            n=n,
+            journal=audit,
+            transport=transport,
+            clock=clock,
+            has_running_action=False,
+            timeout_ms=timeout_ms,
         )
         assert returned.terminal.error_class == expected
+        assert returned.terminal.latency_ms == script.delay_ms
         assert returned.parsed is None and returned.terminal.parsed_ref is None
+        raw = script.response
         if raw.body is None:
             assert returned.terminal.raw_output_ref is None
         else:
