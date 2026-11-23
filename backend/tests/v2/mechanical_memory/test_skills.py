@@ -1,5 +1,7 @@
 """MF-03 and MF-22 exercise the writer through delivered packet and day-log members."""
 
+from v2.mechanical_memory.mechanical_skill_support import add_skill
+
 
 def _look(archetype=None, material=None, **words):
     return {
@@ -24,29 +26,8 @@ def _skill_store(actor, *recipes):
     from living_island.memory.v2.store import MemoryStore
 
     store = MemoryStore(actor)
-    for number, (status, recipe) in enumerate(recipes, 1):
-        record = store.registry.parse(
-            {
-                "id": f"m:{actor}:{number}",
-                "owner_id": actor,
-                "kind": "skill",
-                "content": {"hypothesis": recipe, "evidence": {}, "status": status},
-                "sources": [{"kind": "observed", "entry_id": "d:earlier:1"}],
-                "created_tick": 0,
-                "updated_tick": 0,
-                "about_tick": None,
-                "confidence": 2,
-                "speech_derived": False,
-                "last_used_tick": None,
-                "use_count": 0,
-                "supersedes": None,
-                "superseded_by": None,
-                "needs_review": False,
-                "gist": f"My {recipe['verb']} technique",
-                "text": None,
-            }
-        )
-        store.apply(store.snapshot.version, "change_set", (record,))
+    for status, recipe in recipes:
+        add_skill(store, status, recipe)
     return store
 
 

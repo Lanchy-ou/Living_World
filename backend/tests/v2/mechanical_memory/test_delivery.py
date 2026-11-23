@@ -5,7 +5,7 @@ from functools import partial
 from v2.engine.conftest import pack as pack
 from v2.engine.conftest import setup as setup
 from v2.engine.perception.conftest import make_world as make_world
-from v2.engine.perception.test_packets import (
+from v2.mechanical_memory.mechanical_delivery_support import (
     BODY,
     GIFT_STACKS,
     SLEEP_RULE,
@@ -13,15 +13,11 @@ from v2.engine.perception.test_packets import (
     B,
     C,
     entity,
-    sleep,
+    pending,
     step,
-    tile,
     turn,
 )
-from v2.engine.perception.test_packets import (
-    packet as pending,
-)
-from v2.memory_store.test_store import envelope
+from v2.mechanical_memory.mechanical_skill_support import add_skill
 
 
 class Mind:
@@ -52,26 +48,15 @@ class Mind:
         return self.writer.deliver(evidence)
 
     def seed_skill(self, verb, target, inputs=()):
-        record = self.store.registry.parse(
-            envelope(
-                owner=self.store.snapshot.owner_id,
-                kind="skill",
-                content={
-                    "hypothesis": dict(
-                        verb=verb,
-                        target=target,
-                        inputs=list(inputs),
-                        instruments=[],
-                        circumstances=None,
-                        expected=["snaps"],
-                    ),
-                    "status": "active",
-                    "evidence": {},
-                },
-            )
+        hypothesis = dict(
+            verb=verb,
+            target=target,
+            inputs=list(inputs),
+            instruments=[],
+            circumstances=None,
+            expected=["snaps"],
         )
-        self.store.apply(0, "change_set", [record])
-        return record.id
+        return add_skill(self.store, "active", hypothesis)
 
     def quantities(self, direction):
         return {
@@ -83,10 +68,7 @@ class Mind:
 
 
 def _intent_map(*turns):
-    from living_island.world.v2.protocol import TurnSubmission
-
-    intents = [TurnSubmission.model_validate(t).action.intent for t in turns]
-    return {intent.intent_id: intent for intent in intents}
+    return {turn.action.intent.intent_id: turn.action.intent for turn in turns}
 
 
 def _gift(make_world, control):
@@ -102,7 +84,13 @@ def _gift(make_world, control):
     )
     submissions = []
     if sleeping:
-        rest = sleep(world, B, 6 if control == "waking" else 7)
+        rest = turn(
+            world,
+            B,
+            "act",
+            verb="sleep",
+            params={"duration_ticks": 6 if control == "waking" else 7},
+        )
         submissions.append(rest)
         step(world, rest)
         step(world)
@@ -121,7 +109,7 @@ def _gift(make_world, control):
     if sleeping:
         assert pending(world, B).perception.awareness == "asleep"
     if control == "failed":
-        move = turn(world, B, "move_to", target=tile(4, 1))
+        move = turn(world, B, "move_to", target={"kind": "tile", "position": {"x": 4, "y": 1}})
         submissions.append(move)
         step(world, move)
     else:

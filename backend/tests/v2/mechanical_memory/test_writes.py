@@ -2,6 +2,12 @@
 
 import pytest
 
+from v2.mechanical_memory.mechanical_agreement_support import (
+    AGREEMENT,
+    accepted_event,
+    agreement_exchange,
+)
+
 
 def _given(packet, audit):
     from living_island.agents.v2.context.day_log import DayLog
@@ -69,8 +75,6 @@ def _given(packet, audit):
 
 
 def test_mf_01_mechanical_log_versions_and_allocation(packet, audit):
-    from test_agreements import AGREEMENT, _event, _exchange
-
     from living_island.memory.v2.mechanical import MechanicalWriter
     from living_island.memory.v2.store import MemoryStore
     from living_island.sim.v2.harness.agreement_facts import (
@@ -80,10 +84,10 @@ def test_mf_01_mechanical_log_versions_and_allocation(packet, audit):
 
     # Both parties get one record, including the proposer asleep through acceptance.
     for owner in ("ella", "mia"):
-        snapshot, _ = _exchange(owner, packet, audit)
+        snapshot, _ = agreement_exchange(owner, packet, audit)
         assert len([r for r in snapshot.records() if r.kind == "commitment"]) == 1
     given, entries, intents = _given(packet, audit)
-    fact = project_agreement_facts([_event()], "ella")
+    fact = project_agreement_facts([accepted_event()], "ella")
     delivery = mechanical_delivery(given, entries, intents)
     store = MemoryStore("ella")
     writer = MechanicalWriter(store)
@@ -142,8 +146,6 @@ def test_reject_another_residents_writer_checkpoint():
 
 
 def test_reject_misrouted_party_fact_before_writes(packet, audit):
-    from test_agreements import _event
-
     from living_island.memory.v2.mechanical import MechanicalWriter
     from living_island.memory.v2.store import MemoryStore
     from living_island.sim.v2.harness.agreement_facts import (
@@ -156,6 +158,6 @@ def test_reject_misrouted_party_fact_before_writes(packet, audit):
     with pytest.raises(ValueError, match="wrong party"):
         writer.deliver(
             mechanical_delivery(given, entries, intents),
-            agreements=project_agreement_facts([_event()], "mia"),
+            agreements=project_agreement_facts([accepted_event()], "mia"),
         )
     assert writer.store.snapshot.version == 0
