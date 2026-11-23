@@ -1,0 +1,11 @@
+{
+  "name": "dl25-generic-act-no-item",
+  "config": "mechanics",
+  "seed": 20261108,
+  "actor": "ella",
+  "ticks": 1,
+  "plan": [
+    {"action_type": "eat", "target": null, "parameters": {}, "reason": null},
+    {"action_type": "wait", "target": null, "parameters": {}, "reason": null}
+  ]
+}
