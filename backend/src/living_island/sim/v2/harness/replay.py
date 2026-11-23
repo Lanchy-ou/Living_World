@@ -328,13 +328,14 @@ def replay_resident(
     rules: RuleStore,
     audit: AuditReader,
     *,
+    registry: KindRegistry,
     boundaries: int,
 ) -> Iterator[Replayed]:
-    """Replay a finite recording, including an optional final unacknowledged boundary."""
+    """Replay a finite recording using the memory kinds registered for its live session."""
     manifest.check_content(world.pack.source)
     snapshot = encode_snapshot(world)
     tick, cursor = world.tick, runtime.cursor
-    store = MemoryStore.from_snapshot(runtime.resident.period.store.restore(KindRegistry()))
+    store = MemoryStore.from_snapshot(runtime.resident.period.store.restore(registry), registry)
     verbs = tuple(spec.shape for spec in world.pack.verbs.values())
     for _ in range(boundaries):
         key = Journal.cursor(world.run_id, f"{tick}.boundary")

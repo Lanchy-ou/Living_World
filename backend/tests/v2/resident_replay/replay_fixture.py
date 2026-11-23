@@ -155,6 +155,7 @@ def verify(directory, record, kwargs, start_at="opening", *, boundaries):
             record.packets,
             RuleStore(directory),
             record.audit,
+            registry=record.session.resident.period.store.registry,
             boundaries=boundaries,
         )
     )

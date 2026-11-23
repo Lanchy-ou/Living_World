@@ -13,6 +13,53 @@ def replace_fact(path, key, raw):
         db.execute("UPDATE facts SET hash=?,body=? WHERE name=?", (digest(raw), raw, key))
 
 
+def test_replay_registered_kind_from_edit_and_checkpoint(tmp_path):
+    from living_island.memory.v2.kinds import Kind
+    from living_island.memory.v2.records import Content, Innate, MemoryRecord
+
+    class TideNote(Content):
+        kind = "tide_note"
+        water_level: int
+
+    recording, kwargs, fake = start(tmp_path)
+    store = recording.session.resident.period.store
+    store.registry.register(Kind(TideNote, 8, 0, frozenset()))
+    base = store.snapshot
+    note = MemoryRecord(
+        id=base.next_id(),
+        owner_id=base.owner_id,
+        kind=TideNote.kind,
+        content=TideNote(water_level=2),
+        created_tick=0,
+        updated_tick=0,
+        about_tick=None,
+        sources=[Innate()],
+        confidence=3,
+        last_used_tick=None,
+        use_count=0,
+        supersedes=None,
+        superseded_by=None,
+        needs_review=False,
+        speech_derived=False,
+        gist="The water level is two.",
+        text=None,
+    )
+    write = store.apply(base.version, "mechanical", [note])
+    recording.save(tmp_path / "with_note.json")
+    recording.advance()
+    recorded_calls = tuple(fake.calls)
+    assert recorded_calls
+
+    (from_opening,) = verify(tmp_path, recording, kwargs, boundaries=1)
+    (from_checkpoint,) = verify(tmp_path, recording, kwargs, "with_note", boundaries=1)
+
+    assert from_opening.revisions == (write.store_hash, *from_checkpoint.revisions)
+    assert from_opening.boundary == from_checkpoint.boundary
+    assert from_checkpoint.boundary.store_hash == store.snapshot.store_hash
+    assert from_opening.decision == from_checkpoint.decision == recording.session.records[0]
+    assert tuple(fake.calls) == recorded_calls
+
+
 def test_dl16_saved_submissions_and_resident_continuation(tmp_path):
     from living_island.sim.v2.harness.checkpoint import load
     from living_island.sim.v2.harness.composition import compose
