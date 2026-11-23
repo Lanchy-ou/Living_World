@@ -981,9 +981,11 @@ from zero elapsed work for a new action. It reports the final change even
 when the action or process settles before delivery. Removing the running
 view itself does not generate a report.
 
+Owner decision (2026-11-23): confirmed as written.
+
 ## CR-P3.5-EN-05: Reachable packets for WAP-19 report order
 
-Status: proposed, awaiting owner.
+Status: approved by the owner (2026-11-23), as recommended.
 
 - Current rule. WAP-19 requires one packet containing addressed and
   overheard speech, a cue upgrade, a progress step and a wake, among its
@@ -1017,6 +1019,8 @@ leaf with its overlays, so a prefix can be pinned even when it fails
 standalone validation. Confirm this encoding for the coordinator's run
 package.
 
+Owner decision (2026-11-23): confirmed as written.
+
 ## OQ-P3.5-PR-05: Read access to the frozen boundary
 
 Should the engine expose pending deliveries and resident turn ordinals
@@ -1038,9 +1042,11 @@ submissions and acknowledgement IDs as separate inputs. The runner schedules
 turns from the packet batch and journals it before delivery. The read-only
 ordinal access remains provisionally accepted.
 
+Owner decision (2026-11-23): confirmed as written.
+
 ## CR-P3.5-PR-06: A private trigger for an externally scheduled fallback
 
-Status: proposed, awaiting owner.
+Status: approved by the owner (2026-11-23), as recommended.
 
 - Current rule: protocol §11.2 enqueues `PLAN_FINISHED` only for a successful
   legacy action with no queued intent. Decision loop §8.3 can invoke the
@@ -1070,9 +1076,11 @@ only for a representable addressed request. A v1 request has no deadline,
 so a native proposal with `due_tick` keeps its text and addressee as a
 statement, without `REPLY_REQUIRED`. Confirm these mappings before M14.
 
+Owner decision (2026-11-23): confirmed as written.
+
 ## CR-P3.5-PR-06-B3: Private typed feedback input for the frozen planner
 
-Status: proposed, awaiting owner.
+Status: approved by the owner (2026-11-23), as recommended.
 
 - Current rule — WAP §11.2 confines bridge feedback to private policy state
   and decision records and excludes every `Perception`. The frozen v1 rule
