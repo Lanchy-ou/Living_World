@@ -407,6 +407,9 @@ are under `C:/Temp/li-p35`, with stems `pr07-focused-18d14d5407ff` and
 
 ## Owner review at M12 Gate 3
 
+**Signed by the owner on 2026-11-23.** M12 is accepted.
+
+
 The owner reviews this report and Claude Code's Gate 2 and acceptance
 findings before signing [M12](../../plans/p3.5-implementation-plan-v0.1.md#4-milestones-and-gates).
 

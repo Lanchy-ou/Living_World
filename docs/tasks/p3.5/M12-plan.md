@@ -7,6 +7,14 @@ through its adapters, and the synthetic-pack engine tests and the rule-pack
 extension test pass (ADR 0007 D8, ADR 0010, ADR 0014 D3). The owner checks
 the equivalence report at Gate 3.
 
+> **M12 accepted (owner, 2026-11-23).** The owner signed Gate 3 on the
+> [equivalence report](M12-equivalence-report.md) and Claude Code's Gate 2
+> review of P3.5-PR-07 (PR #40). All 36 cases matched v1 at every boundary,
+> the four determinism repeats were identical, and no run reached a WAP-26
+> exception. The run scope follows the owner's rulings in OQ-P3.5-PR-07.
+> Known limits: the narrowed development matrix, and run time, which
+> P3.5-EN-08 and P3.5-EN-09 address in M13.
+
 Spec baseline: `8c803ed`, main after PR #5. All eight P3.5 specs are frozen;
 the tests named below are the acceptance tests of those specs.
 
