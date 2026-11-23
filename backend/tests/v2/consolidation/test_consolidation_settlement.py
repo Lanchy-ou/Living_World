@@ -109,7 +109,6 @@ def test_mf08_rebase_preserves_facts_and_allocation_across_restore(packet, fake_
     from living_island.sim.v2.harness.consolidation import PeriodCoordinator
     from living_island.world.v2.protocol import Terms
     from v2.consolidation.conftest import journal, resident
-    from v2.mechanical_memory.test_agreements import TERMS
 
     facts = {}
     original = resident(journal(facts))
@@ -161,7 +160,14 @@ def test_mf08_rebase_preserves_facts_and_allocation_across_restore(packet, fake_
         agreement_id="island:0000000102:000002",
         role="promisee",
         counterpart_id="mia",
-        terms=Terms.model_validate(TERMS),
+        terms=Terms.model_validate(
+            {
+                "promisor_id": "mia",
+                "promisee_id": "ella",
+                "what": {"kind": "give_item", "item": {"archetype_id": "fruit", "quantity": 2}},
+                "due_tick": 300,
+            }
+        ),
         due_tick=300,
         accepted_tick=102,
         proposal_id="island:0000000099:000000",
@@ -286,8 +292,17 @@ def test_mf16_only_full_periods_on_committed_change_wire_leave_pending(
     assert result.record.pending_after == ("p:ella:1",)
 
 
-@pytest.mark.parametrize("intervening", ["edit", "remove", "create"])
-def test_reject_model_owned_change_between_snapshots_before_publishing(packet, audit, intervening):
+@pytest.mark.parametrize(
+    ("intervening", "expected_conflict"),
+    [
+        ("remove", "frozen record removed: m:ella:1"),
+        ("edit", "model-owned field changed: m:ella:1"),
+        ("create", "non-mechanical record created: m:ella:2"),
+    ],
+)
+def test_rebase_rejects_version_conflicts_before_publishing(
+    packet, audit, intervening, expected_conflict
+):
     from living_island.memory.v2.changes import stage_change_set
     from living_island.memory.v2.provenance import SentInput
     from living_island.memory.v2.validation import decode_change_set
@@ -314,6 +329,7 @@ def test_reject_model_owned_change_between_snapshots_before_publishing(packet, a
             tick=105, turn_id="turn", text="I will find fruit.", source=original.sources[0]
         )
     changed = store.snapshot
-    with pytest.raises(VersionConflict):
+    with pytest.raises(VersionConflict) as conflict:
         commit_rebased(store, staged)
+    assert str(conflict.value) == expected_conflict
     assert store.snapshot is changed
