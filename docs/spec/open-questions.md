@@ -800,6 +800,47 @@ preserve the P1/P2 reference hashes in plan section 3.2. Refuse unsupported vers
 rather than guessing migrations. Recommendation: approve this scoped amendment and
 the decision sheet's recommended options; keep OQ-063 outside this task.
 
+## OQ-P3.5-M14-1: Schema 0.2 resident profiles beside the frozen profiles
+
+Status: proposed for M14 owner disposition. Affects P3.5-MM-01 and the
+five-resident rehearsal. Memory model §3.7 gives three trait vectors and
+assigns two additional profiles to M14. It names the profile path without
+a coexistence convention. The current P3 CharacterProfile reader requires
+schema 0.1. Replacing its inputs would invalidate the frozen v1 lane before
+the M12 D2 removal point.
+
+Options: keep explicitly pinned 0.2 files in `content/characters/v2/`
+alongside 0.1, or review a separate migration of profile paths and their
+historical consumers. Recommend the versioned directory, loading by explicit
+schema, ID and hash. Reuse the exact explorer, cautious and cooperative vectors
+of §3.7. Ask the owner to select two further names and five trait base values
+per profile. Until then use named synthetic profiles in the offline fixture
+only. No production personality or change of frozen spec is implied. If the
+literal §3.7 path needs amendment, obtain its disposition through phase plan
+§7 before landing that path change.
+
+## OQ-P3.5-M14-2: Evidence sufficient for the paid provider check and horizon
+
+Status: proposed for M14 owner disposition before dispatch. ADR 0007 D7
+and decision loop §8.1 require single-copy acceptance and a parse comparison
+with P3. They do not prescribe a sample size or a statistical test. Phase
+plan §4 requires several game days without assigning a minimum number.
+
+Options: use a fixed small sample covering all six call kinds, or preregister
+a larger sample within the same check. Recommend one prepared request from
+each call kind, each with its own schema once in the structured-output field.
+Compare first-pass decision parsing with the historical M9 final 22/22, and
+record all attempt-level successes and failures by kind. Require all six
+accepted and parsed on the fixed sample. Report denominators and limitations.
+A different comparison rule or sample must be approved before the check.
+
+For the run, recommend three complete calendar game days (432 ticks), then
+size the affordable whole-day horizon from the measured check and the
+one-resident fake rehearsal. The owner may choose a different multi-day
+target before the run, hold a run that cannot fit, or authorize shorter
+partial evidence. Until approved and measured, the recommendation is neither
+a purchased duration nor a milestone pass.
+
 ## OQ-P3.5-RR-01: Pack encoding and proof defaults
 
 The frozen rule representation and starter content specs leave the following
