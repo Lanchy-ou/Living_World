@@ -46,6 +46,17 @@ root_package = "living_island"
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
+id = "resident-audit-isolation"
+name = "Resident memory, decisions and consolidation cannot read the audit"
+type = "forbidden"
+source_modules = [
+    "living_island.agents",
+    "living_island.memory",
+    "living_island.sim.v2.harness.consolidation",
+]
+forbidden_modules = ["living_island.persistence.v2.audit"]
+
+[[tool.importlinter.contracts]]
 name = "world is pure: no other subpackage, no LLM/network libraries"
 type = "forbidden"
 source_modules = ["living_island.world"]
