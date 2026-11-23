@@ -1,0 +1,69 @@
+[[instance]]
+id = "clay_bank_01"
+archetype = "deposit"
+material = "clay"
+at = { tile = [37, 31] }
+state = { store = { archetype = "clay_lump", capacity = 16, count = 16 } }
+
+[[instance]]
+id = "grass_patch_01"
+archetype = "deposit"
+material = "grass"
+at = { tile = [30, 34] }
+state = { store = { archetype = "grass_tuft", capacity = 12, count = 12 } }
+
+[[instance]]
+id = "stone_outcrop_01"
+archetype = "deposit"
+material = "stone"
+at = { tile = [37, 28] }
+state = { store = { archetype = "stone", capacity = 20, count = 20 } }
+
+[[instance]]
+id = "grass_patch_02"
+archetype = "deposit"
+material = "grass"
+at = { tile = [40, 36] }
+state = { store = { archetype = "grass_tuft", capacity = 12, count = 12 } }
+
+[[instance]]
+id = "flint_scatter_01"
+archetype = "deposit"
+material = "flint"
+at = { tile = [28, 25] }
+state = { store = { archetype = "flint_nodule", capacity = 12, count = 12 } }
+
+[[instance]]
+id = "deadwood_02"
+archetype = "deposit"
+material = "wood"
+at = { tile = [31, 22] }
+state = { store = { archetype = "branch", capacity = 8, count = 8 } }
+
+[[instance]]
+id = "deadwood_01"
+archetype = "deposit"
+material = "wood"
+at = { tile = [47, 31] }
+state = { store = { archetype = "branch", capacity = 8, count = 8 } }
+
+[[instance]]
+id = "vine_tangle_02"
+archetype = "deposit"
+material = "vine"
+at = { tile = [36, 44] }
+state = { store = { archetype = "vine", capacity = 10, count = 10 } }
+
+[[instance]]
+id = "flint_scatter_02"
+archetype = "deposit"
+material = "flint"
+at = { tile = [27, 41] }
+state = { store = { archetype = "flint_nodule", capacity = 12, count = 12 } }
+
+[[instance]]
+id = "vine_tangle_01"
+archetype = "deposit"
+material = "vine"
+at = { tile = [48, 26] }
+state = { store = { archetype = "vine", capacity = 10, count = 10 } }

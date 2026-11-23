@@ -1,0 +1,236 @@
+# Authored verb rules (starter §5.5).
+
+[[rule]]
+id = "gather_deposit"
+trigger = "verb:gather"
+target = { where = { archetype = "deposit" } }
+conditions = [
+  { id = "stamina", kind = "need", need = "stamina", op = ">", value = "min" },
+  { id = "room", kind = "free_slots", op = ">=", value = 1 },
+  { id = "stock", kind = "state", of = "target", field = "store.count", op = ">=", value = 1 },
+]
+work_ticks = 3
+exhaustion_stops = true
+effects = [
+  { op = "move", from = "target.store", to = "actor", quantity = 1 },
+  { op = "need", need = "stamina", delta = -150, timing = "completion" },
+]
+phenomena = { success = ["takes_some"], unmet = ["nothing_happens"], unmet_by_check = { stamina = ["too_tired"], room = ["hands_full"], stock = ["finds_nothing"] } }
+
+[[rule]]
+id = "knap_flake"
+trigger = "verb:strike"
+target = { where = { archetype = "flint_nodule" } }
+instruments = [{ slot = "hammer", where = { material = "stone" }, qty = 1 }]
+conditions = [{ id = "nodule", kind = "state", of = "target", field = "quantity", op = ">=", value = 1 }]
+work_ticks = 2
+success_per_mille = 750
+on_chance_failed = "keep_inputs"
+conservation = "inputs_to_outputs"
+effects = [{ op = "consume", of = "target", quantity = 1 }]
+outputs = [{ archetype = "sharp_flake", material = "flint", quantity = 2, at = "actor" }]
+phenomena = { success = ["splits"], unmet = ["nothing_happens"], chance_failed = ["slips"] }
+
+[[rule]]
+id = "twist_cord"
+trigger = "verb:combine"
+inputs = [{ slot = "fibre", where = { flexible = true }, qty = 3 }]
+work_ticks = 4
+outputs = [{ archetype = "cord", material_from = "fibre", quantity = 1, at = "actor" }]
+phenomena = { success = ["fits_together"], unmet = ["nothing_happens"] }
+
+[[rule]]
+id = "make_stone_axe"
+trigger = "verb:combine"
+inputs = [
+  { slot = "head", where = { sharp = true, hardness_min = 4 }, qty = 1 },
+  { slot = "handle", where = { material = "wood", long = true }, qty = 1 },
+  { slot = "bind", where = { archetype = "cord", strength_min = 3 }, qty = 1 },
+]
+work_ticks = 6
+outputs = [{ archetype = "stone_axe", material_from = "head", quantity = 1, at = "actor" }]
+phenomena = { success = ["fits_together", "holds_firm"], unmet = ["nothing_happens"] }
+
+[[rule]]
+id = "bind_snaps"
+trigger = "verb:combine"
+inputs = [{ slot = "head",   where = { sharp = true, hardness_min = 4 }, qty = 1 },
+          { slot = "handle", where = { material = "wood", long = true }, qty = 1 },
+          { slot = "bind",   where = { archetype = "cord", strength_max = 2 }, qty = 1 }]
+work_ticks = 6
+conservation = "inputs_to_outputs"
+outputs = [{ archetype_from = "head",   material_from = "head",   quantity = 1, at = "actor" },
+           { archetype_from = "handle", material_from = "handle", quantity = 1, at = "actor" }]
+phenomena = { success = ["snaps"], unmet = ["nothing_happens"], chance_failed = [] }
+
+[[rule]]
+id = "cut_wood_with_axe"
+trigger = "verb:cut"
+target = { where = { archetype = "deposit", material = "wood" } }
+instruments = [{ slot = "axe", where = { archetype = "stone_axe" }, qty = 1 }]
+conditions = [
+  { id = "stamina", kind = "need", need = "stamina", op = ">", value = "min" },
+  { id = "room", kind = "free_slots", op = ">=", value = 2 },
+  { id = "stock", kind = "state", of = "target", field = "store.count", op = ">=", value = 2 },
+]
+work_ticks = 2
+exhaustion_stops = true
+effects = [
+  { op = "move", from = "target.store", to = "actor", quantity = 2 },
+  { op = "set_state", of = "slot:axe", field = "durability.wear", add = 1 },
+  { op = "need", need = "stamina", delta = -150, timing = "completion" },
+]
+phenomena = { success = ["cuts_through"], unmet = ["nothing_happens"], unmet_by_check = { stamina = ["too_tired"], room = ["hands_full"], stock = ["finds_nothing"] } }
+
+[[rule]]
+id = "light_fire"
+trigger = "verb:light"
+target = { where = { archetype = "branch" } }
+instruments = [{ slot = "striker", where = { material = "flint" }, qty = 1 },
+               { slot = "hammer",  where = { material = "stone" }, qty = 1 }]
+inputs = [{ slot = "tinder", where = { dry = true, flammable = true }, qty = 1 }]
+conditions = [{ id = "pile", kind = "state", of = "target", field = "quantity", op = ">=", value = 2 }]
+work_ticks = 2
+success_per_mille = 500
+on_chance_failed = "consume_inputs"
+conservation = "inputs_to_outputs"
+outputs = [{ archetype = "campfire", quantity = 1, at = "target.tile" }]
+effects = [{ op = "consume", of = "target", quantity = 2 }]
+phenomena = { success = ["catches_fire"], unmet = ["nothing_happens"], chance_failed = ["smokes"], unmet_by_check = { pile = ["fizzles"] } }
+
+[[rule]]
+id = "feed_fire"
+trigger = "verb:light"
+target = { where = { archetype = "campfire" } }
+inputs = [{ slot = "fuel", where = { material = "wood" }, qty = 1 }]
+work_ticks = 1
+effects = [{ op = "set_state", of = "target", field = "fuel.ticks_left", add = 18 }]
+phenomena = { success = ["catches_fire"], unmet = ["nothing_happens"] }
+
+[[rule]]
+id = "shape_pot"
+trigger = "verb:combine"
+inputs = [{ slot = "clay", where = { archetype = "clay_lump" }, qty = 2 }]
+work_ticks = 4
+outputs = [{ archetype = "unfired_pot", material_from = "clay", quantity = 1, at = "actor" }]
+phenomena = { success = ["fits_together"], unmet = ["nothing_happens"] }
+
+[[rule]]
+id = "fill_pot"
+trigger = "verb:fill"
+target = { where = { archetype = "clay_pot" } }
+conditions = [{ id = "spring", kind = "terrain_near", terrain = "spring", distance = { min = 1, max = 1 } },
+              { id = "room",   kind = "state", of = "target", field = "container.free", op = ">=", value = 1 }]
+work_ticks = 1
+conservation = "source"
+outputs = [{ archetype = "water", quantity = { of = "fit:target.contents" }, at = "target.contents", source = "spring_water" }]
+phenomena = { success = ["fills_up"], unmet = ["nothing_happens"], chance_failed = [], unmet_by_check = { spring = ["no_water_here"], room = ["already_full"] } }
+
+[[rule]]
+id = "drink_from_pot"
+trigger = "verb:drink"
+instruments = [{ slot = "pot", where = { archetype = "clay_pot" }, qty = 1 }]
+conditions = [
+  { id = "need", kind = "need", need = "hydration", op = "<", value = "max" },
+  { id = "water", kind = "state", of = "slot:pot", field = "container.count:water", op = ">=", value = 1 },
+]
+work_ticks = 1
+effects = [
+  { op = "consume", of = "slot:pot.contents", archetype = "water", quantity = 1 },
+  { op = "need", need = "hydration", delta = 6000, timing = "completion" },
+]
+phenomena = { success = ["drinks"], unmet = ["nothing_happens"], unmet_by_check = { need = ["not_thirsty"], water = ["no_water_here"] } }
+
+[[rule]]
+id = "mark_shelter_site"
+trigger = "verb:build"
+target = { terrain = "grass" }
+work_ticks = 2
+outputs = [{ archetype = "shelter_site", quantity = 1, at = "target.tile" }]
+phenomena = { success = ["site_marked"], unmet = ["nothing_happens"] }
+
+[[rule]]
+id = "sleep_in_shelter"
+trigger = "verb:sleep"
+conditions = [{ id = "shelter", kind = "entity_near", where = { has_component = "shelter" }, distance = { min = 0, max = 1 } }]
+work_ticks = { param = "duration_ticks" }
+effects = [{ op = "need", need = "stamina", delta = 220, timing = "per_tick" }]
+phenomena = { success = ["sleeps"], unmet = ["nothing_happens"] }
+
+# Authored world rules (starter §5.6).
+
+[[rule]]
+id = "regrow_deadwood"
+trigger = "every:72"
+subject = { archetype = "deposit", material = "wood" }
+conditions = [{ id = "room", kind = "state", of = "subject", field = "store.free", op = ">=", value = 1 }]
+conservation = "source"
+outputs = [{ archetype = "branch", quantity = { upto = 1, of = "fit:subject.store" }, at = "subject.store", source = "deadwood_regrowth" }]
+
+[[rule]]
+id = "regrow_grass"
+trigger = "every:48"
+subject = { archetype = "deposit", material = "grass" }
+conditions = [{ id = "room", kind = "state", of = "subject", field = "store.free", op = ">=", value = 1 }]
+conservation = "source"
+outputs = [{ archetype = "grass_tuft", quantity = { upto = 1, of = "fit:subject.store" }, at = "subject.store", source = "grass_regrowth" }]
+
+[[rule]]
+id = "bake_pot"
+trigger = "every:6"
+subject = { archetype = "campfire" }
+inputs = [{ slot = "pot", where = { archetype = "unfired_pot" }, qty = 1 }]
+conditions = [{ id = "lit", kind = "state", of = "subject", field = "fuel.ticks_left", op = ">=", value = 1 }]
+outputs = [{ archetype = "clay_pot", material = "fired_clay", quantity = 1, at = "subject.tile" }]
+
+[[rule]]
+id = "fire_burns"
+trigger = "every:1"
+subject = { archetype = "campfire" }
+conditions = [{ id = "lit", kind = "state", of = "subject", field = "fuel.ticks_left", op = ">=", value = 1 }]
+effects = [{ op = "set_state", of = "subject", field = "fuel.ticks_left", add = -1 }]
+
+[[rule]]
+id = "fire_goes_out"
+trigger = "when:out"
+subject = { archetype = "campfire" }
+conditions = [{ id = "out", kind = "state", of = "subject", field = "fuel.ticks_left", op = "==", value = 0 }]
+effects = [{ op = "consume", of = "subject" }]
+
+[[rule]]
+id = "fruit_rots"
+trigger = "when:old"
+subject = { archetype = "fruit" }
+conditions = [{ id = "old", kind = "state", of = "subject", field = "age", op = ">=", value = 432 }]
+conservation = "inputs_to_outputs"
+effects = [{ op = "consume", of = "subject" }]
+outputs = [{ archetype = "rotten_fruit", quantity = { of = "subject.quantity" }, at = "subject.place" }]
+phenomena = { success = [], unmet = [], chance_failed = [] }
+
+[[rule]]
+id = "rotten_fruit_crumbles"
+trigger = "when:gone"
+subject = { archetype = "rotten_fruit" }
+conditions = [{ id = "gone", kind = "state", of = "subject", field = "age", op = ">=", value = 288 }]
+effects = [{ op = "consume", of = "subject" }]
+
+[[rule]]
+id = "axe_breaks"
+trigger = "when:broken"
+subject = { archetype = "stone_axe" }
+conditions = [{ id = "broken", kind = "state", of = "subject", field = "durability.left", op = "==", value = 0 }]
+effects = [{ op = "consume", of = "subject" }]
+outputs = [{ archetype = "branch", quantity = 1, at = "subject.place" }]
+
+[[rule]]
+id = "finish_shelter"
+trigger = "when:done"
+subject = { archetype = "shelter_site" }
+inputs = [
+  { slot = "frame", where = { material = "wood", long = true }, qty = 4 },
+  { slot = "cover", where = { archetype = "grass_tuft" }, qty = 4 },
+  { slot = "tie", where = { archetype = "cord", strength_min = 3 }, qty = 1 },
+]
+conditions = [{ id = "done", kind = "work_complete" }]
+outputs = [{ archetype = "shelter", quantity = 1, at = "subject.tile" }]
+effects = [{ op = "consume", of = "subject" }]
