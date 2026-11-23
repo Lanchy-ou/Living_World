@@ -289,10 +289,17 @@ class World:
 
     def pending_packets(self) -> tuple[BoundaryDelivery, ...]:
         """Return detached copies of the committed packets."""
-        return tuple(
-            packet.model_copy(deep=True)
-            for _, packet in sorted(self.state.pending_deliveries.items())
-        )
+        packets = []
+        for _, packet in sorted(self.state.pending_deliveries.items()):
+            view = packet.perception
+            # Tile rows and their coordinates are frozen and contain only scalar
+            # fields. Detach their lists and deep-copy the rest of the packet.
+            memo = {
+                id(view.visible_tiles): view.visible_tiles.copy(),
+                id(view.explored_static_tiles): view.explored_static_tiles.copy(),
+            }
+            packets.append(deepcopy(packet, memo))
+        return tuple(packets)
 
     def step(
         self,
