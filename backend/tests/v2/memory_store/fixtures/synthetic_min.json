@@ -1,0 +1,14 @@
+{
+  "profile_schema_version": "0.2",
+  "profile_id": "synthetic_min",
+  "values": [
+    "Synthetic profile for memory store tests."
+  ],
+  "traits": {
+    "curiosity": 0,
+    "caution": 0,
+    "sociability": 0,
+    "trustfulness": 0,
+    "diligence": 0
+  }
+}
