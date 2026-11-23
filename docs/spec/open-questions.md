@@ -3,6 +3,40 @@
 Add an entry whenever the spec is missing or ambiguous. Do not invent rules or numbers:
 record the question, make the smallest reversible assumption, and flag it in your handoff.
 
+## OQ-P3.5-M13-1: Tuning ranges and fixed starter test vectors
+
+Proposed, awaiting owner. Starter content §9.3 permits changes to fatigue,
+regrowth, fire fuel and wear, while §5.9 and CT-08/CT-09 give exact example
+lifetimes, periods, cut counts and fatigue values. Which evidence should count
+if a candidate within the tuning range passes §9 only after changing one of
+those numbers?
+
+Use the published values for the initial candidate and run the fixed vectors
+on the qualified hash. Prefer tuning within §9.3 that preserves those vectors.
+If the two requirements diverge, retain both candidate hashes and both sets of
+results. The owner can keep the fixed expectations or authorize distinct
+reference and tuned-candidate expectations through the phase plan §7 process.
+Until then a changed numeric outcome cannot close the affected test. An
+out-of-range change always requires a change request. Tracked by M13 D5.
+
+## OQ-P3.5-M13-2: Recipe-ID scan when starter names also name engine concepts
+
+Proposed, awaiting owner. EN-22 excludes recipe-specific engine code.
+OQ-P3.5-CT-01-EN-22 covers the existing `fruit_tree` terrain declarations.
+Loading the real starter pack adds the material `grass` (also a terrain),
+archetype `shelter` (also a component), and item `branch` (also used to name
+a settlement branch). The current lexical scan in
+`backend/tests/v2/pack/test_recipe_free.py` cannot distinguish these uses.
+Which occurrences can the scanner accept while still detecting a starter
+recipe lookup in `world/v2`?
+
+CT-03 proposes distinguishing the existing generic source contexts and
+retaining detection elsewhere, including a planted recipe reference with the
+same spelling on the same line. Keep the real starter names, the disjoint
+synthetic pack and EN-22's prohibition. A blanket exempt-name list would
+hide actual recipe dependencies. If a source occurrence really does implement
+content-specific behavior, correct it through the engine defect procedure.
+
 ## CR-006: P305-U3 Unicode schema compatibility (approved 2026-11-13)
 
 Current rule: cognition pins `p3-actions/0.1`; the provider must send its schema
