@@ -1102,3 +1102,71 @@ Status: approved by the owner (2026-11-23), as recommended.
   carrier. The separate request-only marker CR keeps `PLAN_FINISHED` in the
   private decision request, with `native_fallback` provenance in the sim
   decision trace and no synthetic marker in the ingested delivery.
+
+## OQ-P3.5-M13-1: Tuning ranges and fixed starter test vectors
+
+The owner approved D5 on 2026-11-23. Starter content §9.3 permits changes to fatigue,
+regrowth, fire fuel and wear, while §5.9 and CT-08/CT-09 give exact example
+lifetimes, periods, cut counts and fatigue values. Which evidence should count
+if a candidate within the tuning range passes §9 only after changing one of
+those numbers?
+
+Use the published values for the initial candidate and run the fixed vectors
+on the qualified hash. Keep tuning within §9.3 and preserve those vectors.
+If the two requirements diverge, retain both candidate hashes and both sets of
+results. If that exception arises, the owner must decide whether to keep the
+fixed expectations or authorize distinct reference and tuned-candidate
+expectations through the phase plan §7 process.
+Until then a changed numeric outcome cannot close the affected test. An
+out-of-range change always requires a change request. Tracked by M13 D5.
+
+## OQ-P3.5-M13-2: Recipe-ID scan when starter names also name engine concepts
+
+The owner approved D7 on 2026-11-23. EN-22 excludes recipe-specific engine code.
+OQ-P3.5-CT-01-EN-22 covers the existing `fruit_tree` terrain declarations.
+Loading the real starter pack adds the material `grass` (also a terrain),
+archetype `shelter` (also a component), and item `branch` (also used to name
+a settlement branch). The current lexical scan in
+`backend/tests/v2/pack/test_recipe_free.py` cannot distinguish these uses.
+Which occurrences can the scanner accept while still detecting a starter
+recipe lookup in `world/v2`?
+
+CT-03 implements D7 by distinguishing the existing generic source contexts and
+retaining detection elsewhere, including a planted recipe reference with the
+same spelling on the same line. Keep the real starter names, the disjoint
+synthetic pack and EN-22's prohibition. A blanket exempt-name list would
+hide actual recipe dependencies. If a source occurrence really does implement
+content-specific behavior, correct it through the engine defect procedure.
+
+## OQ-P3.5-M14-1: Schema 0.2 resident profiles beside the frozen profiles
+
+Memory model §3.7 names three schema 0.2 trait vectors and assigns two more
+profiles to M14. How should 0.2 files coexist with the 0.1 inputs of the
+frozen P3 reader, and who supplies the remaining profiles? The options were
+a versioned directory with explicit schema, ID and hash pins, or a separate
+migration of the old paths and their historical consumers.
+
+Owner decision (2026-11-23, M14 D6). Put schema 0.2 profiles in
+`content/characters/v2/` beside the existing 0.1 inputs. MM-01 uses the
+exact explorer, cautious and cooperative vectors from §3.7 and may finish
+with synthetic fixture profiles for the two additional residents. The owner
+will provide their names and five trait values each before P3.5-EV-05. If
+they arrive after MM-01, EV-05 lands those two files for its rehearsal.
+
+## OQ-P3.5-M14-2: Evidence sufficient for the paid provider check and horizon
+
+ADR 0007 D7 and decision loop §8.1 require single-copy schema acceptance and
+a parse comparison with P3. They leave sample size and comparison method to
+the live check. Phase plan §4 calls for several game days without a fixed
+duration. The options were a small fixed sample across the six call kinds or
+a larger sample declared before the check, and a multi-day horizon sized
+from the measured calls and the one-resident fake rehearsal.
+
+Owner decision (2026-11-23, M14 D7 and D2). Send one prepared request of each
+of the six call kinds in the provider check, with each request's schema once
+in its structured-output field. All six must be accepted and parsed before
+paid step 2. Report first-pass decision parsing against the final M9 smoke
+(22/22), with per-kind attempts, outcomes, denominators and the sample's
+limits. Target three complete calendar game days (432 ticks). Size the run
+from the measured costs under the CNY 20 total P3.5 cap. If fewer than three
+days fit, hold the run and ask the owner. Both paid steps require signed M12.
