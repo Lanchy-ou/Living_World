@@ -1173,7 +1173,8 @@ days fit, hold the run and ask the owner. Both paid steps require signed M12.
 
 ## OQ-P3.5-PR-07: Run scope of the M12 equivalence matrix
 
-Protocol §11.3 (CR-011) checks the compatibility pack "on the P2 matrices".
+Protocol §11.3 (CR-011) requires M12 to check that no run of the P2 matrix
+reaches a declared exception.
 P2 §1 lists 7 development arms × 20 seeds and 20 acceptance seeds, and
 OQ-060 lets the owner approve a shorter prefix of the development list. A
 full run of the 160 cases, twice, took about 18 hours on the shared host.
