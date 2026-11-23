@@ -29,6 +29,42 @@ def test_pending_readers_own_exploration_and_nested_entity_lists(pack, setup, tm
     assert tuple(map(canonical_bytes, journal.read(0))) == expected
 
 
+def test_runner_callbacks_own_their_tile_lists(pack, setup, tmp_path):
+    from living_island.persistence.v2.journal import PacketJournal
+    from living_island.sim.v2.manifest import TerminalStop
+    from living_island.sim.v2.runner import Runner
+    from living_island.world.v2.engine import initialize
+    from living_island.world.v2.protocol import canonical_bytes
+
+    world = initialize(pack, setup)
+    expected = {packet.actor_id: canonical_bytes(packet) for packet in world.pending_packets()}
+    journal = PacketJournal(tmp_path, world.run_id)
+
+    def edit(packet):
+        assert canonical_bytes(packet) == expected[packet.actor_id]
+        view = packet.perception
+        assert view.visible_tiles and view.explored_static_tiles
+        view.visible_tiles.clear()
+        view.explored_static_tiles.clear()
+        view.visible_entities[0].observable_signs.append("weak")
+
+    def deliver(packet):
+        edit(packet)
+        return False
+
+    def decide(request):
+        edit(request.delivery)
+        return TerminalStop("test stop", None)
+
+    runner = Runner(world, decide, deliver=deliver, journal=journal)
+    assert runner.advance() is None
+    assert runner.manifest.stop is not None
+    assert {
+        packet.actor_id: canonical_bytes(packet) for packet in world.pending_packets()
+    } == expected
+    assert {packet.actor_id: canonical_bytes(packet) for packet in journal.read(0)} == expected
+
+
 def test_model_packet_owns_lists_after_filtering(pack, setup):
     from living_island.agents.types import OwnProfile, PolicyConfig, RuleParams
     from living_island.sim.v2.compat.policy_host import NeutralActionEnd, PolicyHost

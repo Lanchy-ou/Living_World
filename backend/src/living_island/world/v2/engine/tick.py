@@ -267,6 +267,18 @@ class FallbackFact:
     policy_id: str
 
 
+def detach_packet(packet: BoundaryDelivery) -> BoundaryDelivery:
+    """Give one packet consumer ownership of its mutable data."""
+    view = packet.perception
+    # Detach the tile lists because consumers can edit them, sharing their frozen rows.
+    memo = {
+        id(view.visible_tiles): view.visible_tiles.copy(),
+        id(view.explored_static_tiles): view.explored_static_tiles.copy(),
+    }
+    # Detach the other mutable descendants, including nested entity and feedback lists.
+    return deepcopy(packet, memo)
+
+
 @dataclass
 class World:
     """A world boundary and its typed, validated engine pack."""
@@ -289,17 +301,9 @@ class World:
 
     def pending_packets(self) -> tuple[BoundaryDelivery, ...]:
         """Return detached copies of the committed packets."""
-        packets = []
-        for _, packet in sorted(self.state.pending_deliveries.items()):
-            view = packet.perception
-            # Tile rows and their coordinates are frozen and contain only scalar
-            # fields. Detach their lists and deep-copy the rest of the packet.
-            memo = {
-                id(view.visible_tiles): view.visible_tiles.copy(),
-                id(view.explored_static_tiles): view.explored_static_tiles.copy(),
-            }
-            packets.append(deepcopy(packet, memo))
-        return tuple(packets)
+        return tuple(
+            detach_packet(packet) for _, packet in sorted(self.state.pending_deliveries.items())
+        )
 
     def step(
         self,
@@ -326,10 +330,26 @@ class World:
             for rule in added:
                 store_rule(rule.content_hash, canonical_json_bytes(rule.data))
         schedule = self._schedule.with_rules(added) if added else self._schedule
-        state = deepcopy(self.state)
+        opening = self.state
+        # Tick phases read setup data and installed rule definitions without editing them.
+        memo = {
+            id(value): value
+            for value in (
+                opening.static_map,
+                opening.clock,
+                opening.senses,
+                opening.dialogue_limits,
+                opening.cues,
+                *opening.library.added_rules.values(),
+            )
+        }
+        # Acknowledgement pops from the staged map; fatigue and reports only read the old packets.
+        memo[id(opening.pending_deliveries)] = opening.pending_deliveries.copy()
+        # Stage mutable state, including the library's rule index, until settlement succeeds.
+        state = deepcopy(opening, memo)
         state.next_event_seq_in_tick = 0
         writer = EventWriter(state, state.tick + 1)
-        ctx = TickContext(state, next_pack, writer, opening_needs=self.state.needs)
+        ctx = TickContext(state, next_pack, writer, opening_needs=opening.needs)
         boundary_input(ctx, turns, acknowledgements, added)
         progress_needs: dict[str, physiology.ProgressNeeds] = {}
         completions = action_progress(ctx, turns, progress_needs, schedule)
@@ -648,6 +668,7 @@ def place_entities(state: WorldState, pack: EnginePack) -> None:
         owner = row.owner_id
         if owner is not None and owner not in state.residents:
             raise ValueError(f"placement {key!r} has no such owner")
+        # Entity component changes must stay separate from the placement defaults.
         state.entities[key] = Entity(
             key,
             row.archetype_id,
