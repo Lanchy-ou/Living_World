@@ -304,11 +304,17 @@ def run_case(path: Path, evidence: Path, through: int) -> dict[str, object]:
     }
 
 
+def report_bytes(result: object) -> bytes:
+    return (json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
 def run_recorded(path: Path, evidence: Path, through: int) -> dict[str, object]:
     try:
         result = run_case(path, evidence, through)
     except PersistenceError as error:
         raise RuntimeError(f"{path.name}: {error}") from error
+    name = path.name.removesuffix(".json.gz")
+    store_once(evidence / "cases" / f"{name}.json", report_bytes(result))
     if result["difference"] is not None:
         print(f"{result['case']}: {result['difference']}", file=sys.stderr, flush=True)
     return result
@@ -346,11 +352,11 @@ def main() -> int:
     else:
         with ProcessPoolExecutor(max_workers=args.jobs) as pool:
             results = list(pool.map(work, cases))
-    report = json.dumps(results, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    report = report_bytes(results)
     if args.output is None:
-        print(report, end="")
+        sys.stdout.buffer.write(report)
     else:
-        store_once(args.output, report.encode("utf-8"))
+        store_once(args.output, report)
     print(
         f"Compared {len(results)} case(s) in {perf_counter() - start:.3f} seconds.", file=sys.stderr
     )

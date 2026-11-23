@@ -150,12 +150,16 @@ def test_matrix_registration_agrees_with_archive():
 
 
 def test_acceptance_prefix_and_repeatable_receipt(tmp_path):
-    from living_island.sim.v2.cli import FIXTURES, run_case
+    from living_island.sim.v2.cli import FIXTURES, report_bytes, run_recorded
 
-    path = FIXTURES / "matrix/acceptance-production-base-2600456787.json.gz"
-    first = run_case(path, tmp_path / "first", 2)
-    second = run_case(path, tmp_path / "second", 2)
+    case = "acceptance-production-base-2600456787"
+    path = FIXTURES / f"matrix/{case}.json.gz"
+    first = run_recorded(path, tmp_path / "first", 2)
+    second = run_recorded(path, tmp_path / "second", 2)
     assert first == second
+    for directory in ("first", "second"):
+        receipt = tmp_path / directory / "cases" / f"{case}.json"
+        assert receipt.read_bytes() == report_bytes(first)
     assert first["difference"] is None
     assert first["matched_boundaries"] == 3
 
