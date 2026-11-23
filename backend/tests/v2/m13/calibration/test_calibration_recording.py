@@ -2,6 +2,7 @@
 
 import sqlite3
 from contextlib import closing
+from shutil import copytree
 
 import pytest
 
@@ -49,3 +50,44 @@ def test_verified_trace_refuses_changed_observation(recorded_mid_queue, tmp_path
     (tmp_path / first).write_bytes((base / "direct/trace" / first).read_bytes() + b"\n")
     with pytest.raises(ValueError, match="calibration observation digest differs at tick 0"):
         next(verified_trace(tmp_path, direct))
+
+
+@pytest.mark.parametrize("changed", ["missing", "policy", "restore"])
+def test_run_affected_arm_when_prior_evidence_cannot_supply_it(recorded_mid_queue, changed):
+    from living_island.sim.v2.scenarios.calibration.reuse import reusable_evidence
+
+    case, base, pair, _ = recorded_mid_queue
+    inputs = pair.arms["visible"].inputs
+    if changed == "policy":
+        inputs = inputs.model_copy(
+            update={"plan": inputs.plan.model_copy(update={"controller": "changed"})}
+        )
+    arm = base / ("absent" if changed == "missing" else "direct")
+    cut = case.restore_after if changed == "restore" else None
+    pack = case.prepare(base / "source").bound.pack
+    assert reusable_evidence(arm, inputs, pack, restore_after=cut) is None
+
+
+@pytest.mark.parametrize(
+    ("damage", "reason"),
+    [
+        ("checkpoint-index", "checkpoints do not cover the requested horizon"),
+        ("published-evidence", "prior evidence differs from the verified CT-04 handoff"),
+    ],
+)
+def test_reuse_refuses_altered_completed_arm(recorded_mid_queue, tmp_path, damage, reason):
+    from living_island.sim.v2.scenarios.calibration.reuse import reusable_evidence
+
+    case, base, pair, _ = recorded_mid_queue
+    arm = copytree(base / "direct", tmp_path / "prior")
+    inputs = pair.arms["visible"].inputs
+    if damage == "checkpoint-index":
+        with closing(sqlite3.connect(arm / "progress.sqlite")) as db:
+            db.execute("UPDATE checkpoints SET tick=tick+1 WHERE tick=?", (case.end,))
+            db.commit()
+    else:
+        evidence = arm / "evidence.json"
+        evidence.write_bytes(evidence.read_bytes() + b"\n")
+    pack = case.prepare(base / "source").bound.pack
+    with pytest.raises(ValueError, match=reason):
+        reusable_evidence(arm, inputs, pack)

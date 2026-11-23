@@ -12,10 +12,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--en08", type=Path, help="EN-08 acceptance-<revision> evidence directory")
+    parser.add_argument(
+        "--reuse",
+        type=Path,
+        action="append",
+        default=[],
+        help="previous calibration directory with verified arm recordings (repeatable)",
+    )
     args = parser.parse_args()
     try:
         en08 = args.en08 or find_evidence(args.out.parent / "en08")
-        receipt = run(args.out, en08)
+        receipt = run(args.out, en08, reuse=tuple(args.reuse))
     except (OSError, ValueError) as error:
         parser.exit(1, f"{error}\n")
     path = args.out / "receipt.json"

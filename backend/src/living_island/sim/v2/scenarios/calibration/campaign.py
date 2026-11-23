@@ -4,7 +4,6 @@ from collections.abc import Iterator
 from dataclasses import asdict
 from functools import partial
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Literal
 
 from living_island.persistence.v2.journal import store_once
@@ -17,9 +16,16 @@ from living_island.world.v2.rules.schema import content_hash
 from ..receipts import CasePlan, Evidence, Inputs, file_digest
 from ..runtime import Scenario, run_or_resume
 from .comparison import TraceBoundary, TraceComparison, compare_traces
-from .fixtures import CalibrationCase, calibration_cases, generic_failure_difference
-from .pins import EquivalenceCase, EquivalencePin, calibration_pins, read_equivalence
+from .fixtures import CalibrationCase, Prepared, calibration_cases, generic_failure_difference
+from .pins import (
+    EquivalenceCase,
+    EquivalencePin,
+    calibration_pins,
+    read_equivalence,
+    recording_revision,
+)
 from .recording import Mode, scenario, verified_trace
+from .reuse import reusable_evidence
 
 MODES: tuple[Mode, Mode] = ("bridge", "visible")
 
@@ -40,8 +46,44 @@ class PairResult(ProtocolModel):
     comparison: TraceComparison
 
 
+def _record_arm(
+    out: Path,
+    case: CalibrationCase,
+    prepared: Prepared,
+    plan: CasePlan,
+    mode: Mode,
+    reuse: tuple[Path, ...],
+) -> tuple[Path, Evidence, Inputs]:
+    directory = out / case.name
+    arm = directory / mode
+    expected = scenario(prepared, mode, arm / "trace").inputs(plan)
+    for prior in reuse:
+        candidate = prior / case.name / mode
+        saved = reusable_evidence(
+            candidate, expected, prepared.bound.pack, restore_after=case.restore_after
+        )
+        if saved is not None:
+            return candidate, saved, expected
+
+    def setup() -> Scenario:
+        return scenario(case.prepare(directory / "config"), mode, arm / "trace")
+
+    # Reopen the scheduled fixture cut with its pending delivery and policy state.
+    record = partial(run_or_resume, arm, plan, setup)
+    progress = record(pause_after=lambda tick: tick == case.restore_after)
+    if progress.evidence is None:
+        progress = record()
+    assert progress.evidence is not None
+    return arm, progress.evidence, expected
+
+
 def record_pair(
-    out: Path, case: CalibrationCase, revision: str, en08: EquivalenceCase | None = None
+    out: Path,
+    case: CalibrationCase,
+    revision: str,
+    en08: EquivalenceCase | None = None,
+    *,
+    reuse: tuple[Path, ...] = (),
 ) -> PairResult:
     directory = out / case.name
     inputs = directory / "config"
@@ -75,30 +117,23 @@ def record_pair(
         checkpoint_every=24,
     )
     evidence: dict[Mode, Evidence] = {}
+    traces: dict[Mode, Path] = {}
     arms: dict[Mode, ArmReceipt] = {}
     for index, mode in enumerate(MODES):
-        arm = directory / mode
         arm_plan = plan.model_copy(update={"arm": mode, "case_index": index})
-
-        def setup(mode: Mode = mode, arm: Path = arm) -> Scenario:
-            return scenario(case.prepare(inputs), mode, arm / "trace")
-
-        # Each specified fixture cut reopens its saved policy and pending delivery once.
-        record = partial(run_or_resume, arm, arm_plan, setup)
-        progress = record(pause_after=lambda tick: tick == case.restore_after)
-        if progress.evidence is None:
-            progress = record()
-        assert progress.evidence is not None
-        evidence[mode] = progress.evidence
+        arm, evidence[mode], expected = _record_arm(out, case, prepared, arm_plan, mode, reuse)
+        traces[mode] = arm / "trace"
         path = arm / "evidence.json"
         arms[mode] = ArmReceipt(
-            inputs=Inputs.model_validate_json((arm / "inputs.json").read_bytes()),
-            evidence_path=path.relative_to(out).as_posix(),
+            inputs=expected,
+            evidence_path=(
+                path.relative_to(out) if path.is_relative_to(out) else path.resolve()
+            ).as_posix(),
             evidence_sha256=file_digest(path),
         )
 
     def trace(mode: Mode) -> Iterator[TraceBoundary]:
-        return verified_trace(directory / mode / "trace", evidence[mode])
+        return verified_trace(traces[mode], evidence[mode])
 
     result = compare_traces(
         case.seed,
@@ -136,18 +171,24 @@ class CalibrationReceipt(ProtocolModel):
     missing_cases: tuple[str, ...]
 
 
-def run(out: Path, en08_directory: Path) -> CalibrationReceipt:
+def run(out: Path, en08_directory: Path, *, reuse: tuple[Path, ...] = ()) -> CalibrationReceipt:
     en08, equivalence = read_equivalence(en08_directory)
     pins = calibration_pins()
     cases = sorted(calibration_cases(out / "config"), key=lambda case: case.script is None)
     fixtures = {case.name: file_digest(case.fixture_input) for case in cases}
-    registration = {"en08": en08.model_dump(), "executable": pins, "fixtures": fixtures}
+    registration = {
+        "en08": en08.model_dump(),
+        "executable": pins,
+        "fixtures": fixtures,
+        "reuse": [p.resolve().as_posix() for p in reuse],
+    }
     store_once(out / "registration.json", cli.report_bytes(registration))
     pairs: list[PairResult] = []
     status: Literal["equal", "different", "incomplete"] = "equal"
+    revision = recording_revision()
     for case in cases:
         reference = equivalence[case.name] if case.script is None else None
-        pair = record_pair(out, case, content_hash(pins), reference)
+        pair = record_pair(out, case, revision, reference, reuse=reuse)
         pairs.append(pair)
         status = pair.comparison.status
         if status != "equal":
@@ -175,18 +216,38 @@ def require_calibration(
         raise ValueError(
             "recalibrate: EN-08 revision, implementation, policy or fixture pins changed"
         )
-    with TemporaryDirectory() as scratch:
-        required = {
-            case.name: file_digest(case.fixture_input) for case in calibration_cases(Path(scratch))
-        }
+    cases = calibration_cases(directory / "config")
+    required = {}
+    for case in cases:
+        fixture_hash = file_digest(case.fixture_input)
+        horizon = case.end - case.start
+        for mode in MODES:
+            required[case.name, mode] = (
+                fixture_hash,
+                case.seed,
+                case.start,
+                horizon,
+                horizon,
+                mode,
+            )
     matched = {
-        row.case: row.fixture_sha256 for row in receipt.cases if row.comparison.status == "equal"
+        (row.case, mode): (
+            row.fixture_sha256,
+            arm.inputs.seed,
+            arm.inputs.opening_tick,
+            arm.inputs.plan.horizon,
+            row.comparison.compared_boundaries,
+            arm.inputs.plan.arm,
+        )
+        for row in receipt.cases
+        if row.comparison.status == "equal"
+        for mode, arm in row.arms.items()
     }
     if (
         receipt.status != "equal"
         or receipt.missing_cases
         or matched != required
-        or len(receipt.cases) != len(required)
+        or len(receipt.cases) != len(cases)
     ):
         raise ValueError("recalibrate: fixture or seed coverage is incomplete or different")
     return receipt

@@ -50,6 +50,11 @@ def test_ct20_feedback_isolation_and_transitions(tmp_path, monkeypatch):
     )
 
     cases = {case.name: case for case in calibration_cases(tmp_path / "inputs")}
+    dusk = cases["wap23-wap32-daylight-footprint"].prepare(tmp_path / "dusk")
+    assert (dusk.world.tick, dusk.world.state.resolution_rng_state_uint32) == (
+        143,
+        dusk.config.meta.seed,
+    )
     empty = cases["wap23-gather-empty-at-start"]
     ordinary, journal = _run(empty, "visible", tmp_path / "stock", monkeypatch)
     hidden, other_journal = _run(

@@ -155,11 +155,22 @@ def test_ct06_admits_reviewed_complete_receipt_and_refuses_changed_inputs(
         campaign.require_calibration(directory, en08_revision=revision, receipt_sha256=digest)
         == receipt
     )
+    # Rebuild the verdict from another directory without executing matched arms.
+    with monkeypatch.context() as patch:
+        patch.setattr(campaign, "run_or_resume", lambda *a, **kw: pytest.fail("reran matched arm"))
+        reused = campaign.run(tmp_path / "rework", en08_report, reuse=(directory,))
+    assert reused.cases[0].comparison == receipt.cases[0].comparison
+    assert (
+        reused.cases[0].arms["bridge"].evidence_sha256
+        == receipt.cases[0].arms["bridge"].evidence_sha256
+    )
     with pytest.raises(ValueError, match="digest differs"):
         campaign.require_calibration(directory, en08_revision=revision, receipt_sha256="0" * 64)
     with pytest.raises(ValueError, match="pins changed"):
         campaign.require_calibration(directory, en08_revision="0" * 40, receipt_sha256=digest)
-    partial = receipt.model_copy(update={"cases": (), "missing_cases": (short.name,)})
+    pair = receipt.cases[0]
+    partial_pair = pair.model_copy(update={"arms": {"visible": pair.arms["visible"]}})
+    partial = receipt.model_copy(update={"cases": (partial_pair,)})
     path.write_bytes(cli.report_bytes(partial.model_dump(mode="json")))
     with pytest.raises(ValueError, match="coverage"):
         campaign.require_calibration(

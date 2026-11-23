@@ -11,11 +11,12 @@ from living_island.persistence.v2.manifest import Digest
 from living_island.sim.equivalence.projection import Source
 from living_island.sim.v2 import cli
 from living_island.world.v2.protocol import ProtocolModel
+from living_island.world.v2.rules.schema import content_hash
 
 from ..receipts import file_digest
 
 _BASE = "backend/src/living_island/"
-_COMMON = tuple(
+_COMPAT = tuple(
     _BASE + path
     for path in (
         "agents/rule_based",
@@ -36,11 +37,10 @@ _COMMON = tuple(
     "backend/uv.lock",
     "content/packs/compat-v1",
     "content/vocabulary",
-    "backend/tests/fixtures/v1_projection",
 )
-_SCENARIO = tuple(
-    _BASE + "sim/v2/scenarios/" + path for path in ("calibration", "runtime.py", "receipts.py")
-)
+_COMMON = (*_COMPAT, "backend/tests/fixtures/v1_projection")
+_SCENARIOS = _BASE + "sim/v2/scenarios/"
+_RUNTIME = (_SCENARIOS + "runtime.py", _SCENARIOS + "receipts.py")
 _PR07_SCOPE = ("backend/src", "backend/uv.lock", "backend/tests/fixtures/v1_projection", "content")
 
 
@@ -54,7 +54,14 @@ def _trees(revision: str, paths: tuple[str, ...]) -> dict[str, str]:
 
 
 def calibration_pins() -> dict[str, str]:
-    return _trees("HEAD", _COMMON + _SCENARIO)
+    return _trees("HEAD", (*_COMMON, *_RUNTIME, _SCENARIOS + "calibration"))
+
+
+def recording_revision() -> str:
+    """Pin code that produces an arm. CT-04 Inputs separately bind its fixture and pack."""
+    recorder = _SCENARIOS + "calibration/"
+    paths = (*_COMPAT, *_RUNTIME, recorder + "recording.py", recorder + "fixtures.py")
+    return content_hash(_trees("HEAD", paths))
 
 
 class EquivalenceCase(ProtocolModel):
@@ -92,7 +99,7 @@ def find_evidence(parent: Path) -> Path:
 
 
 def read_equivalence(directory: Path) -> tuple[EquivalencePin, dict[str, EquivalenceCase]]:
-    """Read the producer's immutable scope, aggregate and individual receipts, without running it."""
+    """Verify the producer's scope, aggregate report and per-seed receipts."""
     report = directory / "report.json"
     scope_path = directory / "scope.json"
     pin = EquivalencePin(

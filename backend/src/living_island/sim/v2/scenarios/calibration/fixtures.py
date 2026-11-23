@@ -162,6 +162,10 @@ def _bootstrap_dusk(world: World, start: int) -> None:
         [TurnRequest(packet, 0, ("start",)).bind(wait) for packet in opening],
         acknowledged={packet.actor_id: packet.delivery_id for packet in opening},
     )
+    # PR-03 bootstrapped this boundary without completions. As in PR-07,
+    # the fixture opens before its first resolution-order random draw.
+    state = world.state
+    state.resolution_rng_state_uint32 = state.seed
 
 
 def _bootstrap_policies(world: World) -> dict[str, PolicyCheckpoint]:
