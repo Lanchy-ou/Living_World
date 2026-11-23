@@ -1170,3 +1170,28 @@ paid step 2. Report first-pass decision parsing against the final M9 smoke
 limits. Target three complete calendar game days (432 ticks). Size the run
 from the measured costs under the CNY 20 total P3.5 cap. If fewer than three
 days fit, hold the run and ask the owner. Both paid steps require signed M12.
+
+## OQ-P3.5-PR-07: Run scope of the M12 equivalence matrix
+
+Protocol §11.3 (CR-011) requires M12 to check that no run of the P2 matrix
+reaches a declared exception.
+P2 §1 lists 7 development arms × 20 seeds and 20 acceptance seeds, and
+OQ-060 lets the owner approve a shorter prefix of the development list. A
+full run of the 160 cases, twice, took about 18 hours on the shared host.
+
+Owner decisions (2026-11-23):
+
+1. First narrowing: the 20 acceptance seeds, plus the development matrix as
+   P2-04 ran it under OQ-060 (the first six registered development seeds,
+   all seven arms). The determinism rerun covers the 20 acceptance seeds.
+2. Second narrowing, under OQ-060: the 20 acceptance seeds, the four
+   completed S1 orig base cases, and the other six development arms on the
+   first two registered development seeds (`2195683955`, `937154673`):
+   36 cases. The determinism rerun covers the first four acceptance seeds in
+   registration order.
+3. The full backend suite for P3.5 cards runs on GitHub CI only. Executors
+   run the static checks and their cards' test folders locally.
+
+Result: all 36 cases matched at every boundary, the four repeats were
+identical, and no run reached a WAP-26 exception
+([M12 equivalence report](../tasks/p3.5/M12-equivalence-report.md)).
