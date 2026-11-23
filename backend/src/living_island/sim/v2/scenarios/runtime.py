@@ -459,7 +459,7 @@ def run_campaign(
     if len(indices) != len(set(indices)):
         raise ValueError("campaign case indices must be unique")
     through = max((case.plan.horizon for case in cases), default=0)
-    results = []
+    results: list[Progress] = []
     for case in cases:
         index = case.plan.case_index
         progress = _record_case(
