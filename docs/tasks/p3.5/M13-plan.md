@@ -2,31 +2,33 @@
 
 ## 1. Owner decisions
 
-**Proposed for review, 2026-11-23.** Claude Code reviews these cards and runs acceptance. The owner chooses the operating conditions before dispatch and signs Gate 3 after seeing the evidence. Record the chosen options and date in the milestone report.
+**Decided by the owner on 2026-11-23.** Claude Code runs independent Gate 2 and acceptance. The owner signs Gate 3 after reviewing the evidence.
 
-| Decision | Options | Recommendation and consequence |
-|---|---|---|
-| D1. How long may the proof take? | Set a fixed limit now, or set one from the signed M12 single-case timings before dispatch. | Allow **30 minutes of cumulative elapsed run time** for one 1,008-tick week, three rule-based residents, `starter-v1`, S2 m6, first registered acceptance seed (initially 2600456787). This is a proposed operating budget. Compare it with PR-07's measured timings before signing. Use the one serial host and ordinary journal/checkpoints. Preselect the case before opening results. A matching timed CT-13 treatment receipt can serve twice. P3's V-04 stopped at committed tick 132 and remains incomplete. |
-| D2. When does the §9 balance check happen? | Commission a separate pre-M13 qualification, or make waves 1–3 the qualification stage of this plan. | Use waves 1–3. The pack and measurement tools have to exist first. Require calibration, development and the held-out comparison **before** accepting the candidate for M13 demonstrations and speed evidence. Both options keep the same §9 order and thresholds. Gate 3 needs the qualification receipt under either option. |
-| D3. What happens to P3-PERF-U1? | Close the candidate's P3.5 disposition as dropped, or retain it for separately commissioned v1 verification. | Record “dropped for P3.5” now that EN-07 delivers the replacement store. Candidate `124e751` targeted the P3 store and lacked final verification. Record the owner's decision only. Leave branch `task/P3-PERF-U1-validation-cache` and its history intact. |
-| D4. Who searches once for the original M9 artifacts? | Name one custodian now, or schedule the search separately once the retained volumes are available. | Name one custodian shared with M14. First check for an existing completed search receipt. Otherwise check the paths in M9-evidence and owner-identified backups once, read-only. Record locations checked, hashes and completeness of originals recovered, or “lost” after the agreed search is exhausted. Identify inaccessible locations as unresolved. CT-10 links the single record. This search is independent of milestone acceptance. |
-| D5. What happens if tuning changes a fixed demo value? | Keep the published numeric test vectors on the release candidate, or ask the owner to distinguish a reference-vector result from an approved tuned-candidate result. | Start with the published values. If §9 cannot pass while preserving the fixed CT vectors, retain the failing candidate and its evidence and take OQ-P3.5-M13-1 to the owner before changing an expectation. |
-| D6. When are benefits measured with LLM residents? | Use the already planned M15 trials, or leave the live measurement pending a separate owner decision. | Hand the six item benefits and the LLM time-use comparison to M15. M13 demonstrates the benefits by script and measures spare time on the two rule-based arms. No M13 run calls a model. |
-| D7. How should the EN-22 recipe scan handle shared words? | Distinguish legitimate uses at specific source locations, or keep the current scan and block the pack until a new method is approved. | Adopt the narrow source-context approach in OQ-P3.5-M13-2. Require the scanner to catch a planted recipe reference with the same spelling. |
+| Decision | Approved terms |
+|---|---|
+| D1. Long-run budget | Allow **30 minutes of cumulative elapsed run time** for a 1,008-tick week on `starter-v1` with three rule-based residents, S2 m6 geometry and ordinary journaling/checkpoints. Use the first registered acceptance seed (initially 2600456787), selected before opening results. A fully timed matching treatment receipt from test CT-13 may also prove D1. P3's V-04 stopped at committed tick 132. |
+| D2. Balance qualification | Waves 1–3 carry out starter §9. Calibrate, tune on development seeds, then qualify the final candidate on the held-out pairs before using it for the mechanic demonstrations or speed verdict. |
+| D3. P3-PERF-U1 | Dropped for P3.5. EN-07 replaces the store targeted by candidate `124e751`. Preserve `task/P3-PERF-U1-validation-cache` and its history. |
+| D4. Original M9 artifacts | **Claude Code** is the custodian for both tracks. Check for a completed search receipt first. If none exists, search the recorded M9 paths and owner-identified backups once, read-only. Record locations, hashes and completeness of any originals. Mark exhausted searches “lost” and inaccessible locations unresolved. CT-10 cites this one record. The search is independent of milestone acceptance. |
+| D5. Fixed demo values | Start with the published values. If §9 requires changing a fixed test vector, preserve both sets of values and results and bring OQ-P3.5-M13-1 back to the owner before changing the expectation. |
+| D6. LLM measurements | M15 measures item benefits and time use with LLM residents. M13 demonstrates all six benefits by script and measures spare time in both rule-based arms. |
+| D7. Recipe-ID scan | Apply the narrow source-context approach in OQ-P3.5-M13-2. A planted recipe reference with the same spelling must still be detected. |
+
+**Early start and risk (owner, 2026-11-23).** M13 and M14 may start while P3.5-PR-07 runs and before the owner signs M12 Gate 3. Dispatch CT-03, CT-04 and EN-08 from current `origin/main`. Work that needs `sim/v2/cli.py` or `sim/equivalence/**` waits until PR-07 merges. Starter §5 still requires the compatibility equivalence check to pass before loading the starter pack. An M12 failure that requires an engine fix may send M13 work back for rework. Recheck affected evidence on the corrected engine. CT-10 waits for the signed M12 before assembling the M13 Gate 3 package.
 
 **Done when.** Each starter mechanic has a scripted demonstration on the qualified pack. The owner can follow mental fatigue into fainting and waking, follow a tool until it breaks, watch fruit decay, follow crafting through use of its products, and see a process persist while residents cooperate to finish it. A long rule-based run on that pack reaches tick 1,008 within D1. The owner checks the six §5.9 benefits, the §9 balance report and the measured speed alongside these demonstrations. [Phase plan §§3–5, 8, 10](../../plans/p3.5-implementation-plan-v0.1.md) · [Starter content §§5–10](../../spec/starter-content-v0.1.md) · [ADR 0010](../../adr/0010-starter-content.md)
 
-**Baseline.** The eight specs froze at `8c803ed`. This plan was cut from `origin/main` at `101361db91498f20511b793c6171b4b716e969b0` (PR-06 review notes). PR-07 and M12 Gate 3 are prerequisites. The owner's 23 November update to M12 §2 at `ffa3f12799f1d5e10cdab59e066a5e3b1592b569` governs execution, including its dated OQ/CR rulings. Record the signed M12 and actual executor base SHAs at dispatch. M14 may use the compatibility world independently. [M12 plan](M12-plan.md) · [PR-07](P3.5-PR-07.md) · [P3 closeout](../p3/P3-closeout.md)
+**Baseline.** The eight specs froze at `8c803ed`. The original planning base was `101361db91498f20511b793c6171b4b716e969b0`. Record each executor's actual base SHA at dispatch. The owner's 23 November update to M12 §2 at `ffa3f12799f1d5e10cdab59e066a5e3b1592b569` governs review and acceptance. [M12 plan](M12-plan.md) · [PR-07](P3.5-PR-07.md) · [P3 closeout](../p3/P3-closeout.md)
 
 ## 2. Waves and start conditions
 
 | Wave | Cards | Starts when | Leaves for the next wave |
 |---|---|---|---|
-| 1. Compose and drive | [CT-03](P3.5-CT-03.md) starter pack and placements and [CT-04](P3.5-CT-04.md) resumable run driver | PR-07 merged, compatibility equivalence passed, owner signed M12 and authorized M13 qualification. Claude allocates any required shared edits first. CT-04 can use an existing compat fixture independently of CT-03. | Validated base/leaf hash pair and a driver that resumes inside a case. |
-| 2. Calibrate | [CT-05](P3.5-CT-05.md) visible policy comparison | CT-04 merged and M12 fixtures available. Use the compatibility pack in both modes. | Pin of the policy, calibration inputs, identical decisions and trajectories. |
-| 3. Qualify the pack | [CT-06](P3.5-CT-06.md) balance and spare time | CT-03 through CT-05 merged, calibration green for this mode and D1/D2 recorded before measurement. | §9 development report, then 40 valid held-out cases on the final candidate, including the preselected timing receipt. Any tuning returns to the sole pack owner, CT-03. |
+| 1. Pack, run driver and copy cost | [P3.5-CT-03](P3.5-CT-03.md) starter pack, [P3.5-CT-04](P3.5-CT-04.md) resumable driver and [P3.5-EN-08](P3.5-EN-08.md) copy cost | Start from current `origin/main` while PR-07 runs. CT-03 can author pack data, CT-04 can drive existing compat fixtures and EN-08 can trace copy ownership. Apply §1 to work that consumes PR-07. Claude allocates shared edits under §3. | Validated pack pins, a resumable driver and matched before/after time per tick. EN-08 completes its 20-seed per-tick equivalence rerun after PR-07 merges. |
+| 2. Calibrate | [CT-05](P3.5-CT-05.md) visible policy comparison | CT-04 and PR-07 merged. Use EN-08's verified revision for the final calibration evidence. | Pin of the policy, calibration inputs, identical decisions and trajectories. |
+| 3. Qualify the pack | [CT-06](P3.5-CT-06.md) balance and spare time | CT-03 through CT-05 and EN-08 merged. Calibration is green on the runner used for the paired measurement. | §9 development report, then 40 valid held-out cases on the final candidate, including the preselected D1 timing receipt. Any tuning returns to CT-03. |
 | 4. Demonstrate | [CT-07](P3.5-CT-07.md) craft and cooperate, [CT-08](P3.5-CT-08.md) physiology and world-rule boundaries and [CT-09](P3.5-CT-09.md) week-long scripted matter ledger | CT-06 merged and final candidate qualified. All three consume the same immutable pack and CT-04 driver in disjoint directories. | Indexed playable event/packet traces and a seven-day ledger. Schedule heavy jobs serially even when authoring in parallel. |
-| 5. Verify speed and assemble Gate 3 | [CT-10](P3.5-CT-10.md) long run and owner report | CT-06 through CT-09 merged, reviewed pins available, owner-approved D1 in hand. D3/D4 dispositions can be recorded separately. | Validated speed receipt or an explicit miss, all mechanic and benefit witnesses, Claude's acceptance verdict and a space for the owner's decision. |
+| 5. Verify speed and assemble Gate 3 | [CT-10](P3.5-CT-10.md) long run and owner report | The owner has signed M12 Gate 3, CT-06 through CT-09 have merged and the qualified pins are available. | D1 timing verdict, mechanic and benefit witnesses, Claude's acceptance verdict and the owner's signature line. |
 
 Each card has its own branch, worktree and Gate 2. A pack change creates a new version/hash, invalidates qualification for that candidate and reopens CT-06 before final scenario and speed sign-off. Preserve earlier rounds. A change to execution, calibration or metrics requires rechecking the affected evidence on its new pins. Changes isolated to evidence presentation can cite the verified underlying run. No worker may use an early integration branch as evidence of M12 acceptance.
 
@@ -36,8 +38,9 @@ Source paths in this section are relative to `backend/src/living_island/`. Each 
 
 | Card | Exclusive writable paths |
 |---|---|
-| CT-03 | `content/packs/starter-v1/**`, `sim/v2/scenarios/starter.py`, `backend/tests/v2/m13/pack/**`, `backend/tests/v2/pack/test_recipe_free.py` for actual name collisions with the new pack (OQ-P3.5-M13-2) |
+| CT-03 | `content/packs/starter-v1/**`, `sim/v2/scenarios/starter.py`, `backend/tests/v2/m13/pack/**` |
 | CT-04 | `sim/v2/scenarios/{__init__,runtime,receipts}.py`, `backend/tests/v2/m13/runtime/**` |
+| EN-08 | `backend/tests/v2/m13/copy_cost/**` for any missing isolation regression. Production edits require the shared-file allocations below. |
 | CT-05 | `sim/v2/scenarios/calibration/**`, `backend/tests/v2/m13/calibration/**` |
 | CT-06 | `sim/v2/scenarios/balance/**`, `backend/tests/v2/m13/balance/**`, `docs/tasks/p3.5/M13-balance.md` |
 | CT-07 | `sim/v2/scenarios/craft/**`, `backend/tests/v2/m13/craft/**` |
@@ -47,13 +50,16 @@ Source paths in this section are relative to `backend/src/living_island/`. Each 
 
 ### Shared files
 
-These are allocation requests for Claude at review or before an overlapping edit. No row grants a write. Allocate one named file to one branch at a time across M13 and M14, record the grant in its PR, then release it after merge. Prefer the existing public operations. Check what PR-07 actually ships before granting an edit.
+Claude allocates one named file to one branch at a time across PR-07, M13 and M14. Record the grant in the card's PR and release it after merge. The recipe-scan grant is already in effect. All other entries below are requests or read-only dependencies.
 
 | Shared surface | Card and reason |
 |---|---|
+| `backend/tests/v2/pack/test_recipe_free.py` | Granted to P3.5-CT-03 by the owner and reviewer on 2026-11-23 for OQ-P3.5-M13-2. Record the grant in CT-03's PR. |
+| `sim/v2/compat/policy_host.py` | P3.5-EN-08 requests the policy decision path to remove unnecessary deep copies. Schedule any later CT-05 correction or M14 DL-04 integration after this edit, on the merged revision. |
+| `world/v2/engine/tick.py` | P3.5-EN-08 requests the `World.pending_packets` copy path. Preserve the detached delivery approved under OQ-P3.5-PR-05. |
 | `sim/v2/compat/config.py` | CT-03 expects to need a small public way to reuse registered config/map admission and bound compat templates when composing the starter leaf. Today `load_compat_pack` also requires a local compatibility code table. Keep code-table admission on the base. Reuse a public PR-07 seam if available. CT-06 would need fresh allocation here and in `compat/registry.py` only if a formally registered replacement seed list cannot be admitted. |
-| `sim/v2/compat/{policy_host,bridge,adapters,receipts}.py` | CT-05 may demonstrate a calibration difference in the existing visible mode. Report the first mismatch and request allocation of the responsible file for a tested correction before running balance. |
-| `sim/v2/{runner,turns,manifest}.py` and `sim/v2/cli.py` after PR-07 | CT-04 consumes the real advance/turn/manifest path. Request a specific file only if a required committed-boundary handoff cannot be observed via public APIs. Commands live under `scenarios/`. |
+| `sim/v2/compat/{bridge,adapters,receipts}.py` | CT-05 may demonstrate a calibration difference in the existing visible mode. Report the first mismatch and request allocation of the responsible file before running balance. |
+| `sim/v2/{runner,turns,manifest}.py` and `sim/v2/cli.py` after PR-07 | CT-04 consumes the existing advance/turn/manifest path. Once PR-07 merges, reuse its per-case receipt and resume mechanism. Request a specific file only if a required boundary handoff cannot be observed via public APIs. M13 commands live under `scenarios/`. |
 | `persistence/v2/**` | CT-04 uses `journal.py`, `checkpoint.py`, `replay.py` and the manifest read-only. If a reproducible journal/checkpoint defect prevents exact resumption, request only the affected file. CT-05–CT-10 consume CT-04's driver. |
 | `backend/pyproject.toml` (import-linter section), `contract/**` | No planned writer. Run the existing boundary checks. An actual public contract change needs owner disposition and separate allocation. |
 
@@ -81,8 +87,9 @@ CT numbers in the left column are **starter-content §10 tests**. The right colu
 | CT-20 | P3.5-CT-05 | WAP-23 fixtures, DL-25/WAP-35 and 20 calibration seeds, including restore |
 | §5.9 six scripted benefits | P3.5-CT-07 | Flake, cord, axe, fire, pot and shelter in use |
 | §9.1–9.4 balance before M13 and CT-D9 | P3.5-CT-06 | Paired reports and per-resident/day awake-time fractions for both arms |
+| Copy cost and compatibility after optimization | P3.5-EN-08 | Time per tick before/after on the same 121-tick case, detached-delivery evidence, full test result and a fresh per-tick match on all 20 PR-07 acceptance seeds |
 | Phase §4 timed long rule-based run | P3.5-CT-10 | Preselected receipt, elapsed time and final committed tick |
-| §9.1/§9.4 benefits and time use measured with LLM residents | M15, pending D6 | Handoff of the M13 scenario and metric definitions for pending live measurements |
+| §9.1/§9.4 benefits and time use measured with LLM residents | M15 (D6) | Handoff of the M13 scenario and metric definitions for the live measurements |
 
 M12 retains CT-01–03, CT-14, CT-15, CT-17, the canteen half of CT-16, and the compatibility halves of CT-10/11. CT-20 reuses the M12 fixture and adapter implementation. Its pre-balance calibration remains an M13 result. CT-07's scripted week and §4's rule-based week require different controllers and separate evidence.
 
@@ -92,6 +99,7 @@ CT-10 indexes the evidence below by tested commit, content pins, run ID, relativ
 
 | Producer | Evidence to retain |
 |---|---|
+| EN-08 | Profile locator, compared revisions, matched case and milliseconds/tick before and after. Include the isolation check and PR-07 rerun receipt for 20 matching acceptance trajectories. CT-06 uses this runner for the held-out pairs and CT-10 cites it alongside D1. |
 | CT-03 | Loader/normalization report and both ancestry hashes, negative inputs with refusal paths, and deposit coordinates, stock and adjacent looks. |
 | CT-04 | One interruption inside an action and one resume/refusal comparison, with pending delivery, committed prefix, next choice and canonical output hashes. Include the receipt format, invocation and timing convention for all later cards. |
 | CT-05 | Fixture and seed table for both compat policies, first difference if any, private/visible boundary proof, restored mid-queue trace. |
@@ -105,23 +113,24 @@ CT-10 indexes the evidence below by tested commit, content pins, run ID, relativ
 
 - Codex executes each implementation card in its own worktree. Claude Code independently reviews (Gate 2) and runs acceptance. The owner decides and signs Gate 3. Both unattended runbooks are suspended. Put review findings and rechecks in the card's own PR.
 - Validate once, at the boundary (AGENTS.md). Convert file, message or public-call input to typed data there. Inside, trust the types. No `isinstance` checks, `.get` defaults, casts or fallbacks for states those types rule out. Every reachable check has a test that reaches it.
-- Install locked dependencies. On each rework round rerun only `uv run --directory backend pytest tests/v2 tests/p3/test_trial_registration.py`, in **one session**. Keep v2 imports out of collection if they contaminate frozen v1 registration. On Windows use a fresh dedicated `--basetemp` from AGENTS.md for every invocation. Run the full suite once before the PR, **or** use a draft PR's GitHub CI for that full run. Record which path supplied the result. One heavy job at a time on the host, including matrices, week runs, acceptance and full pytest. PR CI covers the repository's backend, frontend and contract jobs.
+- Install locked dependencies. On each rework round rerun only `uv run --directory backend pytest tests/v2 tests/p3/test_trial_registration.py`, in **one session**. Keep v2 imports out of collection if they contaminate frozen v1 registration. On Windows use a fresh dedicated `--basetemp` from AGENTS.md for every invocation. Run the full suite once before the PR, **or** use a draft PR's GitHub CI for that full run. Record which path supplied the result. PR CI covers the repository's backend, frontend and contract jobs.
+- **Host lock (M13 and M14).** Before a heavy job (full suite, matrix, week run, balance round, long fake workload or full equivalence), create `C:\Temp\li-heavy.lock` exclusively with the card ID and start time inside. If the file exists, wait. The holder deletes the lock when the job ends, including on failure. A lock older than 12 hours may be removed only after confirming there is no live process for that job. Note the stale lock removal in the handoff.
 - Long runs and scenario runs write durable receipts. Resume from a verified committed boundary within the interrupted case, with matching inputs and script/policy state. Preserve failures, completed cases and elapsed time across attempts. A partial case cannot pass. Use the EN-07 checkpoint, packet journal and recorded replay. Never commit `runs/` or secrets.
 - No paid model calls in M13. Scripts and stand-alone rule-based policies submit through the ordinary coordinator/world boundary. Pin any scripted starting setup separately from the pack. The production balance and timed week use registered geometry and placements. Give residents only their packets and own feedback. Keep analysis of objective facts on the observer side. Leave live measurement to D6.
 - Respect §3, including the M14 boundary. Forbidden writes include `agents/**`, `memory/**`, `analysis/**`, frontend, generated types, v1 modules, compat content and other tracks' new paths. Use the shared-file allocation procedure for any exception on the listed shared surfaces. Preserve the default map, v1 pins and independent compatibility evidence.
 - A missing rule goes to the question register (coordinated, one writer) with the smallest reversible assumption. A frozen-spec contradiction follows phase §7 with current/requested rule, impact, options and recommendation. Await owner disposition for the affected work. Never edit a frozen spec on an implementation card.
-- Each handoff records what changed, commands/results, deviations, open questions, and all seven template fields, including `NOT_RUN`. Mark gates and historical trials by their actual status. [Task template](../_template.md) · [Open questions](../../spec/open-questions.md)
+- Each handoff records what changed, commands/results, deviations, open questions, and all seven template fields, including `NOT_RUN`. Distinguish spec tests (e.g. “test CT-04”) from their implementation tasks (“card P3.5-CT-03”). Mark gates and historical trials by their actual status. [Task template](../_template.md) · [Open questions](../../spec/open-questions.md)
 
 ## Planning handoff
 
-These eight briefs are ready for Claude Code to review. Their implementation handoffs are intentionally open.
+Claude Code requested four changes to `73abdca`. The nine briefs now reflect the owner's decisions. The B1–B4 revisions are ready for Claude's recheck.
 
 | Field | Planning result |
 |---|---|
-| base_commit / result_commit | `101361db91498f20511b793c6171b4b716e969b0` / the commit publishing this plan on `task/P3.5-M13-cards` |
+| base_commit / result_commit | Reviewed plan `73abdca` / the rework commit on `task/P3.5-M13-cards` |
 | status | READY_FOR_REVIEW |
-| scope_changed | No. The question register carries the two requested clarifications. |
-| human_interventions | The owner supplied the planning scope and duty split. No new owner rulings are assumed. |
-| rework_rounds | 0 independent review rounds at publication |
-| verification | Documentation checks cover ID ownership, local links, card fields and branch diff. Runtime tests, acceptance runs and Gate 2 are NOT_RUN by the planner. |
-| open_questions | D1–D7 await owner choices, including OQ-P3.5-M13-1 and OQ-P3.5-M13-2. |
+| scope_changed | Yes. The owner approved the early start, EN-08 copy-cost work and the common host lock on 2026-11-23. |
+| human_interventions | The owner approved D1–D7 on 2026-11-23, named Claude Code as M9 custodian and confirmed the review changes. |
+| rework_rounds | 1. B1 corrects the start conditions, B2 adds EN-08, B3 adds the host lock and B4 moves the M13 entries to the end of the question register. |
+| verification | Checked document links, all 14 M13 test assignments, wave dependencies, shared-file ownership and the register move. No implementation tests or heavy jobs ran in this planning rework. |
+| open_questions | D1–D7 are decided. If tuning requires new fixed expectations, return to the owner under D5. When merging second, rebase and retain both tracks' P3.5 question-register entries. |
