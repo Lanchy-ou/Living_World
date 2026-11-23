@@ -76,6 +76,17 @@ class Evidence(ProtocolModel):
     provider_calls: Literal[0] = 0
 
 
+class CaseReceipt(ProtocolModel):
+    """A PR-07 case receipt extended with relative M13 evidence and timing links."""
+
+    case: str
+    projection_sha256: Digest
+    difference: None = None
+    evidence_path: str
+    evidence_sha256: Digest
+    timing_db: str
+
+
 type AttemptStatus = Literal["active", "interrupted", "failed", "paused", "evidence_ready"]
 
 
@@ -131,6 +142,7 @@ def case_writer(directory: Path) -> Iterator[sqlite3.Connection]:
             " attempt INTEGER, sha256 TEXT)"
         )
         db.commit()
+        db.execute("UPDATE attempts SET status='interrupted' WHERE status='active'")
         yield db
 
 
@@ -143,11 +155,13 @@ class ActiveAttempt:
 
     @classmethod
     def begin(
-        cls, db: sqlite3.Connection, clock: Clock, attempt_limit_ns: int | None
+        cls,
+        db: sqlite3.Connection,
+        clock: Clock,
+        start: int,
+        started_ns: int,
+        attempt_limit_ns: int | None,
     ) -> "ActiveAttempt":
-        start, started_ns = clock.monotonic_ns(), clock.wall_ns()
-        # Reaching this point requires the previous process to have released its writer.
-        db.execute("UPDATE attempts SET status='interrupted' WHERE status='active'")
         (number,) = db.execute("SELECT coalesce(max(number),0)+1 FROM attempts").fetchone()
         db.execute(
             "INSERT INTO attempts VALUES (?,?,?,?,0,NULL,?,'active',NULL)",
@@ -174,7 +188,12 @@ def checkpoints(db: sqlite3.Connection) -> list[Checkpoint]:
     ]
 
 
-def timing(db: sqlite3.Connection, plan: CasePlan, ticks: int, finished: bool) -> Timing:
+def timing(
+    db: sqlite3.Connection,
+    plan: CasePlan,
+    ticks: int,
+    finished: bool,
+) -> Timing:
     reader = db.execute(
         "SELECT attempts.*, coalesce((SELECT max(tick) FROM checkpoints WHERE attempt=number),"
         " resumed_tick) AS last_checkpoint_tick FROM attempts ORDER BY number"

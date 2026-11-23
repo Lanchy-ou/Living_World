@@ -1,7 +1,8 @@
 """Run one case up to its next checkpoint or verified evidence handoff."""
 
+import gzip
 import sqlite3
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import closing
 from copy import deepcopy
 from dataclasses import dataclass
@@ -21,6 +22,7 @@ from living_island.persistence.v2.replay import (
     RuleStore,
     replay,
 )
+from living_island.sim.v2 import cli
 from living_island.sim.v2.compat.policy_host import (
     PolicyCheckpoint,
     PolicyHost,
@@ -44,6 +46,7 @@ from living_island.world.v2.rules.schema import canonical_json_bytes, content_ha
 from .receipts import (
     ActiveAttempt,
     CasePlan,
+    CaseReceipt,
     Checkpoint,
     Clock,
     Cursor,
@@ -198,7 +201,6 @@ def _restore(
 @dataclass
 class _Run:
     directory: Path
-    inputs: Inputs
     world: World
     journal: PacketJournal
     session: Session
@@ -248,35 +250,32 @@ class _Run:
         attempt.db.execute("INSERT INTO checkpoints VALUES (?,?,?)", point)
         return point
 
-    def evidence(self, history: list[Checkpoint]) -> Evidence:
-        # Reopen the final durable files before handing any evidence to the campaign.
-        for previous in history[:-1]:
-            _checkpoint_path(self.directory, previous)
-        point = history[-1]
-        restored, cursor = _restore(
-            self.directory, point, self.inputs, self.world.pack.source, self.journal
-        )
-        evidence = Evidence(
-            run_id=self.inputs.content.run_id,
-            case_index=self.inputs.plan.case_index,
-            inputs_sha256=file_digest(self.directory / "inputs.json"),
-            opening_tick=self.inputs.opening_tick,
-            final_tick=restored.tick,
-            final_snapshot_sha256=sha256(encode_snapshot(restored)).hexdigest(),
-            prefix_sha256=cursor.prefix_sha256,
-            checkpoint=point.location,
-            checkpoint_sha256=point.sha256,
-            observer=cursor.observer,
-        )
-        path = self.directory / "evidence.json"
-        store_once(path, canonical_json_bytes(evidence.model_dump(mode="json")))
-        return Evidence.model_validate_json(path.read_bytes())
+
+def _verified_evidence(
+    directory: Path, inputs: Inputs, pack: Pack, history: list[Checkpoint]
+) -> Evidence:
+    for previous in history[:-1]:
+        _checkpoint_path(directory, previous)
+    point = history[-1]
+    journal = PacketJournal(directory / "packets", inputs.content.run_id)
+    restored, cursor = _restore(directory, point, inputs, pack, journal)
+    return Evidence(
+        run_id=inputs.content.run_id,
+        case_index=inputs.plan.case_index,
+        inputs_sha256=file_digest(directory / "inputs.json"),
+        opening_tick=inputs.opening_tick,
+        final_tick=restored.tick,
+        final_snapshot_sha256=sha256(encode_snapshot(restored)).hexdigest(),
+        prefix_sha256=cursor.prefix_sha256,
+        checkpoint=point.location,
+        checkpoint_sha256=point.sha256,
+        observer=cursor.observer,
+    )
 
 
 def _open(
     directory: Path, scenario: Scenario, inputs: Inputs, attempt: ActiveAttempt
 ) -> tuple[_Run, Checkpoint]:
-    store_once(directory / "inputs.json", canonical_json_bytes(inputs.model_dump(mode="json")))
     world = scenario.world
     store_once(
         directory / "opening-events.jsonl", b"".join(map(encode_event_line, world.initial_events))
@@ -290,7 +289,7 @@ def _open(
         world, cursor = _restore(directory, points[-1], inputs, world.pack.source, journal)
         controller, totals, prefix = cursor.controller, cursor.observer, cursor.prefix_sha256
     session = scenario.session(world, journal, controller)
-    run = _Run(directory, inputs, world, journal, session, scenario.observe, totals, prefix)
+    run = _Run(directory, world, journal, session, scenario.observe, totals, prefix)
     point = points[-1] if points else run.save(attempt, world.tick)
     attempt.resumed_at(world.tick)
     return run, point
@@ -302,6 +301,120 @@ class Progress:
     checkpoint: str
     evidence: Evidence | None
     timing: Timing
+
+
+@dataclass(frozen=True)
+class CampaignCase:
+    plan: CasePlan
+    setup: Callable[[], Scenario]
+
+
+def _advance(
+    directory: Path,
+    scenario: Scenario,
+    inputs: Inputs,
+    attempt: ActiveAttempt,
+    pause_after: Callable[[int], bool],
+    attempt_limit_ns: int | None,
+) -> tuple[Checkpoint, Evidence | None]:
+    run, point = _open(directory, scenario, inputs, attempt)
+    end = inputs.opening_tick + inputs.plan.horizon
+    while run.world.tick < end:
+        elapsed = attempt.sample()
+        if attempt_limit_ns is not None and elapsed >= attempt_limit_ns:
+            break
+        run.advance()
+        tick = run.world.tick
+        pause = pause_after(tick)
+        if pause or tick == end or tick - point.tick == inputs.plan.checkpoint_every:
+            point = run.save(attempt, point.tick)
+        if pause:
+            break
+    else:
+        evidence = _verified_evidence(
+            directory, inputs, scenario.world.pack.source, checkpoints(attempt.db)
+        )
+        path = directory / "evidence.json"
+        store_once(path, canonical_json_bytes(evidence.model_dump(mode="json")))
+        return point, evidence
+    if point.tick != run.world.tick:
+        point = run.save(attempt, point.tick)
+    return point, None
+
+
+def _record_case(
+    campaign: Path,
+    directory: Path,
+    case: CampaignCase,
+    through: int,
+    pause_after: Callable[[int], bool],
+    attempt_limit_ns: int | None,
+    clock: Clock,
+) -> Progress:
+    name = str(case.plan.case_index)
+    archive = campaign / "inputs" / f"{name}.json.gz"
+    receipt = campaign / "cases" / f"{name}.json"
+    output = directory / "evidence.json"
+    evidence_path = output.relative_to(campaign).as_posix()
+    timing_path = (directory / "progress.sqlite").relative_to(campaign).as_posix()
+    with case_writer(directory) as db:
+        start, wall = clock.monotonic_ns(), clock.wall_ns()
+        begin = partial(ActiveAttempt.begin, db, clock, start, wall, attempt_limit_ns)
+        attempt = None if receipt.is_file() else begin()
+        try:
+            scenario = case.setup()
+            inputs = scenario.inputs(case.plan)
+            pins = canonical_json_bytes(inputs.model_dump(mode="json"))
+            if attempt is None:
+                # PR-07 checks the registered case name and digest of its immutable input.
+                saved = CaseReceipt.model_validate(cli.run_recorded(archive, campaign, through))
+                if gzip.decompress(archive.read_bytes()) != pins:
+                    raise ValueError(f"{archive}: requested scenario inputs differ")
+                evidence = _verified_evidence(
+                    directory, inputs, scenario.world.pack.source, checkpoints(db)
+                )
+                expected = content_hash(evidence.model_dump(mode="json"))
+                if (
+                    (saved.evidence_path, saved.timing_db) != (evidence_path, timing_path)
+                    or saved.evidence_sha256 != expected
+                    or file_digest(output) != expected
+                ):
+                    raise ValueError(f"{receipt}: recorded scenario outputs differ")
+                return Progress(
+                    evidence.final_tick,
+                    evidence.checkpoint,
+                    evidence,
+                    timing(db, case.plan, case.plan.horizon, True),
+                )
+
+            store_once(directory / "inputs.json", pins)
+            store_once(archive, gzip.compress(pins, mtime=0))
+            point, evidence = _advance(
+                directory, scenario, inputs, attempt, pause_after, attempt_limit_ns
+            )
+            if evidence is None:
+                attempt.sample("paused")
+                return Progress(
+                    point.tick,
+                    point.location,
+                    None,
+                    timing(db, case.plan, point.tick - inputs.opening_tick, False),
+                )
+            completed = CaseReceipt(
+                case=name,
+                projection_sha256=file_digest(archive),
+                evidence_path=evidence_path,
+                evidence_sha256=file_digest(output),
+                timing_db=timing_path,
+            )
+            store_once(receipt, cli.report_bytes(completed.model_dump(mode="json")))
+            attempt.sample("evidence_ready")
+            return Progress(
+                point.tick, point.location, evidence, timing(db, case.plan, case.plan.horizon, True)
+            )
+        except BaseException as exc:
+            (attempt or begin()).sample("failed", f"{type(exc).__name__}: {exc}")
+            raise
 
 
 def run_or_resume(
@@ -319,42 +432,48 @@ def run_or_resume(
     A later call with the same pins continues with the checkpoint's pending packet.
     An evidence handoff is ready only after the entire requested horizon verifies.
     """
-    with case_writer(directory) as db:
-        attempt = ActiveAttempt.begin(db, clock, attempt_limit_ns)
-        try:
-            scenario = setup()
-            inputs = scenario.inputs(plan)
-            run, point = _open(directory, scenario, inputs, attempt)
-            end = inputs.opening_tick + plan.horizon
-            while run.world.tick < end:
-                elapsed = attempt.sample()
-                if attempt_limit_ns is not None and elapsed >= attempt_limit_ns:
-                    break
-                run.advance()
-                tick = run.world.tick
-                pause = pause_after(tick)
-                if pause or tick == end or tick - point.tick == plan.checkpoint_every:
-                    point = run.save(attempt, point.tick)
-                if pause:
-                    break
-            else:
-                evidence = run.evidence(checkpoints(db))
-                attempt.sample("evidence_ready")
-                return Progress(
-                    point.tick, point.location, evidence, timing(db, plan, plan.horizon, True)
-                )
-            if point.tick != run.world.tick:
-                point = run.save(attempt, point.tick)
-            attempt.sample("paused")
-            return Progress(
-                point.tick,
-                point.location,
-                None,
-                timing(db, plan, point.tick - inputs.opening_tick, False),
-            )
-        except BaseException as exc:
-            attempt.sample("failed", f"{type(exc).__name__}: {exc}")
-            raise
+    cli.bind_evidence(directory, plan.horizon)
+    return _record_case(
+        directory,
+        directory,
+        CampaignCase(plan, setup),
+        plan.horizon,
+        pause_after,
+        attempt_limit_ns,
+        clock,
+    )
+
+
+def run_campaign(
+    directory: Path,
+    cases: Sequence[CampaignCase],
+    *,
+    pause_after: Callable[[int, int], bool] = lambda index, tick: False,
+    attempt_limit_ns: int | None = None,
+    clock: Clock = _CLOCK,
+) -> tuple[Progress, ...]:
+    """Verify saved cases in order and resume at the first unfinished checkpoint."""
+    indices = [case.plan.case_index for case in cases]
+    if len(indices) != len(set(indices)):
+        raise ValueError("campaign case indices must be unique")
+    through = max((case.plan.horizon for case in cases), default=0)
+    cli.bind_evidence(directory, through)
+    results = []
+    for case in cases:
+        index = case.plan.case_index
+        progress = _record_case(
+            directory,
+            directory / "work" / str(index),
+            case,
+            through,
+            partial(pause_after, index),
+            attempt_limit_ns,
+            clock,
+        )
+        results.append(progress)
+        if progress.evidence is None:
+            break
+    return tuple(results)
 
 
 def replay_case(directory: Path, pack: Pack) -> Iterator[ReplayedBoundary]:

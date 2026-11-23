@@ -172,7 +172,7 @@ def test_attempt_limit_and_cumulative_active_budget(tmp_path, monkeypatch):
     from living_island.sim.v2.scenarios import runtime
 
     clock = _ManualClock()
-    case = plan("script").model_copy(update={"horizon": 3, "budget_ns": 27})
+    case = plan("script").model_copy(update={"horizon": 3, "budget_ns": 38})
 
     def measured_setup():
         clock.spend(3)
@@ -190,6 +190,8 @@ def test_attempt_limit_and_cumulative_active_budget(tmp_path, monkeypatch):
         publish(path, data)
         if path.name == "evidence.json":
             clock.spend(7)
+        elif path == tmp_path / "cases/0.json":
+            clock.spend(11)
 
     monkeypatch.setattr(runtime, "store_once", measured_write)
     partial_run = runtime.run_or_resume(
@@ -200,11 +202,12 @@ def test_attempt_limit_and_cumulative_active_budget(tmp_path, monkeypatch):
     assert partial_run.timing.attempts[0].attempt_limit_ns == 8
     clock.wall += 90
     complete = runtime.run_or_resume(tmp_path, case, measured_setup, clock=clock)
-    assert complete.timing.active_ns == 28  # Two setups, three ticks and durable evidence.
+    # Two setups, three ticks, seven ns writing evidence and eleven publishing its receipt.
+    assert complete.timing.active_ns == 39
     assert complete.timing.downtime_ns == 90
     assert complete.timing.unclassified_gap_ns == 0
     assert complete.timing.verdict == "exceeded"
-    assert complete.timing.ticks_per_second == 3_000_000_000 / 28
+    assert complete.timing.ticks_per_second == 3_000_000_000 / 39
 
 
 def _abandon_case(directory):
@@ -285,3 +288,133 @@ def test_script_stop_records_failure_before_any_boundary_commit(tmp_path):
         assert db.execute("SELECT tick FROM checkpoints").fetchall() == [(0,)]
     assert not (tmp_path / "evidence.json").exists()
     assert not _files(tmp_path, "turns/*.json")
+
+
+def test_campaign_recovers_unfinished_case_and_skips_verified_receipts(tmp_path):
+    from scenario_smoke import plan, setup
+
+    from living_island.sim.v2.cli import run_recorded
+    from living_island.sim.v2.scenarios.runtime import CampaignCase, run_campaign
+
+    observed = [[], []]
+
+    def tracked_setup(mode, index):
+        scenario = setup(mode)
+
+        def observe(state, boundary):
+            observed[index].append(boundary.tick)
+            return scenario.observe(state, boundary)
+
+        return replace(scenario, observe=observe)
+
+    cases = tuple(
+        CampaignCase(plan(mode), partial(tracked_setup, mode, index))
+        for index, mode in enumerate(("script", "policy"))
+    )
+
+    def attempts(index):
+        with closing(sqlite3.connect(tmp_path / "work" / str(index) / "progress.sqlite")) as db:
+            return db.execute(
+                "SELECT status, resumed_tick, failure FROM attempts ORDER BY number"
+            ).fetchall()
+
+    horizon = cases[1].plan.horizon
+    partial_run = run_campaign(
+        tmp_path, cases, pause_after=lambda index, tick: (index, tick) == (1, 3)
+    )
+    assert partial_run[0].evidence is not None
+    assert partial_run[1].tick == 3 and partial_run[1].evidence is None
+    assert json.loads((tmp_path / "scope.json").read_bytes())["through"] == horizon
+    first_receipt = _files(tmp_path, "cases/*.json")
+    assert set(first_receipt) == {"0.json"}
+    first_attempts = attempts(0)
+    assert len(first_attempts) == 1
+    assert observed == [list(range(horizon)), [0, 1, 2]]
+
+    last = run_campaign(
+        tmp_path, cases, pause_after=lambda index, tick: (index, tick) == (1, horizon)
+    )
+    assert last[1].tick == horizon and last[1].evidence is None
+    assert last[1].timing.attempts[-1].resumed_tick == 3
+    assert _files(tmp_path, "cases/*.json") == first_receipt and attempts(0) == first_attempts
+
+    recovered = run_campaign(tmp_path, cases)
+    assert recovered[1].timing.attempts[-1].resumed_tick == horizon
+    receipts = _files(tmp_path, "cases/*.json")
+    assert set(receipts) == {"0.json", "1.json"} and receipts["0.json"] == first_receipt["0.json"]
+    for index, result in enumerate(recovered):
+        receipt = json.loads(receipts[f"{index}.json"])
+        source = tmp_path / f"inputs/{index}.json.gz"
+        assert receipt["case"] == str(index)
+        assert receipt["projection_sha256"] == sha256(source.read_bytes()).hexdigest()
+        assert run_recorded(source, tmp_path, horizon) == receipt
+        assert result.evidence.case_index == index and result.evidence.final_tick == horizon
+
+    policy_attempts = attempts(1)
+    retry = run_campaign(tmp_path, cases)
+    assert tuple(result.evidence for result in retry) == tuple(
+        result.evidence for result in recovered
+    )
+    assert (attempts(0), attempts(1)) == (first_attempts, policy_attempts)
+    assert observed == [list(range(horizon)), list(range(horizon))]
+    assert _files(tmp_path, "cases/*.json") == receipts
+
+    def changed_setup():
+        return replace(tracked_setup("script", 0), config_blob_sha256="0" * 64)
+
+    with pytest.raises(ValueError):
+        run_campaign(tmp_path, (CampaignCase(cases[0].plan, changed_setup), cases[1]))
+    completed_work = tmp_path / "work/0"
+    packet = completed_work / "packets/0.json"
+    packet.write_bytes(packet.read_bytes() + b" ")
+    with pytest.raises(ValueError):
+        run_campaign(tmp_path, cases)
+    assert _files(tmp_path, "cases/*.json") == receipts
+    assert attempts(1) == policy_attempts
+    assert attempts(0)[:1] == first_attempts
+    refusals = attempts(0)[1:]
+    assert len(refusals) == 2 and all(status == "failed" and error for status, _, error in refusals)
+    assert observed == [list(range(horizon)), list(range(horizon))]
+
+
+def test_duplicate_campaign_case_indices_refused_before_setup(tmp_path):
+    from scenario_smoke import plan
+
+    from living_island.sim.v2.scenarios.runtime import CampaignCase, run_campaign
+
+    def unexpected_setup():
+        pytest.fail("setup ran before checking the campaign indices")
+
+    case = CampaignCase(plan("script"), unexpected_setup)
+    evidence = tmp_path / "campaign"
+    with pytest.raises(ValueError, match="case indices must be unique"):
+        run_campaign(evidence, (case, case))
+    assert not evidence.exists()
+
+
+def test_modified_receipt_evidence_digest_retains_failed_attempt(tmp_path):
+    from scenario_smoke import plan, setup
+
+    from living_island.sim.v2.cli import report_bytes
+    from living_island.sim.v2.scenarios.runtime import CampaignCase, run_campaign
+
+    case = CampaignCase(plan("script").model_copy(update={"horizon": 1}), partial(setup, "script"))
+    (completed,) = run_campaign(tmp_path, (case,))
+    receipt = tmp_path / "cases/0.json"
+    published = json.loads(receipt.read_bytes())
+    output = tmp_path / published["evidence_path"]
+    evidence_bytes = output.read_bytes()
+    assert published["evidence_sha256"] == sha256(evidence_bytes).hexdigest()
+    published["evidence_sha256"] = "0" * 64
+    altered = report_bytes(published)
+    receipt.write_bytes(altered)
+
+    with pytest.raises(ValueError, match="recorded scenario outputs differ"):
+        run_campaign(tmp_path, (case,))
+    assert receipt.read_bytes() == altered and output.read_bytes() == evidence_bytes
+    with closing(sqlite3.connect(tmp_path / published["timing_db"])) as db:
+        original, refusal = db.execute(
+            "SELECT status, failure FROM attempts ORDER BY number"
+        ).fetchall()
+    assert original == (completed.timing.attempts[0].status, None)
+    assert refusal[0] == "failed" and "recorded scenario outputs differ" in refusal[1]
