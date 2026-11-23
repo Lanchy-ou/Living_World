@@ -204,6 +204,12 @@ def test_mm03_versions_use_and_pinned_revisions():
         assert store.credit_dispatch(replace(dispatch, revisions=())) is None
         use = store.credit_dispatch(dispatch)
         assert use.credited == (ref,) and use.dispatch == dispatch and not use.blobs
+        fork = MemoryStore.from_snapshot(frozen)
+        fork.apply(frozen.version, "change_set", [first.model_copy(update={"gist": "East"})])
+        other_ref = fork.snapshot.ref(first.id)
+        assert other_ref.store_version == store.snapshot.version
+        with pytest.raises(ValueError, match="^revision does not match this snapshot$"):
+            store.snapshot.read(other_ref)
         assert store.credit_dispatch(replace(dispatch, call_id="retry")) is None
         assert store.snapshot.ref(first.id).content_hash == ref.content_hash
         after = store.credit_dispatch(
@@ -216,10 +222,8 @@ def test_mm03_versions_use_and_pinned_revisions():
         assert [r.last_used_tick for r in store.snapshot.records()] == [7, 7]
         assert store.credit_dispatch(replace(dispatch, turn_id="t2", tick=8)).after_version == 5
         assert frozen.read(ref).use_count == 0
-        with pytest.raises(ValueError, match="revision"):
+        with pytest.raises(ValueError, match="^revision does not match this snapshot$"):
             store.snapshot.read(ref)
-        with pytest.raises(ValueError, match="revision"):
-            frozen.read(replace(ref, content_hash="0" * 64))
         assert [
             (w.before_version, w.after_version) for w in (mechanical, committed, use, after)
         ] == [
@@ -232,6 +236,41 @@ def test_mm03_versions_use_and_pinned_revisions():
         return mechanical, committed, use, after, store.snapshot.store_hash
 
     assert run() == run()
+
+
+def test_resume_mid_turn_credits_only_newly_dispatched_records():
+    from living_island.memory.v2.store import DecisionDispatch, MemoryStore
+
+    store = MemoryStore("ella")
+    first, second = [store.registry.parse(envelope(n)) for n in (1, 2)]
+    store.apply(0, "change_set", [first, second])
+    first_ref = store.snapshot.ref(first.id)
+    dispatch = DecisionDispatch("decision", "turn1", "call1", 7, (first_ref,))
+    store.credit_dispatch(dispatch)
+    store.apply(2, "mechanical", [second.model_copy(update={"gist": "Water nearby"})])
+    checkpoint = store.snapshot
+    restored = MemoryStore.from_snapshot(checkpoint)
+    assert restored.credit_dispatch(replace(dispatch, call_id="retry")) is None
+    assert restored.snapshot is checkpoint
+    assert checkpoint.read(checkpoint.ref(first.id)).use_count == 1
+    assert checkpoint.store_hash != replace(checkpoint, credited_turn_id="other").store_hash
+    assert checkpoint.store_hash != replace(checkpoint, credited_ids=frozenset()).store_hash
+
+    second_ref = checkpoint.ref(second.id)
+    follow_up = DecisionDispatch(
+        "decision_after_recall", "turn1", "call2", 7, (first_ref, second_ref)
+    )
+    receipt = restored.credit_dispatch(follow_up)
+    assert receipt == store.credit_dispatch(follow_up)
+    assert receipt.credited == (second_ref,)
+    assert [r.use_count for r in restored.snapshot.records()] == [1, 1]
+    assert checkpoint.credited_ids == {first.id}
+    assert restored.snapshot.credited_ids == {first.id, second.id}
+
+    restored.credit_dispatch(replace(dispatch, turn_id="turn2", call_id="call3", tick=8))
+    assert restored.snapshot.credited_turn_id == "turn2"
+    assert restored.snapshot.credited_ids == {first.id}
+    assert [r.use_count for r in restored.snapshot.records()] == [2, 1]
 
 
 def test_mm04_sorted_safe_index_flags_and_archive():
@@ -389,8 +428,12 @@ def test_mm18_replace_clear_and_off_arm_reset():
     assert visible.current_intention is None and visible.records == visible.history()
     assert store.snapshot.resident(memory_on=False).records == ()
     assert store.end_intention(tick=6, turn_id=None) is None
-    with pytest.raises(ValueError, match="historical intention"):
-        store.apply(store.snapshot.version, "mechanical", [original])
+    history = store.snapshot
+    # Both the replaced original and the cleared record without a successor are history.
+    for prior in (original, current):
+        with pytest.raises(ValueError, match="^historical intention cannot become current$"):
+            store.apply(history.version, "mechanical", [prior])
+    assert store.snapshot is history and history.current_intention() is None
     for tick in range(6, 29):
         set_at(tick)
     assert len(store.snapshot.resident(memory_on=True).history()) == 20
