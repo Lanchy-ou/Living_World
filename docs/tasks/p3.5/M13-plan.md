@@ -18,7 +18,7 @@
 
 **Done when.** Each starter mechanic has a scripted demonstration on the qualified pack. The owner can follow mental fatigue into fainting and waking, follow a tool until it breaks, watch fruit decay, follow crafting through use of its products, and see a process persist while residents cooperate to finish it. A long rule-based run on that pack reaches tick 1,008 within D1. The owner checks the six §5.9 benefits, the §9 balance report and the measured speed alongside these demonstrations. [Phase plan §§3–5, 8, 10](../../plans/p3.5-implementation-plan-v0.1.md) · [Starter content §§5–10](../../spec/starter-content-v0.1.md) · [ADR 0010](../../adr/0010-starter-content.md)
 
-**Baseline.** The eight specs froze at `8c803ed`. The original planning base was `101361db91498f20511b793c6171b4b716e969b0`. Record each executor's actual base SHA at dispatch. The owner's 23 November update to M12 §2 at `ffa3f12799f1d5e10cdab59e066a5e3b1592b569` governs review and acceptance. [M12 plan](M12-plan.md) · [PR-07](P3.5-PR-07.md) · [P3 closeout](../p3/P3-closeout.md)
+**Baseline.** The eight specs froze at `8c803ed`. The original planning base was `101361db91498f20511b793c6171b4b716e969b0`. Record each executor's actual base SHA at dispatch. The owner's 23 November update to M12 §2 at `ffa3f12799f1d5e10cdab59e066a5e3b1592b569` governs review and acceptance. The owner's later 2026-11-23 directions in §6 govern executor tests, CI and long runs for all nine M13 cards. [M12 plan](M12-plan.md) · [PR-07](P3.5-PR-07.md) · [P3 closeout](../p3/P3-closeout.md)
 
 ## 2. Waves and start conditions
 
@@ -87,7 +87,7 @@ CT numbers in the left column are **starter-content §10 tests**. The right colu
 | CT-20 | P3.5-CT-05 | WAP-23 fixtures, DL-25/WAP-35 and 20 calibration seeds, including restore |
 | §5.9 six scripted benefits | P3.5-CT-07 | Flake, cord, axe, fire, pot and shelter in use |
 | §9.1–9.4 balance before M13 and CT-D9 | P3.5-CT-06 | Paired reports and per-resident/day awake-time fractions for both arms |
-| Copy cost and compatibility after optimization | P3.5-EN-08 | Time per tick before/after on the same 121-tick case, detached-delivery evidence, full test result and a fresh per-tick match on all 20 PR-07 acceptance seeds |
+| Copy cost and compatibility after optimization | P3.5-EN-08 | Time per tick before/after on one matched case (121 ticks proposed on EN-08), detached-delivery evidence, green CI for the reviewed commit and a fresh per-tick match on all 20 PR-07 acceptance seeds |
 | Phase §4 timed long rule-based run | P3.5-CT-10 | Preselected receipt, elapsed time and final committed tick |
 | §9.1/§9.4 benefits and time use measured with LLM residents | M15 (D6) | Handoff of the M13 scenario and metric definitions for the live measurements |
 
@@ -113,8 +113,12 @@ CT-10 indexes the evidence below by tested commit, content pins, run ID, relativ
 
 - Codex executes each implementation card in its own worktree. Claude Code independently reviews (Gate 2) and runs acceptance. The owner decides and signs Gate 3. Both unattended runbooks are suspended. Put review findings and rechecks in the card's own PR.
 - Validate once, at the boundary (AGENTS.md). Convert file, message or public-call input to typed data there. Inside, trust the types. No `isinstance` checks, `.get` defaults, casts or fallbacks for states those types rule out. Every reachable check has a test that reaches it.
-- Install locked dependencies. On each rework round rerun only `uv run --directory backend pytest tests/v2 tests/p3/test_trial_registration.py`, in **one session**. Keep v2 imports out of collection if they contaminate frozen v1 registration. On Windows use a fresh dedicated `--basetemp` from AGENTS.md for every invocation. Run the full suite once before the PR, **or** use a draft PR's GitHub CI for that full run. Record which path supplied the result. PR CI covers the repository's backend, frontend and contract jobs.
+- **Local Gate 1 (owner, 2026-11-23).** Install the locked backend dependencies. Every round runs `uv run --directory backend` with each of `ruff check .`, `ruff format --check .`, `mypy src` and `lint-imports --no-cache`. For the initial pytest run select the card's own test folder and the test folders of the modules it actually edits, including any shared file granted under §3. On rework, rerun only failing tests and the card's own tests, then push. On Windows give each pytest invocation a fresh dedicated `--basetemp`. Keep v2 imports out of test collection where they affect frozen v1 registration.
+- **GitHub CI.** Push the implementation branch and open a draft PR. The full backend suite runs only on GitHub CI, alongside the frontend and contract jobs. Report the PR, commit and current check status, then continue other work while CI runs. Use green backend, frontend and contract jobs on the reviewed commit as the full-suite evidence. A rework push reruns these jobs.
+- **Test count.** Use one test per mapped spec item, plus one per reachable boundary check (AGENTS.md). Reuse existing tests where they cover the item or check. Exercise the item's required outcomes within its test. Add no other tests.
 - **Host lock (M13 and M14).** Before a heavy job (full suite, matrix, week run, balance round, long fake workload or full equivalence), create `C:\Temp\li-heavy.lock` exclusively with the card ID and start time inside. If the file exists, wait. The holder deletes the lock when the job ends, including on failure. A lock older than 12 hours may be removed only after confirming there is no live process for that job. Note the stale lock removal in the handoff.
+- **Long evidence runs.** Run the card's long workloads once at the end under the host lock, at the smallest case count the spec permits. This applies to matrices, balance rounds, week runs and the five-resident fake workload on its owning track. Keep these runs out of routine pytest and CI iterations. On rework rerun only affected cases, then rebuild the report using verified receipts for unaffected cases. Preserve the complete required seed lists, arms and horizons. For example, CT-06 needs one 40-case development round and one 40-case held-out round for a passing candidate. A changed candidate must still satisfy starter §9.
+- **Sizing.** Where the spec leaves a long run's size open, the card states a concrete proposed size and asks the owner to confirm it before execution. In M13, settle flexible sizes after P3.5-EN-08 lands using its measured time per tick. The EN-08 comparison itself uses its card's before/after timing workload. Existing decisions stand for fixed sizes, including D1's single three-resident week. CT-10 reuses the preselected CT-06 timing receipt when it meets D1.
 - Long runs and scenario runs write durable receipts. Resume from a verified committed boundary within the interrupted case, with matching inputs and script/policy state. Preserve failures, completed cases and elapsed time across attempts. A partial case cannot pass. Use the EN-07 checkpoint, packet journal and recorded replay. Never commit `runs/` or secrets.
 - No paid model calls in M13. Scripts and stand-alone rule-based policies submit through the ordinary coordinator/world boundary. Pin any scripted starting setup separately from the pack. The production balance and timed week use registered geometry and placements. Give residents only their packets and own feedback. Keep analysis of objective facts on the observer side. Leave live measurement to D6.
 - Respect §3, including the M14 boundary. Forbidden writes include `agents/**`, `memory/**`, `analysis/**`, frontend, generated types, v1 modules, compat content and other tracks' new paths. Use the shared-file allocation procedure for any exception on the listed shared surfaces. Preserve the default map, v1 pins and independent compatibility evidence.
@@ -123,14 +127,14 @@ CT-10 indexes the evidence below by tested commit, content pins, run ID, relativ
 
 ## Planning handoff
 
-Claude Code requested four changes to `73abdca`. The nine briefs now reflect the owner's decisions. The B1–B4 revisions are ready for Claude's recheck.
+Claude Code requested four changes to `73abdca`, implemented in `b91e19c`. This follow-up applies the owner's 2026-11-23 verification and run-sizing rules to all nine cards.
 
 | Field | Planning result |
 |---|---|
-| base_commit / result_commit | Reviewed plan `73abdca` / the rework commit on `task/P3.5-M13-cards` |
+| base_commit / result_commit | `b91e19c` / the commit applying the owner's executor rules on `task/P3.5-M13-cards` |
 | status | READY_FOR_REVIEW |
 | scope_changed | Yes. The owner approved the early start, EN-08 copy-cost work and the common host lock on 2026-11-23. |
-| human_interventions | The owner approved D1–D7 on 2026-11-23, named Claude Code as M9 custodian and confirmed the review changes. |
+| human_interventions | The owner approved D1–D7 and the Gate 2 revisions on 2026-11-23, then assigned full-suite verification to GitHub CI and limited local tests and long evidence runs. |
 | rework_rounds | 1. B1 corrects the start conditions, B2 adds EN-08, B3 adds the host lock and B4 moves the M13 entries to the end of the question register. |
-| verification | Checked document links, all 14 M13 test assignments, wave dependencies, shared-file ownership and the register move. No implementation tests or heavy jobs ran in this planning rework. |
+| verification | Checked the local and rework commands for all nine cards, CI handoff, long-run scopes, receipt reuse and the 14 mapped starter tests. This revision changes planning documents only. |
 | open_questions | D1–D7 are decided. If tuning requires new fixed expectations, return to the owner under D5. When merging second, rebase and retain both tracks' P3.5 question-register entries. |
