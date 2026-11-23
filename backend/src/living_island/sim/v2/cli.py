@@ -12,6 +12,7 @@ from functools import partial
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from time import perf_counter
+from typing import cast
 
 from living_island.agents.types import OwnProfile, PolicyConfig, RuleParams
 from living_island.persistence._codec import PersistenceError
@@ -308,15 +309,43 @@ def report_bytes(result: object) -> bytes:
     return (json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
+def bind_evidence(evidence: Path, through: int) -> None:
+    """Keep a receipt directory bound to its executable inputs and horizon."""
+    inputs = ("backend/src", "backend/uv.lock", "backend/tests/fixtures/v1_projection", "content")
+    if subprocess.run(["git", "diff", "--quiet", "HEAD", "--", *inputs], cwd=ROOT).returncode:
+        raise ValueError("commit executable source and input changes before running the matrix")
+    pins = subprocess.check_output(
+        ["git", "rev-parse", *(f"HEAD:{path}" for path in inputs)], cwd=ROOT, text=True
+    ).splitlines()
+    scope = evidence / "scope.json"
+    if not scope.exists() and any((evidence / "cases").glob("*.json")):
+        raise ValueError(f"{evidence}: existing case receipts have no scope pin")
+    store_once(
+        scope, report_bytes({"through": through, "git": dict(zip(inputs, pins, strict=True))})
+    )
+
+
 def run_recorded(path: Path, evidence: Path, through: int) -> dict[str, object]:
+    name = path.name.removesuffix(".json.gz")
+    receipt = evidence / "cases" / f"{name}.json"
+    if receipt.is_file():
+        result = cast(dict[str, object], json.loads(receipt.read_bytes()))
+        fixture_digest = sha256(path.read_bytes()).hexdigest()
+        if result["case"] != name or result["projection_sha256"] != fixture_digest:
+            raise ValueError(f"{receipt}: case receipt does not match the archived projection")
+        return result
+    start = perf_counter()
     try:
         result = run_case(path, evidence, through)
     except PersistenceError as error:
         raise RuntimeError(f"{path.name}: {error}") from error
-    name = path.name.removesuffix(".json.gz")
-    store_once(evidence / "cases" / f"{name}.json", report_bytes(result))
+    store_once(receipt, report_bytes(result))
     if result["difference"] is not None:
         print(f"{result['case']}: {result['difference']}", file=sys.stderr, flush=True)
+    else:
+        print(
+            f"{name}: matched in {perf_counter() - start:.3f} seconds", file=sys.stderr, flush=True
+        )
     return result
 
 
@@ -346,6 +375,7 @@ def main() -> int:
         parser.error(f"unregistered matrix case(s): {', '.join(unknown)}")
     cases = [matrix / f"{name}.json.gz" for name in names]
     start = perf_counter()
+    bind_evidence(args.evidence, args.through)
     work = partial(run_recorded, evidence=args.evidence, through=args.through)
     if args.jobs == 1:
         results = list(map(work, cases))

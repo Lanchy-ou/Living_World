@@ -164,6 +164,19 @@ def test_acceptance_prefix_and_repeatable_receipt(tmp_path):
     assert first["matched_boundaries"] == 3
 
 
+def test_completed_receipt_is_reused(tmp_path, monkeypatch):
+    from living_island.sim.v2 import cli
+
+    path = cli.FIXTURES / "matrix/acceptance-production-base-2600456787.json.gz"
+    completed = cli.run_recorded(path, tmp_path, 2)
+
+    def rerun(*args):
+        pytest.fail("completed case was scheduled again")
+
+    monkeypatch.setattr(cli, "run_case", rerun)
+    assert cli.run_recorded(path, tmp_path, 2) == completed
+
+
 def test_comparator_locates_the_first_unequal_need():
     from living_island.sim.equivalence.compare import first_difference
     from living_island.sim.equivalence.projection import read_projection
