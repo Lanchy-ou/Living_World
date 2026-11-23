@@ -85,12 +85,20 @@ def declaration_uses(module: str, source: str) -> Counter[tuple[int, str]]:
 
 # These English phrases describe settlement or terrain in diagnostics, docs and comments.
 GENERIC_PROSE = {
-    "engine/validate.py": ("movement budget must cover all step costs, including grass",),
-    "engine/effects.py": ("simulate a verb branch", "# A partial branch can refer"),
-    "engine/limits.py": ("initialization and branch preflight",),
-    "engine/processes.py": ("transfer its inputs as one branch",),
-    "rules/conservation.py": ("each settlement branch", "branch credits exceed debits"),
-    "engine/settle.py": ("admit only its selected branch",),
+    "engine/validate.py": (
+        ("movement budget must cover all step costs, including grass", "grass"),
+    ),
+    "engine/effects.py": (
+        ("simulate a verb branch", "branch"),
+        ("# A partial branch can refer", "branch"),
+    ),
+    "engine/limits.py": (("initialization and branch preflight", "branch"),),
+    "engine/processes.py": (("transfer its inputs as one branch", "branch"),),
+    "rules/conservation.py": (
+        ("each settlement branch", "branch"),
+        ("branch credits exceed debits", "branch"),
+    ),
+    "engine/settle.py": (("admit only its selected branch", "branch"),),
 }
 
 
@@ -141,9 +149,8 @@ def recipe_id_locations(source: Path, ids: set[str]) -> list[str]:
         uses.update(operation_uses(module, text))
         for number, line in enumerate(text.splitlines(), start=1):
             tokens = Counter(re.findall(r"\w+", line))
-            for phrase in GENERIC_PROSE.get(module, ()):
+            for phrase, shared in GENERIC_PROSE.get(module, ()):
                 # Discount only the shared word, even if other IDs occur in the phrase.
-                shared = "grass" if module == "engine/validate.py" else "branch"
                 uses[number, shared] += len(re.findall(rf"(?<!\w){re.escape(phrase)}(?!\w)", line))
             for member in sorted(ids.intersection(tokens)):
                 if tokens[member] > uses[number, member]:
@@ -227,6 +234,7 @@ def test_en22_distinguishes_generic_uses_from_same_line_recipes(tmp_path: Path) 
         ("rules/vocabulary.py", 'COMPONENTS = {"shelter": ("", "")}', "shelter"),
         ("engine/state.py", "class Components(TypedDict): shelter: NotRequired[dict]", "shelter"),
         ("engine/settle.py", "def interrupt(): branch = None", "branch"),
+        ("rules/conservation.py", '"each settlement branch"', "branch"),
     ):
         path = tmp_path / module
         path.parent.mkdir(parents=True, exist_ok=True)

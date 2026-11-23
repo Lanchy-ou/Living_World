@@ -190,8 +190,6 @@ def test_ct04_composition(case: Case, tmp_path: Path) -> None:
             else:
                 replace(case, config=wrong).load()
 
-    print("Pack pins", pack.pack_version, pack.ancestors, pack.pack_hash, pack.rule_library_hash)
-
 
 def move_resident(setup: WorldSetup, actor: str, position: Coord) -> WorldSetup:
     residents = tuple(
@@ -244,7 +242,6 @@ def test_ct12_deposits_and_adjacent_perceptions(case: Case) -> None:
             point,
         )
         assert ("stock_amount", "plenty") in [(d.property_id, d.value) for d in look.descriptors]
-        print(key, stock, adjacent, look.model_dump_json())
 
 
 def opening_turn(actor: str, action: str, target: str, *, verb=None, instruments=()) -> dict:
@@ -309,7 +306,6 @@ def test_ct18_normalization_and_corpse_reserve(case: Case, tmp_path: Path) -> No
         else:
             assert key in inherited | WORLD_RULES
             assert "work_ticks" not in row and row["instruments"] == []
-    print("Normalized rules", sorted(pack.rules))
 
     # The witness worlds start with actual zero-wear and zero-work entities.
     implicit = case.copy(tmp_path / "implicit")
