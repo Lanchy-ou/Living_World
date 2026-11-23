@@ -350,6 +350,8 @@ def _record_case(
     pause_after: Callable[[int], bool],
     attempt_limit_ns: int | None,
     clock: Clock,
+    *,
+    bind_scope: bool,
 ) -> Progress:
     name = str(case.plan.case_index)
     archive = campaign / "inputs" / f"{name}.json.gz"
@@ -362,55 +364,55 @@ def _record_case(
         begin = partial(ActiveAttempt.begin, db, clock, start, wall, attempt_limit_ns)
         attempt = None if receipt.is_file() else begin()
         try:
+            if bind_scope:
+                cli.bind_evidence(campaign, through)
             scenario = case.setup()
             inputs = scenario.inputs(case.plan)
             pins = canonical_json_bytes(inputs.model_dump(mode="json"))
             if attempt is None:
-                # PR-07 checks the registered case name and digest of its immutable input.
-                saved = CaseReceipt.model_validate(cli.run_recorded(archive, campaign, through))
                 if gzip.decompress(archive.read_bytes()) != pins:
                     raise ValueError(f"{archive}: requested scenario inputs differ")
-                evidence = _verified_evidence(
+                recorded = _verified_evidence(
                     directory, inputs, scenario.world.pack.source, checkpoints(db)
                 )
-                expected = content_hash(evidence.model_dump(mode="json"))
-                if (
-                    (saved.evidence_path, saved.timing_db) != (evidence_path, timing_path)
-                    or saved.evidence_sha256 != expected
-                    or file_digest(output) != expected
-                ):
-                    raise ValueError(f"{receipt}: recorded scenario outputs differ")
-                return Progress(
-                    evidence.final_tick,
-                    evidence.checkpoint,
-                    evidence,
-                    timing(db, case.plan, case.plan.horizon, True),
+            else:
+                store_once(directory / "inputs.json", pins)
+                store_once(archive, gzip.compress(pins, mtime=0))
+                point, evidence = _advance(
+                    directory, scenario, inputs, attempt, pause_after, attempt_limit_ns
                 )
+                if evidence is None:
+                    attempt.sample("paused")
+                    return Progress(
+                        point.tick,
+                        point.location,
+                        None,
+                        timing(db, case.plan, point.tick - inputs.opening_tick, False),
+                    )
+                recorded = evidence
 
-            store_once(directory / "inputs.json", pins)
-            store_once(archive, gzip.compress(pins, mtime=0))
-            point, evidence = _advance(
-                directory, scenario, inputs, attempt, pause_after, attempt_limit_ns
-            )
-            if evidence is None:
-                attempt.sample("paused")
-                return Progress(
-                    point.tick,
-                    point.location,
-                    None,
-                    timing(db, case.plan, point.tick - inputs.opening_tick, False),
-                )
-            completed = CaseReceipt(
+            expected = CaseReceipt(
                 case=name,
                 projection_sha256=file_digest(archive),
                 evidence_path=evidence_path,
-                evidence_sha256=file_digest(output),
+                evidence_sha256=content_hash(recorded.model_dump(mode="json")),
                 timing_db=timing_path,
             )
-            store_once(receipt, cli.report_bytes(completed.model_dump(mode="json")))
-            attempt.sample("evidence_ready")
+            if file_digest(output) != expected.evidence_sha256:
+                raise ValueError(f"{output}: recorded scenario outputs differ")
+            if attempt is not None:
+                store_once(receipt, cli.report_bytes(expected.model_dump(mode="json")))
+            # PR-07 admits the published receipt on the first handoff and on a retry.
+            saved = CaseReceipt.model_validate(cli.run_recorded(archive, campaign, through))
+            if saved != expected:
+                raise ValueError(f"{receipt}: recorded scenario outputs differ")
+            if attempt is not None:
+                attempt.sample("evidence_ready")
             return Progress(
-                point.tick, point.location, evidence, timing(db, case.plan, case.plan.horizon, True)
+                recorded.final_tick,
+                recorded.checkpoint,
+                recorded,
+                timing(db, case.plan, case.plan.horizon, True),
             )
         except BaseException as exc:
             (attempt or begin()).sample("failed", f"{type(exc).__name__}: {exc}")
@@ -432,7 +434,6 @@ def run_or_resume(
     A later call with the same pins continues with the checkpoint's pending packet.
     An evidence handoff is ready only after the entire requested horizon verifies.
     """
-    cli.bind_evidence(directory, plan.horizon)
     return _record_case(
         directory,
         directory,
@@ -441,6 +442,7 @@ def run_or_resume(
         pause_after,
         attempt_limit_ns,
         clock,
+        bind_scope=True,
     )
 
 
@@ -457,7 +459,6 @@ def run_campaign(
     if len(indices) != len(set(indices)):
         raise ValueError("campaign case indices must be unique")
     through = max((case.plan.horizon for case in cases), default=0)
-    cli.bind_evidence(directory, through)
     results = []
     for case in cases:
         index = case.plan.case_index
@@ -469,6 +470,7 @@ def run_campaign(
             partial(pause_after, index),
             attempt_limit_ns,
             clock,
+            bind_scope=not results,
         )
         results.append(progress)
         if progress.evidence is None:

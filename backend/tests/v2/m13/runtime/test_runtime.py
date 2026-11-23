@@ -392,7 +392,8 @@ def test_duplicate_campaign_case_indices_refused_before_setup(tmp_path):
     assert not evidence.exists()
 
 
-def test_modified_receipt_evidence_digest_retains_failed_attempt(tmp_path):
+@pytest.mark.parametrize("altered", ["receipt", "evidence"])
+def test_modified_receipt_evidence_digest_retains_failed_attempt(tmp_path, altered):
     from scenario_smoke import plan, setup
 
     from living_island.sim.v2.cli import report_bytes
@@ -405,13 +406,17 @@ def test_modified_receipt_evidence_digest_retains_failed_attempt(tmp_path):
     output = tmp_path / published["evidence_path"]
     evidence_bytes = output.read_bytes()
     assert published["evidence_sha256"] == sha256(evidence_bytes).hexdigest()
-    published["evidence_sha256"] = "0" * 64
-    altered = report_bytes(published)
-    receipt.write_bytes(altered)
+    if altered == "receipt":
+        published["evidence_sha256"] = "0" * 64
+    else:
+        evidence_bytes += b" "
+        output.write_bytes(evidence_bytes)
+    receipt_bytes = report_bytes(published)
+    receipt.write_bytes(receipt_bytes)
 
     with pytest.raises(ValueError, match="recorded scenario outputs differ"):
         run_campaign(tmp_path, (case,))
-    assert receipt.read_bytes() == altered and output.read_bytes() == evidence_bytes
+    assert receipt.read_bytes() == receipt_bytes and output.read_bytes() == evidence_bytes
     with closing(sqlite3.connect(tmp_path / published["timing_db"])) as db:
         original, refusal = db.execute(
             "SELECT status, failure FROM attempts ORDER BY number"
