@@ -96,8 +96,6 @@ def mechanical_delivery(
     members = {}
     speech = []
     for entry in entries:
-        if entry.delivery_id != packet.delivery_id:
-            raise ValueError("day entry belongs to a different delivery")
         path, *related = entry.member_paths
         member = Member(packet.delivery_id, path, entry.id, entry.revision, tuple(related))
         members[path] = member
@@ -145,8 +143,6 @@ def mechanical_delivery(
             continue
         slot = delivery.feedback_sources[result.intent_id]
         intent = intents[result.intent_id]
-        if intent.intent_id != result.intent_id or intent.actor_id != packet.actor_id:
-            raise ValueError("submitted intent differs from the delivered feedback")
         target = intent.target
         results.append(
             OwnResult(

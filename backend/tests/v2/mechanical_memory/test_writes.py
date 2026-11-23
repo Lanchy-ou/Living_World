@@ -121,25 +121,6 @@ def test_mf_01_mechanical_log_versions_and_allocation(packet, audit):
     assert MechanicalWriter(MemoryStore("ella")).deliver(delivery, agreements=fact) == log
 
 
-def test_reject_entry_from_another_delivery(packet, audit):
-    from living_island.agents.v2.context.delivery import FilteredDelivery
-    from living_island.sim.v2.harness.agreement_facts import mechanical_delivery
-
-    _, entries, _ = _given(packet, audit)
-    with pytest.raises(ValueError, match="day entry"):
-        mechanical_delivery(FilteredDelivery(packet(actor="mia")), entries)
-
-
-def test_reject_unrelated_submission_in_feedback_join(packet, audit):
-    from living_island.sim.v2.harness.agreement_facts import mechanical_delivery
-
-    given, entries, intents = _given(packet, audit)
-    (identity,) = intents
-    intents[identity] = intents[identity].model_copy(update={"intent_id": "ella:t000003:a"})
-    with pytest.raises(ValueError, match="submitted intent"):
-        mechanical_delivery(given, entries, intents)
-
-
 def test_reject_delivery_to_another_store(packet):
     from living_island.agents.v2.context.delivery import FilteredDelivery
     from living_island.memory.v2.mechanical import MechanicalWriter
