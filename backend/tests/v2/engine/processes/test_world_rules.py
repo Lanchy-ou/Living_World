@@ -412,7 +412,7 @@ state = { process = { work_done = 0 } }
     assert stopped.stop.reason == ("DEATH" if doomed else "TARGET_GONE")
 
     action_events = [event.type for event in final.events if event.intent_id == stopped.intent_id]
-    assert action_events == ["action_progressed", "action_stopped"]
+    assert action_events == ["action_progressed", "action_stopped", "action_observed"]
     if doomed:
         death = next(event for event in final.events if event.type == "resident_died")
         stop = next(event for event in final.events if event.type == "action_stopped")
