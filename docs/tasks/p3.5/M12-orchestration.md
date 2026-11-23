@@ -1,5 +1,10 @@
 # M12 orchestration runbook: waves 6 to 9
 
+> **Suspended on 2026-11-23 (owner decision).** The owner returned to a
+> human-in-the-loop mode: Codex threads execute cards, and Claude Code runs
+> Gate 2 and acceptance, with the owner deciding. No thread may act on this
+> runbook. It is kept as the record of the unattended run of 2026-11-22/23.
+
 This runbook is for the Codex orchestrator thread that finishes M12. Read
 [AGENTS.md](../../../AGENTS.md), the [M12 plan](M12-plan.md) and every card
 before you act. Where this runbook and the specs disagree, the specs win

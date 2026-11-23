@@ -49,6 +49,13 @@ The runbook replaces the one-recheck limit of D5 with a fix-until-pass
 review loop, and records how decisions are made while the owner is away.
 On 2026-11-22 the owner extended the unattended run to all of P3.5, with
 provisional Gate 3 packages ([P3.5 runbook](P3.5-orchestration.md)).
+On 2026-11-23 the owner stopped the unattended run and returned to a
+human-in-the-loop mode: Codex threads execute, Claude Code runs Gate 2 and
+acceptance, and the owner decides and signs Gate 3. Both runbooks are
+suspended. Per round, rework reruns only `tests/v2` with the registration
+test; the full suite runs once before the PR, and CI runs it again. One
+heavy job runs at a time, because the host restarted unexpectedly under
+parallel load. Review notes go in the card's own PR.
 
 ## 3. File ownership
 
