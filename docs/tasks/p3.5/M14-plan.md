@@ -127,6 +127,8 @@ This accounts for all 25 MM, 25 MF, 30 DL and 25 EV rows. Eleven EV rows have M1
 
 The owner authorizes **at most CNY 20 across all of P3.5**. Both paid operations require the owner's signed M12 Gate 3. All development, CI, schema/guard tests, rehearsals, probes used as fixtures, and replay use a fake or disabled transport. No paid M15 matrix, exploration run, probe, P3 rerun or provider bake-off is scheduled here. Credentials come from `.env` only at the approved live invocation. Never display, log, commit or send keys to the model. Store sanitized request bodies and attempts without authorization headers. Keep raw `runs/` artifacts outside Git.
 
+EV-05 has two distinct evidence cases. EV-13 fixes the first at one five-resident, seven-day fake run. For the separate cost rehearsal, EV-05 proposes one seed with Ella on fake transport for three game days and asks the owner to confirm that size. Use both receipts from the card's final locked run when preparing the paid steps.
+
 | Paid operation | Admission and evidence | Stop condition |
 |---|---|---|
 | 1. DL-06 provider live check | Owner releases the D7 sample against verified pins and a worst-case allowance that fits after all other phase liabilities. EV-05 rehearses the same wires. Persist every sent, failed, retried or interrupted attempt and raw/parsed outcome. Record tariff date, actual token categories, CNY per attempt and first-pass parse rate | A failed check, unverified model, insufficient headroom or unresolved accounting holds step 2. A tool-calling alternative requires a CR |
@@ -138,17 +140,26 @@ The owner authorizes **at most CNY 20 across all of P3.5**. Both paid operations
 
 ## 6. Rules for every card
 
+The owner set the following verification rules on **2026-11-23** for all 18 M14 implementation cards.
+
+| Stage | Executor action | Evidence |
+|---|---|---|
+| Local Gate 1 | Each round, run Ruff lint and format checks, mypy and import-linter. On the first pass, run pytest on the card's own test folder and the test folders for modules the patch edits. Include a shared module's tests only when the patch actually changes it. | Record the commit, commands, folders, exit codes and counts. |
+| Rework | Keep the four static checks. Narrow pytest to the failing tests and the card's own tests, then push the fix to the existing draft PR. | Record the failing test selectors and their new outcomes. CI reruns the rest. |
+| GitHub CI | Push the implementation branch and open a draft PR. The full backend suite, frontend job and contract generation/drift job run on GitHub CI only. | Report the PR, commit and CI status immediately and continue with available work. Green backend, frontend and contract jobs on that commit are the full-suite evidence. Link the results when available. |
+
+- **Test count.** Add one test per spec item mapped to the card, plus one test per reachable boundary check (AGENTS.md). Add no other tests. Keep a spec row's required examples, controls and negative cases together in its test. Reuse existing coverage for the same item or boundary. Cards with no mapped items add tests only for reachable boundary checks.
+- **Long evidence runs.** At the end of the card, run each required balance round, week run, five-resident fake workload or matrix once under the host lock, using the smallest case count the spec allows. Keep these runs out of routine pytest and repeated CI runs. Retain the inputs and results. On rework, rerun only the cases affected by the change. If the spec leaves the size open, the card states its proposed case count and horizon and asks the owner before running it. Cite a size the owner has already approved. For M13 cards that allow sizing to be deferred, size the long run **after P3.5-EN-08 lands**, using the updated performance measurements.
 - Human-in-the-loop mode, 2026-11-23. Codex executors work one branch and isolated worktree per card. Claude Code independently runs Gate 2 and acceptance. The owner makes decisions, authorizes paid dispatch and signs Gate 3. Both unattended runbooks are suspended. Put review notes in the card's **own PR**. Bring fixes back through Claude Code. This planning branch is backed up without a PR.
 - **Validate once, at the boundary** (AGENTS.md). Check files, wire messages, model output and public package inputs where they enter and turn them into typed data once. No internal `isinstance` checks, `.get` defaults, casts or fallbacks for states that the types already rule out. Every reachable check ships with a test that reaches it. Parse and type model output once at the provider/model boundary.
 - **Record every LLM call** with input, prompt version, model, raw output, parsed result, latency and tokens. Keep all attempts, settings, required immutable versions/hashes, usage/cache and error state. Null unavailable measurements with reasons. Separate reasoning returned by a provider stays in the record and never returns to a subsequent prompt. Capture full manifests, prepared candidates and floor, sent only upon dispatch, and every durable journal cursor. Replay makes zero model calls.
-- **Rework rounds** rerun only `uv run --directory backend pytest tests/v2 tests/p3/test_trial_registration.py` **in one session**. The frozen registration test inspects loaded modules. Keep v2 test imports inside tests when collection would pollute that check. Run the **full suite once before the PR, or use a draft implementation PR's GitHub CI for that run instead of running it locally**. Keep receipts tied to the reviewed tree; a code change affecting evidence requires the relevant recheck. Use the active CI jobs as gates.
 - **Host lock (M13 and M14).** Before a heavy job (full suite, matrix, week run, balance round, long fake workload or full equivalence), create `C:\Temp\li-heavy.lock` exclusively with the card ID and start time inside. If the file exists, wait. The holder deletes the lock when the job ends, including on failure. A lock older than 12 hours may be removed only after confirming there is no live process for that job. Note the stale lock removal in the handoff.
-- Gate 1 starts with the card's targeted fake tests and the registration check in one process, plus the applicable locked checks below. On Windows append a fresh, previously nonexistent `--basetemp` under a short writable parent to **every** pytest invocation. Use AGENTS.md's command-scoped Git longpaths setting when needed. Use only repository-supported Python or package scripts for reusable commands.
+- On Windows give each pytest invocation a fresh, previously nonexistent absolute `--basetemp` under a short writable parent. Use AGENTS.md's command-scoped Git longpaths setting when needed. Keep v2 imports out of test collection if they interfere with the historical registration check in CI. Use repository-supported Python or package scripts for reusable commands.
 - Preserve isolation: agents/memory read world only through the protocol; context, recall and consolidation cannot read the audit. A facts-only agreement writer may receive its allowlisted party-specific feed from sim. Commit memory-use credit at first actual decision dispatch and world actions only after binding. Analysis reads verified recorded artifacts, the frontend renders the resulting values. Frozen specs, M13 content and engine code never change on these cards.
 - Record unresolved choices at `docs/spec/open-questions.md`; use the smallest reversible fixture assumption. A contradiction with a frozen spec follows [phase plan §7](../../plans/p3.5-implementation-plan-v0.1.md). Stop only the affected part. Do not import parked P3 work or restart its trials. Every handoff includes what changed, commands/results, deviations, questions and the seven fields of [the template](../_template.md). Keep full raw runs and credentials out of all commits.
 - Preserve v1 until the signed retirement point. EV-07 is subject to the repository's deletion instructions: identify files individually and request explicit user approval for any batch deletion.
 
-Gate 1 commands from the repository root, as applicable to the card and the full CI jobs:
+Run the four static checks from the repository root with the locked backend dependencies. Then use the card's scoped pytest command. For example, DL-05 runs `uv run --directory backend pytest tests/v2/resident_replay tests/v2/persistence` if its patch also edits persistence. During rework its pytest selection is `tests/v2/resident_replay` plus any failing selectors outside that folder.
 
 ```sh
 uv sync --directory backend --locked
@@ -156,20 +167,9 @@ uv run --directory backend ruff check .
 uv run --directory backend ruff format --check .
 uv run --directory backend mypy src
 uv run --directory backend lint-imports --no-cache
-uv run --directory backend pytest tests/v2 tests/p3/test_trial_registration.py
-uv run --directory backend pytest
-pnpm --dir frontend install --frozen-lockfile
-pnpm --dir frontend lint
-pnpm --dir frontend typecheck
-pnpm --dir frontend build
-pnpm --dir frontend run test:schema
-pnpm --dir frontend run test
-uv run --directory backend python ../scripts/gen_types.py
-uv run --directory backend python ../scripts/gen_p3_inspection_types.py
-git diff --exit-code
 ```
 
-Run generation/drift checks on a clean committed candidate and include the new v2 generator if allocated. Use the receipts for the full checks once under the workflow above. A docs-only handoff reports its own verification scope; implementation, paid runs and reviewer decisions belong to their future cards.
+The [CI workflow](../../../.github/workflows/ci.yml) defines all three jobs. A card that introduces a v2 contract generator includes its drift check in the contract job through the allocated integration change. A documentation-only handoff records its document checks.
 
 ## Planning handoff
 
@@ -177,10 +177,12 @@ The planning change adds this milestone plan, 18 executor cards and the two M14 
 
 Rework on 2026-11-23 incorporates Claude Code's Gate 2 findings B1–B3 on `7af14f2`. The plan and affected cards now distinguish offline and paid start conditions, share the M13 host lock and order the EN-08/DL-04 handoff. The two M14 question entries follow the existing P3.5 entries. When merging the second planning branch, rebase and retain both tracks' register entries.
 
-1. `base_commit` / `result_commit` — `7af14f22399a915c8610d5458a6253e06c3ee951` / the commit containing this rework on `task/P3.5-M14-cards`.
+The owner's subsequent 2026-11-23 addition assigns focused checks to executors and the full jobs to GitHub CI. Section 6 and all 18 cards carry that workflow. Long evidence is scheduled at the end of the owning card.
+
+1. `base_commit` / `result_commit` — `52c51f3d18abeb2255f5060faf17a3d63b7b2648` / the commit containing the verification-policy update on `task/P3.5-M14-cards`.
 2. `status` — `READY_FOR_REVIEW` for Claude Code's Gate 2 recheck.
-3. `scope_changed` — no. The two register entries are the open-question exception requested in the planning brief.
-4. `human_interventions` — one owner disposition on 2026-11-23 approved D1–D7, early offline work and the host lock.
+3. `scope_changed` — the owner revised how executors verify cards and size evidence runs. Milestone acceptance and file ownership remain as reviewed.
+4. `human_interventions` — two owner instructions on 2026-11-23: the Gate 2 disposition and the subsequent verification-policy addition.
 5. `rework_rounds` — one Gate 2 rework round for start conditions, host locking and register order.
-6. `verification` — `git diff --check` and a read-only documentation check passed. The check covered the dated decisions, wave and paid gates, EN-08/PR-07 order, host-lock rules and register placement. All earlier register entries were preserved. The 105-test mapping, 18 cards and 106 local links and anchors passed. Implementation suites, simulations and live calls are `NOT_RUN` for this documentation rework.
-7. `open_questions` — D1–D7 are decided. The owner supplies two profile names and their trait values before EV-05. Paid dispatch still depends on the M12 signature and the measured budget.
+6. `verification` — `git diff --check` and a read-only audit passed. The audit checked the local commands, rework scope, CI evidence and test budget on all 18 cards, the long-run sizes and 94 local links and anchors. All 105 spec items retained their assignments. Implementation suites, simulations and live calls are `NOT_RUN` for this documentation change.
+7. `open_questions` — D1–D7 are decided. The owner supplies two profile names and trait values before EV-05. The cards request sizing decisions for the DL-05 replay, EV-05 cost rehearsal and EV-07 archive demonstration. Paid dispatch still depends on the M12 signature and measured budget.
