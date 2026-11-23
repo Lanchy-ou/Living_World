@@ -48,7 +48,14 @@ def test_pure_modules_never_import_world_internals_or_io(package):
                 module == prefix or module.startswith(prefix + ".") for prefix in forbidden
             )
             if module.startswith("living_island.world"):
-                assert module == "living_island.world.protocol" and path.name != "__init__.py"
+                assert (
+                    module
+                    in (
+                        "living_island.world.protocol",
+                        "living_island.world.v2.protocol",
+                    )
+                    and path.name != "__init__.py"
+                )
             if package == "memory":
                 assert not module.startswith("living_island.agents")
 
