@@ -77,7 +77,8 @@ def read_shard(directory: Path, ref: ShardRef) -> Shard:
         if len(ref.parts) > 1:
             block = b64decode(TypeAdapter(str).validate_json(block), validate=True)
         raw.extend(block)
-    if sha256_hex(bytes(raw)) != ref.sha256:
+    assembled_hash = ref.parts[0].sha256 if len(ref.parts) == 1 else sha256_hex(bytes(raw))
+    if assembled_hash != ref.sha256:
         raise ValueError(f"{ref.id}: assembled hash mismatch")
     value = _SHARD.validate_json(raw, extra="forbid")
     if value.family != ref.family:

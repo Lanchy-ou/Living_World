@@ -184,11 +184,19 @@ def member(packet: dict[str, Any], path: str) -> Any:
 @dataclass
 class Events:
     heard: dict[tuple[str, str], str] = field(default_factory=dict)
+    watched: dict[tuple[str, str, str], str] = field(default_factory=dict)
     intents: defaultdict[str, list[ia.WorldEvent]] = field(
         default_factory=lambda: defaultdict(list)
     )
 
     def add(self, event: ia.WorldEvent) -> None:
+        if event.type == "action_observed":
+            payload = event.payload
+            self.watched[
+                str(payload["observer_id"]),
+                str(payload["observed_intent_id"]),
+                str(payload["phase"]),
+            ] = event.event_id
         if event.intent_id is not None:
             self.intents[event.intent_id].append(event)
         if event.type == "utterance_heard":
@@ -217,7 +225,11 @@ class Events:
             if not ids:
                 missing = "missing action outcome for intent"
         elif ref.kind == "observed_action":
-            missing = "watched-phase objective join pending EN-10"
+            event_id = self.watched.get((packet.actor_id, ref.intent_id, ref.phase))
+            if event_id:
+                ids.append(event_id)
+            else:
+                missing = "missing action_observed event for observer, intent and phase"
         return ia.JoinedEntry(
             entry=entry,
             members=[member(fields, p) for p in entry.member_paths],

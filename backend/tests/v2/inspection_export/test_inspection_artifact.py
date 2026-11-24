@@ -9,7 +9,7 @@ def test_inspection_reader_refuses_misaddressed_or_invalid_artifacts(
 ):
     from living_island.analysis.v2 import shards
     from living_island.analysis.v2.export import export
-    from living_island.contract.inspection_v2 import FilePart, RevisionRef
+    from living_island.contract.inspection_v2 import Cost, FilePart, RevisionRef
 
     directory = tmp_path / "read"
     index = export(*capture, directory)
@@ -39,6 +39,13 @@ def test_inspection_reader_refuses_misaddressed_or_invalid_artifacts(
         with pytest.raises(ValueError, match=reason):
             archive.read(ref)
     index_path = directory / "index.json"
+    misplaced = shards.write_shard(directory, "ryan:1", Cost(attempts=[]))
+    invalid_index = index.model_copy(update={"revisions": [misplaced]})
+    index_path.write_bytes(shards.encoded(invalid_index.model_dump(mode="json")))
+    with pytest.raises(ValueError, match="wrong revision family"):
+        shards.InspectionArchive.open(directory).revision(
+            "ryan", RevisionRef("m:ryan:1", 1, "0" * 64)
+        )
     index_path.write_bytes(index_path.read_bytes() + b"\n")
     with pytest.raises(ValueError, match="canonical inspection index"):
         shards.read_index(directory)

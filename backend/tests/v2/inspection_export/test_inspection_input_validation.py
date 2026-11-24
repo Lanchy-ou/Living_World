@@ -175,3 +175,74 @@ def test_inspection_missing_hypothesis_is_unknown(formation, tmp_path):
         r for r in read_shard(directory, index.metrics).instances if r.metric == "hypothesis_source"
     )
     assert row.value is None and row.reason == "missing hypothesis revision"
+
+
+@pytest.mark.parametrize(
+    ("case", "reason"),
+    [
+        ("citation", "citation does not resolve"),
+        ("delivery", "entry names a different delivery"),
+        ("path", "invalid packet member path"),
+        ("event", "foreign event in boundary"),
+        ("digest", "corrupt audit fact"),
+    ],
+)
+def test_inspection_rejects_broken_fact_links(capture, tmp_path, case, reason):
+    from living_island.analysis.v2.export import export, fingerprint
+    from living_island.analysis.v2.shards import encoded
+
+    source, original, replay = capture
+    copy = tmp_path / "run"
+    shutil.copytree(source, copy)
+    database = copy / "resident.sqlite"
+    with sqlite3.connect(database) as db:
+
+        def first(slot):
+            key, raw = db.execute(
+                "SELECT name,body FROM facts WHERE name LIKE ? ORDER BY seq LIMIT 1",
+                ("%." + slot + ".json",),
+            ).fetchone()
+            return key, json.loads(raw)
+
+        def body(digest):
+            return db.execute("SELECT body FROM facts WHERE name=?", (digest,)).fetchone()[0]
+
+        def blob(raw):
+            digest = sha256(raw).hexdigest()
+            db.execute("INSERT INTO facts(name,hash,body) VALUES(?,?,?)", (digest, digest, raw))
+            return digest
+
+        if case in ("delivery", "path"):
+            key, row = first("period_members")
+            entry = json.loads(body(row["entries"][0]))
+            if case == "delivery":
+                entry["delivery_id"] = "other-delivery"
+            else:
+                entry["member_paths"] = ["perception.invalid[]"]
+            row["entries"][0] = blob(encoded(entry))
+        elif case == "citation":
+            key, row = first("decision")
+            row["cited_parts"] = [
+                dict(
+                    id="missing",
+                    act_call_id=row["call_ids"][-1],
+                    sent_part_sha256="a" * 64,
+                    revision=None,
+                )
+            ]
+        else:
+            key, row = first("0.boundary")
+            if case == "event":
+                events = [json.loads(line) for line in body(row["events"]).splitlines()]
+                events[0]["run_id"] = "another-run"
+                row["events"] = blob(b"".join(encoded(e) + b"\n" for e in events))
+        raw = encoded(row)
+        digest = "0" * 64 if case == "digest" else sha256(raw).hexdigest()
+        db.execute("UPDATE facts SET body=?,hash=? WHERE name=?", (raw, digest, key))
+    manifest = tmp_path / "seal.json"
+    manifest.write_text(
+        json.dumps({**json.loads(original.read_bytes()), "audit_sha256": fingerprint(database)}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match=reason):
+        export(copy, manifest, replay, tmp_path / "refused")
