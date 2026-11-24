@@ -5,7 +5,8 @@
 | Stage | Registered pairs | Result | Evidence |
 |---|---:|---|---|
 | Development | 20 | Technical PASS, verdict FAIL | 112 treatment faints in 60 resident-weeks. See [development evidence](#development-evidence). |
-| Held-out acceptance | 20 | NOT_RUN | Owner decision on tuning and candidate freeze pending |
+| Tuned development | 20 | READY_TO_RUN | Awake gain 30. Fresh starter cases and retained controls await host release. See [owner decision](#owner-selected-development-check). |
+| Held-out acceptance | 20 | NOT_RUN | One round after tuned development and candidate freeze |
 | D1 and CT-D9 | — | D1 pending, development CT-D9 above 30% | 21,588 of 40,080 treatment awake ticks were non-survival. Held-out measurements are pending. |
 
 D2 selects the S2 m6 production geometry, the P2 base policy in stand-alone visible-feedback mode, three residents and 1,008 advances. Both arms journal ordinary packet batches and committed turns and checkpoint every 24 ticks. The comparison changes the loaded pack from `compat-v1` to `starter-v1`. CT-03's initial starter source tree at dispatch is `d7ef990e5ab85992aa342bd27f64bc70d5a217a9`. Its bound pack and rule library hashes are captured separately in each case. Each balance invocation takes the accepted equivalence commit via `--equivalence-revision`. `require_calibration` checks that revision, the CT-05 receipt digest, the executable pins and full case coverage. EN-10 added `action_observed`. The owner selected its accepted 20/20 evidence at `3d729bcfe3bd3e2fb3207100f2075830100c3999` for fresh calibration. D1 preselects treatment seed 2600456787 with a 30-minute cumulative active-time budget. [Decisions D1–D6](M13-plan.md) · [CT-03 content pins](P3.5-CT-03.md) · [P2 S2 reference evidence](../p2/P2-05.md)
@@ -121,6 +122,8 @@ Both proposals fit the §9.3 coefficient range. The recommended change would mov
 
 ### Shortest rerun plan
 
+The owner subsequently selected the full 20-seed development option. The launch command is in the [owner decision](#owner-selected-development-check).
+
 Use two workers, a fresh output directory per stage and the recorded `require_calibration` gate at each start. The owner chooses the tuning before the quick check. Freeze the candidate after reviewing that check, then open the acceptance list once. Estimates assume sole use of the host after EV-05. [Campaign and case admission](../../../backend/src/living_island/sim/v2/scenarios/balance/campaign.py) · [Byte comparison and evidence verification](../../../backend/src/living_island/sim/v2/scenarios/calibration/reuse.py)
 
 | Step | Fresh simulations | Reused balance controls | Estimated wall time at two workers |
@@ -136,3 +139,29 @@ The CLI currently enumerates all 20 seeds in case-name sort order, schedules bot
 **Acceptance.** None of the 20 calibration visible-arm inputs is byte-identical to its expected balance control. All 20 share the required 1,008-tick horizon and 24-tick cadence, but their archived plan says arm `visible`, observer `CT-20/1` and case index 1. Balance requires arm `compat-v1`, a pinned balance measurement observer and the seed's even control index. Controller, setup and recording revision pins differ as well. The calibration directories contain CT-20 comparison traces, while balance measurement consumes hash-bound opening and per-tick `observations/` absent from all 20. Moving or renaming the directories cannot satisfy these checks. Use the ordinary 40-case acceptance round once, including D1 timing on starter seed 2600456787. [Calibration recorder](../../../backend/src/living_island/sim/v2/scenarios/calibration/campaign.py) · [Balance observer](../../../backend/src/living_island/sim/v2/scenarios/balance/observations.py)
 
 The six corresponding starter receipts total 31.7 worker-minutes, and all 20 starter receipts total 103.7. Control verification, measurement, scheduling and report publication add overhead. The 40-case acceptance estimate uses the measured 109-minute paired development round. The preferred sequence is **46 fresh cases, about 2 h 02 min–2 h 22 min** of campaign time. With today's CLI the fallback is **60 fresh cases, about 2 h 40 min–3 h 05 min**. These estimates exclude implementation and owner review time.
+
+### Owner-selected development check
+
+On 2026-11-24 the owner allocated the single `awake_per_tick` setting in the starter pack and selected the 20-seed development check, followed by acceptance once after candidate review. The fixed-schedule calculation reproduced all 112 observed baseline faint ticks before projecting the five candidate values.
+
+| Awake gain per tick | Projected faints / 60 resident-weeks | Faints per resident-week |
+|---:|---:|---:|
+| **30 (selected)** | **49/60** | **0.8167** |
+| 31 | 49/60 | 0.8167 |
+| 32 | 49/60 | 0.8167 |
+| 33 | 50/60 | 0.8333 |
+| 34 | 55/60 | 0.9167 |
+
+The owner's 0.80 selection target allows 48 faints. The lowest projection is 49, so the owner's fallback sets `awake_per_tick` from 50 to 30 (−40%). It projects 11 fewer faints than the §9.2 ceiling of 60. The treatment pack bound to the registered production inputs has SHA-256 `c193d071e7593185f7641513c7a14e42d9b30eba3ceaf96e1fc563bf85f51fc0`. The measured result on this pack is pending.
+
+For D5/CT-09, the published typical day (96 awake ticks, 50 heard utterances and 20 first sightings) moves from 6,400 fatigue to **4,480** (`96 × 30 + 50 × 20 + 20 × 30`). From zero fatigue, a silent resident first reaches 10,000 at **334 ticks**, previously 200. The 48-tick night still clears up to 7,200 points and a faint lasts 36 ticks. The owner will disposition the two changed vectors at Gate 3. [Published CT-09 vectors](../../spec/starter-content-v0.1.md)
+
+**Calibration and reuse preflight.** The current admission function accepted receipt `82aa10718fd9de52a4abae70a08cf6795ce43ddcc4a8a20fd32a95ef4d3f4fd5` as equal for all 59 cases with zero missing. Its 20 executable pins cover `content/packs/compat-v1` and `content/vocabulary` and exclude the starter pack. All 20 match this branch. Comparing `fbdc069` with fetched `origin/main` at `b5fb161624ef421fbc6f98a78fc3e7ebd8a8768b` showed identical objects at every pinned path. Rebasing this branch onto that tip preserves the receipt, including this branch's calibration implementation. Rebuilding the 20 development control inputs at tick zero matched the retained CT-04 archives byte for byte. Their receipt and evidence digests matched the development report, and every new starter pack hash differed from its baseline. [Calibration pins](../../../backend/src/living_island/sim/v2/scenarios/calibration/pins.py)
+
+**Prepared command from the worktree root** (55–65 minutes at two workers, based on 103.7 measured starter worker-minutes plus control verification and reporting).
+
+```powershell
+uv run --directory backend python -m living_island.sim.v2.scenarios.balance --stage development --jobs 2 --calibration ../runs/m13/calibration-en10 --receipt-sha256 82aa10718fd9de52a4abae70a08cf6795ce43ddcc4a8a20fd32a95ef4d3f4fd5 --equivalence-revision 3d729bcfe3bd3e2fb3207100f2075830100c3999 --reuse ../runs/m13/balance-dev --out ../runs/m13/balance-dev-awake30
+```
+
+The current balance CLI wraps the development campaign in the same exclusive `heavy_lock()` used by the previous wrapper. It releases the lock in `finally`, including on error, and calls `require_calibration` before scheduling cases. This command selects only development and publishes into a new directory. EV-05 has the host. Launch awaits the owner's release notice.
