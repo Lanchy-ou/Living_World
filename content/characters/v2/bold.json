@@ -1,0 +1,16 @@
+{
+  "profile_schema_version": "0.2",
+  "profile_id": "bold",
+  "values": [
+    "Act first and adjust afterwards.",
+    "Trust what others say.",
+    "Share what you have."
+  ],
+  "traits": {
+    "curiosity": 3,
+    "caution": 0,
+    "sociability": 3,
+    "trustfulness": 4,
+    "diligence": 1
+  }
+}
