@@ -305,3 +305,41 @@ After `ella passed`, run the new offline preflight in the same terminal.
 $dl06EllaSample = Join-Path ($dl06EllaRun | Select-Object -First 1) 'ella'
 uv run --offline --no-env-file --locked --directory backend python -m living_island.sim.v2.harness.provider_check --sample-dir $dl06EllaSample --sample-sha256 ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $dl06EllaSample 'provider-check.sqlite')).Hash.ToLowerInvariant()) --receipt-sha256 ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $dl06EllaSample 'receipt.json')).Hash.ToLowerInvariant())
 ```
+
+## Recheck release on 2026-11-24 UTC
+
+Claude Code completed the 432-tick Ella-only fake rehearsal at `2ec9912`.
+The retained sample at `runs/ev05-m1m1r03g/ella` recorded zero network
+dispatches and zero charges. The fresh offline preflight rebuilt and
+fake-parsed all six `/0.2` requests and matched the rehearsal's receipt
+and audit pins. The fresh report is
+`runs/dl06-recheck-release-preflight.txt`.
+
+The recheck release was prepared at 22:58 UTC on 2026-11-24
+(06:58 Singapore time on 2026-11-25). Its `dispatch_on` is therefore
+`2026-11-24` and it expires at 08:00 Singapore time on 2026-11-25. It uses
+the same UTC-day off-peak tariff and the same dated DeepSeek model and
+Responses evidence as the first release. The original eight paid attempts
+remain reconciled at CNY 0.02620786, with zero outstanding liabilities.
+[Original dated tariff and support evidence](#owner-release-on-2026-11-24)
+
+The release sets `max_cny` to `"4.97379214"`, the unused portion of the
+owner's CNY 5.00 authorization. EV-04 priced the 60 permitted attempts at
+a peak reservation of **CNY 4.650088**. The hold plus settled spend is
+**CNY 4.67629586**, leaving **CNY 0.32370414** under the authorization.
+
+| Local input or evidence | SHA-256 |
+| --- | --- |
+| Ella `receipt.json` | `d470ea3c419f75d152dad471cb2b860026e68bf377874bb8f64ddfe017ceec43` |
+| Ella `provider-check.sqlite` | `6b50becac1807e56d288a14e84fcbd8b84611147aad8a9e78e2c9ba5f20792b1` |
+| Rebuilt preflight | `c65031364b0184d3bbb34ba055cbb9573a7c5f84d121c5bd4c671f7700975170` |
+| Reconciled `runs/dl06-recheck-ledger.json` | `e8a92cc2514389c9a0eba43dd28e27a07378bc7f0e01508a47bc832171ff0ea2` |
+| `runs/dl06-recheck-release.json` | `ede8dc0f85e2013aa610c4fdaf91dbe94c94f9cfee47cf0a7cef86dfb44fa0fc` |
+
+The owner runs this command from `F:\p35-w1\dl06` with
+`DEEPSEEK_API_KEY` in the process environment. The launcher creates
+`runs/dl06-provider-recheck/` for this invocation.
+
+```powershell
+uv run --offline --no-env-file --locked --directory backend python -m living_island.sim.v2.harness.provider_check --sample-dir F:/p35-w1/dl06/runs/ev05-m1m1r03g/ella --sample-sha256 6b50becac1807e56d288a14e84fcbd8b84611147aad8a9e78e2c9ba5f20792b1 --receipt-sha256 d470ea3c419f75d152dad471cb2b860026e68bf377874bb8f64ddfe017ceec43 --live --release F:/p35-w1/dl06/runs/dl06-recheck-release.json --ledger F:/p35-w1/dl06/runs/dl06-recheck-ledger.json
+```
