@@ -134,7 +134,16 @@ def test_missing_calibration_refused_before_any_case(tmp_path):
     from living_island.sim.v2.scenarios.balance.campaign import campaign
 
     with pytest.raises(FileNotFoundError, match="receipt.json"):
-        campaign("development", tmp_path, "0" * 64, tmp_path / "out", 4, inspect=False, reuse=())
+        campaign(
+            "development",
+            tmp_path,
+            "0" * 64,
+            tmp_path / "out",
+            4,
+            equivalence_revision="a" * 40,
+            inspect=False,
+            reuse=(),
+        )
     assert not (tmp_path / "out").exists()
 
 
@@ -143,16 +152,77 @@ def test_worker_limit(tmp_path, jobs):
     from living_island.sim.v2.scenarios.balance.campaign import campaign
 
     with pytest.raises(ValueError, match="jobs"):
-        campaign("development", tmp_path, "0" * 64, tmp_path, jobs, inspect=False, reuse=())
+        campaign(
+            "development",
+            tmp_path,
+            "0" * 64,
+            tmp_path,
+            jobs,
+            equivalence_revision="a" * 40,
+            inspect=False,
+            reuse=(),
+        )
 
 
 def test_heavy_lock_excludes_concurrent_campaign_and_releases_on_failure(tmp_path):
-    from living_island.sim.v2.scenarios.balance.__main__ import heavy_lock
+    from living_island.sim.v2.scenarios.balance.campaign import heavy_lock
 
     path = tmp_path / "li-heavy.lock"
     with pytest.raises(FileExistsError), heavy_lock(path), heavy_lock(path):
         pytest.fail("concurrent campaign admitted")
     assert not path.exists()
+
+
+@pytest.mark.parametrize("state,missing", [("equal", []), ("different", []), ("equal", ["case"])])
+def test_wrapper_owns_lock_through_development_only(tmp_path, monkeypatch, state, missing):
+    import json
+    import sys
+    from hashlib import sha256
+
+    from living_island.sim.v2.scenarios.balance import development
+
+    revision = "a" * 40
+    evidence = tmp_path / f"acceptance-{revision}"
+    lock = tmp_path / "heavy.lock"
+    real_lock = development.heavy_lock
+    monkeypatch.setattr(development, "heavy_lock", lambda: real_lock(lock))
+    monkeypatch.setattr(development.cli, "ROOT", tmp_path)
+    monkeypatch.setattr(sys, "argv", ["wrapper", "--en08", str(evidence)])
+    out = tmp_path / "runs/m13/calibration-en10"
+    calls = []
+    raw = json.dumps(
+        {
+            "en08": {"revision": revision, "report_sha256": "1" * 64, "scope_sha256": "2" * 64},
+            "status": state,
+            "missing_cases": missing,
+            "cases": [],
+            "executable": {},
+        }
+    ).encode()
+
+    def calibrate(command, *, cwd, check):
+        assert lock.is_file() and cwd == tmp_path and check
+        assert command[-4:] == ["--en08", str(evidence), "--jobs", "4"]
+        calls.append("calibrate")
+        out.mkdir(parents=True)
+        (out / "receipt.json").write_bytes(raw)
+
+    def develop(stage, calibration, digest, directory, jobs, **options):
+        assert lock.is_file() and calibration == out
+        assert digest == sha256(raw).hexdigest() and jobs == 4
+        assert options["equivalence_revision"] == revision
+        calls.append(stage)
+        return {"verdict": "PASS"}
+
+    monkeypatch.setattr(development.subprocess, "run", calibrate)
+    monkeypatch.setattr(development, "campaign", develop)
+    if state == "equal" and not missing:
+        assert development.main() == 0 and calls == ["calibrate", "development"]
+    else:
+        with pytest.raises(ValueError, match="calibration"):
+            development.main()
+        assert calls == ["calibrate"]
+    assert not lock.exists()
 
 
 def test_observation_integrity_and_missing_case(short_pair, tmp_path):

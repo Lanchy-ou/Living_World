@@ -3,9 +3,12 @@
 import os
 import platform
 import sqlite3
+import tempfile
+from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor
-from contextlib import closing
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 from time import time_ns
@@ -24,9 +27,25 @@ from .measurement import measure
 from .observations import Arm, scenario
 from .report import ARMS, Case, report
 
-EN08 = "f8142919376de0ea2125fe3e443629c82dce8166"
 D1_SEED = 2600456787
 type Stage = Literal["development", "acceptance"]
+
+
+@contextmanager
+def heavy_lock(path: Path | None = None) -> Iterator[None]:
+    if path is None:
+        parent = Path("C:/Temp") if os.name == "nt" else Path(tempfile.gettempdir())
+        path = parent / "li-heavy.lock"
+    lock = path.open("x", encoding="utf-8")
+    try:
+        with lock:
+            lock.write(
+                f"P3.5-CT-06 {datetime.now(UTC).isoformat()} "
+                f"pid={os.getpid()} host={platform.node()}\n"
+            )
+        yield
+    finally:
+        path.unlink()
 
 
 def registered(stage: Stage) -> list[int]:
@@ -92,12 +111,15 @@ def campaign(
     out: Path,
     jobs: int,
     *,
+    equivalence_revision: str,
     inspect: bool,
     reuse: tuple[Path, ...],
 ) -> dict[str, Any]:
     if not 1 <= jobs <= 4:
         raise ValueError("jobs must be 1 through 4")
-    receipt = require_calibration(calibration, en08_revision=EN08, receipt_sha256=digest)
+    receipt = require_calibration(
+        calibration, en08_revision=equivalence_revision, receipt_sha256=digest
+    )
     seeds = registered(stage)
     revision = content_hash(
         [
@@ -114,7 +136,7 @@ def campaign(
         "stage": stage,
         "seeds": seeds,
         "calibration_sha256": digest,
-        "en08": EN08,
+        "en08": receipt.en08.revision,
         "starter_tree": git("rev-parse", "HEAD:content/packs/starter-v1"),
         "implementation": revision,
         "measurement": git(
