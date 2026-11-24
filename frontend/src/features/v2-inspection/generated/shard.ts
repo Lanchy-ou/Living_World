@@ -16,7 +16,7 @@ export type InspectionShard =
   | Metrics
   | Cost
   | TimeUse
-  | Attempts4;
+  | Attempts6;
 export type Family = "decisions";
 export type RecordSchema = "dr/0.1";
 export type TurnId = string;
@@ -711,8 +711,92 @@ export type Check2 = "contradiction";
 export type Verdict3 = "contradicts" | "consistent";
 export type ContentChecks = ContentCheck[];
 export type CheckedParts = StoredPart[];
-export type Family8 = "cost";
+export type Packs = string[];
+export type ResidentId6 = string;
+export type SelfFoundSkills = number;
+export type AccuracyDistribution = string[];
+export type LaterPeriodUses = number;
+export type PriorDayUses = number;
+export type UnknownUseOrigins = number;
+export type Residents = ResidentSummary[];
+export type ResidentId7 = string;
+export type InstanceId4 = string;
+export type Trace1 = string[];
+export type Family8 =
+  | "decisions"
+  | "consolidations"
+  | "stores"
+  | "deliveries"
+  | "revisions"
+  | "evidence_writes"
+  | "calls"
+  | "metrics"
+  | "cost"
+  | "time_use"
+  | "attempts";
+export type Id11 = string;
+export type Label = string;
+export type Member1 = string | null;
+export type Links = AnalysisLink[];
+export type RuleId = string;
+export type TurnId8 = string;
+export type PeriodId7 = string;
+export type Flags = ("own_failures" | "watched" | "told" | "earlier_period" | "prior_knowledge")[];
+export type UncheckedUtterances = string[];
+export type Reason7 = string | null;
+export type Learning = LearningPath[];
+export type ResidentId8 = string;
+export type InstanceId5 = string;
+export type Trace2 = string[];
+export type Links1 = AnalysisLink[];
+export type Prediction = string;
+export type Sources2 = string[];
+export type CreatorCall = string | null;
+export type Origin1 = "self_found" | "supplied";
+export type Attempts3 = number | null;
+export type MatchedExpected1 = number | null;
+export type Watched1 = number;
+export type SuppliedAttempts = number;
+export type FallbackAttempts = number;
+export type Accuracy = string | null;
+export type Reason8 = string | null;
+export type Skills = SkillScore[];
+export type ResidentId9 = string;
+export type InstanceId6 = string;
+export type Trace3 = string[];
+export type Links2 = AnalysisLink[];
+export type PeriodId8 = string;
+export type Day = number;
+export type CreatedPeriod = string | null;
+export type CreatedDay = number | null;
+export type TurnId9 = string;
 export type CallId9 = string;
+export type BeforeVersion2 = number;
+export type AfterVersion2 = number;
+export type Kind37 = string | null;
+export type Cited = boolean;
+export type Uses = MemoryUse[];
+export type ResidentId10 = string;
+export type PeriodId9 = string;
+export type CallId10 = string;
+export type TurnId10 = string | null;
+export type Outcome4 = string;
+export type Omitted2 = Ref[];
+export type Retrieved = string[];
+export type Calls2 = ExposureCall[];
+export type InheritedFrom = string[];
+export type Exposed = boolean;
+export type ExposedTurns = string[];
+export type Periods = PeriodExposure[];
+export type ResidentId11 = string;
+export type PeriodId10 = string;
+export type AttemptId = string;
+export type Calls3 = ExposureCall[];
+export type Outcome5 = string;
+export type SuppliesPeriod = string | null;
+export type Consolidations = ConsolidationExposure[];
+export type Family9 = "cost";
+export type CallId11 = string;
 export type N2 = number;
 export type Input1 = number | null;
 export type Output1 = number | null;
@@ -720,15 +804,69 @@ export type CacheHit1 = number | null;
 export type CacheMiss1 = number | null;
 export type LatencyMs1 = number | null;
 export type MissingUsageReason2 = string | null;
-export type Attempts3 = Charge[];
-export type Family9 = "time_use";
-export type ResidentId6 = string;
+export type Attempts4 = Charge[];
+export type ResidentId12 = string;
+export type PeriodId11 = string;
+export type Tick9 = number;
+export type Day1 = number;
+export type TurnId11 = string | null;
+export type CallId12 = string;
+export type Outcome6 = string;
+export type N3 = number | null;
+export type AttemptOutcome = string;
+export type FullTokens1 = number | null;
+export type SentTokens = number | null;
+export type PressureBand1 = string | null;
+export type FullLogTokens = number | null;
+export type LogGrowthTokens = number | null;
+export type Omitted3 = Ref[];
+export type Fallback1 = boolean | null;
+export type Section3 = string;
+export type Tokens1 = number;
+export type Share = string;
+export type EstimatedInputPicoCny = number | null;
+export type Sections1 = SectionCost[];
+export type InputPicoCny = number | null;
+export type OutputPicoCny = number | null;
+export type UnassignablePicoCny = number | null;
+export type PaidPicoCny = number | null;
+export type CostReason = string | null;
+export type Contexts = ContextCost[];
+export type ResidentId13 = string;
+export type Day2 = number;
+export type Calls4 = number;
+export type Attempts5 = number;
+export type Turns = number;
+export type FallbackTurns = number;
+export type FallbackRate = string | null;
+export type InputTokens = number | null;
+export type OutputTokens = number | null;
+export type CacheHit2 = number | null;
+export type CacheMiss2 = number | null;
+export type LatencyMs2 = number | null;
+export type InputPicoCny1 = number | null;
+export type OutputPicoCny1 = number | null;
+export type UnassignablePicoCny1 = number | null;
+export type PaidPicoCny1 = number | null;
+export type Days = DailyCost[];
+export type ResidentId14 = string;
+export type TurnId12 = string;
+export type Day3 = number;
+export type Tick10 = number;
+export type PeriodId12 = string;
+export type CallIds1 = string[];
+export type FatigueBand1 = string | null;
+export type AwakeTicks1 = number;
+export type Turns1 = TurnCost[];
+export type LedgerMode = ("fake" | "paid") | null;
+export type Family10 = "time_use";
+export type ResidentId15 = string;
 export type IntentId9 = string;
 export type StartTick = number;
 export type EndTick = number | null;
 export type EventIds1 = string[];
 export type Intervals = Interval[];
-export type Family10 = "attempts";
+export type Family11 = "attempts";
 export type Events = WorldEvent[];
 export type Submissions = TurnSubmission[];
 
@@ -1646,6 +1784,7 @@ export interface Metrics {
   instances: Instances;
   content_checks: ContentChecks;
   checked_parts: CheckedParts;
+  resident_analysis: ResidentAnalysis;
 }
 export interface Metric {
   instance_id: InstanceId;
@@ -1686,12 +1825,111 @@ export interface ContradictionCheck {
   check: Check2;
   verdict: Verdict3;
 }
-export interface Cost {
+export interface ResidentAnalysis {
+  packs: Packs;
+  residents: Residents;
+  learning: Learning;
+  skills: Skills;
+  uses: Uses;
+  periods: Periods;
+  consolidations: Consolidations;
+}
+export interface ResidentSummary {
+  resident_id: ResidentId6;
+  self_found_skills: SelfFoundSkills;
+  accuracy_distribution: AccuracyDistribution;
+  later_period_uses: LaterPeriodUses;
+  prior_day_uses: PriorDayUses;
+  unknown_use_origins: UnknownUseOrigins;
+}
+export interface LearningPath {
+  resident_id: ResidentId7;
+  instance_id: InstanceId4;
+  trace: Trace1;
+  links: Links;
+  rule_id: RuleId;
+  turn_id: TurnId8;
+  period_id: PeriodId7;
+  flags: Flags;
+  unchecked_utterances: UncheckedUtterances;
+  reason: Reason7;
+}
+export interface AnalysisLink {
   family: Family8;
+  id: Id11;
+  label: Label;
+  member?: Member1;
+}
+export interface SkillScore {
+  resident_id: ResidentId8;
+  instance_id: InstanceId5;
+  trace: Trace2;
+  links: Links1;
+  revision: RevisionRef;
+  prediction: Prediction;
+  sources: Sources2;
+  creator_call: CreatorCall;
+  origin: Origin1;
   attempts: Attempts3;
+  matched_expected: MatchedExpected1;
+  watched: Watched1;
+  supplied_attempts: SuppliedAttempts;
+  fallback_attempts: FallbackAttempts;
+  accuracy: Accuracy;
+  reason: Reason8;
+}
+export interface MemoryUse {
+  resident_id: ResidentId9;
+  instance_id: InstanceId6;
+  trace: Trace3;
+  links: Links2;
+  revision: RevisionRef;
+  period_id: PeriodId8;
+  day: Day;
+  created_period: CreatedPeriod;
+  created_day: CreatedDay;
+  turn_id: TurnId9;
+  call_id: CallId9;
+  before_version: BeforeVersion2;
+  after_version: AfterVersion2;
+  kind: Kind37;
+  cited: Cited;
+}
+export interface PeriodExposure {
+  resident_id: ResidentId10;
+  period_id: PeriodId9;
+  calls: Calls2;
+  inherited_from: InheritedFrom;
+  exposed: Exposed;
+  exposed_turns: ExposedTurns;
+}
+export interface ExposureCall {
+  call_id: CallId10;
+  call_kind: CallKind;
+  turn_id: TurnId10;
+  outcome: Outcome4;
+  omitted: Omitted2;
+  retrieved: Retrieved;
+}
+export interface ConsolidationExposure {
+  resident_id: ResidentId11;
+  period_id: PeriodId10;
+  attempt_id: AttemptId;
+  calls: Calls3;
+  outcome: Outcome5;
+  supplies_period: SuppliesPeriod;
+}
+export interface Cost {
+  family: Family9;
+  attempts: Attempts4;
+  contexts?: Contexts;
+  days?: Days;
+  turns?: Turns1;
+  ledger_sha256?: Digest | null;
+  ledger_mode?: LedgerMode;
 }
 export interface Charge {
-  call_id: CallId9;
+  call_id: CallId11;
   n: N2;
   input: Input1;
   output: Output1;
@@ -1700,19 +1938,79 @@ export interface Charge {
   latency_ms: LatencyMs1;
   missing_usage_reason: MissingUsageReason2;
 }
+export interface ContextCost {
+  resident_id: ResidentId12;
+  period_id: PeriodId11;
+  tick: Tick9;
+  day: Day1;
+  turn_id: TurnId11;
+  call_id: CallId12;
+  call_kind: CallKind;
+  outcome: Outcome6;
+  n: N3;
+  attempt_outcome: AttemptOutcome;
+  full_tokens: FullTokens1;
+  sent_tokens: SentTokens;
+  pressure_band: PressureBand1;
+  full_log_tokens: FullLogTokens;
+  log_growth_tokens: LogGrowthTokens;
+  omitted: Omitted3;
+  fallback: Fallback1;
+  sections: Sections1;
+  input_pico_cny: InputPicoCny;
+  output_pico_cny: OutputPicoCny;
+  unassignable_pico_cny: UnassignablePicoCny;
+  paid_pico_cny: PaidPicoCny;
+  cost_reason: CostReason;
+}
+export interface SectionCost {
+  section: Section3;
+  tokens: Tokens1;
+  share: Share;
+  estimated_input_pico_cny: EstimatedInputPicoCny;
+}
+export interface DailyCost {
+  resident_id: ResidentId13;
+  day: Day2;
+  calls: Calls4;
+  attempts: Attempts5;
+  turns: Turns;
+  fallback_turns: FallbackTurns;
+  fallback_rate: FallbackRate;
+  input_tokens: InputTokens;
+  output_tokens: OutputTokens;
+  cache_hit: CacheHit2;
+  cache_miss: CacheMiss2;
+  latency_ms: LatencyMs2;
+  input_pico_cny: InputPicoCny1;
+  output_pico_cny: OutputPicoCny1;
+  unassignable_pico_cny: UnassignablePicoCny1;
+  paid_pico_cny: PaidPicoCny1;
+}
+export interface TurnCost {
+  resident_id: ResidentId14;
+  turn_id: TurnId12;
+  day: Day3;
+  tick: Tick10;
+  period_id: PeriodId12;
+  call_ids: CallIds1;
+  fallback: Fallback;
+  fatigue_band: FatigueBand1;
+  awake_ticks: AwakeTicks1;
+}
 export interface TimeUse {
-  family: Family9;
+  family: Family10;
   intervals: Intervals;
 }
 export interface Interval {
-  resident_id: ResidentId6;
+  resident_id: ResidentId15;
   intent_id: IntentId9;
   start_tick: StartTick;
   end_tick: EndTick;
   event_ids: EventIds1;
 }
-export interface Attempts4 {
-  family: Family10;
+export interface Attempts6 {
+  family: Family11;
   events: Events;
   submissions: Submissions;
 }
