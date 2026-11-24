@@ -6,8 +6,8 @@
 |---|---:|---|---|
 | Development | 20 | Technical PASS, verdict FAIL | 112 treatment faints in 60 resident-weeks. See [development evidence](#development-evidence). |
 | Tuned development | 20 | Technical PASS, verdict PASS | All five thresholds passed. See [measured results and frozen candidate](#tuned-development-result-and-candidate-freeze). |
-| Held-out acceptance | 20 | Verdict pending | Owner approved one round on the frozen candidate, 40 fresh cases at two workers. |
-| D1 and CT-D9 | — | D1 pending, tuned development CT-D9 above 30% | 22,509 of 41,983 treatment awake ticks were non-survival (53.61%). |
+| Held-out acceptance | 20 | Technical PASS, verdict PASS | All five thresholds passed. See [held-out evidence and receipts](#held-out-acceptance-evidence). |
+| D1 and CT-D9 | — | Within budget, above 30% | D1 took 356.951 s. Treatment spent 22,571 of 42,391 awake ticks on non-survival actions (53.24%). |
 
 D2 selects the S2 m6 production geometry, the P2 base policy in stand-alone visible-feedback mode, three residents and 1,008 advances. Both arms journal ordinary packet batches and committed turns and checkpoint every 24 ticks. The comparison changes the loaded pack from `compat-v1` to `starter-v1`. CT-03's initial starter source tree at dispatch is `d7ef990e5ab85992aa342bd27f64bc70d5a217a9`. Its bound pack and rule library hashes are captured separately in each case. Each balance invocation takes the accepted equivalence commit via `--equivalence-revision`. `require_calibration` checks that revision, the CT-05 receipt digest, the executable pins and full case coverage. EN-10 added `action_observed`. The owner selected its accepted 20/20 evidence at `3d729bcfe3bd3e2fb3207100f2075830100c3999` for fresh calibration. D1 preselects treatment seed 2600456787 with a 30-minute cumulative active-time budget. [Decisions D1–D6](M13-plan.md) · [CT-03 content pins](P3.5-CT-03.md) · [P2 S2 reference evidence](../p2/P2-05.md)
 
@@ -179,3 +179,52 @@ On 2026-11-24 the tuned development check passed technically and on all five §9
 | Deaths and new death causes | 0 | 0 |
 
 The owner froze `starter-v1` version `0.1` at `awake_per_tick = 30` on reviewed commit `27ab740282934d8cb8dddd4d631583f2a60f299e`. Its pack tree is `8991da96e1dbac05fd8284e4c8ccd20b0917714e` and its bound pack SHA-256 is `c193d071e7593185f7641513c7a14e42d9b30eba3ceaf96e1fc563bf85f51fc0`. The single authorized acceptance round uses both arms fresh on all 20 registered acceptance seeds, the reviewed EN-10 calibration receipt, two workers and `runs/m13/balance-accept`. D1 uses the preselected starter case on seed 2600456787.
+
+## Held-out acceptance evidence
+
+**CT-13 PASS.** The frozen candidate passed all five §9.2 thresholds on its single held-out round. The report records execution head `bacb78e48139be9d9922df4da9d1817badbf7dc5` and calibration SHA-256 `82aa10718fd9de52a4abae70a08cf6795ce43ddcc4a8a20fd32a95ef4d3f4fd5`. All 40 cases were fresh and formed 20 valid pairs, with zero failures. Each case covered three residents for 1,008 ticks. At two workers the wall time from round registration (21:11:15 SGT) to report publication (23:14:14 SGT) was **2 h 02 min 59 s** on 2026-11-24. The owner reported wrapper completion and lock release by 23:15 SGT. Report SHA-256 is `37131a9bcec492e2824d77383e740383bce6f5357c3edf562e6b840a1744f7f3`. [Acceptance report](../../../runs/m13/balance-accept/report.json) · [Round registration](../../../runs/m13/balance-accept/round.json)
+
+| Held-out measurement | compat-v1 | starter-v1 |
+|---|---:|---:|
+| All-alive cases / valid cases | 20/20 | 20/20 |
+| Deprived ticks / residents (mean) | 69/60 (1.15) | 0/60 (0) |
+| Median first spring drink over all 60 residents (ticks) | 48 | 48 |
+| Spring drinkers / never-drinkers | 60 / 0 | 60 / 0 |
+| Faints / resident-weeks (mean) | 0/60 (0) | 51/60 (0.85) |
+| Deaths / distinct death causes | 0 / 0 | 0 / 0 |
+| Dedicated water trips | 122 | 83 |
+| Awake / asleep / unconscious resident-ticks | 45,145 / 15,335 / 0 | 42,391 / 16,268 / 1,821 |
+| Non-survival / living awake ticks (CT-D9) | 24,650/45,145 (54.60%) | 22,571/42,391 (53.24%) |
+
+Each arm contributes 420 resident-days and 60,480 living resident-ticks. The water threshold uses the recorded first spring drink. The separate discovery-based access labels read `not_found` for all 60 residents in each arm despite recorded spring drinks for all 60.
+
+**CT-10 / D1.** Preselected seed 2600456787, starter arm, completed tick 1,008 in one attempt with standard journaling and 24-tick checkpoints. Cumulative active time was 356,950,809,400 ns (5 min 56.951 s) against the 30-minute budget, with zero downtime or unclassified gap. The receipt SHA-256 is `66f735dec5f1b22a973711518c960b491d04f868d2a2b8a3bda7c667dc3f7b0c`. [Case receipt](../../../runs/m13/balance-accept/2600456787/starter-v1/cases/1.json) · [Evidence](../../../runs/m13/balance-accept/2600456787/starter-v1/evidence.json) · [Timing database](../../../runs/m13/balance-accept/2600456787/starter-v1/progress.sqlite)
+
+**D5 / CT-09 for Gate 3.** The published awake gain is 50 and the qualified pack uses 30. For 96 awake ticks, 50 heard utterances and 20 first sightings, published day fatigue is 6,400 and pack fatigue is 4,480. From zero fatigue, the published silent faint occurs at tick 200 and the pack faint at tick 334. Both use a 36-tick faint and recover up to 7,200 fatigue in 48 ticks of sleep. The owner retains disposition of the two changed vectors. [Starter specification §5.2](../../spec/starter-content-v0.1.md)
+
+### Acceptance case receipts
+
+Each link displays the first 12 hex digits of the receipt SHA-256. The acceptance report records the full receipt and evidence digests under `cases["<seed>/<arm>"]`. All 40 receipt files and all 40 evidence files matched those digests.
+
+| Seed | compat-v1 receipt | starter-v1 receipt |
+|---:|---|---|
+| 2600456787 | [43bba39d3a75](../../../runs/m13/balance-accept/2600456787/compat-v1/cases/0.json) | [66f735dec5f1](../../../runs/m13/balance-accept/2600456787/starter-v1/cases/1.json) |
+| 1007489817 | [3b352493df73](../../../runs/m13/balance-accept/1007489817/compat-v1/cases/2.json) | [9f0c3ecc84e5](../../../runs/m13/balance-accept/1007489817/starter-v1/cases/3.json) |
+| 1557484054 | [6bb18a16415d](../../../runs/m13/balance-accept/1557484054/compat-v1/cases/4.json) | [da9f30060def](../../../runs/m13/balance-accept/1557484054/starter-v1/cases/5.json) |
+| 1569596598 | [44a8d77c5842](../../../runs/m13/balance-accept/1569596598/compat-v1/cases/6.json) | [4f036eebd1a8](../../../runs/m13/balance-accept/1569596598/starter-v1/cases/7.json) |
+| 1802799976 | [641544d771a8](../../../runs/m13/balance-accept/1802799976/compat-v1/cases/8.json) | [f9dda9fe8e2d](../../../runs/m13/balance-accept/1802799976/starter-v1/cases/9.json) |
+| 2122883013 | [e51f06eb3fb9](../../../runs/m13/balance-accept/2122883013/compat-v1/cases/10.json) | [e889b3efa89c](../../../runs/m13/balance-accept/2122883013/starter-v1/cases/11.json) |
+| 2170312666 | [6b8802cfc412](../../../runs/m13/balance-accept/2170312666/compat-v1/cases/12.json) | [9493ce0ee5d7](../../../runs/m13/balance-accept/2170312666/starter-v1/cases/13.json) |
+| 2560155364 | [f51a08b19272](../../../runs/m13/balance-accept/2560155364/compat-v1/cases/14.json) | [063687a24d9e](../../../runs/m13/balance-accept/2560155364/starter-v1/cases/15.json) |
+| 2733016023 | [7abb911c7bb3](../../../runs/m13/balance-accept/2733016023/compat-v1/cases/16.json) | [e892c69d4c39](../../../runs/m13/balance-accept/2733016023/starter-v1/cases/17.json) |
+| 3178109895 | [4b321bdd91c9](../../../runs/m13/balance-accept/3178109895/compat-v1/cases/18.json) | [a8c721123a7f](../../../runs/m13/balance-accept/3178109895/starter-v1/cases/19.json) |
+| 330361958 | [657d04e58962](../../../runs/m13/balance-accept/330361958/compat-v1/cases/20.json) | [10c9de32f40e](../../../runs/m13/balance-accept/330361958/starter-v1/cases/21.json) |
+| 3335059634 | [f0329d010b6f](../../../runs/m13/balance-accept/3335059634/compat-v1/cases/22.json) | [53d113445934](../../../runs/m13/balance-accept/3335059634/starter-v1/cases/23.json) |
+| 3486741106 | [68650c22f710](../../../runs/m13/balance-accept/3486741106/compat-v1/cases/24.json) | [84d9c676248e](../../../runs/m13/balance-accept/3486741106/starter-v1/cases/25.json) |
+| 3501343423 | [9a4e9d535f59](../../../runs/m13/balance-accept/3501343423/compat-v1/cases/26.json) | [f843748a8f74](../../../runs/m13/balance-accept/3501343423/starter-v1/cases/27.json) |
+| 4155892942 | [30816b9c179c](../../../runs/m13/balance-accept/4155892942/compat-v1/cases/28.json) | [47112eb4bded](../../../runs/m13/balance-accept/4155892942/starter-v1/cases/29.json) |
+| 598561891 | [6c60132c13a3](../../../runs/m13/balance-accept/598561891/compat-v1/cases/30.json) | [76214c60e54b](../../../runs/m13/balance-accept/598561891/starter-v1/cases/31.json) |
+| 646834264 | [878eacf124fa](../../../runs/m13/balance-accept/646834264/compat-v1/cases/32.json) | [12ad43b6c443](../../../runs/m13/balance-accept/646834264/starter-v1/cases/33.json) |
+| 857949281 | [d43305d8baad](../../../runs/m13/balance-accept/857949281/compat-v1/cases/34.json) | [159598af55c8](../../../runs/m13/balance-accept/857949281/starter-v1/cases/35.json) |
+| 958049702 | [5ae2b243daa6](../../../runs/m13/balance-accept/958049702/compat-v1/cases/36.json) | [0c7f3f8d36e8](../../../runs/m13/balance-accept/958049702/starter-v1/cases/37.json) |
+| 969717619 | [02a8c023a279](../../../runs/m13/balance-accept/969717619/compat-v1/cases/38.json) | [6b89480813e9](../../../runs/m13/balance-accept/969717619/starter-v1/cases/39.json) |
