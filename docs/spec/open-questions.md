@@ -1153,6 +1153,20 @@ with synthetic fixture profiles for the two additional residents. The owner
 will provide their names and five trait values each before P3.5-EV-05. If
 they arrive after MM-01, EV-05 lands those two files for its rehearsal.
 
+Owner decision (2026-11-24). The owner delegated both profiles and the
+rehearsal size to Claude Code ("EV-05你来定"). Claude Code chose the
+following, and EV-05 lands the two files in `content/characters/v2/`:
+
+| Resident | Profile ID | curiosity | caution | sociability | trustfulness | diligence | Values |
+|---|---|---:|---:|---:|---:|---:|---|
+| Noah | `maker` | 2 | 2 | 1 | 2 | 4 | Finish what you start. Keep tools in working order. Prepare materials before they are needed. |
+| Iris | `bold` | 3 | 0 | 3 | 4 | 1 | Act first and adjust afterwards. Trust what others say. Share what you have. |
+
+The two profiles widen the spread of the three §3.7 vectors: `maker` is
+the most diligent and least sociable, and `bold` is the least cautious and
+most trusting. The EV-05 cost-sizing rehearsal is confirmed as proposed:
+one separate case, Ella, memory on, one seed, three fake game days.
+
 ## OQ-P3.5-M14-2: Evidence sufficient for the paid provider check and horizon
 
 ADR 0007 D7 and decision loop §8.1 require single-copy schema acceptance and
