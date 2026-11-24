@@ -11,7 +11,10 @@ from pydantic import Field, JsonValue, TypeAdapter
 
 from living_island.agents.v2.calls.journal import Journal
 from living_island.analysis.canon import sha256_hex
+from living_island.analysis.v2.continuity import History
+from living_island.analysis.v2.cost import context_cost
 from living_island.analysis.v2.joins import Audit, Events, calls, instance
+from living_island.analysis.v2.learning import resident_analysis
 from living_island.analysis.v2.shards import INDEX_LIMIT, encoded, write_shard
 from living_island.contract import inspection_v2 as ia
 from living_island.contract.replay import ReplayBundle
@@ -602,6 +605,28 @@ def export(run: Path, manifest: Path, replay: Path, destination: Path) -> ia.Ins
         destination, seal, consolidations, versions, latest_period, call_views
     )
     submissions, intervals = action_intervals(boundaries, by_event)
+    archive = History.from_export(
+        destination,
+        delivery_refs,
+        versions.values(),
+        consolidations,
+        {
+            f"{r.delivery_id}:{w.write.after_version}": w
+            for r in receipts.values()
+            for w in r.writes
+        },
+        bundle.clock.tick_minutes,
+    )
+    analysis = resident_analysis(
+        archive,
+        decisions,
+        call_views,
+        events,
+        checks,
+        audit.entry_revisions,
+        seal.residents,
+        seal.pack_ids,
+    )
     index = ia.InspectionIndex(
         inspection_schema_version="ia/0.1",
         run_id=seal.run_id,
@@ -621,9 +646,20 @@ def export(run: Path, manifest: Path, replay: Path, destination: Path) -> ia.Ins
         metrics=write_shard(
             destination,
             "metrics",
-            ia.Metrics(instances=metrics, content_checks=checks, checked_parts=checked),
+            ia.Metrics(
+                instances=metrics,
+                content_checks=checks,
+                checked_parts=checked,
+                resident_analysis=analysis,
+            ),
         ),
-        cost=write_shard(destination, "cost", ia.Cost(attempts=charges)),
+        cost=write_shard(
+            destination,
+            "cost",
+            context_cost(
+                run, seal.run_id, call_views, charges, decisions, bundle.clock.tick_minutes
+            ),
+        ),
         time_use=write_shard(destination, "time_use", ia.TimeUse(intervals=intervals)),
         attempts=write_shard(
             destination, "attempts", ia.Attempts(events=events, submissions=submissions)

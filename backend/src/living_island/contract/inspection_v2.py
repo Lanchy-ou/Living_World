@@ -420,11 +420,113 @@ class Metric(View):
     reason: str | None
 
 
+HypothesisContent = Skill
+
+
+class AnalysisLink(View):
+    family: Family
+    id: str
+    label: str
+    member: str | None = None
+
+
+class AnalysisRow(View):
+    resident_id: str
+    instance_id: str
+    trace: list[str]
+    links: list[AnalysisLink]
+
+
+class LearningPath(AnalysisRow):
+    rule_id: str
+    turn_id: str
+    period_id: str
+    flags: list[Literal["own_failures", "watched", "told", "earlier_period", "prior_knowledge"]]
+    unchecked_utterances: list[str]
+    reason: str | None
+
+
+class SkillScore(AnalysisRow):
+    revision: RevisionRef
+    prediction: str
+    sources: list[str]
+    creator_call: str | None
+    origin: Literal["self_found", "supplied"]
+    attempts: int | None
+    matched_expected: int | None
+    watched: int
+    supplied_attempts: int
+    fallback_attempts: int
+    accuracy: str | None
+    reason: str | None
+
+
+class MemoryUse(AnalysisRow):
+    revision: RevisionRef
+    period_id: str
+    day: int
+    created_period: str | None
+    created_day: int | None
+    turn_id: str
+    call_id: str
+    before_version: int
+    after_version: int
+    kind: str | None
+    cited: bool
+
+
+class ExposureCall(View):
+    call_id: str
+    call_kind: CallKind
+    turn_id: str | None
+    outcome: str
+    omitted: list[Ref]
+    retrieved: list[str]
+
+
+class PeriodExposure(View):
+    resident_id: str
+    period_id: str
+    calls: list[ExposureCall]
+    inherited_from: list[str]
+    exposed: bool
+    exposed_turns: list[str]
+
+
+class ConsolidationExposure(View):
+    resident_id: str
+    period_id: str
+    attempt_id: str
+    calls: list[ExposureCall]
+    outcome: str
+    supplies_period: str | None
+
+
+class ResidentSummary(View):
+    resident_id: str
+    self_found_skills: int
+    accuracy_distribution: list[str]
+    later_period_uses: int
+    prior_day_uses: int
+    unknown_use_origins: int
+
+
+class ResidentAnalysis(View):
+    packs: list[str]
+    residents: list[ResidentSummary]
+    learning: list[LearningPath]
+    skills: list[SkillScore]
+    uses: list[MemoryUse]
+    periods: list[PeriodExposure]
+    consolidations: list[ConsolidationExposure]
+
+
 class Metrics(View):
     family: Literal["metrics"] = "metrics"
     instances: list[Metric]
     content_checks: list[ContentCheck]
     checked_parts: list[StoredPart]
+    resident_analysis: ResidentAnalysis | None = None
 
 
 class Charge(View):
@@ -438,9 +540,78 @@ class Charge(View):
     missing_usage_reason: str | None
 
 
+class SectionCost(View):
+    section: str
+    tokens: int
+    share: str
+    estimated_input_pico_cny: int | None
+
+
+class ContextCost(View):
+    resident_id: str
+    period_id: str
+    tick: int
+    day: int
+    turn_id: str | None
+    call_id: str
+    call_kind: CallKind
+    outcome: str
+    n: int | None
+    attempt_outcome: str
+    full_tokens: int | None
+    sent_tokens: int | None
+    pressure_band: str | None
+    full_log_tokens: int | None
+    log_growth_tokens: int | None
+    omitted: list[Ref]
+    fallback: bool | None
+    sections: list[SectionCost]
+    input_pico_cny: int | None
+    output_pico_cny: int | None
+    unassignable_pico_cny: int | None
+    paid_pico_cny: int | None
+    cost_reason: str | None
+
+
+class DailyCost(View):
+    resident_id: str
+    day: int
+    calls: int
+    attempts: int
+    turns: int
+    fallback_turns: int
+    fallback_rate: str | None
+    input_tokens: int | None
+    output_tokens: int | None
+    cache_hit: int | None
+    cache_miss: int | None
+    latency_ms: int | None
+    input_pico_cny: int | None
+    output_pico_cny: int | None
+    unassignable_pico_cny: int | None
+    paid_pico_cny: int | None
+
+
+class TurnCost(View):
+    resident_id: str
+    turn_id: str
+    day: int
+    tick: int
+    period_id: str
+    call_ids: list[str]
+    fallback: Fallback
+    fatigue_band: str | None
+    awake_ticks: int
+
+
 class Cost(View):
     family: Literal["cost"] = "cost"
     attempts: list[Charge]
+    contexts: list[ContextCost] = Field(default_factory=list)
+    days: list[DailyCost] = Field(default_factory=list)
+    turns: list[TurnCost] = Field(default_factory=list)
+    ledger_sha256: Digest | None = None
+    ledger_mode: Literal["fake", "paid"] | None = None
 
 
 class Interval(View):

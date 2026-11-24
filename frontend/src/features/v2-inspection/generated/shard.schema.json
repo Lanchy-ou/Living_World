@@ -317,6 +317,41 @@
       "title": "ActionInput",
       "type": "object"
     },
+    "AnalysisLink": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "$ref": "#/$defs/Family"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "member": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Member"
+        }
+      },
+      "required": [
+        "family",
+        "id",
+        "label"
+      ],
+      "title": "AnalysisLink",
+      "type": "object"
+    },
     "Arm": {
       "enum": [
         "on",
@@ -1051,6 +1086,55 @@
       "title": "Commitment",
       "type": "object"
     },
+    "ConsolidationExposure": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "period_id": {
+          "title": "Period Id",
+          "type": "string"
+        },
+        "attempt_id": {
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "calls": {
+          "items": {
+            "$ref": "#/$defs/ExposureCall"
+          },
+          "title": "Calls",
+          "type": "array"
+        },
+        "outcome": {
+          "title": "Outcome",
+          "type": "string"
+        },
+        "supplies_period": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Supplies Period"
+        }
+      },
+      "required": [
+        "resident_id",
+        "period_id",
+        "attempt_id",
+        "calls",
+        "outcome",
+        "supplies_period"
+      ],
+      "title": "ConsolidationExposure",
+      "type": "object"
+    },
     "ConsolidationInspection": {
       "additionalProperties": false,
       "properties": {
@@ -1310,6 +1394,226 @@
         }
       ]
     },
+    "ContextCost": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "period_id": {
+          "title": "Period Id",
+          "type": "string"
+        },
+        "tick": {
+          "title": "Tick",
+          "type": "integer"
+        },
+        "day": {
+          "title": "Day",
+          "type": "integer"
+        },
+        "turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Turn Id"
+        },
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "call_kind": {
+          "$ref": "#/$defs/CallKind"
+        },
+        "outcome": {
+          "title": "Outcome",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "N"
+        },
+        "attempt_outcome": {
+          "title": "Attempt Outcome",
+          "type": "string"
+        },
+        "full_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Full Tokens"
+        },
+        "sent_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sent Tokens"
+        },
+        "pressure_band": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pressure Band"
+        },
+        "full_log_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Full Log Tokens"
+        },
+        "log_growth_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Log Growth Tokens"
+        },
+        "omitted": {
+          "items": {
+            "$ref": "#/$defs/Ref"
+          },
+          "title": "Omitted",
+          "type": "array"
+        },
+        "fallback": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fallback"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/SectionCost"
+          },
+          "title": "Sections",
+          "type": "array"
+        },
+        "input_pico_cny": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Input Pico Cny"
+        },
+        "output_pico_cny": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Output Pico Cny"
+        },
+        "unassignable_pico_cny": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Unassignable Pico Cny"
+        },
+        "paid_pico_cny": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Paid Pico Cny"
+        },
+        "cost_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cost Reason"
+        }
+      },
+      "required": [
+        "resident_id",
+        "period_id",
+        "tick",
+        "day",
+        "turn_id",
+        "call_id",
+        "call_kind",
+        "outcome",
+        "n",
+        "attempt_outcome",
+        "full_tokens",
+        "sent_tokens",
+        "pressure_band",
+        "full_log_tokens",
+        "log_growth_tokens",
+        "omitted",
+        "fallback",
+        "sections",
+        "input_pico_cny",
+        "output_pico_cny",
+        "unassignable_pico_cny",
+        "paid_pico_cny",
+        "cost_reason"
+      ],
+      "title": "ContextCost",
+      "type": "object"
+    },
     "ContinueAction": {
       "additionalProperties": false,
       "properties": {
@@ -1437,6 +1741,54 @@
           },
           "title": "Attempts",
           "type": "array"
+        },
+        "contexts": {
+          "items": {
+            "$ref": "#/$defs/ContextCost"
+          },
+          "title": "Contexts",
+          "type": "array"
+        },
+        "days": {
+          "items": {
+            "$ref": "#/$defs/DailyCost"
+          },
+          "title": "Days",
+          "type": "array"
+        },
+        "turns": {
+          "items": {
+            "$ref": "#/$defs/TurnCost"
+          },
+          "title": "Turns",
+          "type": "array"
+        },
+        "ledger_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ledger_mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "fake",
+                "paid"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ledger Mode"
         }
       },
       "required": [
@@ -1505,6 +1857,165 @@
         "cue_id"
       ],
       "title": "CueRef",
+      "type": "object"
+    },
+    "DailyCost": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "day": {
+          "title": "Day",
+          "type": "integer"
+        },
+        "calls": {
+          "title": "Calls",
+          "type": "integer"
+        },
+        "attempts": {
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "turns": {
+          "title": "Turns",
+          "type": "integer"
+        },
+        "fallback_turns": {
+          "title": "Fallback Turns",
+          "type": "integer"
+        },
+        "fallback_rate": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fallback Rate"
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Input Tokens"
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Output Tokens"
+        },
+        "cache_hit": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cache Hit"
+        },
+        "cache_miss": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cache Miss"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Latency Ms"
+        },
+        "input_pico_cny": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Input Pico Cny"
+        },
+        "output_pico_cny": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Output Pico Cny"
+        },
+        "unassignable_pico_cny": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Unassignable Pico Cny"
+        },
+        "paid_pico_cny": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Paid Pico Cny"
+        }
+      },
+      "required": [
+        "resident_id",
+        "day",
+        "calls",
+        "attempts",
+        "turns",
+        "fallback_turns",
+        "fallback_rate",
+        "input_tokens",
+        "output_tokens",
+        "cache_hit",
+        "cache_miss",
+        "latency_ms",
+        "input_pico_cny",
+        "output_pico_cny",
+        "unassignable_pico_cny",
+        "paid_pico_cny"
+      ],
+      "title": "DailyCost",
       "type": "object"
     },
     "DayEntry": {
@@ -2433,6 +2944,57 @@
       "title": "ExactItemSpec",
       "type": "object"
     },
+    "ExposureCall": {
+      "additionalProperties": false,
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "call_kind": {
+          "$ref": "#/$defs/CallKind"
+        },
+        "turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Turn Id"
+        },
+        "outcome": {
+          "title": "Outcome",
+          "type": "string"
+        },
+        "omitted": {
+          "items": {
+            "$ref": "#/$defs/Ref"
+          },
+          "title": "Omitted",
+          "type": "array"
+        },
+        "retrieved": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Retrieved",
+          "type": "array"
+        }
+      },
+      "required": [
+        "call_id",
+        "call_kind",
+        "turn_id",
+        "outcome",
+        "omitted",
+        "retrieved"
+      ],
+      "title": "ExposureCall",
+      "type": "object"
+    },
     "Fallback": {
       "additionalProperties": false,
       "properties": {
@@ -2470,6 +3032,22 @@
       ],
       "title": "Fallback",
       "type": "object"
+    },
+    "Family": {
+      "enum": [
+        "decisions",
+        "consolidations",
+        "stores",
+        "deliveries",
+        "revisions",
+        "evidence_writes",
+        "calls",
+        "metrics",
+        "cost",
+        "time_use",
+        "attempts"
+      ],
+      "type": "string"
     },
     "FeedbackRef": {
       "additionalProperties": false,
@@ -3299,6 +3877,91 @@
       "title": "KindItemSpec",
       "type": "object"
     },
+    "LearningPath": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "instance_id": {
+          "title": "Instance Id",
+          "type": "string"
+        },
+        "trace": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Trace",
+          "type": "array"
+        },
+        "links": {
+          "items": {
+            "$ref": "#/$defs/AnalysisLink"
+          },
+          "title": "Links",
+          "type": "array"
+        },
+        "rule_id": {
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "period_id": {
+          "title": "Period Id",
+          "type": "string"
+        },
+        "flags": {
+          "items": {
+            "enum": [
+              "own_failures",
+              "watched",
+              "told",
+              "earlier_period",
+              "prior_knowledge"
+            ],
+            "type": "string"
+          },
+          "title": "Flags",
+          "type": "array"
+        },
+        "unchecked_utterances": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unchecked Utterances",
+          "type": "array"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "resident_id",
+        "instance_id",
+        "trace",
+        "links",
+        "rule_id",
+        "turn_id",
+        "period_id",
+        "flags",
+        "unchecked_utterances",
+        "reason"
+      ],
+      "title": "LearningPath",
+      "type": "object"
+    },
     "LocalRecall": {
       "additionalProperties": false,
       "properties": {
@@ -3480,6 +4143,116 @@
       "title": "Member",
       "type": "object"
     },
+    "MemoryUse": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "instance_id": {
+          "title": "Instance Id",
+          "type": "string"
+        },
+        "trace": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Trace",
+          "type": "array"
+        },
+        "links": {
+          "items": {
+            "$ref": "#/$defs/AnalysisLink"
+          },
+          "title": "Links",
+          "type": "array"
+        },
+        "revision": {
+          "$ref": "#/$defs/RevisionRef"
+        },
+        "period_id": {
+          "title": "Period Id",
+          "type": "string"
+        },
+        "day": {
+          "title": "Day",
+          "type": "integer"
+        },
+        "created_period": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Created Period"
+        },
+        "created_day": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Created Day"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "before_version": {
+          "title": "Before Version",
+          "type": "integer"
+        },
+        "after_version": {
+          "title": "After Version",
+          "type": "integer"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Kind"
+        },
+        "cited": {
+          "title": "Cited",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "resident_id",
+        "instance_id",
+        "trace",
+        "links",
+        "revision",
+        "period_id",
+        "day",
+        "created_period",
+        "created_day",
+        "turn_id",
+        "call_id",
+        "before_version",
+        "after_version",
+        "kind",
+        "cited"
+      ],
+      "title": "MemoryUse",
+      "type": "object"
+    },
     "Metric": {
       "additionalProperties": false,
       "properties": {
@@ -3563,6 +4336,17 @@
           },
           "title": "Checked Parts",
           "type": "array"
+        },
+        "resident_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResidentAnalysis"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -4068,6 +4852,54 @@
       "title": "Perception",
       "type": "object"
     },
+    "PeriodExposure": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "period_id": {
+          "title": "Period Id",
+          "type": "string"
+        },
+        "calls": {
+          "items": {
+            "$ref": "#/$defs/ExposureCall"
+          },
+          "title": "Calls",
+          "type": "array"
+        },
+        "inherited_from": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Inherited From",
+          "type": "array"
+        },
+        "exposed": {
+          "title": "Exposed",
+          "type": "boolean"
+        },
+        "exposed_turns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Exposed Turns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "resident_id",
+        "period_id",
+        "calls",
+        "inherited_from",
+        "exposed",
+        "exposed_turns"
+      ],
+      "title": "PeriodExposure",
+      "type": "object"
+    },
     "Personality": {
       "additionalProperties": false,
       "properties": {
@@ -4559,6 +5391,113 @@
       "title": "ReportRef",
       "type": "object"
     },
+    "ResidentAnalysis": {
+      "additionalProperties": false,
+      "properties": {
+        "packs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Packs",
+          "type": "array"
+        },
+        "residents": {
+          "items": {
+            "$ref": "#/$defs/ResidentSummary"
+          },
+          "title": "Residents",
+          "type": "array"
+        },
+        "learning": {
+          "items": {
+            "$ref": "#/$defs/LearningPath"
+          },
+          "title": "Learning",
+          "type": "array"
+        },
+        "skills": {
+          "items": {
+            "$ref": "#/$defs/SkillScore"
+          },
+          "title": "Skills",
+          "type": "array"
+        },
+        "uses": {
+          "items": {
+            "$ref": "#/$defs/MemoryUse"
+          },
+          "title": "Uses",
+          "type": "array"
+        },
+        "periods": {
+          "items": {
+            "$ref": "#/$defs/PeriodExposure"
+          },
+          "title": "Periods",
+          "type": "array"
+        },
+        "consolidations": {
+          "items": {
+            "$ref": "#/$defs/ConsolidationExposure"
+          },
+          "title": "Consolidations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "packs",
+        "residents",
+        "learning",
+        "skills",
+        "uses",
+        "periods",
+        "consolidations"
+      ],
+      "title": "ResidentAnalysis",
+      "type": "object"
+    },
+    "ResidentSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "self_found_skills": {
+          "title": "Self Found Skills",
+          "type": "integer"
+        },
+        "accuracy_distribution": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Accuracy Distribution",
+          "type": "array"
+        },
+        "later_period_uses": {
+          "title": "Later Period Uses",
+          "type": "integer"
+        },
+        "prior_day_uses": {
+          "title": "Prior Day Uses",
+          "type": "integer"
+        },
+        "unknown_use_origins": {
+          "title": "Unknown Use Origins",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "resident_id",
+        "self_found_skills",
+        "accuracy_distribution",
+        "later_period_uses",
+        "prior_day_uses",
+        "unknown_use_origins"
+      ],
+      "title": "ResidentSummary",
+      "type": "object"
+    },
     "ResidentTarget": {
       "additionalProperties": false,
       "properties": {
@@ -4826,6 +5765,42 @@
       "title": "Section",
       "type": "object"
     },
+    "SectionCost": {
+      "additionalProperties": false,
+      "properties": {
+        "section": {
+          "title": "Section",
+          "type": "string"
+        },
+        "tokens": {
+          "title": "Tokens",
+          "type": "integer"
+        },
+        "share": {
+          "title": "Share",
+          "type": "string"
+        },
+        "estimated_input_pico_cny": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Estimated Input Pico Cny"
+        }
+      },
+      "required": [
+        "section",
+        "tokens",
+        "share",
+        "estimated_input_pico_cny"
+      ],
+      "title": "SectionCost",
+      "type": "object"
+    },
     "Selection": {
       "additionalProperties": false,
       "properties": {
@@ -5080,6 +6055,142 @@
         "quantity"
       ],
       "title": "SkillInput",
+      "type": "object"
+    },
+    "SkillScore": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "instance_id": {
+          "title": "Instance Id",
+          "type": "string"
+        },
+        "trace": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Trace",
+          "type": "array"
+        },
+        "links": {
+          "items": {
+            "$ref": "#/$defs/AnalysisLink"
+          },
+          "title": "Links",
+          "type": "array"
+        },
+        "revision": {
+          "$ref": "#/$defs/RevisionRef"
+        },
+        "prediction": {
+          "title": "Prediction",
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "creator_call": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Creator Call"
+        },
+        "origin": {
+          "enum": [
+            "self_found",
+            "supplied"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "attempts": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Attempts"
+        },
+        "matched_expected": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Matched Expected"
+        },
+        "watched": {
+          "title": "Watched",
+          "type": "integer"
+        },
+        "supplied_attempts": {
+          "title": "Supplied Attempts",
+          "type": "integer"
+        },
+        "fallback_attempts": {
+          "title": "Fallback Attempts",
+          "type": "integer"
+        },
+        "accuracy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Accuracy"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "resident_id",
+        "instance_id",
+        "trace",
+        "links",
+        "revision",
+        "prediction",
+        "sources",
+        "creator_call",
+        "origin",
+        "attempts",
+        "matched_expected",
+        "watched",
+        "supplied_attempts",
+        "fallback_attempts",
+        "accuracy",
+        "reason"
+      ],
+      "title": "SkillScore",
       "type": "object"
     },
     "Social": {
@@ -6134,6 +7245,69 @@
         "seen_at_step"
       ],
       "title": "TransientSighting",
+      "type": "object"
+    },
+    "TurnCost": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "day": {
+          "title": "Day",
+          "type": "integer"
+        },
+        "tick": {
+          "title": "Tick",
+          "type": "integer"
+        },
+        "period_id": {
+          "title": "Period Id",
+          "type": "string"
+        },
+        "call_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Call Ids",
+          "type": "array"
+        },
+        "fallback": {
+          "$ref": "#/$defs/Fallback"
+        },
+        "fatigue_band": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fatigue Band"
+        },
+        "awake_ticks": {
+          "title": "Awake Ticks",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "resident_id",
+        "turn_id",
+        "day",
+        "tick",
+        "period_id",
+        "call_ids",
+        "fallback",
+        "fatigue_band",
+        "awake_ticks"
+      ],
+      "title": "TurnCost",
       "type": "object"
     },
     "TurnRef": {
