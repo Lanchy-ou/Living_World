@@ -1,0 +1,6959 @@
+{
+  "$defs": {
+    "AboutTick": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "minimum": 0,
+          "title": "From",
+          "type": "integer"
+        },
+        "to": {
+          "minimum": 0,
+          "title": "To",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "title": "AboutTick",
+      "type": "object"
+    },
+    "ActCitations": {
+      "additionalProperties": false,
+      "properties": {
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "attempt": {
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "request_sha256": {
+          "title": "Request Sha256",
+          "type": "string"
+        },
+        "valid": {
+          "items": {
+            "$ref": "#/$defs/living_island__agents__v2__recall__attribution__Citation"
+          },
+          "title": "Valid",
+          "type": "array"
+        },
+        "invalid": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Invalid",
+          "type": "array"
+        }
+      },
+      "required": [
+        "turn_id",
+        "call_id",
+        "attempt",
+        "request_sha256",
+        "valid",
+        "invalid"
+      ],
+      "title": "ActCitations",
+      "type": "object"
+    },
+    "ActStep": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "discriminator": {
+            "mapping": {
+              "continue": "#/$defs/ContinueAction",
+              "intent": "#/$defs/ModelIntentAction"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ContinueAction"
+            },
+            {
+              "$ref": "#/$defs/ModelIntentAction"
+            }
+          ],
+          "title": "Action"
+        },
+        "utterance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Utterance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "step": {
+          "const": "act",
+          "title": "Step",
+          "type": "string"
+        },
+        "intention": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SetIntention"
+            },
+            {
+              "$ref": "#/$defs/ClearIntention"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Intention"
+        },
+        "mute": {
+          "items": {
+            "enum": [
+              "body",
+              "direct_speech",
+              "nearby_speech",
+              "discovery",
+              "progress"
+            ],
+            "type": "string"
+          },
+          "title": "Mute",
+          "type": "array"
+        },
+        "cite": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Cite",
+          "type": "array"
+        }
+      },
+      "required": [
+        "action",
+        "utterance",
+        "step",
+        "intention",
+        "mute",
+        "cite"
+      ],
+      "title": "ActStep",
+      "type": "object"
+    },
+    "ActionFeedback": {
+      "additionalProperties": false,
+      "properties": {
+        "intent_id": {
+          "pattern": "^[^\\r\\n]+:t[0-9]{6,}:a$",
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "done",
+            "failed",
+            "stopped"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "failure_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "DEAD",
+                "INVALID_TARGET",
+                "NO_PATH",
+                "PATH_BLOCKED",
+                "OUT_OF_REACH",
+                "NO_ITEM",
+                "ITEM_TAKEN",
+                "INVENTORY_FULL",
+                "CONTAINER_FULL",
+                "NOT_A_PROCESS",
+                "EXHAUSTED",
+                "OUT_OF_HEARING",
+                "INVALID_SPEECH_ACT",
+                "INVALID_REPLY",
+                "INVALID_TERMS",
+                "DIALOGUE_LIMIT"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Failure Code"
+        },
+        "stop_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "DEATH",
+                "FAINTED",
+                "EXHAUSTED",
+                "PATH_BLOCKED",
+                "TARGET_GONE",
+                "WOKEN"
+              ],
+              "type": "string"
+            },
+            {
+              "const": "own_choice",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stop Reason"
+        },
+        "phenomena": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Phenomena",
+          "type": "array"
+        },
+        "inspected": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InspectView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "start_target": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "entity": "#/$defs/SubjectStartTarget",
+                  "resident": "#/$defs/SubjectStartTarget",
+                  "tile": "#/$defs/TileStartTarget"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TileStartTarget"
+                },
+                {
+                  "$ref": "#/$defs/SubjectStartTarget"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Start Target"
+        },
+        "items_used": {
+          "items": {
+            "$ref": "#/$defs/ItemUse"
+          },
+          "title": "Items Used",
+          "type": "array"
+        }
+      },
+      "required": [
+        "intent_id",
+        "status",
+        "failure_code",
+        "stop_reason",
+        "phenomena",
+        "inspected",
+        "start_target",
+        "items_used"
+      ],
+      "title": "ActionFeedback",
+      "type": "object"
+    },
+    "ActionInput": {
+      "additionalProperties": false,
+      "properties": {
+        "item": {
+          "discriminator": {
+            "mapping": {
+              "held": "#/$defs/HeldItem",
+              "item": "#/$defs/NamedItem"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NamedItem"
+            },
+            {
+              "$ref": "#/$defs/HeldItem"
+            }
+          ],
+          "title": "Item"
+        },
+        "quantity": {
+          "exclusiveMinimum": 0,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "item",
+        "quantity"
+      ],
+      "title": "ActionInput",
+      "type": "object"
+    },
+    "Arm": {
+      "enum": [
+        "on",
+        "off"
+      ],
+      "type": "string"
+    },
+    "Attempt": {
+      "additionalProperties": false,
+      "properties": {
+        "dispatch": {
+          "$ref": "#/$defs/Dispatch"
+        },
+        "terminal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Terminal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "raw_output_base64": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Raw Output Base64"
+        },
+        "parsed_output": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "missing_usage_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Missing Usage Reason"
+        }
+      },
+      "required": [
+        "dispatch",
+        "terminal",
+        "raw_output_base64",
+        "parsed_output",
+        "missing_usage_reason"
+      ],
+      "title": "Attempt",
+      "type": "object"
+    },
+    "Attempts": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "const": "attempts",
+          "default": "attempts",
+          "title": "Family",
+          "type": "string"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/WorldEvent"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "submissions": {
+          "items": {
+            "$ref": "#/$defs/TurnSubmission"
+          },
+          "title": "Submissions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "events",
+        "submissions",
+        "family"
+      ],
+      "title": "Attempts",
+      "type": "object"
+    },
+    "BeAtTerm": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "be_at",
+          "title": "Kind",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        }
+      },
+      "required": [
+        "kind",
+        "position"
+      ],
+      "title": "BeAtTerm",
+      "type": "object"
+    },
+    "Belief": {
+      "additionalProperties": false,
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/Subject"
+        },
+        "stance": {
+          "enum": [
+            "stable",
+            "dated",
+            "guess"
+          ],
+          "title": "Stance",
+          "type": "string"
+        },
+        "topics": {
+          "items": {
+            "enum": [
+              "food",
+              "water",
+              "shelter",
+              "tools",
+              "materials",
+              "people",
+              "danger",
+              "other"
+            ],
+            "type": "string"
+          },
+          "title": "Topics",
+          "type": "array"
+        }
+      },
+      "required": [
+        "subject",
+        "stance",
+        "topics"
+      ],
+      "title": "Belief",
+      "type": "object"
+    },
+    "BoundaryDelivery": {
+      "additionalProperties": false,
+      "properties": {
+        "delivery_id": {
+          "title": "Delivery Id",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "observed_tick": {
+          "minimum": 0,
+          "title": "Observed Tick",
+          "type": "integer"
+        },
+        "perception": {
+          "$ref": "#/$defs/Perception"
+        },
+        "reports": {
+          "items": {
+            "$ref": "#/$defs/WorldReport"
+          },
+          "title": "Reports",
+          "type": "array"
+        }
+      },
+      "required": [
+        "delivery_id",
+        "actor_id",
+        "observed_tick",
+        "perception",
+        "reports"
+      ],
+      "title": "BoundaryDelivery",
+      "type": "object"
+    },
+    "Call": {
+      "additionalProperties": false,
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "tick": {
+          "title": "Tick",
+          "type": "integer"
+        },
+        "period_id": {
+          "title": "Period Id",
+          "type": "string"
+        },
+        "turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Turn Id"
+        },
+        "consolidation_period": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Consolidation Period"
+        }
+      },
+      "required": [
+        "call_id",
+        "resident_id",
+        "tick",
+        "period_id"
+      ],
+      "title": "Call",
+      "type": "object"
+    },
+    "CallInspection": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "const": "calls",
+          "default": "calls",
+          "title": "Family",
+          "type": "string"
+        },
+        "record_schema": {
+          "const": "cr/0.1",
+          "default": "cr/0.1",
+          "title": "Record Schema",
+          "type": "string"
+        },
+        "call": {
+          "$ref": "#/$defs/Call"
+        },
+        "call_kind": {
+          "$ref": "#/$defs/CallKind"
+        },
+        "authorized_parts": {
+          "items": {
+            "$ref": "#/$defs/Part"
+          },
+          "title": "Authorized Parts",
+          "type": "array"
+        },
+        "prepared": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PreparedRecord"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "full_manifest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Manifest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sent_manifest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Manifest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "disposition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Disposition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "adopted",
+            "not_adopted",
+            "failed",
+            "abandoned",
+            "stopped_unfit"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "attempts": {
+          "items": {
+            "$ref": "#/$defs/Attempt"
+          },
+          "title": "Attempts",
+          "type": "array"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/StoredPart"
+          },
+          "title": "Parts",
+          "type": "array"
+        },
+        "requests": {
+          "items": {
+            "$ref": "#/$defs/StoredPart"
+          },
+          "title": "Requests",
+          "type": "array"
+        },
+        "morning": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MorningReceipt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deliberate_recall": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RecallReceipt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "adopted_citations": {
+          "items": {
+            "$ref": "#/$defs/ActCitations"
+          },
+          "title": "Adopted Citations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "call",
+        "call_kind",
+        "authorized_parts",
+        "prepared",
+        "full_manifest",
+        "sent_manifest",
+        "disposition",
+        "outcome",
+        "attempts",
+        "parts",
+        "requests",
+        "morning",
+        "deliberate_recall",
+        "adopted_citations",
+        "family"
+      ],
+      "title": "CallInspection",
+      "type": "object"
+    },
+    "CallKind": {
+      "enum": [
+        "decision",
+        "decision_after_recall",
+        "recall",
+        "morning",
+        "consolidation_selection",
+        "consolidation_change_set"
+      ],
+      "type": "string"
+    },
+    "Candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "manifest": {
+          "$ref": "#/$defs/Manifest"
+        },
+        "wire_sha256": {
+          "title": "Wire Sha256",
+          "type": "string"
+        },
+        "omitted": {
+          "items": {
+            "$ref": "#/$defs/Ref"
+          },
+          "title": "Omitted",
+          "type": "array"
+        }
+      },
+      "required": [
+        "manifest",
+        "wire_sha256",
+        "omitted"
+      ],
+      "title": "Candidate",
+      "type": "object"
+    },
+    "Change": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "before": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Head"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Head"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "before",
+        "after"
+      ],
+      "title": "Change",
+      "type": "object"
+    },
+    "Charge": {
+      "additionalProperties": false,
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "input": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Input"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Output"
+        },
+        "cache_hit": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cache Hit"
+        },
+        "cache_miss": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cache Miss"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Latency Ms"
+        },
+        "missing_usage_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Missing Usage Reason"
+        }
+      },
+      "required": [
+        "call_id",
+        "n",
+        "input",
+        "output",
+        "cache_hit",
+        "cache_miss",
+        "latency_ms",
+        "missing_usage_reason"
+      ],
+      "title": "Charge",
+      "type": "object"
+    },
+    "ChoiceCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "instance_id": {
+          "title": "Instance Id",
+          "type": "string"
+        },
+        "ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ids",
+          "type": "array"
+        },
+        "checker": {
+          "title": "Checker",
+          "type": "string"
+        },
+        "date": {
+          "title": "Date",
+          "type": "string"
+        },
+        "note": {
+          "title": "Note",
+          "type": "string"
+        },
+        "check": {
+          "const": "choice_link",
+          "title": "Check",
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "relevant",
+            "not_relevant"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        },
+        "sent_fragment_sha256": {
+          "items": {
+            "$ref": "#/$defs/Digest"
+          },
+          "minItems": 1,
+          "title": "Sent Fragment Sha256",
+          "type": "array"
+        },
+        "source_revision_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Revision Ids",
+          "type": "array"
+        },
+        "member_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Member Ids",
+          "type": "array"
+        },
+        "antecedent_event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Antecedent Event Ids",
+          "type": "array"
+        },
+        "chosen_outcome_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Chosen Outcome Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "instance_id",
+        "ids",
+        "checker",
+        "date",
+        "note",
+        "check",
+        "verdict",
+        "sent_fragment_sha256",
+        "source_revision_ids",
+        "member_ids",
+        "antecedent_event_ids",
+        "chosen_outcome_ids"
+      ],
+      "title": "ChoiceCheck",
+      "type": "object"
+    },
+    "ClearIntention": {
+      "additionalProperties": false,
+      "properties": {
+        "clear": {
+          "const": true,
+          "title": "Clear",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "clear"
+      ],
+      "title": "ClearIntention",
+      "type": "object"
+    },
+    "Commitment": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "enum": [
+            "promisor",
+            "promisee"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "counterpart_id": {
+          "title": "Counterpart Id",
+          "type": "string"
+        },
+        "terms": {
+          "$ref": "#/$defs/Terms"
+        },
+        "due_tick": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Due Tick"
+        },
+        "heard_counterpart": {
+          "title": "Heard Counterpart",
+          "type": "boolean"
+        },
+        "status": {
+          "enum": [
+            "open",
+            "kept",
+            "broken",
+            "expired"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "status_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Status Note"
+        },
+        "agreement_id": {
+          "title": "Agreement Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "counterpart_id",
+        "terms",
+        "due_tick",
+        "heard_counterpart",
+        "status",
+        "status_note",
+        "agreement_id"
+      ],
+      "title": "Commitment",
+      "type": "object"
+    },
+    "ConsolidationInspection": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "const": "consolidations",
+          "default": "consolidations",
+          "title": "Family",
+          "type": "string"
+        },
+        "record": {
+          "$ref": "#/$defs/ConsolidationRecord"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/StoredPart"
+          },
+          "title": "Parts",
+          "type": "array"
+        },
+        "calls": {
+          "items": {
+            "$ref": "#/$defs/CallInspection"
+          },
+          "title": "Calls",
+          "type": "array"
+        }
+      },
+      "required": [
+        "record",
+        "parts",
+        "calls",
+        "family"
+      ],
+      "title": "ConsolidationInspection",
+      "type": "object"
+    },
+    "ConsolidationRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "record_schema": {
+          "const": "mf/0.1",
+          "title": "Record Schema",
+          "type": "string"
+        },
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "period_id": {
+          "title": "Period Id",
+          "type": "string"
+        },
+        "arm": {
+          "$ref": "#/$defs/Arm"
+        },
+        "s_tick": {
+          "title": "S Tick",
+          "type": "integer"
+        },
+        "started_tick": {
+          "title": "Started Tick",
+          "type": "integer"
+        },
+        "confirming_delivery": {
+          "title": "Confirming Delivery",
+          "type": "string"
+        },
+        "boundary_tick": {
+          "title": "Boundary Tick",
+          "type": "integer"
+        },
+        "outcome": {
+          "enum": [
+            "committed",
+            "failed",
+            "abandoned",
+            "off_arm"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        },
+        "base_version": {
+          "title": "Base Version",
+          "type": "integer"
+        },
+        "result_version": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Result Version"
+        },
+        "store_hash": {
+          "$ref": "#/$defs/Digest"
+        },
+        "selection_call_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Selection Call Id"
+        },
+        "change_set_call_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Change Set Call Id"
+        },
+        "selection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Selection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "change_set": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/JsonValue"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Change Set"
+        },
+        "verdicts": {
+          "items": {
+            "$ref": "#/$defs/Verdict"
+          },
+          "title": "Verdicts",
+          "type": "array"
+        },
+        "relabel_flags": {
+          "items": {
+            "$ref": "#/$defs/RelabelFlag"
+          },
+          "title": "Relabel Flags",
+          "type": "array"
+        },
+        "pending": {
+          "items": {
+            "$ref": "#/$defs/Pending"
+          },
+          "title": "Pending",
+          "type": "array"
+        },
+        "pending_after": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Pending After",
+          "type": "array"
+        },
+        "closed_context": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effects": {
+          "items": {
+            "$ref": "#/$defs/Effect"
+          },
+          "title": "Effects",
+          "type": "array"
+        },
+        "episodic_created": {
+          "title": "Episodic Created",
+          "type": "integer"
+        },
+        "write": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Write"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "record_schema",
+        "resident_id",
+        "period_id",
+        "arm",
+        "s_tick",
+        "started_tick",
+        "confirming_delivery",
+        "boundary_tick",
+        "outcome",
+        "reason",
+        "base_version",
+        "result_version",
+        "store_hash",
+        "selection_call_id",
+        "change_set_call_id",
+        "selection",
+        "change_set",
+        "verdicts",
+        "relabel_flags",
+        "pending",
+        "pending_after",
+        "closed_context",
+        "effects",
+        "episodic_created",
+        "write"
+      ],
+      "title": "ConsolidationRecord",
+      "type": "object"
+    },
+    "ContentCheck": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SpeechCheck"
+        },
+        {
+          "$ref": "#/$defs/ChoiceCheck"
+        },
+        {
+          "$ref": "#/$defs/ContradictionCheck"
+        }
+      ]
+    },
+    "ContinueAction": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "continue",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "ContinueAction",
+      "type": "object"
+    },
+    "ContradictionCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "instance_id": {
+          "title": "Instance Id",
+          "type": "string"
+        },
+        "ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ids",
+          "type": "array"
+        },
+        "checker": {
+          "title": "Checker",
+          "type": "string"
+        },
+        "date": {
+          "title": "Date",
+          "type": "string"
+        },
+        "note": {
+          "title": "Note",
+          "type": "string"
+        },
+        "check": {
+          "const": "contradiction",
+          "title": "Check",
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "contradicts",
+            "consistent"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instance_id",
+        "ids",
+        "checker",
+        "date",
+        "note",
+        "check",
+        "verdict"
+      ],
+      "title": "ContradictionCheck",
+      "type": "object"
+    },
+    "ContributeTerm": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "contribute",
+          "title": "Kind",
+          "type": "string"
+        },
+        "process_id": {
+          "title": "Process Id",
+          "type": "string"
+        },
+        "work_ticks": {
+          "exclusiveMinimum": 0,
+          "title": "Work Ticks",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "process_id",
+        "work_ticks"
+      ],
+      "title": "ContributeTerm",
+      "type": "object"
+    },
+    "Coord": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "Coord",
+      "type": "object"
+    },
+    "Cost": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "const": "cost",
+          "default": "cost",
+          "title": "Family",
+          "type": "string"
+        },
+        "attempts": {
+          "items": {
+            "$ref": "#/$defs/Charge"
+          },
+          "title": "Attempts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "attempts",
+        "family"
+      ],
+      "title": "Cost",
+      "type": "object"
+    },
+    "Credit": {
+      "additionalProperties": false,
+      "properties": {
+        "stage": {
+          "enum": [
+            "decision",
+            "decision_after_recall"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "tick": {
+          "title": "Tick",
+          "type": "integer"
+        },
+        "revisions": {
+          "items": {
+            "$ref": "#/$defs/RevisionRef"
+          },
+          "title": "Revisions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "stage",
+        "turn_id",
+        "call_id",
+        "tick",
+        "revisions"
+      ],
+      "title": "Credit",
+      "type": "object"
+    },
+    "CueRef": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "cue",
+          "default": "cue",
+          "title": "Kind",
+          "type": "string"
+        },
+        "cue_id": {
+          "title": "Cue Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cue_id"
+      ],
+      "title": "CueRef",
+      "type": "object"
+    },
+    "DayEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/EntryType"
+        },
+        "tick": {
+          "title": "Tick",
+          "type": "integer"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "delivery_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Delivery Id"
+        },
+        "ref": {
+          "$ref": "#/$defs/EntryRef"
+        },
+        "verbatim": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeardUtterance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "about": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "About",
+          "type": "array"
+        },
+        "member_paths": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Member Paths",
+          "type": "array"
+        },
+        "retrieved": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RevisionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "tick",
+        "text",
+        "delivery_id",
+        "ref"
+      ],
+      "title": "DayEntry",
+      "type": "object"
+    },
+    "DecisionInspection": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "const": "decisions",
+          "default": "decisions",
+          "title": "Family",
+          "type": "string"
+        },
+        "record": {
+          "$ref": "#/$defs/DecisionRecord"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/StoredPart"
+          },
+          "title": "Parts",
+          "type": "array"
+        },
+        "calls": {
+          "items": {
+            "$ref": "#/$defs/CallInspection"
+          },
+          "title": "Calls",
+          "type": "array"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/DayEntry"
+          },
+          "title": "Entries",
+          "type": "array"
+        },
+        "outcome_event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Outcome Event Ids",
+          "type": "array"
+        },
+        "outcomes": {
+          "items": {
+            "$ref": "#/$defs/WorldEvent"
+          },
+          "title": "Outcomes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "record",
+        "parts",
+        "calls",
+        "entries",
+        "outcome_event_ids",
+        "outcomes",
+        "family"
+      ],
+      "title": "DecisionInspection",
+      "type": "object"
+    },
+    "DecisionRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "record_schema": {
+          "const": "dr/0.1",
+          "title": "Record Schema",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "tick": {
+          "title": "Tick",
+          "type": "integer"
+        },
+        "period_id": {
+          "title": "Period Id",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "call_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Call Ids",
+          "type": "array"
+        },
+        "prepared_cursors": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Prepared Cursors",
+          "type": "array"
+        },
+        "new_entries": {
+          "items": {
+            "type": "string"
+          },
+          "title": "New Entries",
+          "type": "array"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActStep"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "valid_cites": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Valid Cites",
+          "type": "array"
+        },
+        "invalid_cites": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Invalid Cites",
+          "type": "array"
+        },
+        "cited_parts": {
+          "items": {
+            "$ref": "#/$defs/living_island__contract__inspection_v2__Citation"
+          },
+          "title": "Cited Parts",
+          "type": "array"
+        },
+        "telemetry": {
+          "$ref": "#/$defs/Telemetry"
+        },
+        "use_updates": {
+          "items": {
+            "$ref": "#/$defs/Used"
+          },
+          "title": "Use Updates",
+          "type": "array"
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "enum": [
+                "model",
+                "fallback"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Origin"
+        },
+        "fallback": {
+          "$ref": "#/$defs/Fallback"
+        },
+        "submission": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnSubmission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "used_memories": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Used Memories",
+          "type": "array"
+        }
+      },
+      "required": [
+        "record_schema",
+        "turn_id",
+        "resident_id",
+        "tick",
+        "period_id",
+        "reasons",
+        "call_ids",
+        "prepared_cursors",
+        "new_entries",
+        "output",
+        "valid_cites",
+        "invalid_cites",
+        "cited_parts",
+        "telemetry",
+        "use_updates",
+        "origin",
+        "fallback",
+        "submission",
+        "used_memories"
+      ],
+      "title": "DecisionRecord",
+      "type": "object"
+    },
+    "DeliberateRecall": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "recall",
+          "default": "recall",
+          "title": "Kind",
+          "type": "string"
+        },
+        "mode": {
+          "const": "deliberate",
+          "default": "deliberate",
+          "title": "Mode",
+          "type": "string"
+        },
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "call_id"
+      ],
+      "title": "DeliberateRecall",
+      "type": "object"
+    },
+    "Delivery": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "const": "deliveries",
+          "default": "deliveries",
+          "title": "Family",
+          "type": "string"
+        },
+        "packet": {
+          "$ref": "#/$defs/BoundaryDelivery"
+        },
+        "period_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Period Id"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/JoinedEntry"
+          },
+          "title": "Entries",
+          "type": "array"
+        }
+      },
+      "required": [
+        "packet",
+        "period_id",
+        "entries",
+        "family"
+      ],
+      "title": "Delivery",
+      "type": "object"
+    },
+    "Descriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "property_id": {
+          "title": "Property Id",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "property_id",
+        "value"
+      ],
+      "title": "Descriptor",
+      "type": "object"
+    },
+    "Digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "Dispatch": {
+      "additionalProperties": false,
+      "properties": {
+        "call": {
+          "$ref": "#/$defs/Call"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "prepared_cursor": {
+          "title": "Prepared Cursor",
+          "type": "string"
+        },
+        "request_sha256": {
+          "title": "Request Sha256",
+          "type": "string"
+        },
+        "sent": {
+          "$ref": "#/$defs/Candidate"
+        },
+        "settings": {
+          "$ref": "#/$defs/Settings"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "timeout_ms": {
+          "title": "Timeout Ms",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "call",
+        "n",
+        "prepared_cursor",
+        "request_sha256",
+        "sent",
+        "settings",
+        "started_at",
+        "timeout_ms"
+      ],
+      "title": "Dispatch",
+      "type": "object"
+    },
+    "Disposition": {
+      "additionalProperties": false,
+      "properties": {
+        "record_schema": {
+          "const": "cr/0.1",
+          "title": "Record Schema",
+          "type": "string"
+        },
+        "authorized_cursor": {
+          "title": "Authorized Cursor",
+          "type": "string"
+        },
+        "prepared_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Prepared Cursor"
+        },
+        "attempts": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Attempts",
+          "type": "array"
+        },
+        "outcome": {
+          "enum": [
+            "adopted",
+            "abandoned",
+            "failed",
+            "stopped_unfit"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "ignored": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ignored",
+          "type": "array"
+        }
+      },
+      "required": [
+        "record_schema",
+        "authorized_cursor",
+        "prepared_cursor",
+        "attempts",
+        "outcome",
+        "ignored"
+      ],
+      "title": "Disposition",
+      "type": "object"
+    },
+    "Effect": {
+      "additionalProperties": false,
+      "properties": {
+        "op_id": {
+          "title": "Op Id",
+          "type": "string"
+        },
+        "edits": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Record"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "title": "Edits",
+          "type": "array"
+        },
+        "produced_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Produced Id"
+        },
+        "evictions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evictions",
+          "type": "array"
+        },
+        "carried_from": {
+          "items": {
+            "$ref": "#/$defs/RevisionRef"
+          },
+          "title": "Carried From",
+          "type": "array"
+        },
+        "bindings": {
+          "items": {
+            "$ref": "#/$defs/SourceBinding"
+          },
+          "title": "Bindings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "op_id",
+        "edits",
+        "produced_id",
+        "evictions",
+        "carried_from",
+        "bindings"
+      ],
+      "title": "Effect",
+      "type": "object"
+    },
+    "EntityRef": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "entity",
+          "default": "entity",
+          "title": "Kind",
+          "type": "string"
+        },
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "entity_id"
+      ],
+      "title": "EntityRef",
+      "type": "object"
+    },
+    "EntityTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "entity",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "EntityTarget",
+      "type": "object"
+    },
+    "EntityView": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "archetype_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Archetype Id"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Material Id"
+        },
+        "descriptors": {
+          "items": {
+            "$ref": "#/$defs/Descriptor"
+          },
+          "title": "Descriptors",
+          "type": "array"
+        },
+        "kind": {
+          "enum": [
+            "resident",
+            "corpse",
+            "item",
+            "structure",
+            "process",
+            "feature"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Quantity"
+        },
+        "observable_signs": {
+          "items": {
+            "enum": [
+              "weak",
+              "dehydrated",
+              "fatigued"
+            ],
+            "type": "string"
+          },
+          "title": "Observable Signs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "entity_id",
+        "archetype_id",
+        "material_id",
+        "descriptors",
+        "kind",
+        "position",
+        "quantity",
+        "observable_signs"
+      ],
+      "title": "EntityView",
+      "type": "object"
+    },
+    "Entry": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/Ref"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "tokens": {
+          "title": "Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source",
+        "sha256",
+        "tokens"
+      ],
+      "title": "Entry",
+      "type": "object"
+    },
+    "EntryRef": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FeedbackRef"
+        },
+        {
+          "$ref": "#/$defs/UtteranceFeedbackRef"
+        },
+        {
+          "$ref": "#/$defs/HeardRef"
+        },
+        {
+          "$ref": "#/$defs/ObservedRef"
+        },
+        {
+          "$ref": "#/$defs/EntityRef"
+        },
+        {
+          "$ref": "#/$defs/CueRef"
+        },
+        {
+          "$ref": "#/$defs/ReportRef"
+        },
+        {
+          "$ref": "#/$defs/InspectionRef"
+        },
+        {
+          "$ref": "#/$defs/TurnRef"
+        },
+        {
+          "$ref": "#/$defs/DeliberateRecall"
+        },
+        {
+          "$ref": "#/$defs/LocalRecall"
+        }
+      ]
+    },
+    "EntryType": {
+      "enum": [
+        "own_response",
+        "action_result",
+        "utterance_result",
+        "heard_speech",
+        "observation",
+        "inspection",
+        "body_change",
+        "progress",
+        "sleep",
+        "recall"
+      ],
+      "type": "string"
+    },
+    "EnvironmentalCue": {
+      "additionalProperties": false,
+      "properties": {
+        "cue_id": {
+          "title": "Cue Id",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "detail_level": {
+          "enum": [
+            "distant",
+            "near"
+          ],
+          "title": "Detail Level",
+          "type": "string"
+        },
+        "physical_description": {
+          "title": "Physical Description",
+          "type": "string"
+        },
+        "direction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Direction"
+        }
+      },
+      "required": [
+        "cue_id",
+        "position",
+        "detail_level",
+        "physical_description",
+        "direction"
+      ],
+      "title": "EnvironmentalCue",
+      "type": "object"
+    },
+    "Episodic": {
+      "additionalProperties": false,
+      "properties": {
+        "participants": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Participants",
+          "type": "array"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Coord"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "participants",
+        "place"
+      ],
+      "title": "Episodic",
+      "type": "object"
+    },
+    "ErrorClass": {
+      "enum": [
+        "timeout",
+        "rate_limit",
+        "server_error",
+        "provider_error",
+        "invalid_output"
+      ],
+      "type": "string"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "const": "evidence_writes",
+          "default": "evidence_writes",
+          "title": "Family",
+          "type": "string"
+        },
+        "write": {
+          "$ref": "#/$defs/Write"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/Member"
+          },
+          "title": "Members",
+          "type": "array"
+        },
+        "skill": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/living_island__contract__inspection_v2__SkillEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "agreement": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/JsonValue"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Agreement"
+        }
+      },
+      "required": [
+        "write",
+        "members",
+        "skill",
+        "agreement",
+        "family"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "ExactItemSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "title": "Item Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id"
+      ],
+      "title": "ExactItemSpec",
+      "type": "object"
+    },
+    "Fallback": {
+      "additionalProperties": false,
+      "properties": {
+        "used": {
+          "title": "Used",
+          "type": "boolean"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        },
+        "policy_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Policy Id"
+        }
+      },
+      "required": [
+        "used",
+        "reason",
+        "policy_id"
+      ],
+      "title": "Fallback",
+      "type": "object"
+    },
+    "FeedbackRef": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "feedback",
+          "default": "feedback",
+          "title": "Kind",
+          "type": "string"
+        },
+        "intent_id": {
+          "title": "Intent Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "intent_id"
+      ],
+      "title": "FeedbackRef",
+      "type": "object"
+    },
+    "GiveItemTerm": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "give_item",
+          "title": "Kind",
+          "type": "string"
+        },
+        "item": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExactItemSpec"
+            },
+            {
+              "$ref": "#/$defs/KindItemSpec"
+            }
+          ],
+          "title": "Item"
+        }
+      },
+      "required": [
+        "kind",
+        "item"
+      ],
+      "title": "GiveItemTerm",
+      "type": "object"
+    },
+    "Head": {
+      "additionalProperties": false,
+      "properties": {
+        "content_hash": {
+          "$ref": "#/$defs/Digest"
+        },
+        "last_used_tick": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Used Tick"
+        },
+        "use_count": {
+          "title": "Use Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "content_hash",
+        "last_used_tick",
+        "use_count"
+      ],
+      "title": "Head",
+      "type": "object"
+    },
+    "HeardRef": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "utterance",
+          "default": "utterance",
+          "title": "Kind",
+          "type": "string"
+        },
+        "utterance_id": {
+          "title": "Utterance Id",
+          "type": "string"
+        },
+        "speaker_id": {
+          "title": "Speaker Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "utterance_id",
+        "speaker_id"
+      ],
+      "title": "HeardRef",
+      "type": "object"
+    },
+    "HeardUtterance": {
+      "additionalProperties": false,
+      "properties": {
+        "addressee_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Addressee Id"
+        },
+        "speech_act": {
+          "enum": [
+            "statement",
+            "propose",
+            "accept",
+            "refuse"
+          ],
+          "title": "Speech Act",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "terms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Terms"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "in_reply_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "In Reply To"
+        },
+        "utterance_id": {
+          "title": "Utterance Id",
+          "type": "string"
+        },
+        "speaker_id": {
+          "title": "Speaker Id",
+          "type": "string"
+        },
+        "heard_at_tick": {
+          "minimum": 0,
+          "title": "Heard At Tick",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "addressee_id",
+        "speech_act",
+        "text",
+        "terms",
+        "in_reply_to",
+        "utterance_id",
+        "speaker_id",
+        "heard_at_tick"
+      ],
+      "title": "HeardUtterance",
+      "type": "object"
+    },
+    "HeldItem": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "held",
+          "title": "Kind",
+          "type": "string"
+        },
+        "archetype_id": {
+          "title": "Archetype Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "archetype_id"
+      ],
+      "title": "HeldItem",
+      "type": "object"
+    },
+    "Inferred": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "inferred",
+          "default": "inferred",
+          "title": "Kind",
+          "type": "string"
+        },
+        "memory_ids": {
+          "items": {
+            "pattern": "^m:[^\\r\\n]+:[1-9][0-9]*$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Memory Ids",
+          "type": "array"
+        },
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "memory_ids",
+        "call_id"
+      ],
+      "title": "Inferred",
+      "type": "object"
+    },
+    "Innate": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "innate",
+          "default": "innate",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "Innate",
+      "type": "object"
+    },
+    "InspectView": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "archetype_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Archetype Id"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Material Id"
+        },
+        "descriptors": {
+          "items": {
+            "$ref": "#/$defs/Descriptor"
+          },
+          "title": "Descriptors",
+          "type": "array"
+        }
+      },
+      "required": [
+        "entity_id",
+        "archetype_id",
+        "material_id",
+        "descriptors"
+      ],
+      "title": "InspectView",
+      "type": "object"
+    },
+    "InspectionRef": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "inspection",
+          "default": "inspection",
+          "title": "Kind",
+          "type": "string"
+        },
+        "intent_id": {
+          "title": "Intent Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "intent_id"
+      ],
+      "title": "InspectionRef",
+      "type": "object"
+    },
+    "Intent": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "move_to",
+            "give",
+            "pick_up",
+            "drop",
+            "wait",
+            "inspect",
+            "contribute",
+            "act"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "verb": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Verb"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "entity": "#/$defs/EntityTarget",
+                  "resident": "#/$defs/ResidentTarget",
+                  "tile": "#/$defs/TileTarget"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TileTarget"
+                },
+                {
+                  "$ref": "#/$defs/EntityTarget"
+                },
+                {
+                  "$ref": "#/$defs/ResidentTarget"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        },
+        "instruments": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "held": "#/$defs/HeldItem",
+                "item": "#/$defs/NamedItem"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/NamedItem"
+              },
+              {
+                "$ref": "#/$defs/HeldItem"
+              }
+            ]
+          },
+          "title": "Instruments",
+          "type": "array"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/ActionInput"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "params": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Params",
+          "type": "object"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        },
+        "intent_id": {
+          "pattern": "^[^\\r\\n]+:t[0-9]{6,}:a$",
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "turn_id": {
+          "pattern": "^[^\\r\\n]+:t[0-9]{6,}$",
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "verb",
+        "target",
+        "instruments",
+        "inputs",
+        "params",
+        "reason",
+        "intent_id",
+        "turn_id",
+        "actor_id"
+      ],
+      "title": "Intent",
+      "type": "object"
+    },
+    "IntentAction": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "intent",
+          "title": "Kind",
+          "type": "string"
+        },
+        "intent": {
+          "$ref": "#/$defs/Intent"
+        }
+      },
+      "required": [
+        "kind",
+        "intent"
+      ],
+      "title": "IntentAction",
+      "type": "object"
+    },
+    "IntentShape": {
+      "additionalProperties": false,
+      "description": "Intent fields supplied by a policy before the harness attaches identity.",
+      "properties": {
+        "action": {
+          "enum": [
+            "move_to",
+            "give",
+            "pick_up",
+            "drop",
+            "wait",
+            "inspect",
+            "contribute",
+            "act"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "verb": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Verb"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "entity": "#/$defs/EntityTarget",
+                  "resident": "#/$defs/ResidentTarget",
+                  "tile": "#/$defs/TileTarget"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TileTarget"
+                },
+                {
+                  "$ref": "#/$defs/EntityTarget"
+                },
+                {
+                  "$ref": "#/$defs/ResidentTarget"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        },
+        "instruments": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "held": "#/$defs/HeldItem",
+                "item": "#/$defs/NamedItem"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/NamedItem"
+              },
+              {
+                "$ref": "#/$defs/HeldItem"
+              }
+            ]
+          },
+          "title": "Instruments",
+          "type": "array"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/ActionInput"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "params": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Params",
+          "type": "object"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "action",
+        "verb",
+        "target",
+        "instruments",
+        "inputs",
+        "params",
+        "reason"
+      ],
+      "title": "IntentShape",
+      "type": "object"
+    },
+    "Intention": {
+      "additionalProperties": false,
+      "properties": {
+        "set_turn": {
+          "title": "Set Turn",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "current",
+            "replaced",
+            "cleared",
+            "reset"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "ended_turn": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ended Turn"
+        }
+      },
+      "required": [
+        "set_turn",
+        "state",
+        "ended_turn"
+      ],
+      "title": "Intention",
+      "type": "object"
+    },
+    "Interval": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "intent_id": {
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "start_tick": {
+          "title": "Start Tick",
+          "type": "integer"
+        },
+        "end_tick": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "End Tick"
+        },
+        "event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Event Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "resident_id",
+        "intent_id",
+        "start_tick",
+        "end_tick",
+        "event_ids"
+      ],
+      "title": "Interval",
+      "type": "object"
+    },
+    "ItemUse": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "archetype_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Archetype Id"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Material Id"
+        },
+        "descriptors": {
+          "items": {
+            "$ref": "#/$defs/Descriptor"
+          },
+          "title": "Descriptors",
+          "type": "array"
+        },
+        "role": {
+          "enum": [
+            "target",
+            "instrument",
+            "input",
+            "item",
+            "output"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "quantity": {
+          "exclusiveMinimum": 0,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "entity_id",
+        "archetype_id",
+        "material_id",
+        "descriptors",
+        "role",
+        "quantity"
+      ],
+      "title": "ItemUse",
+      "type": "object"
+    },
+    "ItemView": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "archetype_id": {
+          "title": "Archetype Id",
+          "type": "string"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Material Id"
+        },
+        "descriptors": {
+          "items": {
+            "$ref": "#/$defs/Descriptor"
+          },
+          "title": "Descriptors",
+          "type": "array"
+        },
+        "quantity": {
+          "exclusiveMinimum": 0,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "entity_id",
+        "archetype_id",
+        "material_id",
+        "descriptors",
+        "quantity"
+      ],
+      "title": "ItemView",
+      "type": "object"
+    },
+    "JoinedEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "entry": {
+          "$ref": "#/$defs/DayEntry"
+        },
+        "event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Event Ids",
+          "type": "array"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Members",
+          "type": "array"
+        },
+        "missing_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Missing Reason"
+        }
+      },
+      "required": [
+        "entry",
+        "event_ids",
+        "members",
+        "missing_reason"
+      ],
+      "title": "JoinedEntry",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "KindItemSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "archetype_id": {
+          "title": "Archetype Id",
+          "type": "string"
+        },
+        "quantity": {
+          "exclusiveMinimum": 0,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "archetype_id",
+        "quantity"
+      ],
+      "title": "KindItemSpec",
+      "type": "object"
+    },
+    "LocalRecall": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "recall",
+          "default": "recall",
+          "title": "Kind",
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "recipe",
+            "off_empty"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "ordinal": {
+          "title": "Ordinal",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode",
+        "turn_id",
+        "ordinal"
+      ],
+      "title": "LocalRecall",
+      "type": "object"
+    },
+    "Look": {
+      "additionalProperties": false,
+      "properties": {
+        "archetype_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Archetype Id"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Material Id"
+        },
+        "descriptors": {
+          "items": {
+            "$ref": "#/$defs/Word"
+          },
+          "title": "Descriptors",
+          "type": "array"
+        }
+      },
+      "required": [
+        "archetype_id",
+        "material_id",
+        "descriptors"
+      ],
+      "title": "Look",
+      "type": "object"
+    },
+    "Manifest": {
+      "additionalProperties": false,
+      "properties": {
+        "manifest_schema": {
+          "const": "cm/0.1",
+          "default": "cm/0.1",
+          "title": "Manifest Schema",
+          "type": "string"
+        },
+        "call_kind": {
+          "$ref": "#/$defs/CallKind"
+        },
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "tick": {
+          "title": "Tick",
+          "type": "integer"
+        },
+        "period_id": {
+          "title": "Period Id",
+          "type": "string"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/Section"
+          },
+          "title": "Sections",
+          "type": "array"
+        },
+        "derived": {
+          "items": {
+            "$ref": "#/$defs/Pressure"
+          },
+          "title": "Derived",
+          "type": "array"
+        },
+        "tokens_total": {
+          "title": "Tokens Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "call_kind",
+        "resident_id",
+        "tick",
+        "period_id",
+        "sections",
+        "derived",
+        "tokens_total"
+      ],
+      "title": "Manifest",
+      "type": "object"
+    },
+    "Member": {
+      "additionalProperties": false,
+      "properties": {
+        "delivery_id": {
+          "title": "Delivery Id",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "entry_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Entry Id"
+        },
+        "entry_revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Entry Revision"
+        },
+        "related_paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Related Paths",
+          "type": "array"
+        }
+      },
+      "required": [
+        "delivery_id",
+        "path",
+        "entry_id",
+        "entry_revision",
+        "related_paths"
+      ],
+      "title": "Member",
+      "type": "object"
+    },
+    "Metric": {
+      "additionalProperties": false,
+      "properties": {
+        "instance_id": {
+          "title": "Instance Id",
+          "type": "string"
+        },
+        "metric": {
+          "title": "Metric",
+          "type": "string"
+        },
+        "trace": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Trace",
+          "type": "array"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "instance_id",
+        "metric",
+        "trace",
+        "value",
+        "reason"
+      ],
+      "title": "Metric",
+      "type": "object"
+    },
+    "Metrics": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "const": "metrics",
+          "default": "metrics",
+          "title": "Family",
+          "type": "string"
+        },
+        "instances": {
+          "items": {
+            "$ref": "#/$defs/Metric"
+          },
+          "title": "Instances",
+          "type": "array"
+        },
+        "content_checks": {
+          "items": {
+            "$ref": "#/$defs/ContentCheck"
+          },
+          "title": "Content Checks",
+          "type": "array"
+        },
+        "checked_parts": {
+          "items": {
+            "$ref": "#/$defs/StoredPart"
+          },
+          "title": "Checked Parts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "instances",
+        "content_checks",
+        "checked_parts",
+        "family"
+      ],
+      "title": "Metrics",
+      "type": "object"
+    },
+    "ModelIntentAction": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "intent",
+          "title": "Kind",
+          "type": "string"
+        },
+        "intent": {
+          "$ref": "#/$defs/IntentShape"
+        }
+      },
+      "required": [
+        "kind",
+        "intent"
+      ],
+      "title": "ModelIntentAction",
+      "type": "object"
+    },
+    "MorningReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "prepared_cursor": {
+          "title": "Prepared Cursor",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "adopted",
+            "failed",
+            "stopped_unfit"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "selected_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Selected Ids",
+          "type": "array"
+        },
+        "ignored_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ignored Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "call_id",
+        "prepared_cursor",
+        "outcome",
+        "selected_ids",
+        "ignored_ids"
+      ],
+      "title": "MorningReceipt",
+      "type": "object"
+    },
+    "NamedItem": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "item",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "NamedItem",
+      "type": "object"
+    },
+    "NeedView": {
+      "additionalProperties": false,
+      "properties": {
+        "need_id": {
+          "title": "Need Id",
+          "type": "string"
+        },
+        "band": {
+          "enum": [
+            "critical",
+            "low",
+            "moderate",
+            "good",
+            "strong"
+          ],
+          "title": "Band",
+          "type": "string"
+        }
+      },
+      "required": [
+        "need_id",
+        "band"
+      ],
+      "title": "NeedView",
+      "type": "object"
+    },
+    "Observed": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "observed",
+          "default": "observed",
+          "title": "Kind",
+          "type": "string"
+        },
+        "entry_id": {
+          "title": "Entry Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "entry_id"
+      ],
+      "title": "Observed",
+      "type": "object"
+    },
+    "ObservedAction": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "intent_id": {
+          "pattern": "^[^\\r\\n]+:t[0-9]{6,}:a$",
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "phase": {
+          "enum": [
+            "start",
+            "stop",
+            "settle"
+          ],
+          "title": "Phase",
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "move_to",
+            "give",
+            "pick_up",
+            "drop",
+            "wait",
+            "inspect",
+            "contribute",
+            "act"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "verb": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Verb"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "entity": "#/$defs/EntityTarget",
+                  "resident": "#/$defs/ResidentTarget",
+                  "tile": "#/$defs/TileTarget"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TileTarget"
+                },
+                {
+                  "$ref": "#/$defs/EntityTarget"
+                },
+                {
+                  "$ref": "#/$defs/ResidentTarget"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        },
+        "start_target": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "entity": "#/$defs/SubjectStartTarget",
+                  "resident": "#/$defs/SubjectStartTarget",
+                  "tile": "#/$defs/TileStartTarget"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TileStartTarget"
+                },
+                {
+                  "$ref": "#/$defs/SubjectStartTarget"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Start Target"
+        },
+        "received_items": {
+          "items": {
+            "$ref": "#/$defs/ItemUse"
+          },
+          "title": "Received Items",
+          "type": "array"
+        },
+        "visible_items": {
+          "items": {
+            "$ref": "#/$defs/ItemUse"
+          },
+          "title": "Visible Items",
+          "type": "array"
+        },
+        "phenomena": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Phenomena",
+          "type": "array"
+        }
+      },
+      "required": [
+        "actor_id",
+        "intent_id",
+        "tick",
+        "phase",
+        "action",
+        "verb",
+        "target",
+        "start_target",
+        "received_items",
+        "visible_items",
+        "phenomena"
+      ],
+      "title": "ObservedAction",
+      "type": "object"
+    },
+    "ObservedRef": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "observed_action",
+          "default": "observed_action",
+          "title": "Kind",
+          "type": "string"
+        },
+        "intent_id": {
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "phase": {
+          "enum": [
+            "start",
+            "stop",
+            "settle"
+          ],
+          "title": "Phase",
+          "type": "string"
+        }
+      },
+      "required": [
+        "intent_id",
+        "phase"
+      ],
+      "title": "ObservedRef",
+      "type": "object"
+    },
+    "Part": {
+      "additionalProperties": false,
+      "properties": {
+        "section": {
+          "title": "Section",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/Ref"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "section",
+        "source",
+        "text"
+      ],
+      "title": "Part",
+      "type": "object"
+    },
+    "Pending": {
+      "additionalProperties": false,
+      "properties": {
+        "period_id": {
+          "title": "Period Id",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "included",
+            "omitted",
+            "retained",
+            "evicted"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "period_id",
+        "state"
+      ],
+      "title": "Pending",
+      "type": "object"
+    },
+    "Perception": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "wap/0.1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "awareness": {
+          "enum": [
+            "awake",
+            "asleep",
+            "unconscious"
+          ],
+          "title": "Awareness",
+          "type": "string"
+        },
+        "needs": {
+          "items": {
+            "$ref": "#/$defs/NeedView"
+          },
+          "title": "Needs",
+          "type": "array"
+        },
+        "own_position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "inventory": {
+          "items": {
+            "$ref": "#/$defs/ItemView"
+          },
+          "title": "Inventory",
+          "type": "array"
+        },
+        "running_action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunningAction"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "visible_tiles": {
+          "items": {
+            "$ref": "#/$defs/TileView"
+          },
+          "title": "Visible Tiles",
+          "type": "array"
+        },
+        "explored_static_tiles": {
+          "items": {
+            "$ref": "#/$defs/TileView"
+          },
+          "title": "Explored Static Tiles",
+          "type": "array"
+        },
+        "visible_entities": {
+          "items": {
+            "$ref": "#/$defs/EntityView"
+          },
+          "title": "Visible Entities",
+          "type": "array"
+        },
+        "transient_sightings": {
+          "items": {
+            "$ref": "#/$defs/TransientSighting"
+          },
+          "title": "Transient Sightings",
+          "type": "array"
+        },
+        "environmental_cues": {
+          "items": {
+            "$ref": "#/$defs/EnvironmentalCue"
+          },
+          "title": "Environmental Cues",
+          "type": "array"
+        },
+        "heard_utterances": {
+          "items": {
+            "$ref": "#/$defs/HeardUtterance"
+          },
+          "title": "Heard Utterances",
+          "type": "array"
+        },
+        "observed_actions": {
+          "items": {
+            "$ref": "#/$defs/ObservedAction"
+          },
+          "title": "Observed Actions",
+          "type": "array"
+        },
+        "action_feedback": {
+          "items": {
+            "$ref": "#/$defs/ActionFeedback"
+          },
+          "title": "Action Feedback",
+          "type": "array"
+        },
+        "last_utterance_feedback": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtteranceFeedback"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "actor_id",
+        "tick",
+        "awareness",
+        "needs",
+        "own_position",
+        "inventory",
+        "running_action",
+        "visible_tiles",
+        "explored_static_tiles",
+        "visible_entities",
+        "transient_sightings",
+        "environmental_cues",
+        "heard_utterances",
+        "observed_actions",
+        "action_feedback",
+        "last_utterance_feedback"
+      ],
+      "title": "Perception",
+      "type": "object"
+    },
+    "Personality": {
+      "additionalProperties": false,
+      "properties": {
+        "traits": {
+          "items": {
+            "$ref": "#/$defs/Trait"
+          },
+          "title": "Traits",
+          "type": "array"
+        }
+      },
+      "required": [
+        "traits"
+      ],
+      "title": "Personality",
+      "type": "object"
+    },
+    "PreparedRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "call": {
+          "$ref": "#/$defs/Call"
+        },
+        "settings": {
+          "$ref": "#/$defs/Settings"
+        },
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/Candidate"
+          },
+          "title": "Candidates",
+          "type": "array"
+        },
+        "floor_candidate": {
+          "title": "Floor Candidate",
+          "type": "integer"
+        },
+        "admitted_candidate": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Admitted Candidate"
+        },
+        "omission_order": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Omission Order",
+          "type": "array"
+        },
+        "pressure_at": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pressure At"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "const": "stopped_unfit",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "call",
+        "settings",
+        "candidates",
+        "floor_candidate",
+        "admitted_candidate",
+        "omission_order",
+        "pressure_at",
+        "reason"
+      ],
+      "title": "PreparedRecord",
+      "type": "object"
+    },
+    "Pressure": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "pressure",
+          "default": "pressure",
+          "title": "Kind",
+          "type": "string"
+        },
+        "counter_id": {
+          "default": "deepseek-flash1017-byte-upper-bound",
+          "title": "Counter Id",
+          "type": "string"
+        },
+        "counter_version": {
+          "default": "0.4",
+          "title": "Counter Version",
+          "type": "string"
+        },
+        "wording_version": {
+          "default": "pressure/0.1",
+          "title": "Wording Version",
+          "type": "string"
+        },
+        "counted": {
+          "title": "Counted",
+          "type": "integer"
+        },
+        "window": {
+          "default": 992000,
+          "title": "Window",
+          "type": "integer"
+        },
+        "band": {
+          "title": "Band",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "counted",
+        "band",
+        "text"
+      ],
+      "title": "Pressure",
+      "type": "object"
+    },
+    "RecallReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/RetrievedPart"
+          },
+          "title": "Entries",
+          "type": "array"
+        },
+        "ignored_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ignored Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "entries",
+        "ignored_ids"
+      ],
+      "title": "RecallReceipt",
+      "type": "object"
+    },
+    "Record": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^m:[^\\r\\n]+:[1-9][0-9]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "owner_id": {
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "created_tick": {
+          "minimum": 0,
+          "title": "Created Tick",
+          "type": "integer"
+        },
+        "updated_tick": {
+          "minimum": 0,
+          "title": "Updated Tick",
+          "type": "integer"
+        },
+        "about_tick": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AboutTick"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sources": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "inferred": "#/$defs/Inferred",
+                "innate": "#/$defs/Innate",
+                "observed": "#/$defs/Observed",
+                "told": "#/$defs/Told"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Observed"
+              },
+              {
+                "$ref": "#/$defs/Told"
+              },
+              {
+                "$ref": "#/$defs/Inferred"
+              },
+              {
+                "$ref": "#/$defs/Innate"
+              }
+            ]
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "confidence": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "integer"
+        },
+        "last_used_tick": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Used Tick"
+        },
+        "use_count": {
+          "minimum": 0,
+          "title": "Use Count",
+          "type": "integer"
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "pattern": "^m:[^\\r\\n]+:[1-9][0-9]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Supersedes"
+        },
+        "superseded_by": {
+          "anyOf": [
+            {
+              "pattern": "^m:[^\\r\\n]+:[1-9][0-9]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Superseded By"
+        },
+        "needs_review": {
+          "title": "Needs Review",
+          "type": "boolean"
+        },
+        "gist": {
+          "maxLength": 160,
+          "pattern": "^[^\\r\\n\\x0b\\x0c\\x1c-\\x1e\\x85\\u2028\\u2029]*$",
+          "title": "Gist",
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Text"
+        },
+        "speech_derived": {
+          "title": "Speech Derived",
+          "type": "boolean"
+        },
+        "content": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Episodic"
+            },
+            {
+              "$ref": "#/$defs/Belief"
+            },
+            {
+              "$ref": "#/$defs/Social"
+            },
+            {
+              "$ref": "#/$defs/Skill"
+            },
+            {
+              "$ref": "#/$defs/Commitment"
+            },
+            {
+              "$ref": "#/$defs/Intention"
+            },
+            {
+              "$ref": "#/$defs/Personality"
+            }
+          ],
+          "title": "Content"
+        }
+      },
+      "required": [
+        "id",
+        "owner_id",
+        "kind",
+        "created_tick",
+        "updated_tick",
+        "about_tick",
+        "sources",
+        "confidence",
+        "last_used_tick",
+        "use_count",
+        "supersedes",
+        "superseded_by",
+        "needs_review",
+        "gist",
+        "text",
+        "speech_derived",
+        "content"
+      ],
+      "title": "Record",
+      "type": "object"
+    },
+    "Ref": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "template",
+            "schema",
+            "memory",
+            "day_log",
+            "current_state",
+            "pending_period",
+            "index",
+            "query",
+            "notice",
+            "pressure",
+            "mechanical_record"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Version"
+        },
+        "member_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Member Path"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "version"
+      ],
+      "title": "Ref",
+      "type": "object"
+    },
+    "RelabelFlag": {
+      "additionalProperties": false,
+      "properties": {
+        "flagged": {
+          "$ref": "#/$defs/RevisionRef"
+        },
+        "overlaps": {
+          "items": {
+            "$ref": "#/$defs/RevisionRef"
+          },
+          "title": "Overlaps",
+          "type": "array"
+        },
+        "shared_keys": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Shared Keys",
+          "type": "array"
+        },
+        "store_version": {
+          "title": "Store Version",
+          "type": "integer"
+        },
+        "change_set_call_id": {
+          "title": "Change Set Call Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "flagged",
+        "overlaps",
+        "shared_keys",
+        "store_version",
+        "change_set_call_id"
+      ],
+      "title": "RelabelFlag",
+      "type": "object"
+    },
+    "ReportRef": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "report",
+          "default": "report",
+          "title": "Kind",
+          "type": "string"
+        },
+        "report_kind": {
+          "enum": [
+            "action_ended",
+            "need_band_changed",
+            "need_threshold_crossed",
+            "utterance_heard",
+            "entity_first_seen",
+            "action_observed",
+            "progress_step",
+            "woke"
+          ],
+          "title": "Report Kind",
+          "type": "string"
+        },
+        "subject_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Subject Id"
+        }
+      },
+      "required": [
+        "report_kind",
+        "subject_id"
+      ],
+      "title": "ReportRef",
+      "type": "object"
+    },
+    "ResidentTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "resident",
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "ResidentTarget",
+      "type": "object"
+    },
+    "RetrievedPart": {
+      "additionalProperties": false,
+      "properties": {
+        "entry_id": {
+          "title": "Entry Id",
+          "type": "string"
+        },
+        "entry_revision": {
+          "title": "Entry Revision",
+          "type": "string"
+        },
+        "retrieved": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RevisionRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fragment_sha256": {
+          "title": "Fragment Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "entry_id",
+        "entry_revision",
+        "retrieved",
+        "fragment_sha256"
+      ],
+      "title": "RetrievedPart",
+      "type": "object"
+    },
+    "ReturnItemTerm": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "return_item",
+          "title": "Kind",
+          "type": "string"
+        },
+        "item_id": {
+          "title": "Item Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "item_id"
+      ],
+      "title": "ReturnItemTerm",
+      "type": "object"
+    },
+    "Revision": {
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/RevisionRef"
+        },
+        "record": {
+          "$ref": "#/$defs/Record"
+        }
+      },
+      "required": [
+        "ref",
+        "record"
+      ],
+      "title": "Revision",
+      "type": "object"
+    },
+    "RevisionRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "store_version": {
+          "title": "Store Version",
+          "type": "integer"
+        },
+        "content_hash": {
+          "title": "Content Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "store_version",
+        "content_hash"
+      ],
+      "title": "RevisionRef",
+      "type": "object"
+    },
+    "Revisions": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "const": "revisions",
+          "default": "revisions",
+          "title": "Family",
+          "type": "string"
+        },
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "store_version": {
+          "title": "Store Version",
+          "type": "integer"
+        },
+        "records": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "title": "Records",
+          "type": "array"
+        }
+      },
+      "required": [
+        "resident_id",
+        "store_version",
+        "records",
+        "family"
+      ],
+      "title": "Revisions",
+      "type": "object"
+    },
+    "RunningAction": {
+      "additionalProperties": false,
+      "properties": {
+        "intent_id": {
+          "pattern": "^[^\\r\\n]+:t[0-9]{6,}:a$",
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "move_to",
+            "give",
+            "pick_up",
+            "drop",
+            "wait",
+            "inspect",
+            "contribute",
+            "act"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "verb": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Verb"
+        },
+        "tick_started": {
+          "minimum": 0,
+          "title": "Tick Started",
+          "type": "integer"
+        },
+        "progress": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Progress"
+        },
+        "start_target": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "entity": "#/$defs/SubjectStartTarget",
+                  "resident": "#/$defs/SubjectStartTarget",
+                  "tile": "#/$defs/TileStartTarget"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TileStartTarget"
+                },
+                {
+                  "$ref": "#/$defs/SubjectStartTarget"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Start Target"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ItemUse"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "intent_id",
+        "action",
+        "verb",
+        "tick_started",
+        "progress",
+        "start_target",
+        "items"
+      ],
+      "title": "RunningAction",
+      "type": "object"
+    },
+    "Section": {
+      "additionalProperties": false,
+      "properties": {
+        "section": {
+          "title": "Section",
+          "type": "string"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/Entry"
+          },
+          "title": "Entries",
+          "type": "array"
+        }
+      },
+      "required": [
+        "section",
+        "entries"
+      ],
+      "title": "Section",
+      "type": "object"
+    },
+    "Selection": {
+      "additionalProperties": false,
+      "properties": {
+        "read": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Read",
+          "type": "array"
+        }
+      },
+      "required": [
+        "read"
+      ],
+      "title": "Selection",
+      "type": "object"
+    },
+    "SentFragment": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/Ref"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "memory_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RevisionRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "source",
+        "sha256",
+        "memory_revision"
+      ],
+      "title": "SentFragment",
+      "type": "object"
+    },
+    "SetIntention": {
+      "additionalProperties": false,
+      "properties": {
+        "set": {
+          "maxLength": 500,
+          "title": "Set",
+          "type": "string"
+        }
+      },
+      "required": [
+        "set"
+      ],
+      "title": "SetIntention",
+      "type": "object"
+    },
+    "Settings": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "default": "deepseek-responses",
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "default": "deepseek-flash",
+          "title": "Model",
+          "type": "string"
+        },
+        "model_version": {
+          "default": "DeepSeek-V4.1-Flash-1017",
+          "title": "Model Version",
+          "type": "string"
+        },
+        "endpoint": {
+          "default": "https://api.deepseek.com/responses",
+          "title": "Endpoint",
+          "type": "string"
+        },
+        "prompt_version": {
+          "title": "Prompt Version",
+          "type": "string"
+        },
+        "prompt_sha256": {
+          "title": "Prompt Sha256",
+          "type": "string"
+        },
+        "schema_sha256": {
+          "title": "Schema Sha256",
+          "type": "string"
+        },
+        "wire_adapter_version": {
+          "default": "deepseek-responses-v2/0.1",
+          "title": "Wire Adapter Version",
+          "type": "string"
+        },
+        "max_output_tokens": {
+          "default": 8000,
+          "title": "Max Output Tokens",
+          "type": "integer"
+        },
+        "temperature": {
+          "default": null,
+          "title": "Temperature",
+          "type": "null"
+        },
+        "model_window": {
+          "default": 1000000,
+          "title": "Model Window",
+          "type": "integer"
+        },
+        "counter_id": {
+          "default": "deepseek-flash1017-byte-upper-bound",
+          "title": "Counter Id",
+          "type": "string"
+        },
+        "counter_version": {
+          "default": "0.4",
+          "title": "Counter Version",
+          "type": "string"
+        },
+        "counter_source_sha256": {
+          "default": "fdaf256a6f4558bf8722af2e744e10a816f312248768d3278b988820a36146bc",
+          "title": "Counter Source Sha256",
+          "type": "string"
+        },
+        "tokenizer_sha256": {
+          "default": "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b",
+          "title": "Tokenizer Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "prompt_version",
+        "prompt_sha256",
+        "schema_sha256"
+      ],
+      "title": "Settings",
+      "type": "object"
+    },
+    "Skill": {
+      "additionalProperties": false,
+      "properties": {
+        "hypothesis": {
+          "$ref": "#/$defs/SkillHypothesis"
+        },
+        "evidence": {
+          "$ref": "#/$defs/living_island__memory__v2__records__SkillEvidence"
+        },
+        "status": {
+          "enum": [
+            "active",
+            "doubtful",
+            "refuted"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hypothesis",
+        "evidence",
+        "status"
+      ],
+      "title": "Skill",
+      "type": "object"
+    },
+    "SkillHypothesis": {
+      "additionalProperties": false,
+      "properties": {
+        "verb": {
+          "title": "Verb",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Look"
+            },
+            {
+              "$ref": "#/$defs/TerrainTarget"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        },
+        "instruments": {
+          "items": {
+            "$ref": "#/$defs/Look"
+          },
+          "title": "Instruments",
+          "type": "array"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/SkillInput"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "circumstances": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Circumstances"
+        },
+        "expected": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Expected",
+          "type": "array"
+        }
+      },
+      "required": [
+        "verb",
+        "target",
+        "instruments",
+        "inputs",
+        "circumstances",
+        "expected"
+      ],
+      "title": "SkillHypothesis",
+      "type": "object"
+    },
+    "SkillInput": {
+      "additionalProperties": false,
+      "properties": {
+        "look": {
+          "$ref": "#/$defs/Look"
+        },
+        "quantity": {
+          "exclusiveMinimum": 0,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "look",
+        "quantity"
+      ],
+      "title": "SkillInput",
+      "type": "object"
+    },
+    "Social": {
+      "additionalProperties": false,
+      "properties": {
+        "about": {
+          "title": "About",
+          "type": "string"
+        },
+        "trust": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Trust",
+          "type": "integer"
+        },
+        "impression": {
+          "title": "Impression",
+          "type": "string"
+        },
+        "facts": {
+          "$ref": "#/$defs/SocialFacts"
+        }
+      },
+      "required": [
+        "about",
+        "trust",
+        "impression",
+        "facts"
+      ],
+      "title": "Social",
+      "type": "object"
+    },
+    "SocialFacts": {
+      "additionalProperties": false,
+      "properties": {
+        "given": {
+          "items": {
+            "$ref": "#/$defs/Transfer"
+          },
+          "title": "Given",
+          "type": "array"
+        },
+        "received": {
+          "items": {
+            "$ref": "#/$defs/Transfer"
+          },
+          "title": "Received",
+          "type": "array"
+        },
+        "agreements": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Agreements",
+          "type": "array"
+        },
+        "last_seen_tick": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Seen Tick"
+        },
+        "last_heard_tick": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Heard Tick"
+        }
+      },
+      "required": [
+        "given",
+        "received",
+        "agreements",
+        "last_seen_tick",
+        "last_heard_tick"
+      ],
+      "title": "SocialFacts",
+      "type": "object"
+    },
+    "SourceBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "discriminator": {
+            "mapping": {
+              "inferred": "#/$defs/Inferred",
+              "innate": "#/$defs/Innate",
+              "observed": "#/$defs/Observed",
+              "told": "#/$defs/Told"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Observed"
+            },
+            {
+              "$ref": "#/$defs/Told"
+            },
+            {
+              "$ref": "#/$defs/Inferred"
+            },
+            {
+              "$ref": "#/$defs/Innate"
+            }
+          ],
+          "title": "Source"
+        },
+        "revisions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RevisionRef"
+          },
+          "title": "Revisions",
+          "type": "array"
+        },
+        "entry_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entry Id"
+        },
+        "delivery_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delivery Id"
+        },
+        "member_paths": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Member Paths",
+          "type": "array"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "title": "SourceBinding",
+      "type": "object"
+    },
+    "SpeechCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "instance_id": {
+          "title": "Instance Id",
+          "type": "string"
+        },
+        "ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ids",
+          "type": "array"
+        },
+        "checker": {
+          "title": "Checker",
+          "type": "string"
+        },
+        "date": {
+          "title": "Date",
+          "type": "string"
+        },
+        "note": {
+          "title": "Note",
+          "type": "string"
+        },
+        "check": {
+          "enum": [
+            "hop",
+            "told_event"
+          ],
+          "title": "Check",
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "carries",
+            "different"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instance_id",
+        "ids",
+        "checker",
+        "date",
+        "note",
+        "check",
+        "verdict"
+      ],
+      "title": "SpeechCheck",
+      "type": "object"
+    },
+    "Stage": {
+      "additionalProperties": false,
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "full_tokens": {
+          "title": "Full Tokens",
+          "type": "integer"
+        },
+        "pressure_band": {
+          "title": "Pressure Band",
+          "type": "string"
+        },
+        "pressure_text": {
+          "title": "Pressure Text",
+          "type": "string"
+        },
+        "omitted": {
+          "items": {
+            "$ref": "#/$defs/Ref"
+          },
+          "title": "Omitted",
+          "type": "array"
+        }
+      },
+      "required": [
+        "call_id",
+        "full_tokens",
+        "pressure_band",
+        "pressure_text",
+        "omitted"
+      ],
+      "title": "Stage",
+      "type": "object"
+    },
+    "StoreInspection": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "const": "stores",
+          "default": "stores",
+          "title": "Family",
+          "type": "string"
+        },
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "period_id": {
+          "title": "Period Id",
+          "type": "string"
+        },
+        "store_version": {
+          "title": "Store Version",
+          "type": "integer"
+        },
+        "records": {
+          "items": {
+            "$ref": "#/$defs/Record"
+          },
+          "title": "Records",
+          "type": "array"
+        },
+        "index_lines": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Index Lines",
+          "type": "array"
+        },
+        "relabel_flags": {
+          "items": {
+            "$ref": "#/$defs/RelabelFlag"
+          },
+          "title": "Relabel Flags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "resident_id",
+        "period_id",
+        "store_version",
+        "records",
+        "index_lines",
+        "relabel_flags",
+        "family"
+      ],
+      "title": "StoreInspection",
+      "type": "object"
+    },
+    "StoredPart": {
+      "additionalProperties": false,
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/Digest"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sha256",
+        "text"
+      ],
+      "title": "StoredPart",
+      "type": "object"
+    },
+    "Subject": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "place",
+            "entity",
+            "resident",
+            "kind_of_thing",
+            "general"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ref"
+        }
+      },
+      "required": [
+        "kind",
+        "ref"
+      ],
+      "title": "Subject",
+      "type": "object"
+    },
+    "SubjectStartTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "entity",
+            "resident"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "archetype_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Archetype Id"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Material Id"
+        },
+        "descriptors": {
+          "items": {
+            "$ref": "#/$defs/Descriptor"
+          },
+          "title": "Descriptors",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "archetype_id",
+        "material_id",
+        "descriptors"
+      ],
+      "title": "SubjectStartTarget",
+      "type": "object"
+    },
+    "Telemetry": {
+      "additionalProperties": false,
+      "properties": {
+        "delivery_id": {
+          "title": "Delivery Id",
+          "type": "string"
+        },
+        "awake_ticks": {
+          "title": "Awake Ticks",
+          "type": "integer"
+        },
+        "fatigue_band": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fatigue Band"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/Stage"
+          },
+          "title": "Stages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "delivery_id",
+        "awake_ticks",
+        "fatigue_band",
+        "stages"
+      ],
+      "title": "Telemetry",
+      "type": "object"
+    },
+    "Terminal": {
+      "additionalProperties": false,
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "dispatch_cursor": {
+          "title": "Dispatch Cursor",
+          "type": "string"
+        },
+        "request_sha256": {
+          "title": "Request Sha256",
+          "type": "string"
+        },
+        "ended_at": {
+          "format": "date-time",
+          "title": "Ended At",
+          "type": "string"
+        },
+        "latency_ms": {
+          "title": "Latency Ms",
+          "type": "integer"
+        },
+        "error_class": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorClass"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Error"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Status"
+        },
+        "provider_request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Provider Request Id"
+        },
+        "raw_output_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Raw Output Ref"
+        },
+        "observed_body_bytes": {
+          "title": "Observed Body Bytes",
+          "type": "integer"
+        },
+        "response_complete": {
+          "title": "Response Complete",
+          "type": "boolean"
+        },
+        "reasoning_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reasoning Ref"
+        },
+        "parsed_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Parsed Ref"
+        },
+        "tokens": {
+          "$ref": "#/$defs/Usage"
+        },
+        "missing_usage_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Missing Usage Reason"
+        }
+      },
+      "required": [
+        "call_id",
+        "n",
+        "dispatch_cursor",
+        "request_sha256",
+        "ended_at",
+        "latency_ms",
+        "error_class",
+        "error",
+        "status",
+        "provider_request_id",
+        "raw_output_ref",
+        "observed_body_bytes",
+        "response_complete",
+        "reasoning_ref",
+        "parsed_ref",
+        "tokens",
+        "missing_usage_reason"
+      ],
+      "title": "Terminal",
+      "type": "object"
+    },
+    "Terms": {
+      "additionalProperties": false,
+      "properties": {
+        "promisor_id": {
+          "title": "Promisor Id",
+          "type": "string"
+        },
+        "promisee_id": {
+          "title": "Promisee Id",
+          "type": "string"
+        },
+        "what": {
+          "discriminator": {
+            "mapping": {
+              "be_at": "#/$defs/BeAtTerm",
+              "contribute": "#/$defs/ContributeTerm",
+              "give_item": "#/$defs/GiveItemTerm",
+              "return_item": "#/$defs/ReturnItemTerm"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/GiveItemTerm"
+            },
+            {
+              "$ref": "#/$defs/ReturnItemTerm"
+            },
+            {
+              "$ref": "#/$defs/BeAtTerm"
+            },
+            {
+              "$ref": "#/$defs/ContributeTerm"
+            }
+          ],
+          "title": "What"
+        },
+        "due_tick": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Due Tick"
+        }
+      },
+      "required": [
+        "promisor_id",
+        "promisee_id",
+        "what",
+        "due_tick"
+      ],
+      "title": "Terms",
+      "type": "object"
+    },
+    "TerrainTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "terrain": {
+          "enum": [
+            "sea",
+            "beach",
+            "grass",
+            "woods",
+            "rock",
+            "spring",
+            "cave",
+            "fruit_tree",
+            "damp_moss"
+          ],
+          "title": "Terrain",
+          "type": "string"
+        }
+      },
+      "required": [
+        "terrain"
+      ],
+      "title": "TerrainTarget",
+      "type": "object"
+    },
+    "TileStartTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "tile",
+          "title": "Kind",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "terrain": {
+          "enum": [
+            "sea",
+            "beach",
+            "grass",
+            "woods",
+            "rock",
+            "spring",
+            "cave",
+            "fruit_tree",
+            "damp_moss"
+          ],
+          "title": "Terrain",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "position",
+        "terrain"
+      ],
+      "title": "TileStartTarget",
+      "type": "object"
+    },
+    "TileTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "tile",
+          "title": "Kind",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        }
+      },
+      "required": [
+        "kind",
+        "position"
+      ],
+      "title": "TileTarget",
+      "type": "object"
+    },
+    "TileView": {
+      "additionalProperties": false,
+      "properties": {
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "terrain": {
+          "enum": [
+            "sea",
+            "beach",
+            "grass",
+            "woods",
+            "rock",
+            "spring",
+            "cave",
+            "fruit_tree",
+            "damp_moss"
+          ],
+          "title": "Terrain",
+          "type": "string"
+        }
+      },
+      "required": [
+        "position",
+        "terrain"
+      ],
+      "title": "TileView",
+      "type": "object"
+    },
+    "TimeUse": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "const": "time_use",
+          "default": "time_use",
+          "title": "Family",
+          "type": "string"
+        },
+        "intervals": {
+          "items": {
+            "$ref": "#/$defs/Interval"
+          },
+          "title": "Intervals",
+          "type": "array"
+        }
+      },
+      "required": [
+        "intervals",
+        "family"
+      ],
+      "title": "TimeUse",
+      "type": "object"
+    },
+    "Told": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "told",
+          "default": "told",
+          "title": "Kind",
+          "type": "string"
+        },
+        "utterance_id": {
+          "title": "Utterance Id",
+          "type": "string"
+        },
+        "speaker_id": {
+          "title": "Speaker Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "utterance_id",
+        "speaker_id"
+      ],
+      "title": "Told",
+      "type": "object"
+    },
+    "Trait": {
+      "additionalProperties": false,
+      "properties": {
+        "trait_id": {
+          "enum": [
+            "curiosity",
+            "caution",
+            "sociability",
+            "trustfulness",
+            "diligence"
+          ],
+          "title": "Trait Id",
+          "type": "string"
+        },
+        "base": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Base",
+          "type": "integer"
+        },
+        "value": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Value",
+          "type": "integer"
+        },
+        "min": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Min",
+          "type": "integer"
+        },
+        "max": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Max",
+          "type": "integer"
+        },
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/TraitChange"
+          },
+          "title": "Changes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "trait_id",
+        "base",
+        "value",
+        "min",
+        "max",
+        "changes"
+      ],
+      "title": "Trait",
+      "type": "object"
+    },
+    "TraitChange": {
+      "additionalProperties": false,
+      "properties": {
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "from": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "From",
+          "type": "integer"
+        },
+        "to": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "To",
+          "type": "integer"
+        },
+        "sources": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "inferred": "#/$defs/Inferred",
+                "innate": "#/$defs/Innate",
+                "observed": "#/$defs/Observed",
+                "told": "#/$defs/Told"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Observed"
+              },
+              {
+                "$ref": "#/$defs/Told"
+              },
+              {
+                "$ref": "#/$defs/Inferred"
+              },
+              {
+                "$ref": "#/$defs/Innate"
+              }
+            ]
+          },
+          "minItems": 1,
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "required": [
+        "tick",
+        "from",
+        "to",
+        "sources"
+      ],
+      "title": "TraitChange",
+      "type": "object"
+    },
+    "Transfer": {
+      "additionalProperties": false,
+      "properties": {
+        "archetype_id": {
+          "title": "Archetype Id",
+          "type": "string"
+        },
+        "quantity": {
+          "exclusiveMinimum": 0,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "archetype_id",
+        "quantity"
+      ],
+      "title": "Transfer",
+      "type": "object"
+    },
+    "TransientSighting": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "archetype_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Archetype Id"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Material Id"
+        },
+        "descriptors": {
+          "items": {
+            "$ref": "#/$defs/Descriptor"
+          },
+          "title": "Descriptors",
+          "type": "array"
+        },
+        "kind": {
+          "enum": [
+            "resident",
+            "corpse",
+            "item",
+            "structure",
+            "process",
+            "feature"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Coord"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Quantity"
+        },
+        "observable_signs": {
+          "items": {
+            "enum": [
+              "weak",
+              "dehydrated",
+              "fatigued"
+            ],
+            "type": "string"
+          },
+          "title": "Observable Signs",
+          "type": "array"
+        },
+        "seen_at_step": {
+          "minimum": 0,
+          "title": "Seen At Step",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "entity_id",
+        "archetype_id",
+        "material_id",
+        "descriptors",
+        "kind",
+        "position",
+        "quantity",
+        "observable_signs",
+        "seen_at_step"
+      ],
+      "title": "TransientSighting",
+      "type": "object"
+    },
+    "TurnRef": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "turn",
+          "default": "turn",
+          "title": "Kind",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id"
+      ],
+      "title": "TurnRef",
+      "type": "object"
+    },
+    "TurnSubmission": {
+      "additionalProperties": false,
+      "description": "A complete world-facing turn. Its IDs are bound by the coordinator.",
+      "properties": {
+        "schema_version": {
+          "const": "wap/0.1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "turn_id": {
+          "pattern": "^[^\\r\\n]+:t[0-9]{6,}$",
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "observed_tick": {
+          "minimum": 0,
+          "title": "Observed Tick",
+          "type": "integer"
+        },
+        "action": {
+          "discriminator": {
+            "mapping": {
+              "continue": "#/$defs/ContinueAction",
+              "intent": "#/$defs/IntentAction"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ContinueAction"
+            },
+            {
+              "$ref": "#/$defs/IntentAction"
+            }
+          ],
+          "title": "Action"
+        },
+        "utterance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Utterance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "turn_id",
+        "actor_id",
+        "observed_tick",
+        "action",
+        "utterance"
+      ],
+      "title": "TurnSubmission",
+      "type": "object"
+    },
+    "Usage": {
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output"
+        },
+        "cache_hit": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cache Hit"
+        },
+        "cache_miss": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cache Miss"
+        }
+      },
+      "title": "Usage",
+      "type": "object"
+    },
+    "Used": {
+      "additionalProperties": false,
+      "properties": {
+        "record_id": {
+          "title": "Record Id",
+          "type": "string"
+        },
+        "revision": {
+          "$ref": "#/$defs/RevisionRef"
+        },
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "before_version": {
+          "title": "Before Version",
+          "type": "integer"
+        },
+        "after_version": {
+          "title": "After Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "record_id",
+        "revision",
+        "call_id",
+        "before_version",
+        "after_version"
+      ],
+      "title": "Used",
+      "type": "object"
+    },
+    "Utterance": {
+      "additionalProperties": false,
+      "properties": {
+        "addressee_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Addressee Id"
+        },
+        "speech_act": {
+          "enum": [
+            "statement",
+            "propose",
+            "accept",
+            "refuse"
+          ],
+          "title": "Speech Act",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "terms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Terms"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "in_reply_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "In Reply To"
+        }
+      },
+      "required": [
+        "addressee_id",
+        "speech_act",
+        "text",
+        "terms",
+        "in_reply_to"
+      ],
+      "title": "Utterance",
+      "type": "object"
+    },
+    "UtteranceFeedback": {
+      "additionalProperties": false,
+      "properties": {
+        "utterance_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Utterance Id"
+        },
+        "failure_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "DEAD",
+                "INVALID_TARGET",
+                "NO_PATH",
+                "PATH_BLOCKED",
+                "OUT_OF_REACH",
+                "NO_ITEM",
+                "ITEM_TAKEN",
+                "INVENTORY_FULL",
+                "CONTAINER_FULL",
+                "NOT_A_PROCESS",
+                "EXHAUSTED",
+                "OUT_OF_HEARING",
+                "INVALID_SPEECH_ACT",
+                "INVALID_REPLY",
+                "INVALID_TERMS",
+                "DIALOGUE_LIMIT"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Failure Code"
+        }
+      },
+      "required": [
+        "utterance_id",
+        "failure_code"
+      ],
+      "title": "UtteranceFeedback",
+      "type": "object"
+    },
+    "UtteranceFeedbackRef": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "utterance_feedback",
+          "default": "utterance_feedback",
+          "title": "Kind",
+          "type": "string"
+        },
+        "utterance_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Utterance Id"
+        }
+      },
+      "required": [
+        "utterance_id"
+      ],
+      "title": "UtteranceFeedbackRef",
+      "type": "object"
+    },
+    "Verdict": {
+      "additionalProperties": false,
+      "properties": {
+        "op_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Op Id"
+        },
+        "result": {
+          "enum": [
+            "committed",
+            "dropped"
+          ],
+          "title": "Result",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        },
+        "depends_on": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Depends On",
+          "type": "array"
+        }
+      },
+      "required": [
+        "op_id",
+        "result",
+        "reason",
+        "depends_on"
+      ],
+      "title": "Verdict",
+      "type": "object"
+    },
+    "Word": {
+      "additionalProperties": false,
+      "properties": {
+        "property_id": {
+          "title": "Property Id",
+          "type": "string"
+        },
+        "word": {
+          "title": "Word",
+          "type": "string"
+        }
+      },
+      "required": [
+        "property_id",
+        "word"
+      ],
+      "title": "Word",
+      "type": "object"
+    },
+    "WorldEvent": {
+      "additionalProperties": false,
+      "description": "Objective event envelope. Producers own event types and payload schemas.",
+      "properties": {
+        "schema_version": {
+          "const": "wap/0.1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "seq_in_tick": {
+          "minimum": 0,
+          "title": "Seq In Tick",
+          "type": "integer"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "actor_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Actor Id"
+        },
+        "target_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target Id"
+        },
+        "intent_id": {
+          "anyOf": [
+            {
+              "pattern": "^[^\\r\\n]+:t[0-9]{6,}:a$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Intent Id"
+        },
+        "llm_call_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Llm Call Id"
+        },
+        "caused_by_event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Caused By Event Ids",
+          "type": "array"
+        },
+        "payload": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Payload",
+          "type": "object"
+        }
+      },
+      "required": [
+        "schema_version",
+        "run_id",
+        "event_id",
+        "tick",
+        "seq_in_tick",
+        "type",
+        "actor_id",
+        "target_id",
+        "intent_id",
+        "llm_call_id",
+        "caused_by_event_ids",
+        "payload"
+      ],
+      "title": "WorldEvent",
+      "type": "object"
+    },
+    "WorldReport": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "action_ended",
+            "need_band_changed",
+            "need_threshold_crossed",
+            "utterance_heard",
+            "entity_first_seen",
+            "action_observed",
+            "progress_step",
+            "woke"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "subject_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Subject Id"
+        },
+        "addressed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Addressed"
+        },
+        "band": {
+          "anyOf": [
+            {
+              "enum": [
+                "critical",
+                "low",
+                "moderate",
+                "good",
+                "strong"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Band"
+        },
+        "threshold_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Threshold Id"
+        }
+      },
+      "required": [
+        "kind",
+        "subject_id",
+        "addressed",
+        "band",
+        "threshold_id"
+      ],
+      "title": "WorldReport",
+      "type": "object"
+    },
+    "Write": {
+      "additionalProperties": false,
+      "properties": {
+        "owner_id": {
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "mechanical",
+            "change_set",
+            "use"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "before_version": {
+          "title": "Before Version",
+          "type": "integer"
+        },
+        "after_version": {
+          "title": "After Version",
+          "type": "integer"
+        },
+        "store_hash": {
+          "$ref": "#/$defs/Digest"
+        },
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/Change"
+          },
+          "title": "Changes",
+          "type": "array"
+        },
+        "blobs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Record"
+          },
+          "title": "Blobs",
+          "type": "object"
+        },
+        "dispatch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Credit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "credited": {
+          "items": {
+            "$ref": "#/$defs/RevisionRef"
+          },
+          "title": "Credited",
+          "type": "array"
+        }
+      },
+      "required": [
+        "owner_id",
+        "kind",
+        "before_version",
+        "after_version",
+        "store_hash",
+        "changes",
+        "blobs",
+        "dispatch",
+        "credited"
+      ],
+      "title": "Write",
+      "type": "object"
+    },
+    "living_island__agents__v2__recall__attribution__Citation": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "fragments": {
+          "items": {
+            "$ref": "#/$defs/SentFragment"
+          },
+          "title": "Fragments",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "fragments"
+      ],
+      "title": "Citation",
+      "type": "object"
+    },
+    "living_island__contract__inspection_v2__Citation": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "act_call_id": {
+          "title": "Act Call Id",
+          "type": "string"
+        },
+        "sent_part_sha256": {
+          "$ref": "#/$defs/Digest"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Revision"
+        }
+      },
+      "required": [
+        "id",
+        "act_call_id",
+        "sent_part_sha256",
+        "revision"
+      ],
+      "title": "Citation",
+      "type": "object"
+    },
+    "living_island__contract__inspection_v2__SkillEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "hypothesis": {
+          "$ref": "#/$defs/RevisionRef"
+        },
+        "intent_id": {
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "delta": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Delta",
+          "type": "object"
+        }
+      },
+      "required": [
+        "hypothesis",
+        "intent_id",
+        "actor_id",
+        "delta"
+      ],
+      "title": "SkillEvidence",
+      "type": "object"
+    },
+    "living_island__memory__v2__records__SkillEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "attempts": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "matched_expected": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Matched Expected",
+          "type": "integer"
+        },
+        "other_outcomes": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Other Outcomes",
+          "type": "integer"
+        },
+        "watched": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Watched",
+          "type": "integer"
+        },
+        "watched_matched": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Watched Matched",
+          "type": "integer"
+        },
+        "last_attempt_tick": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Attempt Tick"
+        }
+      },
+      "title": "SkillEvidence",
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/DecisionInspection"
+    },
+    {
+      "$ref": "#/$defs/ConsolidationInspection"
+    },
+    {
+      "$ref": "#/$defs/StoreInspection"
+    },
+    {
+      "$ref": "#/$defs/Revisions"
+    },
+    {
+      "$ref": "#/$defs/CallInspection"
+    },
+    {
+      "$ref": "#/$defs/Delivery"
+    },
+    {
+      "$ref": "#/$defs/Evidence"
+    },
+    {
+      "$ref": "#/$defs/Metrics"
+    },
+    {
+      "$ref": "#/$defs/Cost"
+    },
+    {
+      "$ref": "#/$defs/TimeUse"
+    },
+    {
+      "$ref": "#/$defs/Attempts"
+    }
+  ],
+  "title": "InspectionShard"
+}

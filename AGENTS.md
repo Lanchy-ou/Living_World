@@ -117,6 +117,7 @@ pnpm --dir frontend run test
 # Contract CI
 uv run --directory backend python ../scripts/gen_types.py
 uv run --directory backend python ../scripts/gen_p3_inspection_types.py
+uv run --directory backend python ../scripts/gen_v2_inspection_types.py
 git diff --exit-code
 ```
 

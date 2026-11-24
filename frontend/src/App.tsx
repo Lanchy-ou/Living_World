@@ -22,10 +22,13 @@ import { InspectionImport, InspectionNotice } from "./p3/InspectionImport.tsx";
 import type { ReplayFileSource } from "./p3/inspection.ts";
 import { createInspectionImport, createReplayWithSource } from "./p3/loadState.ts";
 import type { InspectionState } from "./p3/loadState.ts";
+import { inspectionRouter } from "./features/v2-inspection/import.ts";
+import type { ImportState } from "./features/v2-inspection/import.ts";
 import "./App.css";
 
 // One store per page. The viewer is read-only: it displays recorded frames and sends no commands.
 const store = new ReplayStore();
+const V2Inspection = lazy(() => import("./features/v2-inspection/Viewer.tsx"));
 const DecisionInspection = lazy(async () => {
   const { DecisionInspection } = await import("./p3/DecisionInspection.tsx");
   return { default: DecisionInspection };
@@ -38,10 +41,11 @@ export default function App() {
   const [drawer, setDrawer] = useState<InfoDrawerTab | null>(null);
   const [replaySource, setReplaySource] = useState<ReplayFileSource | null>(null);
   const [inspectionState, setInspectionState] = useState<InspectionState>({ status: "idle" });
-  const [inspectionImport] = useState(() => createInspectionImport(
+  const [v2, setV2] = useState<ImportState>({ status: "idle" });
+  const [inspectionImport] = useState(() => inspectionRouter(createInspectionImport(
     async (files, replay, signal) => (await import("./p3/schemas.ts")).loadInspection(files, replay, signal),
     setInspectionState,
-  ));
+  ), async (files, replay, index) => (await import("./features/v2-inspection/schema.ts")).load(files, replay, index), setV2));
   const inspection = inspectionState.status === "ready" ? inspectionState.value : null;
 
   const [replayLoad] = useState(() =>
@@ -125,7 +129,15 @@ export default function App() {
     />
   );
   const navigation = inspection === null ? null : { inspection, onDecision: showDecision, onShowEvent: showEvent };
-  const inspectionTab = bundle === null || navigation === null ? undefined : (
+  const inspectionTab = v2.status === "ready" ? (
+    <Suspense fallback={<p role="status">Opening inspection…</p>}>
+      <V2Inspection inspection={v2.value} seek={(actor, tick) => {
+        store.pause();
+        store.selectResident(actor);
+        store.seek(tick);
+      }} />
+    </Suspense>
+  ) : bundle === null || navigation === null ? undefined : (
     <Suspense fallback={<p role="status">Opening decision debug…</p>}>
       <DecisionInspection
         {...navigation} actor={selectedResidentId} tick={currentTick}
@@ -183,6 +195,8 @@ export default function App() {
           </>
         )}
         <InspectionNotice state={inspectionState} onDismiss={inspectionImport.reset} />
+        {v2.status === "error" && <InspectionNotice state={v2} onDismiss={inspectionImport.reset} />}
+        {v2.status === "loading" && <p role="status">Opening inspection…</p>}
         {error !== null && (
           <div className="error-layer">
             <ErrorDetails error={error.error} fileName={error.fileName} onDismiss={() => setError(null)} />
@@ -206,7 +220,7 @@ export default function App() {
                 {DRAWER_TITLES[t]}
               </button>
             ))}
-            {navigation !== null && (
+            {(navigation !== null || v2.status === "ready") && (
               <button
                 type="button" className={`text-button${drawer === "inspection" ? " active" : ""}`}
                 aria-pressed={drawer === "inspection"}

@@ -1,0 +1,403 @@
+{
+  "$defs": {
+    "Arm": {
+      "enum": [
+        "on",
+        "off"
+      ],
+      "type": "string"
+    },
+    "CallKind": {
+      "enum": [
+        "decision",
+        "decision_after_recall",
+        "recall",
+        "morning",
+        "consolidation_selection",
+        "consolidation_change_set"
+      ],
+      "type": "string"
+    },
+    "CallRef": {
+      "additionalProperties": false,
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "call_kind": {
+          "$ref": "#/$defs/CallKind"
+        },
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Turn Id"
+        },
+        "period_id": {
+          "title": "Period Id",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "shard": {
+          "$ref": "#/$defs/ShardRef"
+        }
+      },
+      "required": [
+        "call_id",
+        "call_kind",
+        "resident_id",
+        "turn_id",
+        "period_id",
+        "tick",
+        "shard"
+      ],
+      "title": "CallRef",
+      "type": "object"
+    },
+    "Digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "Family": {
+      "enum": [
+        "decisions",
+        "consolidations",
+        "stores",
+        "deliveries",
+        "revisions",
+        "evidence_writes",
+        "calls",
+        "metrics",
+        "cost",
+        "time_use",
+        "attempts"
+      ],
+      "type": "string"
+    },
+    "FilePart": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[0-9a-f]{64}\\.[0-9]+\\.json$",
+          "title": "Name",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Digest"
+        },
+        "size": {
+          "exclusiveMinimum": 0,
+          "maximum": 8388608,
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "sha256",
+        "size"
+      ],
+      "title": "FilePart",
+      "type": "object"
+    },
+    "PackPin": {
+      "additionalProperties": false,
+      "properties": {
+        "pack_id": {
+          "title": "Pack Id",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Digest"
+        }
+      },
+      "required": [
+        "pack_id",
+        "sha256"
+      ],
+      "title": "PackPin",
+      "type": "object"
+    },
+    "PeriodRef": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "period_id": {
+          "title": "Period Id",
+          "type": "string"
+        },
+        "boundary_tick": {
+          "minimum": 0,
+          "title": "Boundary Tick",
+          "type": "integer"
+        },
+        "shard": {
+          "$ref": "#/$defs/ShardRef"
+        }
+      },
+      "required": [
+        "resident_id",
+        "period_id",
+        "boundary_tick",
+        "shard"
+      ],
+      "title": "PeriodRef",
+      "type": "object"
+    },
+    "Resident": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "profile_id": {
+          "title": "Profile Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resident_id",
+        "profile_id"
+      ],
+      "title": "Resident",
+      "type": "object"
+    },
+    "ShardRef": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "$ref": "#/$defs/Family"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Digest"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/FilePart"
+          },
+          "minItems": 1,
+          "title": "Parts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "family",
+        "id",
+        "sha256",
+        "parts"
+      ],
+      "title": "ShardRef",
+      "type": "object"
+    },
+    "StoreRef": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "period_id": {
+          "title": "Period Id",
+          "type": "string"
+        },
+        "boundary_tick": {
+          "minimum": 0,
+          "title": "Boundary Tick",
+          "type": "integer"
+        },
+        "shard": {
+          "$ref": "#/$defs/ShardRef"
+        },
+        "store_version": {
+          "minimum": 0,
+          "title": "Store Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "resident_id",
+        "period_id",
+        "boundary_tick",
+        "shard",
+        "store_version"
+      ],
+      "title": "StoreRef",
+      "type": "object"
+    },
+    "TurnRef": {
+      "additionalProperties": false,
+      "properties": {
+        "resident_id": {
+          "title": "Resident Id",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "shard": {
+          "$ref": "#/$defs/ShardRef"
+        }
+      },
+      "required": [
+        "resident_id",
+        "tick",
+        "turn_id",
+        "shard"
+      ],
+      "title": "TurnRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "inspection_schema_version": {
+      "const": "ia/0.1",
+      "title": "Inspection Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "manifest_sha256": {
+      "$ref": "#/$defs/Digest"
+    },
+    "replay_sha256": {
+      "$ref": "#/$defs/Digest"
+    },
+    "arm": {
+      "$ref": "#/$defs/Arm"
+    },
+    "pack_ids": {
+      "items": {
+        "$ref": "#/$defs/PackPin"
+      },
+      "title": "Pack Ids",
+      "type": "array"
+    },
+    "final_tick": {
+      "minimum": 0,
+      "title": "Final Tick",
+      "type": "integer"
+    },
+    "residents": {
+      "items": {
+        "$ref": "#/$defs/Resident"
+      },
+      "title": "Residents",
+      "type": "array"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/TurnRef"
+      },
+      "title": "Decisions",
+      "type": "array"
+    },
+    "consolidations": {
+      "items": {
+        "$ref": "#/$defs/PeriodRef"
+      },
+      "title": "Consolidations",
+      "type": "array"
+    },
+    "stores": {
+      "items": {
+        "$ref": "#/$defs/StoreRef"
+      },
+      "title": "Stores",
+      "type": "array"
+    },
+    "deliveries": {
+      "items": {
+        "$ref": "#/$defs/ShardRef"
+      },
+      "title": "Deliveries",
+      "type": "array"
+    },
+    "revisions": {
+      "items": {
+        "$ref": "#/$defs/ShardRef"
+      },
+      "title": "Revisions",
+      "type": "array"
+    },
+    "evidence_writes": {
+      "items": {
+        "$ref": "#/$defs/ShardRef"
+      },
+      "title": "Evidence Writes",
+      "type": "array"
+    },
+    "calls": {
+      "items": {
+        "$ref": "#/$defs/CallRef"
+      },
+      "title": "Calls",
+      "type": "array"
+    },
+    "metrics": {
+      "$ref": "#/$defs/ShardRef"
+    },
+    "cost": {
+      "$ref": "#/$defs/ShardRef"
+    },
+    "time_use": {
+      "$ref": "#/$defs/ShardRef"
+    },
+    "attempts": {
+      "$ref": "#/$defs/ShardRef"
+    }
+  },
+  "required": [
+    "inspection_schema_version",
+    "run_id",
+    "manifest_sha256",
+    "replay_sha256",
+    "arm",
+    "pack_ids",
+    "final_tick",
+    "residents",
+    "decisions",
+    "consolidations",
+    "stores",
+    "deliveries",
+    "revisions",
+    "evidence_writes",
+    "calls",
+    "metrics",
+    "cost",
+    "time_use",
+    "attempts"
+  ],
+  "title": "InspectionIndex",
+  "type": "object"
+}
