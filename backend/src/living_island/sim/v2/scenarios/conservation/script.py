@@ -23,7 +23,7 @@ from living_island.world.v2.rules import Pack
 
 SEED = 2195683955
 WEEK = 7 * 144
-START = {"ryan": (39, 30), "mia": (37, 31), "ella": (42, 11)}
+START = {"ryan": (39, 30), "mia": (37, 32), "ella": (42, 12)}
 
 
 def tile(x: int, y: int) -> TileTarget:
@@ -106,7 +106,7 @@ def schedules(pack: Pack) -> Schedule:
             [(39, 33), (39, 36), (42, 36), (45, 36), (48, 36), (48, 39), (48, 42), (48, 45)],
         ),
     )
-    carrier = []
+    carrier: list[IntentShape] = []
     for tree, path in orchards:
         carrier.extend(
             (

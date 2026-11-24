@@ -191,7 +191,8 @@ def run(
         ),
         runner="CT-04",
         controller=script_pin,
-        setup=content_hash(setup.model_dump(mode="json")),
+        # CT-04 separately pins the registered config, map and canonical opening snapshot.
+        setup=content_hash([resident.model_dump(mode="json") for resident in residents]),
         observer="committed-matter-ledger",
         arm="scripted",
         case_index=0,

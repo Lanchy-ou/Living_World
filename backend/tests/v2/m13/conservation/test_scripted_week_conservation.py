@@ -2,7 +2,6 @@
 
 import json
 from hashlib import sha256
-from itertools import count
 from shutil import copytree
 
 import pytest
@@ -30,7 +29,7 @@ def short_case(tmp_path_factory):
     pile = next(c["value"] for c in light["conditions"] if c["id"] == "pile")
     wear = pack.data["archetype"]["stone_axe"]["components"]["durability"]["max_wear"]
     with (leaf / "instances.toml").open("a", encoding="utf-8") as f:
-        for arch, qty in [("grass_tuft", tinder), ("stone", 1), ("flint_nodule", 1)]:
+        for arch, qty in [("grass_tuft", 2 * tinder), ("stone", 1), ("flint_nodule", 1)]:
             f.write(
                 f'\n[[instance]]\nid="held_{arch}"\narchetype="{arch}"\n'
                 f'at={{holder="ella"}}\nquantity={qty}\n'
@@ -46,27 +45,28 @@ def short_case(tmp_path_factory):
     program = schedules(case.pack)
     # Pick a turn with a deterministic failed roll. Run the real chance rule with
     # its admitted values and the actual coordinator-issued identity.
-    delay = next(
-        n
-        for n in count()
-        if chance_roll(
-            SEED,
-            n * pack.data["timing"]["wait_ticks"] + light["work_ticks"],
-            "light_fire",
-            f"ella:t{n:06d}:a",
+    lighting = []
+    tick = 0
+    horizon = pack.data["instance"]["fruit_02"]["phase_offset"]["compat_regrow_fruit"]
+    for success in (False, True):
+        for _ in range(horizon - tick):
+            roll = chance_roll(
+                SEED, tick + light["work_ticks"], "light_fire", f"ella:t{len(lighting):06d}:a"
+            )
+            if (roll < light["success_per_mille"]) == success:
+                break
+            lighting.append(intent(action="wait"))
+            tick += pack.data["timing"]["wait_ticks"]
+        lighting.append(
+            intent(
+                "light",
+                entity("pile"),
+                tools=("flint_nodule", "stone"),
+                inputs=(("grass_tuft", tinder),),
+            )
         )
-        >= light["success_per_mille"]
-    )
-    program.programs["ella"] = (
-        *((intent(action="wait"),) * delay),
-        intent(
-            "light",
-            entity("pile"),
-            tools=("flint_nodule", "stone"),
-            inputs=(("grass_tuft", tinder),),
-        ),
-        *program.programs["ella"],
-    )
+        tick += light["work_ticks"]
+    program.programs["ella"] = (*lighting, *program.programs["ella"])
     return case, program
 
 
@@ -107,7 +107,10 @@ def test_ct07_scripted_matter_and_resume(short_case, tmp_path):
         and e["operation"] == "consume"
         for e in entries
     )
-    assert not any(e["rule_id"] == "light_fire" and e["archetype"] == "branch" for e in entries)
+    pile_debits = [
+        e for e in entries if e["rule_id"] == "light_fire" and e["archetype"] == "branch"
+    ]
+    assert [e["branch"] for e in pile_debits] == ["applied"]
     balance = first["balance"]
     assert balance["outputs"]["shape_pot"] == pack.data["archetype"]["unfired_pot"]["matter"]
     assert balance["net_sinks"]["shape_pot"]["mineral"] == 0
@@ -147,22 +150,25 @@ def test_ct07_scripted_matter_and_resume(short_case, tmp_path):
     assert "chance_failed" in validated["rules"]["light_fire"]["branches"]
 
 
-def test_first_incorrect_matter_has_committed_witness(tmp_path, monkeypatch):
+@pytest.mark.parametrize("funding", ["undeclared source", "unfunded output"])
+def test_first_incorrect_matter_has_committed_witness(tmp_path, monkeypatch, funding):
     from living_island.sim.v2.scenarios.conservation import ledger, run, starter
     from living_island.sim.v2.scenarios.conservation.script import schedules
 
     actual = ledger.transactions
 
-    def perturbed(boundary, matter):
-        for row in actual(boundary, matter):
-            if row.rule_id == "compat_drink_canteen":
-                yield row.model_copy(update={"units": {"water": row.units["water"] + 1}})
-            else:
-                yield row
+    def perturbed(boundary, matter, limits):
+        for event in boundary.result.events:
+            if event.type == "entity_created" and event.payload["source"] == "spring_water":
+                event.payload["source"] = "unregistered" if funding == "undeclared source" else None
+        yield from actual(boundary, matter, limits)
 
     monkeypatch.setattr(ledger, "transactions", perturbed)
     case = starter()
-    tick = case.pack.rules["compat_drink_canteen"].data["work_ticks"]
+    tick = sum(
+        case.pack.rules[key].data["work_ticks"]
+        for key in ("compat_drink_canteen", "compat_fill_canteen")
+    )
     result = read(run(tmp_path, case, schedules(case.pack), horizon=tick + 1))
     assert result["status"] == "FAIL"
     diff = result["balance"]["first_difference"]
@@ -174,7 +180,7 @@ def test_first_incorrect_matter_has_committed_witness(tmp_path, monkeypatch):
     summary = (tmp_path / f"fixture-{tick + 1}-summary.md").read_text(encoding="utf-8")
     for ref in (
         diff["entries"][0]["event_id"],
-        "compat_drink_canteen / applied",
+        "compat_fill_canteen / applied",
         f"turns/{tick - 1}.json",
         f"ledger/{tick}.json",
     ):
@@ -190,4 +196,21 @@ def test_changed_ledger_refused_on_resume(tmp_path):
     run(tmp_path, case, program, pause_after=lambda tick: tick == 1)
     (tmp_path / "ledger/1.json").write_bytes(b"{}")
     with pytest.raises(ValueError, match="ledger prefix differs at committed tick 1"):
-        run(tmp_path, case, program, horizon=1008, pause_after=lambda tick: tick == 2)
+        run(tmp_path, case, program, pause_after=lambda tick: tick == 2)
+
+
+def test_week_verdict_requires_all_flow_witnesses():
+    from living_island.sim.v2.scenarios.conservation import verdict
+    from living_island.sim.v2.scenarios.conservation.ledger import Balance
+    from living_island.sim.v2.scenarios.conservation.script import WEEK
+
+    # Exercise just the verdict predicate. Only the CLI produces week evidence.
+    balance = Balance.opening({"plant": 1})
+    balance.tick = WEEK
+    for field in ("sources", "net_sinks", "outputs"):
+        assert verdict(balance, True) == "FAIL"
+        getattr(balance, field)["fixture"] = {"plant": 1}
+    assert verdict(balance, True) == "FAIL"
+    balance.transfers = 1
+    assert verdict(balance, False) == "PARTIAL"
+    assert verdict(balance, True) == "PASS"

@@ -65,18 +65,30 @@ class Entry(ProtocolModel):
     archetype: str
     quantity: int
     units: Units
+    admitted_units: Units
 
 
-def transactions(boundary: Boundary, matter: Matter) -> Iterator[Entry]:
+type SourceLimits = dict[tuple[str, str, str], int]
+
+
+def transactions(boundary: Boundary, matter: Matter, limits: SourceLimits) -> Iterator[Entry]:
     branches = {
         action.intent_id: action.settlement.kind if action.settlement else "interrupt"
         for action in boundary.result.actions
     }
+    # A world rule may apply to several subjects in the same tick. Each
+    # application has its own input budget and declared source allowance.
+    world_application = ""
+    budgets: dict[str, Units] = {}
+    drawn: dict[tuple[str, str], int] = {}
     for event in boundary.result.events:
         operation: Literal["source", "consume", "output"]
         source = None
         record: _Payload
         match event.type:
+            case "world_rule_applied":
+                world_application = event.event_id
+                continue
             case "entity_consumed":
                 consumed = _Consumed.model_validate(event.payload)
                 record, quantity, operation = consumed, consumed.quantity, "consume"
@@ -94,6 +106,23 @@ def transactions(boundary: Boundary, matter: Matter) -> Iterator[Entry]:
                 operation = "source"
             case _:
                 continue
+        application = event.intent_id or world_application
+        units = {k: v * quantity for k, v in matter[record.archetype_id].items()}
+        if source is not None:
+            key = (application, source)
+            remaining = limits.get((record.rule_id, source, record.archetype_id), 0) - drawn.get(
+                key, 0
+            )
+            admitted = min(quantity, remaining)
+            drawn[key] = drawn.get(key, 0) + admitted
+            funded = {k: v * admitted for k, v in matter[record.archetype_id].items()}
+        else:
+            available = budgets.setdefault(application, {})
+            funded = {}
+            for k, amount in units.items():
+                credit = amount if operation == "consume" else min(amount, available.get(k, 0))
+                available[k] = available.get(k, 0) + (credit if operation == "consume" else -credit)
+                funded[k] = credit
         yield Entry(
             event_id=event.event_id,
             intent_id=event.intent_id,
@@ -103,7 +132,8 @@ def transactions(boundary: Boundary, matter: Matter) -> Iterator[Entry]:
             source=source,
             archetype=record.archetype_id,
             quantity=quantity,
-            units={k: v * quantity for k, v in matter[record.archetype_id].items()},
+            units=units,
+            admitted_units=funded,
         )
 
 
@@ -145,7 +175,7 @@ class Balance(BaseModel):
                 bucket = self.sources.setdefault(row.source, {})
             else:
                 bucket = self.net_sinks.setdefault(row.rule_id, {})
-            for kind, units in row.units.items():
+            for kind, units in row.admitted_units.items():
                 delta = -units if row.operation == "consume" else units
                 self.expected[kind] += delta
                 bucket[kind] = bucket.get(kind, 0) + (delta if row.source is not None else -delta)
@@ -189,11 +219,19 @@ class Ledger:
     def __init__(self, directory: Path, pack: Pack, entities: Iterable[Entity]):
         self.directory = directory
         self.matter: Matter = {k: row["matter"] for k, row in pack.data["archetype"].items()}
+        self.source_limits: SourceLimits = {}
+        for rule in pack.rules.values():
+            for output in rule.data["outputs"]:
+                if "source" in output:
+                    name = output["source"]
+                    declaration = pack.data["source"][name]
+                    key = (rule.id, name, declaration["archetype"])
+                    self.source_limits[key] = declaration["max_per_application"]
         self.classes = tuple(sorted(pack.vocabulary.matter_classes))
         self.balance = Balance.opening(inventory(entities, self.matter, self.classes))
 
     def observe(self, boundary: Boundary, entities: Collection[Entity]) -> None:
-        rows = list(transactions(boundary, self.matter))
+        rows = list(transactions(boundary, self.matter, self.source_limits))
         balance = self.balance
         live = inventory(entities, self.matter, self.classes)
         balance.reconcile(boundary.tick + 1, rows, live)
