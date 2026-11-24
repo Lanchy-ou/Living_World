@@ -1185,6 +1185,25 @@ limits. Target three complete calendar game days (432 ticks). Size the run
 from the measured costs under the CNY 20 total P3.5 cap. If fewer than three
 days fit, hold the run and ask the owner. Both paid steps require signed M12.
 
+Owner decision (2026-11-25, EV-06 sizing). The provider check passed on the
+recheck with JSON-only prompts at version 0.2. The two live checks settled
+CNY 0.05343482, leaving CNY 19.94656518. DL-06 found that zero whole days
+fit when every logical call reserves all its permitted retries (13 attempts
+for the decision-loop kinds, 4 for the consolidation kinds). That gives
+CNY 57.41 off-peak and CNY 114.82 at peak for three days. The rehearsal
+dispatched 109 attempts for 106 calls. EV-06 therefore sizes its three
+days on the rehearsed per-day attempt counts. Each attempt assumes zero
+cache hits, the greatest counted input and 8,000 output tokens at the peak
+tariff, a total of CNY 9.480838.
+
+A runtime stop guard keeps the cap absolute. Before each dispatch,
+including retries, the operator compares settled spend plus that attempt's
+worst-case charge at the peak tariff against the remaining phase budget. If
+the attempt does not fit, no new request is sent and the run ends at the
+next safe stop. The guard also stops the run if any day's measured attempts
+or inputs exceed the rehearsal bounds by enough to break the reserved
+total.
+
 ## OQ-P3.5-PR-07: Run scope of the M12 equivalence matrix
 
 Protocol §11.3 (CR-011) requires M12 to check that no run of the P2 matrix
