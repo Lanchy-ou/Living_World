@@ -1784,7 +1784,7 @@ export interface Metrics {
   instances: Instances;
   content_checks: ContentChecks;
   checked_parts: CheckedParts;
-  resident_analysis?: ResidentAnalysis | null;
+  resident_analysis: ResidentAnalysis;
 }
 export interface Metric {
   instance_id: InstanceId;

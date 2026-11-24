@@ -87,7 +87,7 @@ def fits_groups(
 
 
 def predicts(
-    skill: ia.HypothesisContent,
+    skill: ia.Skill,
     success: Attempt,
     delivery: ia.Delivery,
     submitted: ia.TurnSubmission,
@@ -301,7 +301,7 @@ class Learning:
             return
         delivery = self.history.feedback.get((decision.resident_id, success.intent))
         if (
-            isinstance(root.content, ia.HypothesisContent)
+            isinstance(root.content, ia.Skill)
             and delivery
             and decision.submission
             and predicts(root.content, success, delivery, decision.submission)
@@ -504,7 +504,7 @@ class Learning:
         scores = []
         for first in self.history.first.values():
             record = self.history.records[first]
-            if not isinstance(record.content, ia.HypothesisContent):
+            if not isinstance(record.content, ia.Skill):
                 continue
             creator = self.history.creation.get(record.id)
             proof = Proof()
@@ -535,7 +535,7 @@ class Learning:
             supplied = record.content.evidence.attempts
             latest = self.history.latest.get(record.id, record).content
             writes = self.writes[record.id]
-            if isinstance(latest, ia.HypothesisContent) and (
+            if isinstance(latest, ia.Skill) and (
                 latest.evidence.attempts
                 != supplied + sum(s.delta.get("attempts", 0) for _, s in writes)
                 or latest.evidence.matched_expected

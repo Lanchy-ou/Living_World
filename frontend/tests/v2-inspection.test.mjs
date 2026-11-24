@@ -48,7 +48,10 @@ function fixture() {
     replay_sha256: hash(replay), manifest_sha256: "0".repeat(64), arm: "on", pack_ids: [],
     residents: bundle.residents.map(r => ({resident_id: r.id, profile_id: "fixture"})),
     decisions: [], calls: [], stores: [store, missing].map(shard => ({resident_id: actor, period_id: "p", boundary_tick: 1, store_version: 1, shard})),
-    consolidations: [], revisions: [revisions], deliveries: [], evidence_writes: [], metrics: shard("metrics", "metrics", {instances: rows, content_checks: [], checked_parts: []}),
+    consolidations: [], revisions: [revisions], deliveries: [], evidence_writes: [], metrics: shard("metrics", "metrics", {
+      instances: rows, content_checks: [], checked_parts: [],
+      resident_analysis: {packs: [], residents: [], learning: [], skills: [], uses: [], periods: [], consolidations: []},
+    }),
     time_use: shard("time_use", "time_use", {intervals: []}), cost: shard("cost", "cost", {attempts: []}),
     attempts: shard("attempts", "attempts", {events: [], submissions: []})};
   return {index, files: [...files, new File([canonicalJson(index)], "index.json")], bundle, replay};

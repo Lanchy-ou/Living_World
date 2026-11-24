@@ -68,7 +68,7 @@ export function InspectionDetail({ value, inspection, source, seek, follow }: {
   };
   switch (value.family) {
     case "cost": return <ResidentCost data={value} inspection={inspection} follow={follow}/>;
-    case "metrics": return <>{value.resident_analysis && <ResidentMetrics data={value.resident_analysis} inspection={inspection} follow={follow}/>}
+    case "metrics": return <><ResidentMetrics data={value.resident_analysis} inspection={inspection} follow={follow}/>
       <MetricRows rows={value.instances} />
       {value.content_checks.map(check => <section key={check.instance_id}><Details title={check.check + " · " + check.verdict} value={check} />
         {check.check === "choice_link" && check.sent_fragment_sha256.map(hash =>

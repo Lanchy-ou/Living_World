@@ -4338,21 +4338,14 @@
           "type": "array"
         },
         "resident_analysis": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ResidentAnalysis"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
+          "$ref": "#/$defs/ResidentAnalysis"
         }
       },
       "required": [
         "instances",
         "content_checks",
         "checked_parts",
+        "resident_analysis",
         "family"
       ],
       "title": "Metrics",

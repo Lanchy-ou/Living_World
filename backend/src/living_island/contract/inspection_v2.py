@@ -20,9 +20,9 @@ from living_island.memory.v2.records import (
     Intention,
     MemoryRecord,
     Personality,
-    Skill,
     Social,
 )
+from living_island.memory.v2.records import Skill as Skill
 from living_island.world.v2.protocol import BoundaryDelivery as BoundaryDelivery
 from living_island.world.v2.protocol import TurnSubmission as TurnSubmission
 from living_island.world.v2.protocol import WorldEvent as WorldEvent
@@ -420,9 +420,6 @@ class Metric(View):
     reason: str | None
 
 
-HypothesisContent = Skill
-
-
 class AnalysisLink(View):
     family: Family
     id: str
@@ -526,7 +523,7 @@ class Metrics(View):
     instances: list[Metric]
     content_checks: list[ContentCheck]
     checked_parts: list[StoredPart]
-    resident_analysis: ResidentAnalysis | None = None
+    resident_analysis: ResidentAnalysis
 
 
 class Charge(View):
