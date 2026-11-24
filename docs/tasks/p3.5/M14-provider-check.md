@@ -160,3 +160,53 @@ and report with each dispatch and logical call priced separately. Reconcile
 that evidence in the scheduled ledger writer slot and size the EV-06 day
 prefix using the measured per-kind results, the EV-05 daily counts and the
 later contexts. [M14 spend and sizing rules](M14-plan.md#5-paid-steps-and-phase-spend)
+
+## Owner release on 2026-11-24
+
+The owner told Claude Code “Authorize, max 5 CNY” on 2026-11-24. This releases
+one bounded DL-06 check through the end of 2026-11-24 UTC, with
+`max_cny` set to `"5.00"`. The owner operates the live terminal and injects
+`DEEPSEEK_API_KEY` in its process environment.
+
+Claude Code verified the official pages on 2026-11-24. The pricing page
+resolves `deepseek-flash` to `DeepSeek-V4.1-Flash-1017` with a 1M-token
+context, a 384K-token maximum output and Responses API support. DL-06
+keeps its 8,000-token output reserve and pinned Flash-1017 counter.
+The Responses guide confirms support for `text.format` and reasoning effort,
+stateless requests without `previous_response_id` or `store`, function
+tools only, and `tool_choice: none`. Unsupported parameters are silently
+ignored. The offline preflight checked the six exact wires against the
+pinned local form. [Official pricing and model mapping](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)
+[Official Responses compatibility guide](https://api-docs.deepseek.com/guides/responses_api/)
+
+| Usage category | Off-peak CNY per million tokens | Peak CNY per million tokens |
+| --- | ---: | ---: |
+| Cache-hit input | 0.02 | 0.04 |
+| Cache-miss input | 1.00 | 2.00 |
+| Output | 4.00 | 8.00 |
+
+Peak hours in Beijing are 09:00–12:00 and 14:00–18:00, Monday to Friday
+excluding Chinese public holidays. All other hours are half price. The release
+was prepared at 13:11 UTC (21:11 in Beijing) and expires at 08:00 Beijing time
+the next morning. The entire remaining window is off-peak, so the dated tariff
+row uses the off-peak usage rates and retains CNY 2 and CNY 8 for peak
+uncached-input and output reservations. Both tariff date fields are
+`2026-11-24`. [Official CNY tariffs](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)
+
+The EV-04 bundle reconciles CNY 0 opening spend, CNY 0 for EV-05’s fake runs,
+and no outstanding liabilities. The fresh offline preflight rebuilt the
+six wires and parsed all six fake responses. EV-04 and the live admission
+function priced the same 60 permitted attempts at **CNY 4.643368**, within
+the CNY 5.00 release and leaving CNY 15.356632 of phase headroom after the
+projection. This is a reservation. [Opening reconciliation](P3.5-spend-ledger.md#opening-ledger)
+[EV-05 outcome](M14-fake-workload.md)
+
+| Local evidence | SHA-256 |
+| --- | --- |
+| Rebuilt preflight | `ebc49944a5c7d188e95ed730d7bcb782d6f772455a95f2237dbfa0e038ad488d` |
+| `runs/dl06-live-ledger.json` | `ab95b90e79bdd7c5c1febdd5c27572ac48511d98c3903cea9b3a597cf1c074e6` |
+| `runs/dl06-live-release.json` | `224f954959bdfccbd821f44e212dec25ef6cba58d30ae79bee88608ab9ef99e0` |
+
+The release was validated against both pinned hashes without dispatching.
+The [live invocation](#evidence-and-release-for-live-dispatch) references
+the two local JSON files.
