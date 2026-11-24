@@ -1,9 +1,9 @@
 # M13 Gate 3 — The new island
 
-**Status at CT-10 Phase 1 (2026-11-25).** The qualified starter pack passed
-the held-out balance round and the retained D1 treatment case passed the
-30-minute limit. D5 awaits the owner's disposition. CT-10 independent review,
-final acceptance, and signature are pending. [M13 plan](M13-plan.md)
+**CT-10 executor status as of 2026-11-25.** The qualified starter pack passed
+the held-out balance round. Claude Code published the D1 PASS receipt and
+recorded the D4 search. D5 awaits the owner's disposition. CT-10 independent
+review, integrated acceptance, and owner signature are pending. [M13 plan](M13-plan.md)
 
 The integration base is `7e8902acac7ef924acf0b8fd5dda5b36fcac213e`.
 M12 was signed on 2026-11-23. Its compatibility, synthetic-pack and
@@ -45,6 +45,8 @@ hashes. Use the listed execution revision to reproduce historical output.
 | CT-08 dynamics, 20 complete receipts | [`ct08/runs/m13/dynamics/report.json`](../../../../ct08/runs/m13/dynamics/report.json) | `03d87e7f2d903fb1c3b5f1c908a409cff11ecfae8223e4f351715ee8d12f18ba` |
 | CT-09 scripted conservation | [`ct09/runs/m13/conservation/receipt.json`](../../../../ct09/runs/m13/conservation/receipt.json) | `64d527c1872340e9b71a00bc37cb067f57f2e5aec03b5b69334a56207770e6bf` |
 | CT-10 original D1 case receipt | [`ct06/runs/m13/balance-accept/2600456787/starter-v1/cases/1.json`](../../../../ct06/runs/m13/balance-accept/2600456787/starter-v1/cases/1.json) | `66f735dec5f1b22a973711518c960b491d04f868d2a2b8a3bda7c667dc3f7b0c` |
+| CT-10 final D1 PASS receipt | [`ct10/runs/m13/long-run/receipt.json`](../../../runs/m13/long-run/receipt.json) | `d4d9e3736dafbce01605f59f13a9ae5a843e9151cc0a0dc144b9b4275d4cf35d` |
+| CT-10 final command log | [`ct10/runs/CT-10-evidence.log`](../../../runs/CT-10-evidence.log) | `df6f6bf434a1ba87b1976397926b3e995d716099cadc34d276e3a2c4d54fa734` |
 
 ## Mechanics and acceptance map
 
@@ -172,10 +174,13 @@ The CT-10 executor's read-only check recomputed the archived inputs,
 checkpoint and packet/turn chain and confirmed the database matches the
 report. It used zero extra simulations. Independent verification took 13.017
 seconds in the first invocation, recorded outside the D1 stopwatch.
-The executor receipt SHA-256 is
+Claude Code ran the final command once under the host lock on
+`09e305697907e1be367c3c531f0dce116d1ff69f`. It exited 0 in about 2 seconds,
+reused the CT-06 timing, and published the same receipt SHA-256
 `d4d9e3736dafbce01605f59f13a9ae5a843e9151cc0a0dc144b9b4275d4cf35d`.
-The committed verifier reproduced the same receipt on repeat.
-[Executor receipt](../../../runs/m13/long-run-verify/receipt.json) ·
+The executor verified the final digest and the log's `D1 PASS` line.
+[Final receipt](../../../runs/m13/long-run/receipt.json) ·
+[Execution log](../../../runs/CT-10-evidence.log) ·
 [Original timing ledger](../../../../ct06/runs/m13/balance-accept/2600456787/starter-v1/progress.sqlite)
 
 EN-08 measured one worker and 121 identical compatibility advances on this
@@ -210,10 +215,9 @@ Claude Code's final D1 evidence command from the CT-10 checkout is
 uv run --directory F:/p35-w1/ct10/backend --locked --offline python -m living_island.sim.v2.scenarios.long_run --balance F:/p35-w1/ct06/runs/m13/balance-accept --out F:/p35-w1/ct10/runs/m13/long-run
 ```
 
-The final receipt locator is `ct10/runs/m13/long-run/receipt.json`.
-Publication and its digest await Claude Code. Add `--verify-only` for
-read-only admission of the source with simulation disabled and use a
-separate output directory for executor verification.
+The command published `ct10/runs/m13/long-run/receipt.json`. Add
+`--verify-only` and give it a separate output directory to verify the
+source with simulation disabled.
 
 All linked CI runs completed successfully for their listed PR head, with
 backend, frontend and contract jobs green.
@@ -228,7 +232,7 @@ backend, frontend and contract jobs green.
 | CT-07 | Four static checks, six scoped passes, Claude Code's final command exit 0. [Handoff](P3.5-CT-07.md#final-qualified-evidence--2026-11-25) | Phase 1 review found no blockers. [#60](https://github.com/Lanchy-ou/Living_World/pull/60#issuecomment-7119964426) | `83e7bcf` [CI](https://github.com/Lanchy-ou/Living_World/actions/runs/45506672001) |
 | CT-08 | Four static checks and five scoped passes after rebase. Claude Code's final command exited 1 for the two D5 vectors. Receipt audit exited 0. [Handoff](P3.5-CT-08.md#final-evidence) | Phase 1 finding fixed in the handoff. [#59](https://github.com/Lanchy-ou/Living_World/pull/59#issuecomment-7119889117) | `d811b80` [CI](https://github.com/Lanchy-ou/Living_World/actions/runs/45507155855) |
 | CT-09 | Four static checks, five scoped passes, Claude Code's scripted PASS and receipt audit exit 0. [Handoff](P3.5-CT-09.md#final-required-fields) | Phase 1 review found no blockers. [#58](https://github.com/Lanchy-ou/Living_World/pull/58#issuecomment-7119869038) | `a269eec` [CI](https://github.com/Lanchy-ou/Living_World/actions/runs/45506816766) |
-| CT-10 | Four static checks and five scoped passes at `d43f3a338f6834fca4ae6c49f085e1a44e3308fc`. Executor D1 verification PASS. [Handoff](P3.5-CT-10.md#handoff) | Pending review and Claude Code's integrated acceptance verdict. | PR and CI pending publication. [CI workflow](../../../.github/workflows/ci.yml) |
+| CT-10 | Four static checks and five scoped passes rerun on evidence head `09e3056`. Claude Code's final D1 command exited 0 and published PASS. [Handoff](P3.5-CT-10.md#handoff) | Claude Code's independent review and integrated acceptance verdict are pending. | PR and CI pending publication. [CI workflow](../../../.github/workflows/ci.yml) |
 
 ## Owner dispositions
 
@@ -236,7 +240,7 @@ backend, frontend and contract jobs green.
 | --- | --- |
 | D5 / OQ-P3.5-M13-1 | **Pending owner disposition.** The published awake gain 50 becomes 30. Typical CT-09 day fatigue changes **6,400 → 4,480** and silent awake ticks from zero to faint change **200 → 334**. The 36-tick faint and 7,200-point recovery in 48 asleep ticks remain recorded in both vectors. Retain both published expectations and qualified observations. [D5](M13-plan.md#1-owner-decisions) · [CT-08 comparison](P3.5-CT-08.md#phase-2-qualified-pack-and-d5) |
 | D3 / P3-PERF-U1 | Dropped for P3.5. EN-07 replaced the targeted store. Preserve parked branch `task/P3-PERF-U1-validation-cache` and candidate `124e751`. [Owner decision](M13-plan.md#1-owner-decisions) |
-| D4 / original M9 artifacts | **Independent pending.** Claude Code is the sole custodian for the single read-only search and will provide the record locator. The executor did not search. [D4 disposition](M13-plan.md#1-owner-decisions) |
+| D4 / original M9 artifacts | **Recorded independently of M13 acceptance.** Claude Code's single read-only search confirmed receipt folders for four M9 runs, 130 files with sorted listing SHA-256 `7ffcc5e9505c0fcb02f9201e998ff671fc14e1237a005eaf5ccf13d8e136c158`. The original run trees are lost across the accessible locations. Thirteen retained folders were access-denied and remain unresolved. [Search record](M13-m9-search.md) · [PR #67, `916fdf9`](https://github.com/Lanchy-ou/Living_World/pull/67) |
 | D6 / live measurements | M15 owns live benefit and time-use measurements on the starter pack. [M13 handoff](M13-plan.md#1-owner-decisions) |
 | Historical P3 V-04 | Stopped at committed tick 132. [P3 closeout](../p3/P3-closeout.md#owner-disposition-and-deferred-work) |
 
