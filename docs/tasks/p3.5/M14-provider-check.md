@@ -343,3 +343,132 @@ The owner runs this command from `F:\p35-w1\dl06` with
 ```powershell
 uv run --offline --no-env-file --locked --directory backend python -m living_island.sim.v2.harness.provider_check --sample-dir F:/p35-w1/dl06/runs/ev05-m1m1r03g/ella --sample-sha256 6b50becac1807e56d288a14e84fcbd8b84611147aad8a9e78e2c9ba5f20792b1 --receipt-sha256 d470ea3c419f75d152dad471cb2b860026e68bf377874bb8f64ddfe017ceec43 --live --release F:/p35-w1/dl06/runs/dl06-recheck-release.json --ledger F:/p35-w1/dl06/runs/dl06-recheck-ledger.json
 ```
+
+## Live recheck result
+
+The owner ran the `/0.2` six-kind recheck once. The seven attempts began
+between 23:01:28 and 23:01:37 UTC on 2026-11-24. The retained result sets
+`passed` and `provider_gate_passed` to true. HTTP accepted 7/7 attempts.
+Five of six first attempts parsed, 6/7 dispatches parsed, and all six
+logical calls eventually parsed. The two decision
+calls parsed both first dispatches and 2/2 dispatches overall. The final
+CR-008 M9 smoke parsed 22/22 first dispatches with zero local rejections.
+Both first-pass point estimates are 100%. With only two rehearsed decision
+inputs, the recheck gives weaker evidence about other requests. Illustrative
+95% Wilson intervals are about 34% to 100% for 2/2 and 85% to 100% for 22/22.
+The fixed sample checks provider compatibility for these wires. [M9 comparator](../p3/M9-evidence.md#cr-008-authorized-counter-04-smoke-result-2026-11-14)
+
+`consolidation_change_set` attempt 0 returned a JSON object without
+surrounding prose. The JSON decoder rejected duplicate keys before schema
+validation. The zero-based paths were `ops[2].op_id`, `ops[4].op_id` and
+`ops[4].op`. Offline decoding with key pairs retained located those duplicates,
+and the production parse returned `duplicate JSON key`. The same wire
+parsed on attempt 1. Both attempts were charged and count in the denominator.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| `runs/dl06-provider-recheck/provider-check.sqlite` | `8d40a7f0b287e76ca5f0725349646b0a29d7b94ed0e3126649a257556a8cae1a` |
+| Recheck attempt 0 change-set response blob | `80011eb1918f4d5ddacf62e28241fcf42c7b25cd0dda66ed549a9d364ce67e5a` |
+| `runs/dl06-provider-recheck/ledger-evidence.json` | `92562633ad1fdc0d53e70d12bd5acdda559e8dc872d7361095f579b444f413b3` |
+
+Offline replay rebuilt the seven sent requests from the retained audit and
+matched each dispatch to its pinned `/0.2` wire. The final ledger report
+uses measured token categories and the off-peak tariff of CNY 0.02 per
+million cache-hit input tokens, CNY 1 for cache-miss input, and CNY 4 for
+output. Settlement is based on provider-reported token usage. The bundle
+has no separate provider charge or invoice amount. [EV-04 settlement](P3.5-spend-ledger.md#opening-ledger)
+
+### Measured usage and settled CNY by attempt
+
+| Check | Kind | Attempt | Parse | Cache-hit input | Cache-miss input | Output | Settled CNY |
+| --- | --- | ---: | --- | ---: | ---: | ---: | ---: |
+| First | `decision` | 0 | Parsed | 0 | 6,590 | 195 | 0.00737000 |
+| First | `decision_after_recall` | 0 | Rejected | 0 | 6,529 | 213 | 0.00738100 |
+| First | `decision_after_recall` | 1 | Parsed | 6,395 | 134 | 133 | 0.00079390 |
+| First | `recall` | 0 | Parsed | 0 | 160 | 5 | 0.00018000 |
+| First | `morning` | 0 | Parsed | 0 | 772 | 67 | 0.00104000 |
+| First | `consolidation_selection` | 0 | Parsed | 0 | 2,850 | 23 | 0.00294200 |
+| First | `consolidation_change_set` | 0 | Rejected | 0 | 5,396 | 124 | 0.00589200 |
+| First | `consolidation_change_set` | 1 | Parsed | 5,248 | 148 | 89 | 0.00060896 |
+| Recheck | `decision` | 0 | Parsed | 0 | 6,611 | 135 | 0.00715100 |
+| Recheck | `decision_after_recall` | 0 | Parsed | 0 | 6,550 | 161 | 0.00719400 |
+| Recheck | `recall` | 0 | Parsed | 0 | 181 | 25 | 0.00028100 |
+| Recheck | `morning` | 0 | Parsed | 0 | 793 | 53 | 0.00100500 |
+| Recheck | `consolidation_selection` | 0 | Parsed | 0 | 2,913 | 17 | 0.00298100 |
+| Recheck | `consolidation_change_set` | 0 | Rejected | 0 | 5,459 | 422 | 0.00714700 |
+| Recheck | `consolidation_change_set` | 1 | Parsed | 5,248 | 211 | 288 | 0.00146796 |
+| **Both checks** | | **15** | **12/15** | **16,891** | **45,297** | **1,950** | **0.05343482** |
+
+### Recheck usage and settled CNY by logical call
+
+The table sums the attempts of each call. First-check logical costs are
+in the [first live result](#first-live-result-on-2026-11-24).
+
+| Kind | Parsed / dispatched attempts | Cache-hit input | Cache-miss input | Output | Settled CNY |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `decision` | 1/1 | 0 | 6,611 | 135 | 0.00715100 |
+| `decision_after_recall` | 1/1 | 0 | 6,550 | 161 | 0.00719400 |
+| `recall` | 1/1 | 0 | 181 | 25 | 0.00028100 |
+| `morning` | 1/1 | 0 | 793 | 53 | 0.00100500 |
+| `consolidation_selection` | 1/1 | 0 | 2,913 | 17 | 0.00298100 |
+| `consolidation_change_set` | 1/2 | 5,248 | 5,670 | 710 | 0.00861496 |
+| **Recheck total** | **6/7** | **5,248** | **22,718** | **1,101** | **0.02722696** |
+
+## EV-06 day sizing
+
+The remaining phase budget after CNY 0.05343482 settled and CNY 0 outstanding
+is **CNY 19.94656518**. The forecast uses the accepted `/0.2` EV-05 Ella
+rehearsal with rule companions. Its receipt and staged sample are pinned
+above. We read the sent input bounds by day, call kind and attempt ordinal
+from `runs/ev05-m1m1r03g/ella/ella/resident.sqlite` (SHA-256
+`687dfbbf66abee2c12a6239ebdb2172d98f7472721bee40225e26b34f65ca509`). The
+counts and total input bounds matched the receipt. Index bytes grew from
+3,049 to 4,318 to 6,219, and day-log bytes went from 89,598 to 57,030 to
+67,945 across sent attempts. Fewer dispatches on later days explain why
+the daily token total can fall while individual sections grow.
+
+| Call kind | Day 1 calls / attempts | Day 2 calls / attempts | Day 3 calls / attempts | Counted input cap by day (tokens) |
+| --- | ---: | ---: | ---: | --- |
+| `decision` | 27/31 | 20/20 | 20/20 | 18,593 / 18,593 / 18,593 |
+| `decision_after_recall` | 3/3 | 2/2 | 1/1 | 16,137 / 16,137 / 16,649 |
+| `recall` | 3/3 | 2/2 | 1/1 | 306 / 439 / 518 |
+| `morning` | 3/3 | 3/3 | 3/3 | 1,055 / 1,243 / 1,479 |
+| `consolidation_selection` | 4/4 | 3/3 | 3/2 | 10,005 / 10,005 / 10,005 |
+| `consolidation_change_set` | 3/3 | 3/3 | 2/2 | 14,421 / 14,421 / 14,421 |
+
+The **central estimate** uses all 15 paid attempts across both checks,
+including the three local rejections. For each kind and day, it scales the
+measured cache-hit and cache-miss input charges by the ratio of rehearsed
+sent input bounds to paid sample input bounds. It multiplies the observed
+average output charge for the kind by the day's rehearsed attempt count.
+Cache reuse and output lengths can differ in a resident run.
+
+The **conservative full-day hold** uses zero cache hits, the greatest
+observed counted input bound for each kind through that day, and 8,000
+output tokens for each attempt. It reserves every permitted attempt for
+every logical call, including the overlapping consolidation calls and the
+day-3 selection that was abandoned in the rehearsal. The decision-loop
+kinds have 13 attempt slots per call and the two consolidation kinds have
+four. The actual operator must update the hold if a live input or call count
+exceeds the rehearsal bounds. The peak tariff doubles all three off-peak
+rates, so each off-peak figure is half its peak counterpart. [M14 budgeting](M14-plan.md#5-paid-steps-and-phase-spend)
+
+| Game day | Fake calls / attempts | Sent input bound (tokens) | Reserved attempts | Central off-peak (CNY) | Central peak (CNY) | Conservative off-peak (CNY) | Conservative peak (CNY) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 43/47 | 534,641 | 496 | 0.311229 | 0.622458 | 23.413697 | 46.827394 |
+| 2 | 33/33 | 364,236 | 375 | 0.208314 | 0.416628 | 17.606745 | 35.213490 |
+| 3 | 30/29 | 353,542 | 345 | 0.206542 | 0.413084 | 16.390460 | 32.780920 |
+| **Total** | **106/109** | **1,252,419** | **1,216** | **0.726085** | **1.452171** | **57.410902** | **114.821804** |
+
+At the observed 109 dispatches, the zero-cache, full-output reservation
+would be CNY 4.740419 off-peak or CNY 9.480838 peak for three days. That
+estimate covers the retries seen in rehearsal. With the full permitted
+retry exposure, **zero consecutive whole days fit at either tariff**.
+Even day one exceeds headroom by CNY 3.46713182 off-peak or CNY 26.88082882
+peak. The provider gate passed, and EV-06 remains on hold for the owner's
+budget and horizon decision.
+
+EV-04 reproduced the peak plan from `runs/dl06-ev06-sizing-evidence.json`
+(SHA-256 `f037286a10e3d807c5c6329c92521b044f1837bc7998d7e5e78079a497d9a362`).
+The rendered report is `runs/dl06-ev06-sizing.md`. Its tariff date is the
+calibration date of the two paid checks.
