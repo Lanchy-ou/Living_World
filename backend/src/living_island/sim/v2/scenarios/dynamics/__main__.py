@@ -13,7 +13,7 @@ from living_island.world.v2.rules.schema import content_hash
 from .. import runtime
 from ..receipts import CasePlan, file_digest
 from .fixture import SEED, Opening
-from .physical import baking, fruit, lighting, period, regrowth, spilling, wear
+from .physical import baking, fruit, lighting, period, regrowth, rule_value, spilling, wear
 from .physiology import early_wake, fainting, fatigue, fatigue_day, metabolism, night, rate_control
 from .trial import Trial
 
@@ -76,6 +76,8 @@ def changed_fixed_values() -> dict[str, dict[str, int]]:
             20,
             pack["archetype"]["stone_axe"]["components"]["durability"]["max_wear"],
         ),
+        "CT-08/fruit_rot_age": (432, rule_value(opening, "fruit_rots", "old")),
+        "CT-08/rotten_crumble_age": (288, rule_value(opening, "rotten_fruit_crumbles", "gone")),
         "CT-09/day_fatigue": (
             6400,
             96 * config.awake_per_tick
