@@ -11,6 +11,13 @@ from .pins import find_evidence
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        metavar="1..4",
+        help="number of independent case workers (default 1)",
+    )
     parser.add_argument("--en08", type=Path, help="EN-08 acceptance-<revision> evidence directory")
     parser.add_argument(
         "--reuse",
@@ -22,7 +29,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         en08 = args.en08 or find_evidence(args.out.parent / "en08")
-        receipt = run(args.out, en08, reuse=tuple(args.reuse))
+        receipt = run(args.out, en08, reuse=tuple(args.reuse), jobs=args.jobs)
     except (OSError, ValueError) as error:
         parser.exit(1, f"{error}\n")
     path = args.out / "receipt.json"

@@ -1,11 +1,14 @@
 """Run paired compatibility cases and publish the CT-06 prerequisite."""
 
 from collections.abc import Iterator
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict
-from functools import partial
+from functools import cache, partial
+from itertools import batched
 from pathlib import Path
 from typing import Literal
 
+from living_island.persistence._codec import PersistenceError
 from living_island.persistence.v2.journal import store_once
 from living_island.persistence.v2.manifest import Digest
 from living_island.sim.equivalence.projection import read_projection
@@ -171,7 +174,58 @@ class CalibrationReceipt(ProtocolModel):
     missing_cases: tuple[str, ...]
 
 
-def run(out: Path, en08_directory: Path, *, reuse: tuple[Path, ...] = ()) -> CalibrationReceipt:
+@cache
+def _worker_cases(inputs: Path) -> dict[str, CalibrationCase]:
+    # ScriptCase setups can be closures. Resolve their registered names in each worker.
+    return {case.name: case for case in calibration_cases(inputs)}
+
+
+def _worker_pair(
+    out: Path, name: str, revision: str, reference: EquivalenceCase | None, reuse: tuple[Path, ...]
+) -> PairResult:
+    try:
+        case = _worker_cases(out / "config")[name]
+        return record_pair(out, case, revision, reference, reuse=reuse)
+    except PersistenceError as error:
+        # Its exception arguments contain formatted text, not its three constructor fields.
+        raise ValueError(str(error)) from error
+
+
+def _pairs(
+    out: Path,
+    cases: list[CalibrationCase],
+    revision: str,
+    references: dict[str, EquivalenceCase],
+    reuse: tuple[Path, ...],
+    jobs: int,
+) -> Iterator[PairResult]:
+    if jobs == 1:
+        for case in cases:
+            reference = references[case.name] if case.script is None else None
+            yield record_pair(out, case, revision, reference, reuse=reuse)
+        return
+    with ProcessPoolExecutor(max_workers=jobs) as pool:
+        for batch in batched(cases, jobs, strict=False):
+            futures = [
+                pool.submit(
+                    _worker_pair,
+                    out,
+                    case.name,
+                    revision,
+                    references[case.name] if case.script is None else None,
+                    reuse,
+                )
+                for case in batch
+            ]
+            for future in futures:
+                yield future.result()
+
+
+def run(
+    out: Path, en08_directory: Path, *, reuse: tuple[Path, ...] = (), jobs: int = 1
+) -> CalibrationReceipt:
+    if not 1 <= jobs <= 4:
+        raise ValueError("jobs must be 1 through 4")
     en08, equivalence = read_equivalence(en08_directory)
     pins = calibration_pins()
     cases = sorted(calibration_cases(out / "config"), key=lambda case: case.script is None)
@@ -186,9 +240,7 @@ def run(out: Path, en08_directory: Path, *, reuse: tuple[Path, ...] = ()) -> Cal
     pairs: list[PairResult] = []
     status: Literal["equal", "different", "incomplete"] = "equal"
     revision = recording_revision()
-    for case in cases:
-        reference = equivalence[case.name] if case.script is None else None
-        pair = record_pair(out, case, revision, reference, reuse=reuse)
+    for pair in _pairs(out, cases, revision, equivalence, reuse, jobs):
         pairs.append(pair)
         status = pair.comparison.status
         if status != "equal":
