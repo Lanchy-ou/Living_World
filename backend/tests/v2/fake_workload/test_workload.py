@@ -5,6 +5,7 @@ import json
 import pytest
 
 from living_island.analysis.v2.export import fingerprint
+from living_island.analysis.v2.shards import InspectionArchive
 from living_island.memory.v2.profiles import SelectedProfile
 from v2.fake_workload.evidence import capture, disconnected, terminal_cases
 from v2.fake_workload.island import ROOT
@@ -44,6 +45,19 @@ def test_ev13_bounded_workload(tmp_path, packet):
         if case == "week":
             noah = report["actors"]["noah"]
             assert noah["fallback_turns"] and noah["model_handbacks"]
+            archive = InspectionArchive.open(directory / noah["export"])
+            decisions = sorted(
+                (c for c in archive.index.calls if c.call_kind == "decision"), key=lambda c: c.tick
+            )
+            attempts = [a for c in decisions for a in archive.read(c.shard).attempts]
+            seventh = attempts[6]
+            assert seventh.dispatch.call.turn_id == noah["fallback_turns"][0]
+            assert (seventh.terminal.status, seventh.terminal.error_class) == (
+                400,
+                "provider_error",
+            )
+            assert noah["terminal_counts"]["provider_error"] == 1
+            assert report["terminal_counts"]["provider_error"] == 1
     with disconnected():
         terminals = terminal_cases(tmp_path / "terminals")
     assert terminals["no_dispatch"]["attempts"] == 0
@@ -73,6 +87,13 @@ def exercise_periods(directory, packet):
         closed = period.deliver(FilteredDelivery(packet(tick=start + 36))).record
         assert closed.outcome == expected
         if expected == "failed":
+            (selection,) = flow.state.calls
+            assert selection.authorized.kind == "consolidation_selection"
+            (attempt,) = selection.attempts
+            assert (attempt.terminal.status, attempt.terminal.error_class) == (
+                400,
+                "provider_error",
+            )
             assert closed.pending_after == ("p:ella:1",)
         else:
             assert not closed.pending_after

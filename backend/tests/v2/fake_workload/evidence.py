@@ -135,6 +135,7 @@ def capture(directory, case, ticks):
             run_manifest_sha256=fingerprint(directory / "run-manifest.json"),
             replay_sha256=fingerprint(directory / "replay.json"),
             actors=actors,
+            terminal_counts=sum((row["terminal_counts"] for row in actors.values()), Counter()),
             recording_seconds_by_day=day_times,
             wall_seconds=perf_counter() - started,
             provider_check=d7,
@@ -162,6 +163,7 @@ def accept(report):
         and p["tick"] > failures[0]["tick"]
         for p in ella["periods"]
     )
+    assert ella["terminal_counts"]["provider_error"] == 1
     assert set(ella["terminal_counts"]) == {
         "timeout",
         "rate_limit",
@@ -178,8 +180,11 @@ def accept(report):
             for k in ("continue", "intent", "utterance", "set", "clear", "mute", "valid_citation")
         )
         noah = report["actors"]["noah"]
+        assert noah["terminal_counts"]["provider_error"] == 1
+        assert report["terminal_counts"]["provider_error"] == 2
         assert noah["fallback_turns"] and noah["model_handbacks"]
     else:
+        assert report["terminal_counts"]["provider_error"] == 1
         assert set(report["provider_check"]) == KINDS
 
 
