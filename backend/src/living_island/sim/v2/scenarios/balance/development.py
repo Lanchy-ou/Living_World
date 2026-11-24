@@ -14,6 +14,13 @@ from .campaign import campaign, heavy_lock
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--en08", required=True, type=Path, help="accepted equivalence directory")
+    parser.add_argument("--jobs", type=int, choices=range(1, 5), default=2)
+    parser.add_argument(
+        "--calibration-checkout",
+        type=Path,
+        default=cli.ROOT,
+        help="source checkout pinned by existing calibration case receipts",
+    )
     args = parser.parse_args()
     equivalence = args.en08.resolve()
     runs = cli.ROOT / "runs" / "m13"
@@ -31,13 +38,13 @@ def main() -> int:
                 "-m",
                 "living_island.sim.v2.scenarios.calibration",
                 "--out",
-                "../runs/m13/calibration-en10",
+                str(calibration),
                 "--en08",
                 str(equivalence),
                 "--jobs",
-                "4",
+                str(args.jobs),
             ],
-            cwd=cli.ROOT,
+            cwd=args.calibration_checkout.resolve(),
             check=True,
         )
         raw = (calibration / "receipt.json").read_bytes()
@@ -51,7 +58,7 @@ def main() -> int:
             calibration,
             digest,
             development,
-            4,
+            args.jobs,
             equivalence_revision=equivalence.name.removeprefix("acceptance-"),
             inspect=False,
             reuse=(),

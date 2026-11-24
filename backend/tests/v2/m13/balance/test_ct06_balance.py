@@ -187,7 +187,20 @@ def test_wrapper_owns_lock_through_development_only(tmp_path, monkeypatch, state
     real_lock = development.heavy_lock
     monkeypatch.setattr(development, "heavy_lock", lambda: real_lock(lock))
     monkeypatch.setattr(development.cli, "ROOT", tmp_path)
-    monkeypatch.setattr(sys, "argv", ["wrapper", "--en08", str(evidence)])
+    checkout = tmp_path / "pinned"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "wrapper",
+            "--en08",
+            str(evidence),
+            "--jobs",
+            "2",
+            "--calibration-checkout",
+            str(checkout),
+        ],
+    )
     out = tmp_path / "runs/m13/calibration-en10"
     calls = []
     raw = json.dumps(
@@ -201,15 +214,15 @@ def test_wrapper_owns_lock_through_development_only(tmp_path, monkeypatch, state
     ).encode()
 
     def calibrate(command, *, cwd, check):
-        assert lock.is_file() and cwd == tmp_path and check
-        assert command[-4:] == ["--en08", str(evidence), "--jobs", "4"]
+        assert lock.is_file() and cwd == checkout and check
+        assert command[-6:] == ["--out", str(out), "--en08", str(evidence), "--jobs", "2"]
         calls.append("calibrate")
         out.mkdir(parents=True)
         (out / "receipt.json").write_bytes(raw)
 
     def develop(stage, calibration, digest, directory, jobs, **options):
         assert lock.is_file() and calibration == out
-        assert digest == sha256(raw).hexdigest() and jobs == 4
+        assert digest == sha256(raw).hexdigest() and jobs == 2
         assert options["equivalence_revision"] == revision
         calls.append(stage)
         return {"verdict": "PASS"}

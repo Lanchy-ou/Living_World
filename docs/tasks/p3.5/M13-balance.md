@@ -14,16 +14,16 @@ D2 selects the S2 m6 production geometry, the P2 base policy in stand-alone visi
 
 From the repository root, set `$ct05Dir` to the absolute directory containing the EN-10 calibration receipt, `$ct05Sha` to its SHA-256 and `$equivalenceRevision` to the accepted equivalence commit above. On Windows the entry point takes `C:\Temp\li-heavy.lock` exclusively and exits immediately if the host is occupied. One parent owns the lock through completion of all workers and report publication. Each worker owns a separate case directory.
 
-The phase 2 wrapper runs the calibration CLI with four workers and writes `runs/m13/calibration-en10/receipt.json`. An equal receipt with zero missing cases authorizes the development round. The wrapper owns one lock across both steps. The owner reviews both reports before any held-out work.
+The recovery wrapper uses two workers for both stages and writes `runs/m13/calibration-en10/receipt.json`. The detached calibration checkout at `90caa0a` matches the original CT-04 arm scopes. An equal receipt with zero missing cases authorizes development. The wrapper owns one lock across both steps. The owner reviews both reports before any held-out work.
 
 ```powershell
-uv run --directory backend python -m living_island.sim.v2.scenarios.balance.development --en08 F:/p35-w1/en10/runs/m13/en10/acceptance-3d729bcfe3bd3e2fb3207100f2075830100c3999
+uv run --directory backend python -m living_island.sim.v2.scenarios.balance.development --jobs 2 --calibration-checkout F:/p35-w1/ct06-pin --en08 F:/p35-w1/en10/runs/m13/en10/acceptance-3d729bcfe3bd3e2fb3207100f2075830100c3999
 ```
 
 To resume development separately with the same verified calibration:
 
 ```powershell
-uv run --directory backend python -m living_island.sim.v2.scenarios.balance --stage development --calibration $ct05Dir --receipt-sha256 $ct05Sha --equivalence-revision $equivalenceRevision --jobs 4 --out ../runs/m13/balance-dev
+uv run --directory backend python -m living_island.sim.v2.scenarios.balance --stage development --calibration $ct05Dir --receipt-sha256 $ct05Sha --equivalence-revision $equivalenceRevision --jobs 2 --out ../runs/m13/balance-dev
 ```
 
 Record the development report digest, reviewed candidate tree and pack version here before starting held-out acceptance on that candidate. If development needs tuning, retain the round, obtain a CT-03 allocation and repeat development in a fresh directory. Pass `--reuse <absolute-prior-round-directory>` to admit verified cases with identical inputs. A changed starter pin requires fresh treatment cases. If any held-out result informs tuning, retain its report and arrange registration and admission of a disjoint replacement list before further acceptance work.
