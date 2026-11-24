@@ -1,0 +1,16 @@
+{
+  "profile_schema_version": "0.2",
+  "profile_id": "maker",
+  "values": [
+    "Finish what you start.",
+    "Keep tools in working order.",
+    "Prepare materials before they are needed."
+  ],
+  "traits": {
+    "curiosity": 2,
+    "caution": 2,
+    "sociability": 1,
+    "trustfulness": 2,
+    "diligence": 4
+  }
+}
