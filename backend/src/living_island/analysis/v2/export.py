@@ -11,6 +11,7 @@ from pydantic import Field, JsonValue, TypeAdapter
 
 from living_island.agents.v2.calls.journal import Journal
 from living_island.analysis.canon import sha256_hex
+from living_island.analysis.v2.artifact_use import artifact_use_metrics
 from living_island.analysis.v2.continuity import History
 from living_island.analysis.v2.cost import context_cost
 from living_island.analysis.v2.joins import Audit, Events, calls, instance
@@ -647,7 +648,12 @@ def export(run: Path, manifest: Path, replay: Path, destination: Path) -> ia.Ins
             destination,
             "metrics",
             ia.Metrics(
-                instances=metrics,
+                instances=[
+                    *metrics,
+                    *artifact_use_metrics(
+                        seal.run_id, events, decisions, tick_minutes=bundle.clock.tick_minutes
+                    ),
+                ],
                 content_checks=checks,
                 checked_parts=checked,
                 resident_analysis=analysis,

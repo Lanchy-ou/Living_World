@@ -351,12 +351,17 @@ def test_artifact_use_export_repeats_the_same_recorded_rows(tmp_path, monkeypatc
         destination = tmp_path / name
         index = export(*inputs, destination)
         archive = InspectionArchive.open(destination)
-        return artifact_use_metrics(
+        expected = artifact_use_metrics(
             index.run_id,
             archive.read(index.attempts).events,
             [archive.read(ref.shard).record for ref in index.decisions],
             tick_minutes=clock.tick_minutes,
         )
+        exported = [
+            r for r in archive.read(index.metrics).instances if r.metric.startswith("artifact_")
+        ]
+        assert exported == expected
+        return exported
 
     first = read_again("first")
     assert totals(first) == (1, 0, 0)
