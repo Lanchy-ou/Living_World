@@ -43,9 +43,7 @@ from living_island.world.v2.engine.validate import EnginePack
 from living_island.world.v2.rules.vocabulary import parse_vocabulary
 
 ROOT = Path(__file__).resolve().parents[6]
-RUN_ID = "dl06-provider-live"
-AUDIT_SHA256 = "b5e626c9bad17a41683676ee37774a742161eef25eeb17854266a3f37fb6d85d"
-RECEIPT_SHA256 = "89ed3f2f9597b735faa0d793bc013924bf00f8210ef469ca5320b5773e4bacbc"
+RUN_ID = "dl06-provider-recheck"
 VOCABULARY_SHA256 = "5de460d9e649a1000080ad902b475026d8e1e88b571f2497557d565af3351a94"
 PIN = {
     "provider": "deepseek-responses",
@@ -100,6 +98,12 @@ class Release(BaseModel):
     preflight_sha256: spend.Hash
     ledger_sha256: spend.Hash
     max_cny: spend.Money
+
+
+@dataclass(frozen=True)
+class SamplePins:
+    audit_sha256: str
+    receipt_sha256: str
 
 
 @dataclass(frozen=True)
@@ -167,12 +171,14 @@ def check_wire(body: bytes, contract: Contract) -> None:
         raise ValueError(f"{contract.kind}: second schema copy in user text")
 
 
-def load_samples(directory: Path) -> tuple[tuple[Sample, ...], str, History]:
-    receipt = Receipt.model_validate_json(pinned_bytes(directory / "receipt.json", RECEIPT_SHA256))
+def load_samples(directory: Path, pins: SamplePins) -> tuple[tuple[Sample, ...], str, History]:
+    receipt = Receipt.model_validate_json(
+        pinned_bytes(directory / "receipt.json", pins.receipt_sha256)
+    )
     if receipt.provider_check.keys() != INSTRUCTIONS.keys():
         raise ValueError("expected one EV-05 sample of each call kind")
     path = directory / "provider-check.sqlite"
-    pinned_bytes(path, AUDIT_SHA256)
+    pinned_bytes(path, pins.audit_sha256)
     audit = AuditReader(path)
     history = History(audit, audit.cursor())
     vocab_raw = pinned_bytes(ROOT / "content/vocabulary/vocab-0.1.toml", VOCABULARY_SHA256)
@@ -220,11 +226,13 @@ def load_samples(directory: Path) -> tuple[tuple[Sample, ...], str, History]:
     return tuple(samples), vocabulary.vocabulary_hash, history
 
 
-def preflight(samples: tuple[Sample, ...], vocabulary_hash: str) -> dict[str, object]:
+def preflight(
+    samples: tuple[Sample, ...], vocabulary_hash: str, sample_pins: SamplePins
+) -> dict[str, object]:
     return {
         "implementation_sha256": digest(Path(__file__).read_bytes()),
-        "sample_sha256": AUDIT_SHA256,
-        "ev05_receipt_sha256": RECEIPT_SHA256,
+        "sample_sha256": sample_pins.audit_sha256,
+        "ev05_receipt_sha256": sample_pins.receipt_sha256,
         "vocabulary_sha256": VOCABULARY_SHA256,
         "canonical_vocabulary_sha256": vocabulary_hash,
         "requests": {
@@ -506,6 +514,8 @@ def main() -> int:
     parser.add_argument(
         "--sample-dir", type=Path, required=True, help="EV-05 Ella evidence directory"
     )
+    parser.add_argument("--sample-sha256", required=True, help="SHA-256 of provider-check.sqlite")
+    parser.add_argument("--receipt-sha256", required=True, help="SHA-256 of the Ella receipt.json")
     parser.add_argument(
         "--live", action="store_true", help="opt in to the separately released check"
     )
@@ -515,8 +525,9 @@ def main() -> int:
     if args.live and (args.release is None or args.ledger is None):
         parser.error("--live needs both --release and --ledger")
     try:
-        samples, vocabulary_hash, history = load_samples(args.sample_dir)
-        pins = preflight(samples, vocabulary_hash)
+        sample_pins = SamplePins(args.sample_sha256, args.receipt_sha256)
+        samples, vocabulary_hash, history = load_samples(args.sample_dir, sample_pins)
+        pins = preflight(samples, vocabulary_hash, sample_pins)
         if args.live:
             return live_check(samples, history, pins, args.release, args.ledger)
         fake_check(samples, history)

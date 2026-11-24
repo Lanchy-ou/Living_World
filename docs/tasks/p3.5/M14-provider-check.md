@@ -101,6 +101,9 @@ Actual costs and day sizing await the separately authorized observation.
 
 ## Evidence and release for live dispatch
 
+This section records the original `/0.1` release and commands on `0c70926`.
+Use the [recheck procedure](#prepare-the-prompt-recheck) for the new prompts.
+
 For the proposed UTC dispatch date, record official DeepSeek evidence resolving
 `deepseek-flash` to `DeepSeek-V4.1-Flash-1017` and confirming the 1,000,000-token
 window, 8,000-token output reserve, and Responses support for stateless
@@ -210,3 +213,95 @@ projection. This is a reservation. [Opening reconciliation](P3.5-spend-ledger.md
 The release was validated against both pinned hashes without dispatching.
 The [live invocation](#evidence-and-release-for-live-dispatch) references
 the two local JSON files.
+
+## First live result on 2026-11-24
+
+The owner ran the original sample once. The eight requests dispatched between
+14:28:01 and 14:28:11 UTC under the off-peak tariff. DeepSeek returned HTTP 200
+for 8/8 attempts. Local parsing succeeded on 6/8 attempts and eventually on
+all six logical calls. The decision subset parsed 2/3 dispatches and 1/2
+first dispatches, below the final M9 smoke's 22/22 first-pass result. The D7
+provider gate failed. EV-06 remains on hold.
+
+| Kind | Parsed dispatches | First dispatch | Settled CNY |
+| --- | ---: | --- | ---: |
+| `decision` | 1/1 | Parsed | 0.00737000 |
+| `decision_after_recall` | 1/2 | Invalid output | 0.00817490 |
+| `recall` | 1/1 | Parsed | 0.00018000 |
+| `morning` | 1/1 | Parsed | 0.00104000 |
+| `consolidation_selection` | 1/1 | Parsed | 0.00294200 |
+| `consolidation_change_set` | 1/2 | Invalid output | 0.00650096 |
+| **Total** | **6/8** | **4/6 parsed** | **0.02620786** |
+
+Both invalid outputs had a sentence of prose before a JSON object. At
+offline inspection, the unchanged `/0.1` parser accepted each object alone.
+The provider echoed `text.format` as `json_schema` with `strict: null` in
+both responses. The Responses guide documents `text.format` support and
+defines no `strict` flag. The observed behavior left the whole-output
+requirement to the prompt and local parser. The original prompts had no
+explicit JSON-only instruction. [Responses compatibility guide](https://api-docs.deepseek.com/guides/responses_api/)
+
+`decision_after_recall`, attempt 0, assistant output excerpt
+
+```text
+I'll head toward the spring to the northeast to explore a sustainable water source, and greet my neighbors on the way.
+
+{"action": {"kind": "intent", "intent": {"action": "move_to",
+```
+
+`consolidation_change_set`, attempt 0, assistant output excerpt
+
+```text
+I'll take a look around — I've only explored a small patch so far and curiosity is pulling me to see what's near the rock and woods edges.
+
+{"ops":[{"op_id":"op1","op":"add","ref":"m:ella:5",
+```
+
+| Retained evidence | SHA-256 |
+| --- | --- |
+| Original paid audit `runs/dl06-provider-live/provider-check.sqlite` | `11e24dd942339fa7973d4ad9cfb4b0d754281a565bb2aa54e8458d5ae0eda931` |
+| `decision_after_recall` attempt 0 raw response blob | `df826fb681179323796a1c415c8f0ed7996133c6bb6297f61223d6eb1ae7aa26` |
+| `consolidation_change_set` attempt 0 raw response blob | `15c9eca50a5307e30f35c06a4f9c846f9b9a7870cde9608652d9129233d5879a` |
+| Reconciled `runs/dl06-recheck-ledger.json` | `e8a92cc2514389c9a0eba43dd28e27a07378bc7f0e01508a47bc832171ff0ea2` |
+
+The recheck ledger carries the eight original dispatches and their usage as
+one settled paid run, with CNY 0 outstanding and CNY 19.97379214 of phase
+headroom. The original release files and archived run retain their hashes.
+The owner authorized one prompt recheck within the original CNY 5.00
+authorization. The remaining recheck ceiling is **CNY 4.97379214**.
+
+## Prepare the prompt recheck
+
+Claude Code allocated `backend/src/living_island/agents/v2/calls/contracts.py`
+to DL-06 for this change. Each of the six instructions appends “Reply with
+only the JSON object that matches the response schema, with no other text
+before or after it.” Each prompt advances to `<kind>/0.2`. The schema hashes
+match the first check and the typed parser still rejects prefixed or suffixed
+prose. The preflight takes the new sample and receipt SHA-256 pins explicitly
+and the recheck has its own one-time `dl06-provider-recheck` run identity.
+The recheck release must bind the fresh preflight and reconciled ledger and
+fit the remaining CNY 4.97379214 ceiling.
+
+| Prompt version | SHA-256 |
+| --- | --- |
+| `decision/0.2` | `aab0565735df4cf6de933b511ba83bb5c9f1ecb284a4fa87f364965f3e130fdf` |
+| `decision_after_recall/0.2` | `0642904e2d212dd3da3ceb4abf5382d178d500387df23dbee75b85106bb7c66f` |
+| `recall/0.2` | `28748f1a08fd5ad4aacaa4b7ecf0acf471f7bb85231c1f9459c95ab4cdea1781` |
+| `morning/0.2` | `b12156ddc0387c4354bd1717e04a7f1fe7fa7fee1c2b8d98df8d92f760d79e05` |
+| `consolidation_selection/0.2` | `01fae1a9993290a507d25b5dfc6085173255a0d9bb44154ee36eb5e45bfd902a` |
+| `consolidation_change_set/0.2` | `12dc324c74c7eea449f70393fe5a8d5349878bb891e99c9d7ad5ea7e6a13c123` |
+
+After the host lock is free, run the Ella-only EV-05 rehearsal from
+`F:\p35-w1\dl06` in PowerShell. It claims the lock exclusively, creates a
+fresh `runs/ev05-…/ella` directory, and prints the session path.
+
+```powershell
+uv run --offline --no-env-file --locked --directory backend/tests --project .. python -m v2.fake_workload.evidence --case ella --lock C:\Temp\li-heavy.lock | Tee-Object -Variable dl06EllaRun
+```
+
+After `ella passed`, run the new offline preflight in the same terminal.
+
+```powershell
+$dl06EllaSample = Join-Path ($dl06EllaRun | Select-Object -First 1) 'ella'
+uv run --offline --no-env-file --locked --directory backend python -m living_island.sim.v2.harness.provider_check --sample-dir $dl06EllaSample --sample-sha256 ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $dl06EllaSample 'provider-check.sqlite')).Hash.ToLowerInvariant()) --receipt-sha256 ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $dl06EllaSample 'receipt.json')).Hash.ToLowerInvariant())
+```

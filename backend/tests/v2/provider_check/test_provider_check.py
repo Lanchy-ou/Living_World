@@ -59,12 +59,23 @@ def staged(tmp_path):
 
 
 def test_source_hash_rejects_tampering(tmp_path):
-    sample = tmp_path / "receipt.json"
-    sample.write_bytes(b"approved")
-    assert check.pinned_bytes(sample, digest(b"approved")) == b"approved"
-    sample.write_bytes(b"overwritten")
-    with pytest.raises(ValueError, match="pinned SHA-256 differs"):
-        check.pinned_bytes(sample, digest(b"approved"))
+    receipt = tmp_path / "receipt.json"
+    staged = {"prepared": "fact", "terminal": "fact", "sent_bytes": 1, "wire_sha256": "hash"}
+    receipt_bytes = json_bytes({"provider_check": {kind: staged for kind in check.INSTRUCTIONS}})
+    receipt.write_bytes(receipt_bytes)
+    audit = tmp_path / "provider-check.sqlite"
+    audit.write_bytes(b"approved")
+    pins = check.SamplePins(digest(b"approved"), digest(receipt_bytes))
+    report = check.preflight((), "vocabulary", pins)
+    assert report["sample_sha256"] == pins.audit_sha256
+    assert report["ev05_receipt_sha256"] == pins.receipt_sha256
+
+    audit.write_bytes(b"overwritten")
+    with pytest.raises(ValueError, match=r"provider-check\.sqlite: pinned SHA-256 differs"):
+        check.load_samples(tmp_path, pins)
+    receipt.write_bytes(b"overwritten")
+    with pytest.raises(ValueError, match=r"receipt\.json: pinned SHA-256 differs"):
+        check.load_samples(tmp_path, pins)
 
 
 def test_framed_schema_is_single_and_only_in_provider_field():
