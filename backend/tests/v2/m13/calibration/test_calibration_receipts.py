@@ -182,10 +182,13 @@ def test_parallel_calibration_preserves_serial_receipt(tmp_path, en08_report, mo
     from living_island.sim.v2.scenarios.calibration import campaign
 
     names = ("wap23-reply-first-reply", "dl25-generic-act-no-item")
-    registered = {c.name: c for c in campaign.calibration_cases(tmp_path / "config")}
-    monkeypatch.setattr(
-        campaign, "calibration_cases", lambda _: tuple(registered[n] for n in names)
-    )
+    register = campaign.calibration_cases
+
+    def register_short_cases(directory):
+        registered = {c.name: c for c in register(directory)}
+        return tuple(registered[n] for n in names)
+
+    monkeypatch.setattr(campaign, "calibration_cases", register_short_cases)
     serial, parallel = tmp_path / "serial", tmp_path / "parallel"
     receipt = campaign.run(serial, en08_report)
     assert receipt.status == "equal" and tuple(c.case for c in receipt.cases) == names
@@ -195,3 +198,11 @@ def test_parallel_calibration_preserves_serial_receipt(tmp_path, en08_report, mo
     for workers in (0, 5):
         with pytest.raises(ValueError, match="jobs"):
             campaign.run(parallel, en08_report, jobs=workers)
+
+    blocked = tmp_path / "blocked"
+    case = register_short_cases(blocked / "config")[0]
+    held = blocked / case.name / "config" / f".{case.config}.toml.lock"
+    held.parent.mkdir(parents=True)
+    held.touch()
+    with pytest.raises(ValueError, match="writer lock exists"):
+        campaign.run(blocked, en08_report, jobs=2)

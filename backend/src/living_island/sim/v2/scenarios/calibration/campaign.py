@@ -8,6 +8,7 @@ from itertools import batched
 from pathlib import Path
 from typing import Literal
 
+from living_island.persistence._codec import PersistenceError
 from living_island.persistence.v2.journal import store_once
 from living_island.persistence.v2.manifest import Digest
 from living_island.sim.equivalence.projection import read_projection
@@ -182,8 +183,12 @@ def _worker_cases(inputs: Path) -> dict[str, CalibrationCase]:
 def _worker_pair(
     out: Path, name: str, revision: str, reference: EquivalenceCase | None, reuse: tuple[Path, ...]
 ) -> PairResult:
-    case = _worker_cases(out / "config")[name]
-    return record_pair(out, case, revision, reference, reuse=reuse)
+    try:
+        case = _worker_cases(out / "config")[name]
+        return record_pair(out, case, revision, reference, reuse=reuse)
+    except PersistenceError as error:
+        # Its exception arguments contain formatted text, not its three constructor fields.
+        raise ValueError(str(error)) from error
 
 
 def _pairs(
