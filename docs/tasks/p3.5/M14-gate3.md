@@ -473,11 +473,10 @@ with the same frontend sources as the pinned executable.
 
 The owner approved one short probe on 2026-11-25 with a total cap of
 **CNY 0.50**. Offline preflight completed at **12:36:08 Beijing time**,
-before the 13:40 cutoff. The released window is **12:00 inclusive to 14:00
-exclusive Beijing time on 2026-11-25**. The release loader verifies that
-all of the window settles at the off-peak cache-hit, cache-miss and output
-rates of CNY 0.02, 1 and 4 per million tokens. It uses peak rates of CNY
-0.04, 2 and 8 for the reservation. [Dated pricing evidence](M14-provider-check.md#owner-release-on-2026-11-24)
+before the 13:40 cutoff. The original window of 12:00–14:00 Beijing time
+expired without a dispatch. Its off-peak cache-hit, cache-miss and output
+rates were CNY 0.02, 1 and 4 per million tokens. The reservation uses peak
+rates of CNY 0.04, 2 and 8. [Dated pricing evidence](M14-provider-check.md#owner-release-on-2026-11-24)
 
 The probe uses `compat-v1` verb descriptions and schema, Ella's explorer
 profile, the pinned DeepSeek Responses transport and model
@@ -498,20 +497,21 @@ stages required for citation comparison. [Owner sleep and map rulings](../../spe
 Overall pass requires all five criteria on the first attempt and fully
 settled usage within the cap. Prep measured 55,893 counted input tokens
 and holds the 8,000-token limit on each of the five outputs. With zero
-cache hits the reserve is **CNY 0.431786 at peak** and CNY 0.215893 at the
-released rate. Before each claim the runner checks the signed window,
-settled probe charges plus outstanding holds and the worst-case peak cost
-of the candidate against the probe and phase limits. There are no retries
-or fallbacks. The output directory is exclusive and the probe cannot resume.
+cache hits the reserve is **CNY 0.431786 at peak**. The expired off-peak
+window would have cost up to CNY 0.215893. Before each claim the runner
+checks the signed window, settled probe charges plus outstanding holds and
+the worst-case peak cost of the candidate against the probe and phase
+limits. There are no retries or fallbacks. The output directory is
+exclusive and the probe cannot resume.
 
 The pinned phase evidence carries CNY 2.33784866 settled and the original
 CNY 0.133982 hold, leaving CNY 17.52816934 of phase headroom. EV-04 tariff
 rows are date-scoped. The wrapper ledger therefore retains the earlier
-peak-billed evidence byte for byte and supplies the separate off-peak
+peak-billed evidence byte for byte and supplies a separate
 probe slice. It combines their reconciled totals without re-rating the
 earlier claims. [Phase ledger](P3.5-spend-ledger.md#opening-ledger)
 
-| Input under `runs/m14-ev06-probe-inputs/` | SHA-256 |
+| Original input under `runs/m14-ev06-probe-inputs/` | SHA-256 |
 | --- | --- |
 | `probe.py` | `2311fc5191834afe96864e0bb784fe0fcc9cfc2be94218cf519c980ef0c02f4f` |
 | `preflight.json` | `d62e75351de574c0494aed4ce5f5900972bffad0859936ac62ccdafed3ff739b` |
@@ -526,6 +526,28 @@ target. Cap and closed-window cases sent nothing and wrote no claim.
 The live output is reserved for `runs/m14-ev06-probe/`. It will contain
 the input packets, durable provider audit, verdicts and probe-only EV-04
 ledger. A full replacement needs separate owner authorization.
+
+#### Peak-window reissue
+
+Gate 2 passed for `f794cb4`, including the runner pinned above. The owner
+reissued the one-time probe for **Wednesday 2026-11-25, 15:10 inclusive to
+18:00 exclusive Beijing time**. Offline validation reproduced the existing
+preflight and packet bytes. The reviewed runner refused the original
+off-peak tariff for the new window. With the owner's approval, the ledger
+wrapper's probe-only settlement row now uses peak cache-hit, cache-miss and
+output rates of CNY 0.04, 2 and 8 per million tokens. The embedded phase
+ledger remains byte-identical and retains the CNY 0.133982 hold.
+
+The preflight SHA-256 is unchanged. The runner, pass rule, CNY 0.50 cap and
+CNY 0.431786 peak reserve carry forward. The original release and wrapper
+pins above document the expired window. Use the reissued files at the same
+paths. The offline release check passed with the peak row. It confirmed
+15:10 is admitted and 18:00 is excluded. The live output is still unclaimed.
+
+| Active input under `runs/m14-ev06-probe-inputs/` | SHA-256 |
+| --- | --- |
+| `ledger.json` | `18d7dabb0c1c01eee041c3b636ff45d47873e7286a10c7f247e3991618e93690` |
+| `release.json` | `7931ba791d19e73ac837be7951153c14d8b124a924af7266aaf91943ee0e354a` |
 
 Use this PowerShell block from the EV-06 checkout during the released
 window. A nonzero exit preserves the probe evidence for review.
