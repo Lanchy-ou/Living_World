@@ -2,9 +2,10 @@
 
 ## Owner pre-dispatch sheet · 2026-11-25
 
-**The original peak run stopped at committed tick 185 of 432. The owner
-authorized one replacement for 10:30–12:00 Beijing time on 2026-11-25.
-Replacement dispatch and final Gate 3 disposition remain pending.**
+**The replacement completed all 432 ticks. Live evidence for the required
+consolidation and recall loop is missing. The package is ready for the
+owner's Gate 3 disposition.** The original peak run stopped at committed
+tick 185 and is retained separately.
 M12 and M13 are signed. DL-06 passed D7 with
 the six JSON-only `/0.2` prompts. The recheck accepted 7/7 dispatches over
 HTTP, parsed 5/6 first attempts and completed all six logical calls. Both
@@ -245,9 +246,8 @@ The owner authorized one replacement through Claude Code under the standing
 approval. Gate 2 passed for `4e22110` and `e0802e5`, and Claude Code pushed
 `e0802e5` for CI. The detached checkout at `F:/p35-w1/ev06r` is pinned to
 `4e2211081cb26b36d4c450f0abffd6eb978213f2`. Its offline preflight finished at
-10:10:53 Beijing time on Wednesday 2026-11-25, so the release uses
-**10:30 inclusive to 12:00 exclusive** on that date. The one-time capture
-directory there is still unclaimed.
+10:10:53 Beijing time on Wednesday 2026-11-25. The released window was
+**10:30 inclusive to 12:00 exclusive** on that date.
 
 The peak tariff remains CNY 0.04 / 2 / 8 per million cache-hit input,
 cache-miss input and output tokens. The runtime guard reserves at zero cache
@@ -272,7 +272,7 @@ and after validating the replacement artifacts.
 | `runs/m14-ev06-ella-ledger.json` | `d7bff2daadbf64f99b6922ec8053d849ad661aad13c7a4f4b2c8c2e1362d5c3b` |
 | `runs/m14-ev06-ella-release.json` | `fe29be71cff2dfe35a9ef782227fcc29fb0d072cf0ffd3b692caecad21e1f088` |
 
-The owner runs the following during the released window. It loads only
+The operator command for that release follows. It loads only
 `DEEPSEEK_API_KEY` into the process environment and removes it on exit.
 
 ```powershell
@@ -297,26 +297,174 @@ finally {
 }
 ```
 
-### Gate 3 evidence after the owner run
+### Replacement evidence and owner walkthrough
 
 | Item | Status |
 | --- | --- |
-| Paid capture, realized horizon, spend by resident-day and fallback counts | Incomplete at tick 185. The raw audit, packets, opening checkpoint and committed checkpoint remain under `runs/m14-ev06-ella/`. Full Gate 3 accounting and analysis remain pending. |
-| Offline rebuild | Verified read-only through committed tick 185, including the unmatched claim in the audit tail. The DL-05 verifier rebuilt request wires and store revisions and checked committed submissions, events and final state without a provider transport. |
-| Verified export and analysis walkthrough | Pending paid capture and seal. Load the matching `replay.json` in the viewer, open analysis mode and select the fresh inspection directory. Attach the actual resident/period/turn IDs and artifact hashes once selected. |
-| Decision and memory trace | Pending. Select a model-origin outcome and trace earlier packet/day-entry through the K-boundary change set and record revision, then subsequent morning, sent recall, decision citation and world result. Distinguish rendered, dispatched and cited evidence. |
-| Skill and starter evidence | Pending. Report self-found skill evidence or an evidenced zero after the run. The starter-only grass-cord axe is due at M15. |
+| Paid capture and realized horizon | The replacement in `F:/p35-w1/ev06r/runs/m14-ev06-ella/` completed 432 ticks, three whole game days. Ella, Mia and Ryan were alive at the final checkpoint. Ella had one open waking period, `p:ella:1`, and zero closed waking periods. |
+| Spend and model use | 331 logical calls, 343 attempts, 330 successful parses, 13 invalid outputs and one fallback turn. Replacement spend was CNY 1.65184272 with no outstanding replacement charges. The phase ledger settles CNY 2.33784866 and retains the original CNY 0.133982 hold. |
+| Offline rebuild | DL-05 replay passed through tick 432 with zero provider calls and zero uncommitted attempts. World SHA-256 `7a5e39b559bc672ae75ba806d2cd248a1270ff708500434f1fcf5a94ec1a97bd`. Store SHA-256 `6ffbf5f9ae3d21bb4c0e766c27ea88caf9047f023732ff892d2cb7622895ca7d`. The original capture has its own read-only verification through tick 185 and is retained as incident evidence. |
+| Verified export and analysis walkthrough | EV-01 export passed with 331 decision records and all 2,092 referenced shards verified. The frontend importer opened the replay and the selected trace. [Artifact hashes and viewer steps](#artifact-verification-and-viewer-steps) |
+| Decision and memory trace | The packet-to-action trace below is verified from the live journal. There are zero K-boundary consolidations, consolidation change sets, morning calls, sent recalls, use-credit writes and valid citations. The full continuity trace required by M14 is missing. |
+| Skill and starter evidence | Zero skill records and zero self-found skill hypotheses. All 109 replacement store revisions contain only personality, social and intention record bodies. The starter-only grass-cord axe is due at M15. |
 | Prior engineering receipts | [MM-16/MF-14 and DL-19](P3.5-MM-02.md#gate-3-receipts) · [Round 3](M14-plan.md#4-done-when) · [EV-13 rehearsal](M14-fake-workload.md#receipts-and-verified-exports) · [PR-05 provenance](P3.5-PR-05-review.md) · [PR-06 provenance](P3.5-PR-06-review.md) |
-| Owner release and Gate 3 | The owner approved the original peak run and one replacement for 10:30–12:00 Beijing time on 2026-11-25. Final Gate 3 signature and live evidence revision are pending. |
+| Owner disposition | Pending. The run completed the horizon, and the missing continuity evidence leaves milestone acceptance incomplete under the task card. |
 
-For a separately released replacement capture, run these commands from its
-checkout in a terminal without the provider key. The export command verifies
-all shards and writes the viewer replay to `runs/m14-ev06-inspection-source/replay.json`.
-Load that replay, open analysis mode and select `runs/m14-ev06-inspection`.
-[EV-01 export contract](P3.5-EV-01.md)
+#### Realized spend and model use
+
+Game days group dispatch ticks into 144-tick intervals. Each invalid output
+counts as a charged attempt. Ryan and Mia were rule-controlled and had zero
+model attempts or provider cost. [EV-04 reconciliation](P3.5-spend-ledger.md#opening-ledger)
+
+| Ella game day | Dispatch ticks | Logical calls | Attempts | Invalid outputs | Model turns | Fallback turns | Settled CNY |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 0–143 | 135 | 138 | 3 | 135 | 0 | 0.52210456 |
+| 2 | 144–287 | 96 | 101 | 6 | 95 | 1 | 0.47855816 |
+| 3 | 288–431 | 100 | 104 | 4 | 100 | 0 | 0.65118000 |
+| **Replacement total** | **0–431** | **331** | **343** | **13** | **330** | **1** | **1.65184272** |
+
+The only fallback was `ella:t000136` at decision tick 145 after two invalid
+outputs. The world tagged it at `m14-ev06-ella:0000000146:000030`. All claims
+were `decision` calls. The admitted request counter ranged from 11,271 to
+239,954 tokens, with zero omissions. The 343 attempts recorded 59 `clear`,
+162 `busy` and 122 `crowded` pressure readings. Provider usage was 13,363,968
+cached input tokens, 341,326 uncached input tokens and 54,329 output tokens.
+At the peak tariff those categories settled CNY 0.53455872, CNY 0.68265200
+and CNY 0.43463200 respectively. The replacement used 343 attempts against
+109 in rehearsal. It settled CNY 1.65184272 against the CNY 1.452171
+central peak forecast and the CNY 9.480838 peak reserve. It reached the
+horizon without an accounting stop.
+
+The inspection cost projection allocates settled input charges in proportion
+to counted tokens per sent section. Provider usage determines the actual
+charge for each attempt. The aggregate section estimates reconcile to EV-04
+at the ledger's pico-CNY precision.
+
+| Sent section | Counted tokens | Estimated input CNY |
+| --- | ---: | ---: |
+| `system` | 41,160 | 0.001512700629 |
+| `prefix` | 132,055 | 0.004853247868 |
+| `day_log` | 17,185,054 | 0.480398920992 |
+| `current_state` | 658,113 | 0.021077820491 |
+| `schema` | 3,207,393 | 0.117877196857 |
+| Wire framing and tokenization | 21,042,928 | 0.591490833163 |
+| **Total input** | **42,266,703** | **1.217210720000** |
+
+Output added CNY 0.43463200 and unassigned cost was CNY 0. The total is
+CNY 1.65184272 across 343 attempts.
+
+#### Live trace and the missing continuity links
+
+1. At tick **356**, packet `m14-ev06-ella:perception:0000000356:ella` showed
+   fruit at `fruit_02` through `perception.visible_entities[0]`. The builder
+   logged it as `d:p:ella:1:629` (seq 6270). The `day_log` fragment
+   `941b1722d5ebab22083b1c7cc08620196cdfa53c81cc61230b554760c7c267f2`
+   was rendered in the full request and sent on `ella:t000283:decision`
+   (seq 6283–6284, wire
+   `f5a3e4a01672d81c35fa750ca3eea0acd618e5f871bcd761840d0d74ee9553c1`).
+   The model submitted `ella:t000283:a` to gather from the observed tree.
+2. That adopted output became day entry `d:p:ella:1:632`. Its set-intention
+   mechanically wrote `m:ella:62` in v78 → v79 at seq 6293 (record blob
+   `ec1b4e83c9771d7a04bbb3430de9170eb228c712207a28aa8a1d1a2b3697b9b9`).
+   The gather transferred fruit `e:e72084c65d28c600` to Ella and settled
+   under `compat_gather_fruit` at `m14-ev06-ella:0000000358:000022`.
+3. At tick **358**, packet `m14-ev06-ella:perception:0000000358:ella`
+   delivered the gather result in `perception.action_feedback[0]`. Its day
+   entry `d:p:ella:1:637` (seq 6323) was sent as a `day_log` fragment with
+   hash `60a3c96adefdc8ffae81a94db38142790eed58afa134bd5a521762e432121df4`.
+   The same request rendered and sent `m:ella:62` in `current_state`, at
+   revision `79:7fc6c1acd3afe5988e04db227dde4db9dc843200103dbfc851af67147df0b32b`
+   and fragment hash `cb8dc424101dd3764b204b1a027300274a4d5489d4a930a769df72259d7bc44e`.
+   The `ella:t000285:decision` wire was
+   `76cd95c785795acfb828cc2fd0d8ac14838489410e8edd854c42fbbbc688d708`
+   (seq 6332–6333). The model returned a paraphrase of the gather feedback
+   in `cite`, and the validator recorded it as invalid. No valid citation
+   was bound. The current-state intention earned zero use credit under DL-28.
+4. The model-origin submission `ella:t000285:a` ate the same fruit at world
+   tick **359**. `m14-ev06-ella:0000000359:000017` consumed the fruit, and
+   `m14-ev06-ella:0000000359:000019` recorded `compat_eat_fruit` applied
+   with `tastes_good`. Satiety rose from 2550 to 4550 in the intervening
+   `needs_changed` event. The recording establishes delivery of the
+   intention to the model. Reliance on that intention is unverified.
+
+The sole sleep was `ella:t000121` at decision tick **125**. The world
+recorded a six-tick sleep at `m14-ev06-ella:0000000126:000002` and a wake at
+`m14-ev06-ella:0000000131:000014`. The wake packet logged
+`d:p:ella:1:269`. Ella resumed deciding in `p:ella:1`. She never reached
+the 36-tick K boundary. The audit has zero consolidation authorizations and
+zero morning, recipe-recall or deliberate-recall receipts. All 331 decisions
+belong to `p:ella:1`. The adopted turns have 959 invalid citation entries and
+zero valid ones. Without a committed change set or any recall, the live chain
+from earlier-period memory to citation cannot be supplied by this capture.
+
+#### Artifact verification and viewer steps
+
+Paths in the table are relative to `F:/p35-w1/ev06r/runs/`.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `m14-ev06-ella/resident.sqlite` | `4130e1d92d2fc5c58d3092b035b97ab194228eca30b966776d4f6a1ac7adea63` |
+| `m14-ev06-ella/result.json` | `df27ea736ef43abf7efd9e7cec825a4d3e29801a42aafe812526729612f3517b` |
+| `m14-ev06-ella/checkpoints/432.json` | `002094ea1966a1b9e589c38567fc66266ed0e75b8d0b49700019a6570370c104` |
+| `m14-ev06-ella/sanitized-evidence.json` | `152dc7d9155f4d46bbea98a82ab5b3b14c9b948929c68dd9af7399b15f129afe` |
+| `m14-ev06-inspection-source/capture.json` | `004407f318269793e8a68cbe4efe5728d98410911041c8d803df149fd221ff35` |
+| `m14-ev06-inspection-source/finished.json` | `ded1521fc44c44faf4d306ee737b312657fb23bace431113aa9d90dd4d26ddbb` |
+| `m14-ev06-inspection-source/resident.sqlite` | `71440531f6bf05aa36df4f6bce8be488d74729a9f9e1b18c6ab2f45b44193eb9` |
+| `m14-ev06-inspection-source/replay.json` | `8f54eb91a4a8a6ff98bf152490c14dd427e33258aacaeb78b2dd02aa7634fa85` |
+| `m14-ev06-inspection/index.json` | `1510c68611e67a0c453f7ebeeb6e41beddfdfaee7dcdfd6def8c29ea4160fcc1` |
+
+| Inspection shard | SHA-256 |
+| --- | --- |
+| Sleep decision `ella:t000121` | `e75f13e8c5669ce0fd565faaef101b2672e916e55a93fa3045dd0a2eadc4f47e` |
+| Gather decision `ella:t000283` | `5d3385d291a441008be502c75246969ac5af6c6a599ea01b7237a6f33dfbfce7` |
+| Eat decision `ella:t000285` | `f35bd971f72a6ca36f743f398d310e1a2d6f85600388ebf66a56cdd82498dad6` |
+| Cost | `ad8e39541dcbf2764e8f1634c207f51c20b32ee25a7b9c2343bb3ddfee2c0168` |
+| Metrics | `76dd20b21fb479d3f10fae40e767f8b5f71688c527b8241fc0664e8636868d3c` |
+
+The capture receipt binds the finished export to raw SQLite through seq 7460.
+The seal pins all 432 packet batches. The batches for ticks 356 and 358 have
+SHA-256 `d680fdb67d177fcaeb936e319f72ce04a63a8a3953793b60b2c3e9dda4d1ae1b`
+and `02202e935f7f30ca9aa1700241419cd4576f7c7d87a90d59daeab76d90f4d24f`
+respectively. The verified index has 1,296 packet deliveries and 109 memory
+revisions. Its metrics record zero skill hypotheses, consolidation rows and
+memory-use observations.
+
+The offline commands below ran at the pinned replacement checkout, with the
+provider key removed from the process environment. The export command uses a
+fresh destination and verifies every referenced inspection shard. To repeat an
+export, choose a fresh `--destination`, which also creates a sibling
+`-source` directory. [EV-01 export contract](P3.5-EV-01.md)
 
 ```powershell
-uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident replay --out ../runs/m14-ev06-ella
-uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident export --out ../runs/m14-ev06-ella --destination ../runs/m14-ev06-inspection
-pnpm --dir frontend dev
+Set-Location -LiteralPath 'F:\p35-w1\ev06r'
+Remove-Item -LiteralPath 'Env:\DEEPSEEK_API_KEY' -ErrorAction SilentlyContinue
+$env:GIT_CONFIG_COUNT = '1'
+$env:GIT_CONFIG_KEY_0 = 'safe.directory'
+$env:GIT_CONFIG_VALUE_0 = 'F:/p35-w1/ev06r'
+uv run --offline --locked --no-env-file --no-sync --directory backend python -m living_island.sim.v2.harness.live_resident replay --out ../runs/m14-ev06-ella
+uv run --offline --locked --no-env-file --no-sync --directory backend python -m living_island.sim.v2.harness.live_resident export --out ../runs/m14-ev06-ella --destination ../runs/m14-ev06-inspection
 ```
+
+Start the viewer with `pnpm --dir frontend dev` from a checkout with the
+locked frontend dependencies. Use the local URL printed by the command. The
+viewer validator accepted all 433 display frames. The replay file contains
+the initialization event and map frames. Detailed world events and call
+evidence are in the inspection directory. The frontend importer accepted
+all 2,093 files, opened the three turns and their source packets, and read
+the cost totals. This validation used the viewer's importer under Node
+with the same frontend sources as the pinned executable.
+
+1. Click **Open replay…** and choose
+   `F:/p35-w1/ev06r/runs/m14-ev06-inspection-source/replay.json`.
+2. Click **Open inspection…**. Navigate into
+   `F:/p35-w1/ev06r/runs/m14-ev06-inspection/` and select `index.json` and
+   every shard in that directory with Ctrl+A. Open **Decision debug** in
+   the lower right to enter analysis mode.
+3. In **Inspection record → Decisions**, choose `ella:t000121` at tick
+   125 and expand its sleep outcome. Then choose `ella:t000283` at tick
+   356 for the gather and `ella:t000285` at tick 358 for the subsequent
+   eat decision. **Open source packet** shows the exact perception and day
+   entries. Expand **Full request · sent** and **Decision, citations and
+   telemetry** to compare the outgoing evidence with citation validation.
+   Open the `act_settled` outcome to see the world tick.
+   **Inspection record → Analysis → cost** shows the resident-day costs.
