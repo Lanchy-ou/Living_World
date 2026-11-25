@@ -111,8 +111,9 @@ def test_evicted_memory_is_absent_from_both_consolidation_requests(audit, fake_e
 
     clock, transport = fake_exchange(['{"read":[]}', '{"ops":[]}'])
     for kind, selected in (("consolidation_selection", None), ("consolidation_change_set", choice)):
+        logical = call(kind, period.prefix.period_id)
         prepared = prepare(
-            call(kind, period.prefix.period_id), Contract(kind), fixed.assembly(selected), audit
+            logical, Contract(kind), fixed.assembly(selected, change_set_id=logical.call_id), audit
         )
         returned = attempt(
             prepared, n=0, has_running_action=False, journal=audit, transport=transport, clock=clock
@@ -138,7 +139,7 @@ def test_mf10_omit_last_selected_then_oldest_pending_then_oldest_current_entry(
     assert choice.ignored == (first, *surplus)
     contract = Contract("consolidation_change_set")
     logical = call("change", fixed.period.prefix.period_id)
-    assembly = fixed.assembly(choice)
+    assembly = fixed.assembly(choice, change_set_id=logical.call_id)
     missing = (second, first, "p:ella:1", "p:ella:2", fixed.period.entries[0].id)
     assert tuple(assembly.parts[i].source.id for i in assembly.omission_order) == (
         *missing,
@@ -153,7 +154,9 @@ def test_mf10_omit_last_selected_then_oldest_pending_then_oldest_current_entry(
     (map_part,) = fixed.period.current_state
     large = replace(map_part, text=map_part.text + "x" * (WINDOW - oracle(small.body)))
     fixed = replace(fixed, period=replace(fixed.period, current_state=(large,)))
-    prepared = prepare(logical, contract, fixed.assembly(choice), audit)
+    prepared = prepare(
+        logical, contract, fixed.assembly(choice, change_set_id=logical.call_id), audit
+    )
     clock, transport = fake_exchange(['{"ops":[]}'])
     returned = attempt(
         prepared, n=0, has_running_action=False, journal=audit, transport=transport, clock=clock
@@ -170,7 +173,9 @@ def test_mf10_omit_last_selected_then_oldest_pending_then_oldest_current_entry(
     )
     allowed = fixed.sent(logical, sent.manifest)
     assert fixed.sent_pending(sent.manifest) == ()
-    assert {r.id for r in allowed.full} == {ids[k][0] for k in ("social", "commitment", "belief")}
+    assert {r.id for r in allowed.full} == {
+        ids[k][0] for k in ("social", "commitment", "belief", "personality")
+    }
     assert len(allowed.index) == len(fixed.view.records)
     (heard,) = allowed.entries
     assert isinstance(heard, HeardSpeechEntry)
@@ -197,7 +202,9 @@ def test_mf23_selection_and_change_set_protect_their_distinct_framed_floors(
         ("consolidation_change_set", selected),
     ):
         logical = call(kind, pid)
-        prepared = prepare(logical, Contract(kind), fixed.assembly(choice), audit)
+        prepared = prepare(
+            logical, Contract(kind), fixed.assembly(choice, change_set_id=logical.call_id), audit
+        )
         floor = prepared.record.candidates[prepared.record.floor_candidate]
         raw = (tmp_path / floor.wire_sha256).read_bytes()
         assert oracle(raw) == floor.manifest.tokens_total
@@ -213,7 +220,8 @@ def test_mf23_selection_and_change_set_protect_their_distinct_framed_floors(
         ]
         expected = [ids["commitment"][0], review_id, prefix_id]
         if choice is not None:
-            expected += ids["social"]
+            expected += [*ids["social"], *ids["personality"]]
+            assert f"Change-set call ID for inferred sources: {logical.call_id}" in floor_text
         assert sorted(r.id for r in full_records) == sorted(expected)
         for key in expected:
             projected = next(r for r in fixed.view.records if r.ref.id == key)

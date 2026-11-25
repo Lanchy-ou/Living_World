@@ -1,0 +1,897 @@
+{
+  "audit_sha256": "d0f86cf03d0b18c94cc81a39e3ceef22d6c885bb75057d8975fc2ee9f93568f9",
+  "cases": [
+    {
+      "parsed_sha256": "db7ab967cedaad3940d02e792969bec8a734c413621e7305148654cbca30b2fc",
+      "period": "p:ella:1",
+      "response": {
+        "ops": [
+          {
+            "op": "add",
+            "op_id": "op1",
+            "record": {
+              "about_tick": {
+                "from": 6,
+                "to": 269
+              },
+              "confidence": 4,
+              "content": {
+                "empty_areas": [
+                  "northwest woods ~(22-33,13-27)",
+                  "eastern grass ~(40-46,28-34)",
+                  "southern woods strip ~(42-46,36-39)"
+                ],
+                "sightings": {
+                  "mia": "last seen tick 170 near (38,29)/(39,30)",
+                  "ryan": "last seen ~tick 182-183 south of (39,37)"
+                },
+                "skills_hypothesis": "Gathering failed repeatedly with bare or coordinate targets; likely a real entity such as a plant must be in sight first.",
+                "spring_drink_tiles": [
+                  "(38,31)",
+                  "(39,31)"
+                ]
+              },
+              "gist": "Long scouting loops northwest woods, east and south grass found nothing to gather; the spring at (38,30) is the only verified water, and drinking works from an adjacent tile like (38,31).",
+              "kind": "episodic",
+              "sources": [
+                {
+                  "call_id": "ella:t000221",
+                  "kind": "inferred",
+                  "memory_ids": [
+                    "m:ella:148",
+                    "m:ella:156",
+                    "m:ella:182"
+                  ]
+                },
+                {
+                  "entry_id": "d:p:ella:1:15",
+                  "kind": "observed"
+                }
+              ],
+              "text": null
+            },
+            "ref": "new-1"
+          },
+          {
+            "op": "add",
+            "op_id": "op2",
+            "record": {
+              "about_tick": {
+                "from": 221,
+                "to": 270
+              },
+              "confidence": 4,
+              "content": {
+                "needs_at_wake": {
+                  "health": "strong",
+                  "hydration": "strong",
+                  "satiety": "critical",
+                  "stamina": "low"
+                },
+                "position": "(38,31)"
+              },
+              "gist": "Satiety was critical at wake; repeated rests and a sleep left stamina low, so a longer uninterrupted sleep is needed before further searching.",
+              "kind": "episodic",
+              "sources": [
+                {
+                  "entry_id": "d:p:ella:1:529",
+                  "kind": "observed"
+                },
+                {
+                  "entry_id": "d:p:ella:1:444",
+                  "kind": "observed"
+                }
+              ],
+              "text": null
+            },
+            "ref": "new-2"
+          },
+          {
+            "by": "new-3",
+            "id": "m:ella:184",
+            "op": "supersede",
+            "op_id": "op3"
+          },
+          {
+            "op": "add",
+            "op_id": "op4",
+            "record": {
+              "about_tick": {
+                "from": 269,
+                "to": 270
+              },
+              "confidence": 3,
+              "content": {
+                "steps": [
+                  "sleep longer (up to ~54 ticks) at (38,31)",
+                  "drink adjacent to spring (38,30)",
+                  "look for a real plant/pile/deposit before gathering",
+                  "prefer unexplored tiles not yet swept"
+                ]
+              },
+              "gist": "Plan after waking: sleep longer beside the spring to restore stamina, then drink, then search unexplored ground for a visible plant to gather; do not retry gathers without a target in sight.",
+              "kind": "episodic",
+              "sources": [
+                {
+                  "call_id": "ella:t000221",
+                  "kind": "inferred",
+                  "memory_ids": [
+                    "m:ella:184",
+                    "m:ella:183"
+                  ]
+                }
+              ],
+              "text": null
+            },
+            "ref": "new-3"
+          }
+        ]
+      },
+      "sent": {
+        "call_id": "p:ella:1:270:change_set",
+        "entries": [
+          {
+            "about": [
+              "phenomenon:drinks",
+              "verb:drink"
+            ],
+            "delivery_id": "m14-ev06-ella:perception:0000000006:ella",
+            "id": "d:p:ella:1:15",
+            "member_paths": [
+              "perception.action_feedback[0]",
+              "reports[0]"
+            ],
+            "owner_id": "ella",
+            "type": "action_result"
+          },
+          {
+            "about": [
+              "need:satiety"
+            ],
+            "delivery_id": "m14-ev06-ella:perception:0000000221:ella",
+            "id": "d:p:ella:1:444",
+            "member_paths": [
+              "reports[1]"
+            ],
+            "owner_id": "ella",
+            "type": "body_change"
+          },
+          {
+            "about": [
+              "need:stamina"
+            ],
+            "delivery_id": "m14-ev06-ella:perception:0000000270:ella",
+            "id": "d:p:ella:1:529",
+            "member_paths": [
+              "reports[0]"
+            ],
+            "owner_id": "ella",
+            "type": "body_change"
+          }
+        ],
+        "full": [
+          {
+            "content_hash": "26cf5f300f2b182281e5084d90303dc24754065a004da78d222dd422b5ed7e9e",
+            "id": "m:ella:184",
+            "store_version": 237
+          },
+          {
+            "content_hash": "e1fb855e4a6f575df036729edff87514327caa343c2458685191de368433bf26",
+            "id": "m:ella:183",
+            "store_version": 237
+          },
+          {
+            "content_hash": "5fdde40ba381767c7f3f8b8e740127dda09c2927109b02e806bce3214d7b44e2",
+            "id": "m:ella:1",
+            "store_version": 237
+          }
+        ],
+        "index": [
+          {
+            "content_hash": "5fdde40ba381767c7f3f8b8e740127dda09c2927109b02e806bce3214d7b44e2",
+            "id": "m:ella:1",
+            "store_version": 237
+          },
+          {
+            "content_hash": "3b65abd97030ab8aa9d360deebf90fe43a478d2c75bf0bccc38ef5dcb56c580c",
+            "id": "m:ella:182",
+            "store_version": 237
+          },
+          {
+            "content_hash": "e1fb855e4a6f575df036729edff87514327caa343c2458685191de368433bf26",
+            "id": "m:ella:183",
+            "store_version": 237
+          },
+          {
+            "content_hash": "26cf5f300f2b182281e5084d90303dc24754065a004da78d222dd422b5ed7e9e",
+            "id": "m:ella:184",
+            "store_version": 237
+          }
+        ],
+        "owner_id": "ella"
+      },
+      "store": {
+        "credited_ids": [],
+        "credited_turn_id": null,
+        "current_intention_id": "m:ella:184",
+        "next_number": 185,
+        "owner_id": "ella",
+        "records": [
+          {
+            "about_tick": null,
+            "confidence": 4,
+            "content": {
+              "traits": [
+                {
+                  "base": 4,
+                  "changes": [],
+                  "max": 4,
+                  "min": 3,
+                  "trait_id": "curiosity",
+                  "value": 4
+                },
+                {
+                  "base": 1,
+                  "changes": [],
+                  "max": 2,
+                  "min": 0,
+                  "trait_id": "caution",
+                  "value": 1
+                },
+                {
+                  "base": 2,
+                  "changes": [],
+                  "max": 3,
+                  "min": 1,
+                  "trait_id": "sociability",
+                  "value": 2
+                },
+                {
+                  "base": 2,
+                  "changes": [],
+                  "max": 3,
+                  "min": 1,
+                  "trait_id": "trustfulness",
+                  "value": 2
+                },
+                {
+                  "base": 2,
+                  "changes": [],
+                  "max": 3,
+                  "min": 1,
+                  "trait_id": "diligence",
+                  "value": 2
+                }
+              ]
+            },
+            "created_tick": 0,
+            "gist": "My personality",
+            "id": "m:ella:1",
+            "kind": "personality",
+            "last_used_tick": null,
+            "needs_review": false,
+            "owner_id": "ella",
+            "sources": [
+              {
+                "kind": "innate"
+              }
+            ],
+            "speech_derived": false,
+            "superseded_by": null,
+            "supersedes": null,
+            "text": null,
+            "updated_tick": 0,
+            "use_count": 0
+          },
+          {
+            "about_tick": null,
+            "confidence": 3,
+            "content": {
+              "ended_turn": "ella:t000218",
+              "set_turn": "ella:t000217",
+              "state": "replaced"
+            },
+            "created_tick": 262,
+            "gist": "Drink at the spring (38,30), rest to recover stamina, then search explored grass near water for edible plants, gathering only from a plant actually in sight.",
+            "id": "m:ella:182",
+            "kind": "intention",
+            "last_used_tick": null,
+            "needs_review": false,
+            "owner_id": "ella",
+            "sources": [
+              {
+                "entry_id": "d:p:ella:1:518",
+                "kind": "observed"
+              }
+            ],
+            "speech_derived": false,
+            "superseded_by": "m:ella:183",
+            "supersedes": "m:ella:181",
+            "text": "Drink at the spring (38,30), rest to recover stamina, then search explored grass near water for edible plants, gathering only from a plant actually in sight.",
+            "updated_tick": 263,
+            "use_count": 0
+          },
+          {
+            "about_tick": null,
+            "confidence": 3,
+            "content": {
+              "ended_turn": "ella:t000221",
+              "set_turn": "ella:t000218",
+              "state": "replaced"
+            },
+            "created_tick": 263,
+            "gist": "Rest beside the spring (38,30) to recover stamina, then search explored grass near water for edible plants, gathering only from a plant actually in sight.",
+            "id": "m:ella:183",
+            "kind": "intention",
+            "last_used_tick": null,
+            "needs_review": false,
+            "owner_id": "ella",
+            "sources": [
+              {
+                "entry_id": "d:p:ella:1:521",
+                "kind": "observed"
+              }
+            ],
+            "speech_derived": false,
+            "superseded_by": "m:ella:184",
+            "supersedes": "m:ella:182",
+            "text": "Rest beside the spring (38,30) to recover stamina, then search explored grass near water for edible plants, gathering only from a plant actually in sight.",
+            "updated_tick": 269,
+            "use_count": 0
+          },
+          {
+            "about_tick": null,
+            "confidence": 3,
+            "content": {
+              "ended_turn": null,
+              "set_turn": "ella:t000221",
+              "state": "current"
+            },
+            "created_tick": 269,
+            "gist": "Sleep beside the spring at (38,30) to restore stamina, then drink and resume searching explored grass near water for edible plants, gathering only from a plant ",
+            "id": "m:ella:184",
+            "kind": "intention",
+            "last_used_tick": null,
+            "needs_review": false,
+            "owner_id": "ella",
+            "sources": [
+              {
+                "entry_id": "d:p:ella:1:527",
+                "kind": "observed"
+              }
+            ],
+            "speech_derived": false,
+            "superseded_by": null,
+            "supersedes": "m:ella:183",
+            "text": "Sleep beside the spring at (38,30) to restore stamina, then drink and resume searching explored grass near water for edible plants, gathering only from a plant actually in sight.",
+            "updated_tick": 269,
+            "use_count": 0
+          }
+        ],
+        "version": 237
+      },
+      "tick": 305,
+      "verdicts": [
+        {
+          "depends_on": [],
+          "op_id": "op1",
+          "reason": "format",
+          "result": "dropped"
+        },
+        {
+          "depends_on": [],
+          "op_id": "op2",
+          "reason": "format",
+          "result": "dropped"
+        },
+        {
+          "depends_on": [],
+          "op_id": "op3",
+          "reason": "authority",
+          "result": "dropped"
+        },
+        {
+          "depends_on": [
+            "op3"
+          ],
+          "op_id": "op4",
+          "reason": "depends_on",
+          "result": "dropped"
+        }
+      ]
+    },
+    {
+      "parsed_sha256": "6e8909748b3e20c176772866ab89c4f374400f17dec5fc2df9ad8b720e12ff2f",
+      "period": "p:ella:2",
+      "response": {
+        "ops": [
+          {
+            "op": "add",
+            "op_id": "o1",
+            "record": {
+              "about_tick": {
+                "from": 305,
+                "to": 385
+              },
+              "confidence": 4,
+              "content": {
+                "finding": "satiety critical after ~1 day of searching; multiple gather attempts at tile targets failed as invalid target; no plant ever appeared in sight across grass, beach, woods",
+                "reliable_water": true,
+                "spring": "(38,30)"
+              },
+              "gist": "After a long fruitless sweep, ate nothing for a whole day; gathering at tiles repeatedly failed as 'invalid target'",
+              "kind": "observation",
+              "sources": [
+                {
+                  "entry_id": "d:p:ella:2:22",
+                  "kind": "observed"
+                },
+                {
+                  "entry_id": "d:p:ella:2:91",
+                  "kind": "observed"
+                },
+                {
+                  "entry_id": "d:p:ella:2:134",
+                  "kind": "observed"
+                },
+                {
+                  "entry_id": "d:p:ella:2:151",
+                  "kind": "observed"
+                }
+              ],
+              "text": "I swept grass, beach and woods edges from the spring all morning and afternoon and never saw a single edible plant. Every 'gather' aimed at a tile failed with 'invalid target' — only things actually in sight can be gathered. Water at the spring (38,30) is the one resource I can rely on."
+            },
+            "ref": "m:ella:249"
+          },
+          {
+            "op": "add",
+            "op_id": "o2",
+            "record": {
+              "about_tick": {
+                "from": 307,
+                "to": 358
+              },
+              "confidence": 3,
+              "content": {
+                "lesson": "approach within a tile or two before speaking",
+                "pattern": "utterance_result: out of hearing on 6 attempts while chasing their moving positions",
+                "people": [
+                  "mia",
+                  "ryan"
+                ]
+              },
+              "gist": "Calling out to mia and ryan repeatedly failed: out of hearing unless standing right beside them",
+              "kind": "observation",
+              "sources": [
+                {
+                  "entry_id": "d:p:ella:2:20",
+                  "kind": "observed"
+                },
+                {
+                  "entry_id": "d:p:ella:2:75",
+                  "kind": "observed"
+                },
+                {
+                  "entry_id": "d:p:ella:2:114",
+                  "kind": "observed"
+                }
+              ],
+              "text": "I tried to ask mia and ryan where food grows, but my words were never heard — they kept moving away before I got close enough. Speech only carries a short distance; I must be adjacent, not merely nearby."
+            },
+            "ref": "m:ella:250"
+          },
+          {
+            "op": "add",
+            "op_id": "o3",
+            "record": {
+              "about_tick": {
+                "from": 384,
+                "to": 385
+              },
+              "confidence": 4,
+              "content": {
+                "health": "low",
+                "hydration": "strong",
+                "position": "(22,13)",
+                "satiety": "critical",
+                "stamina": "moderate",
+                "tick": 385
+              },
+              "gist": "Long sleep at (22,13) restored stamina to moderate but left health low and satiety critical",
+              "kind": "observation",
+              "sources": [
+                {
+                  "entry_id": "d:p:ella:2:153",
+                  "kind": "observed"
+                },
+                {
+                  "entry_id": "d:p:ella:2:154",
+                  "kind": "observed"
+                },
+                {
+                  "entry_id": "d:p:ella:2:155",
+                  "kind": "observed"
+                }
+              ],
+              "text": "I slept 36 ticks in the north-west woods at (22,13). Stamina came back to moderate but health dropped to low and satiety is still critical — sleep alone won't fix hunger."
+            },
+            "ref": "m:ella:251"
+          },
+          {
+            "about_tick": null,
+            "content": {
+              "ended_turn": null,
+              "set_turn": "ella:t000285",
+              "state": "current"
+            },
+            "gist": "Return to the area near the spring at (38,30) and keep searching unexplored tiles for a plant actually in sight; ask anyone adjacent where food grows",
+            "id": "m:ella:248",
+            "op": "update",
+            "op_id": "o4",
+            "text": "Walk back south-east toward the spring at (38,30). Along the way inspect unexplored grass and woods tiles for any plant actually in sight, gathering only what is visible. If any person comes within a tile or two, ask them where edible plants grow."
+          },
+          {
+            "delta": 1,
+            "op": "trait",
+            "op_id": "o5",
+            "sources": [
+              {
+                "entry_id": "d:p:ella:2:22",
+                "kind": "observed"
+              },
+              {
+                "entry_id": "d:p:ella:2:91",
+                "kind": "observed"
+              }
+            ],
+            "trait_id": "curiosity"
+          },
+          {
+            "delta": 1,
+            "op": "trait",
+            "op_id": "o6",
+            "sources": [
+              {
+                "entry_id": "d:p:ella:2:35",
+                "kind": "observed"
+              },
+              {
+                "entry_id": "d:p:ella:2:134",
+                "kind": "observed"
+              }
+            ],
+            "trait_id": "caution"
+          },
+          {
+            "delta": -1,
+            "op": "trait",
+            "op_id": "o7",
+            "sources": [
+              {
+                "entry_id": "d:p:ella:2:20",
+                "kind": "observed"
+              },
+              {
+                "entry_id": "d:p:ella:2:75",
+                "kind": "observed"
+              }
+            ],
+            "trait_id": "trustfulness"
+          }
+        ]
+      },
+      "sent": {
+        "call_id": "p:ella:2:385:change_set",
+        "entries": [
+          {
+            "about": [],
+            "delivery_id": "m14-ev06-ella:perception:0000000313:ella",
+            "id": "d:p:ella:2:20",
+            "member_paths": [
+              "perception.last_utterance_feedback"
+            ],
+            "owner_id": "ella",
+            "type": "utterance_result"
+          },
+          {
+            "about": [
+              "verb:gather"
+            ],
+            "delivery_id": "m14-ev06-ella:perception:0000000314:ella",
+            "id": "d:p:ella:2:22",
+            "member_paths": [
+              "perception.action_feedback[0]",
+              "reports[0]"
+            ],
+            "owner_id": "ella",
+            "type": "action_result"
+          },
+          {
+            "about": [
+              "verb:gather"
+            ],
+            "delivery_id": "m14-ev06-ella:perception:0000000321:ella",
+            "id": "d:p:ella:2:35",
+            "member_paths": [
+              "perception.action_feedback[0]",
+              "reports[0]"
+            ],
+            "owner_id": "ella",
+            "type": "action_result"
+          },
+          {
+            "about": [],
+            "delivery_id": "m14-ev06-ella:perception:0000000342:ella",
+            "id": "d:p:ella:2:75",
+            "member_paths": [
+              "perception.last_utterance_feedback"
+            ],
+            "owner_id": "ella",
+            "type": "utterance_result"
+          },
+          {
+            "about": [
+              "verb:gather"
+            ],
+            "delivery_id": "m14-ev06-ella:perception:0000000349:ella",
+            "id": "d:p:ella:2:91",
+            "member_paths": [
+              "perception.action_feedback[0]",
+              "reports[0]"
+            ],
+            "owner_id": "ella",
+            "type": "action_result"
+          },
+          {
+            "about": [],
+            "delivery_id": "m14-ev06-ella:perception:0000000358:ella",
+            "id": "d:p:ella:2:114",
+            "member_paths": [
+              "perception.last_utterance_feedback"
+            ],
+            "owner_id": "ella",
+            "type": "utterance_result"
+          },
+          {
+            "about": [
+              "verb:gather"
+            ],
+            "delivery_id": "m14-ev06-ella:perception:0000000372:ella",
+            "id": "d:p:ella:2:134",
+            "member_paths": [
+              "perception.action_feedback[0]",
+              "reports[0]"
+            ],
+            "owner_id": "ella",
+            "type": "action_result"
+          },
+          {
+            "about": [
+              "need:stamina"
+            ],
+            "delivery_id": "m14-ev06-ella:perception:0000000384:ella",
+            "id": "d:p:ella:2:151",
+            "member_paths": [
+              "reports[1]"
+            ],
+            "owner_id": "ella",
+            "type": "body_change"
+          },
+          {
+            "about": [],
+            "delivery_id": "m14-ev06-ella:perception:0000000385:ella",
+            "id": "d:p:ella:2:153",
+            "member_paths": [
+              "perception.awareness",
+              "perception.running_action.intent_id"
+            ],
+            "owner_id": "ella",
+            "type": "sleep"
+          },
+          {
+            "about": [
+              "need:health"
+            ],
+            "delivery_id": "m14-ev06-ella:perception:0000000385:ella",
+            "id": "d:p:ella:2:154",
+            "member_paths": [
+              "reports[0]"
+            ],
+            "owner_id": "ella",
+            "type": "body_change"
+          },
+          {
+            "about": [
+              "need:stamina"
+            ],
+            "delivery_id": "m14-ev06-ella:perception:0000000385:ella",
+            "id": "d:p:ella:2:155",
+            "member_paths": [
+              "reports[1]"
+            ],
+            "owner_id": "ella",
+            "type": "body_change"
+          }
+        ],
+        "full": [
+          {
+            "content_hash": "537e3697fe2adec2a9d11d0ac0975a6148101c60df21b6c204c1bf76c41977c7",
+            "id": "m:ella:248",
+            "store_version": 377
+          }
+        ],
+        "index": [
+          {
+            "content_hash": "5fdde40ba381767c7f3f8b8e740127dda09c2927109b02e806bce3214d7b44e2",
+            "id": "m:ella:1",
+            "store_version": 377
+          },
+          {
+            "content_hash": "537e3697fe2adec2a9d11d0ac0975a6148101c60df21b6c204c1bf76c41977c7",
+            "id": "m:ella:248",
+            "store_version": 377
+          }
+        ],
+        "owner_id": "ella"
+      },
+      "store": {
+        "credited_ids": [
+          "m:ella:1",
+          "m:ella:2",
+          "m:ella:3"
+        ],
+        "credited_turn_id": "ella:t000285",
+        "current_intention_id": "m:ella:248",
+        "next_number": 249,
+        "owner_id": "ella",
+        "records": [
+          {
+            "about_tick": null,
+            "confidence": 4,
+            "content": {
+              "traits": [
+                {
+                  "base": 4,
+                  "changes": [],
+                  "max": 4,
+                  "min": 3,
+                  "trait_id": "curiosity",
+                  "value": 4
+                },
+                {
+                  "base": 1,
+                  "changes": [],
+                  "max": 2,
+                  "min": 0,
+                  "trait_id": "caution",
+                  "value": 1
+                },
+                {
+                  "base": 2,
+                  "changes": [],
+                  "max": 3,
+                  "min": 1,
+                  "trait_id": "sociability",
+                  "value": 2
+                },
+                {
+                  "base": 2,
+                  "changes": [],
+                  "max": 3,
+                  "min": 1,
+                  "trait_id": "trustfulness",
+                  "value": 2
+                },
+                {
+                  "base": 2,
+                  "changes": [],
+                  "max": 3,
+                  "min": 1,
+                  "trait_id": "diligence",
+                  "value": 2
+                }
+              ]
+            },
+            "created_tick": 0,
+            "gist": "My personality",
+            "id": "m:ella:1",
+            "kind": "personality",
+            "last_used_tick": 384,
+            "needs_review": false,
+            "owner_id": "ella",
+            "sources": [
+              {
+                "kind": "innate"
+              }
+            ],
+            "speech_derived": false,
+            "superseded_by": null,
+            "supersedes": null,
+            "text": null,
+            "updated_tick": 0,
+            "use_count": 64
+          },
+          {
+            "about_tick": null,
+            "confidence": 3,
+            "content": {
+              "ended_turn": null,
+              "set_turn": "ella:t000285",
+              "state": "current"
+            },
+            "created_tick": 384,
+            "gist": "Sleep here at (22,13) to restore stamina, then head back toward the spring at (38,30) and resume searching unexplored grass and woods for edible plants actually",
+            "id": "m:ella:248",
+            "kind": "intention",
+            "last_used_tick": null,
+            "needs_review": false,
+            "owner_id": "ella",
+            "sources": [
+              {
+                "entry_id": "d:p:ella:2:152",
+                "kind": "observed"
+              }
+            ],
+            "speech_derived": false,
+            "superseded_by": null,
+            "supersedes": "m:ella:247",
+            "text": "Sleep here at (22,13) to restore stamina, then head back toward the spring at (38,30) and resume searching unexplored grass and woods for edible plants actually in sight.",
+            "updated_tick": 384,
+            "use_count": 0
+          }
+        ],
+        "version": 377
+      },
+      "tick": 420,
+      "verdicts": [
+        {
+          "depends_on": [],
+          "op_id": "o1",
+          "reason": "format",
+          "result": "dropped"
+        },
+        {
+          "depends_on": [],
+          "op_id": "o2",
+          "reason": "format",
+          "result": "dropped"
+        },
+        {
+          "depends_on": [],
+          "op_id": "o3",
+          "reason": "format",
+          "result": "dropped"
+        },
+        {
+          "depends_on": [],
+          "op_id": "o4",
+          "reason": "authority",
+          "result": "dropped"
+        },
+        {
+          "depends_on": [],
+          "op_id": "o5",
+          "reason": "format",
+          "result": "dropped"
+        },
+        {
+          "depends_on": [
+            "o5"
+          ],
+          "op_id": "o6",
+          "reason": "depends_on",
+          "result": "dropped"
+        },
+        {
+          "depends_on": [
+            "o5",
+            "o6"
+          ],
+          "op_id": "o7",
+          "reason": "depends_on",
+          "result": "dropped"
+        }
+      ]
+    }
+  ]
+}

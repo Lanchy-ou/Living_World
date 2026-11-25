@@ -53,17 +53,29 @@ INSTRUCTIONS: dict[CallKind, str] = {
     "decision_after_recall": DECISION + " You have recalled once. Act now." + JSON_ONLY,
     "recall": "Choose up to five memory IDs from the index that answer the query." + JSON_ONLY,
     "morning": "Choose up to twenty memory IDs to carry into this waking period." + JSON_ONLY,
-    "consolidation_selection": CONSOLIDATE + " Choose up to sixty records to read." + JSON_ONLY,
+    "consolidation_selection": CONSOLIDATE
+    + " Choose up to sixty exact IDs from the index to read in full. Select any existing record "
+    "you plan to edit. Intentions are read-only context." + JSON_ONLY,
     "consolidation_change_set": CONSOLIDATE
-    + " Propose memory changes in application order."
-    + JSON_ONLY,
+    + " Propose memory changes in application order with unique op_id values. Use new:<n> "
+    "refs such as new:1 for adds and merges. Later operations may cite an earlier accepted "
+    "ref. Write a single-line gist of at most 160 characters and use the schema's content "
+    "fields for episodic, belief or skill additions. Merge only episodic or belief records. "
+    "Copy the displayed Change-set call ID into every inferred source. Use IDs from this "
+    "request. Observed sources must directly witness the subject. Existing records need "
+    "a full sent body to be edited. Intentions are read-only. Use trait for personality "
+    "changes, one supported step within bounds per trait." + JSON_ONLY,
 }
 
 
 def prompt_version_for(kind: CallKind) -> str:
-    if kind in ("decision", "decision_after_recall"):
+    if kind in (
+        "decision",
+        "decision_after_recall",
+        "consolidation_selection",
+        "consolidation_change_set",
+    ):
         return f"{kind}/0.4"
-    # Morning and consolidation also receive the revised explored map.
     version = "0.2" if kind == "recall" else "0.3"
     return f"{kind}/{version}"
 

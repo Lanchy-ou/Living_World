@@ -67,10 +67,22 @@ class FixedInput:
                 ignored.append(key)
         return Choice(tuple(selected), tuple(ignored))
 
-    def assembly(self, choice: Choice | None = None) -> Assembly:
-        """None builds selection. An empty successful choice still adds mechanical inputs."""
+    def assembly(
+        self, choice: Choice | None = None, *, change_set_id: str | None = None
+    ) -> Assembly:
+        """None builds selection. A successful choice adds mandatory change-set inputs."""
         period = self.period.visible_to(self.view)
-        parts = list(period.parts)
+        parts = []
+        if choice is not None:
+            assert change_set_id is not None
+            parts.append(
+                Part(
+                    "change_set_header",
+                    Ref(kind="template", id=change_set_id, version=None),
+                    f"Change-set call ID for inferred sources: {change_set_id}",
+                )
+            )
+        parts.extend(period.parts)
         days = [i for i, part in enumerate(parts) if part.source.kind == "day_log"]
         pending_start = len(parts)
         parts.extend(_pending_part(pending, self.view) for pending in self.pending)
@@ -95,9 +107,10 @@ class FixedInput:
         shown = {memory.revision for memory in period.prefix.memories}
         for revision in self.view.records:
             mechanical = choice is not None and revision.ref.id in self.mechanical_ids
+            personality = choice is not None and revision.record.kind == "personality"
             open_commitment = revision.record.kind == "commitment" and "open" in revision.flags
             if revision.ref not in shown and (
-                mechanical or open_commitment or revision.record.needs_review
+                mechanical or personality or open_commitment or revision.record.needs_review
             ):
                 shown.add(revision.ref)
                 fragment = render_memory(revision).part

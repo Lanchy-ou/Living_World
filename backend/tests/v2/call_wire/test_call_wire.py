@@ -266,10 +266,10 @@ def test_model_output_is_typed_at_each_kind_boundary():
         ("decision_after_recall", "0.4", {**act, "actor_id": "unbound"}, ActStep),
         ("morning", "0.3", {"ids": ["m:one"]}, MemoryIDs),
         ("recall", "0.2", {"ids": []}, MemoryIDs),
-        ("consolidation_selection", "0.3", {"read": []}, Selection),
+        ("consolidation_selection", "0.4", {"read": []}, Selection),
         (
             "consolidation_change_set",
-            "0.3",
+            "0.4",
             {"ops": [{"op": "forget", "op_id": "f", "id": "m:x"}]},
             ChangeSetOutput,
         ),

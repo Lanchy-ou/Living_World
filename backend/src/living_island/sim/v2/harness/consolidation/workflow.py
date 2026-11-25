@@ -307,7 +307,10 @@ class Workflow:
                 update={"call_id": f"{logical.call.period_id}:{logical.call.tick}:change_set"}
             )
             change = _authorize(
-                change_call, "consolidation_change_set", self.fixed.assembly(choice), self._journal
+                change_call,
+                "consolidation_change_set",
+                self.fixed.assembly(choice, change_set_id=change_call.call_id),
+                self._journal,
             )
             logical.outcome = "adopted"
             self._state.selection = selection
