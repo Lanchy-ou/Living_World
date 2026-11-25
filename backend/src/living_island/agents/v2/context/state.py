@@ -99,7 +99,7 @@ def _explored_map(view: wap.Perception) -> str:
         "Row y coordinates, top to bottom: " + " ".join(map(str, rows)),
     ]
     if springs:
-        lines.append("Explored spring tiles: " + ", ".join(springs))
+        lines.append("Explored spring tiles (drink from a tile next to one): " + ", ".join(springs))
     return "\n".join(lines)
 
 
@@ -163,5 +163,5 @@ def render_current_state(
                 f"Current intention {intention.ref.id}: {intention.record.text}",
             )
         )
-    parts.extend((part("sight", _sight(view)), part("map", _explored_map(view), "state-map/0.2")))
+    parts.extend((part("sight", _sight(view)), part("map", _explored_map(view), "state-map/0.3")))
     return CurrentState(tuple(parts), pressure_at)

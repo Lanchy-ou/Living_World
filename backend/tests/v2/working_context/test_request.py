@@ -288,7 +288,7 @@ def test_dl_07_only_resident_projections_reach_the_request(packet, audit, fake_e
             "~ = sea, S = spring, T = woods",
             "Column x coordinates, left to right: 0 1 2",
             "Row y coordinates, top to bottom: 0 1",
-            "Explored spring tiles: (2,1)",
+            "Explored spring tiles (drink from a tile next to one): (2,1)",
         ):
             assert public_text in decision
         # Only current state is replaced. The confirmation snapshot retains its
