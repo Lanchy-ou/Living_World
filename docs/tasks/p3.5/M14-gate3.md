@@ -2,8 +2,9 @@
 
 ## Owner pre-dispatch sheet · 2026-11-25
 
-**The owner-approved peak run stopped at committed tick 185 of 432. The
-capture is incomplete and final Gate 3 disposition remains pending.**
+**The original peak run stopped at committed tick 185 of 432. The owner
+authorized one replacement for 10:30–12:00 Beijing time on 2026-11-25.
+Replacement dispatch and final Gate 3 disposition remain pending.**
 M12 and M13 are signed. DL-06 passed D7 with
 the six JSON-only `/0.2` prompts. The recheck accepted 7/7 dispatches over
 HTTP, parsed 5/6 first attempts and completed all six logical calls. Both
@@ -238,15 +239,62 @@ store hash is `78752437455d2cc84f2a6e81532e6845d37caa778055c9018774534a55ee2094`
 uv run --offline --locked --no-env-file --directory backend python -c "from pathlib import Path; from living_island.sim.v2.harness.live_resident import Case, Capture, verify; r = verify(Capture.open(Path('F:/p35-w1/ev06/runs/m14-ev06-ella'), Case.load(), write=False)); print(r.replay.frames[-1].tick, r.tail_attempts, r.world_hash, r.store_hash)"
 ```
 
-A replacement requires owner authorization, a new reconciled ledger and a
-release signed for a separate checkout of fixed executable
-`4e2211081cb26b36d4c450f0abffd6eb978213f2`. From the fresh checkout root, the
-preflight pins its own empty `runs/m14-ev06-ella/` path. With the new release
-and key supplied by the owner, the exact commands are:
+### Owner-approved replacement release
+
+The owner authorized one replacement through Claude Code under the standing
+approval. Gate 2 passed for `4e22110` and `e0802e5`, and Claude Code pushed
+`e0802e5` for CI. The detached checkout at `F:/p35-w1/ev06r` is pinned to
+`4e2211081cb26b36d4c450f0abffd6eb978213f2`. Its offline preflight finished at
+10:10:53 Beijing time on Wednesday 2026-11-25, so the release uses
+**10:30 inclusive to 12:00 exclusive** on that date. The one-time capture
+directory there is still unclaimed.
+
+The peak tariff remains CNY 0.04 / 2 / 8 per million cache-hit input,
+cache-miss input and output tokens. The runtime guard reserves at zero cache
+and peak rates. Against the CNY 20 cap, EV-04 reconciles **CNY 0.68600594
+settled** and retains **CNY 0.133982** for the original claim at seq 3645.
+The replacement reserve is **CNY 9.480838** against **CNY 19.18001206** of
+headroom, leaving CNY 9.69917406 outside the new reserve.
+[Dated pricing evidence](M14-provider-check.md#owner-release-on-2026-11-24)
+
+The old and replacement executables use the same local run ID in separate
+checkouts. The replacement ledger labels the original capture
+`m14-ev06-ella-original`, preserving its 151 claims, 150 terminals and all
+attempt identities. Seq 3645 remains unmatched at cursor
+`03d3757ff50353a15c853d27c74863e5dabf6600907424736707e00ae26d0e06.0.dispatch.json`.
+The original audit remained read-only and its SHA-256 matched
+`ce3bc7c013caf26c8c179670932d835a080ef684fecd60e65cc6f9d6ab41e104` before
+and after validating the replacement artifacts.
+
+| Artifact in `F:/p35-w1/ev06r` | SHA-256 |
+| --- | --- |
+| CLI preflight | `6128432ff72b4c92519d4f9071e47aaa3b7c19aed1d6bd653b4e722e50fac1c4` |
+| `runs/m14-ev06-ella-ledger.json` | `d7bff2daadbf64f99b6922ec8053d849ad661aad13c7a4f4b2c8c2e1362d5c3b` |
+| `runs/m14-ev06-ella-release.json` | `fe29be71cff2dfe35a9ef782227fcc29fb0d072cf0ffd3b692caecad21e1f088` |
+
+The owner runs the following during the released window. It loads only
+`DEEPSEEK_API_KEY` into the process environment and removes it on exit.
 
 ```powershell
-uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident preflight --implementation 4e2211081cb26b36d4c450f0abffd6eb978213f2
-uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident run --live --implementation 4e2211081cb26b36d4c450f0abffd6eb978213f2 --release ../runs/m14-ev06-ella-release.json --ledger ../runs/m14-ev06-ella-ledger.json --out ../runs/m14-ev06-ella
+Set-Location -LiteralPath 'F:\p35-w1\ev06r' -ErrorAction Stop
+try {
+    $ev06Pattern = '^\s*(?:export\s+)?DEEPSEEK_API_KEY\s*=\s*(?:"(?<key>[^"]+)"|''(?<key>[^'']+)''|(?<key>[^#\s]+))(?:\s*#.*)?\s*$'
+    $ev06KeyLine = Select-String -LiteralPath 'E:\桌面\Living_World\.env' `
+        -Pattern $ev06Pattern -ErrorAction Stop | Select-Object -Last 1
+    if ($null -eq $ev06KeyLine) { throw 'DEEPSEEK_API_KEY is missing or invalid.' }
+    $env:DEEPSEEK_API_KEY = $ev06KeyLine.Matches[0].Groups['key'].Value
+
+    uv run --offline --locked --no-env-file --no-sync --directory backend `
+        python -m living_island.sim.v2.harness.live_resident run --live `
+        --implementation 4e2211081cb26b36d4c450f0abffd6eb978213f2 `
+        --release ../runs/m14-ev06-ella-release.json `
+        --ledger ../runs/m14-ev06-ella-ledger.json --out ../runs/m14-ev06-ella
+    if ($LASTEXITCODE -ne 0) { throw "EV-06 exited with code $LASTEXITCODE." }
+}
+finally {
+    Remove-Item -LiteralPath 'Env:\DEEPSEEK_API_KEY' -ErrorAction SilentlyContinue
+    Remove-Variable -Name ev06KeyLine -ErrorAction SilentlyContinue
+}
 ```
 
 ### Gate 3 evidence after the owner run
@@ -259,7 +307,7 @@ uv run --offline --locked --no-env-file --directory backend python -m living_isl
 | Decision and memory trace | Pending. Select a model-origin outcome and trace earlier packet/day-entry through the K-boundary change set and record revision, then subsequent morning, sent recall, decision citation and world result. Distinguish rendered, dispatched and cited evidence. |
 | Skill and starter evidence | Pending. Report self-found skill evidence or an evidenced zero after the run. The starter-only grass-cord axe is due at M15. |
 | Prior engineering receipts | [MM-16/MF-14 and DL-19](P3.5-MM-02.md#gate-3-receipts) · [Round 3](M14-plan.md#4-done-when) · [EV-13 rehearsal](M14-fake-workload.md#receipts-and-verified-exports) · [PR-05 provenance](P3.5-PR-05-review.md) · [PR-06 provenance](P3.5-PR-06-review.md) |
-| Owner release and Gate 3 | The owner approved the pre-dispatch sheet and the single peak run on 2026-11-25. Final Gate 3 signature and live evidence revision are pending. |
+| Owner release and Gate 3 | The owner approved the original peak run and one replacement for 10:30–12:00 Beijing time on 2026-11-25. Final Gate 3 signature and live evidence revision are pending. |
 
 For a separately released replacement capture, run these commands from its
 checkout in a terminal without the provider key. The export command verifies
