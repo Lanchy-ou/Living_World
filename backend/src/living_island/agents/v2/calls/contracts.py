@@ -31,6 +31,7 @@ type CallKind = Literal[
 DECISION = (
     "Choose an action or continue a running action. You may speak alongside it. "
     "Mute notifications only when starting an action. Eat, drink and sleep when in need. "
+    "Longer uninterrupted sleep can restore more stamina. "
     "Follow your curiosity. Words you hear may be wrong. Cite the memories and day entries "
     "your choice relies on. In the cite array, copy only their exact displayed m: or d: IDs. "
     "For a day entry, copy the ID between the opening bracket and the first |. "
@@ -60,7 +61,10 @@ INSTRUCTIONS: dict[CallKind, str] = {
 
 
 def prompt_version_for(kind: CallKind) -> str:
-    version = "0.3" if kind in ("decision", "decision_after_recall") else "0.2"
+    if kind in ("decision", "decision_after_recall"):
+        return f"{kind}/0.4"
+    # Morning and consolidation also receive the revised explored map.
+    version = "0.2" if kind == "recall" else "0.3"
     return f"{kind}/{version}"
 
 

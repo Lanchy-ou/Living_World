@@ -1231,7 +1231,7 @@ identical, and no run reached a WAP-26 exception
 
 ## OQ-P3.5-M14-3: Sleep duration and recovery cues
 
-Pending owner decision. In the EV-06 replacement, Ella chose one six-tick
+In the EV-06 replacement, Ella chose one six-tick
 nap after repeated blocked paths. It completed normally and raised her
 stamina from 560 to 1640. At 253 of the 301 subsequent delivered boundaries
 from tick 131 through 431, her stamina was low or critical. She chose rest
@@ -1259,14 +1259,14 @@ wake threshold, forced duration or smaller K would change a rule.
 3. Change gains, waking rules or K. This changes the measured behavior or
    which naps count as a waking-period boundary, and requires new baselines.
 
-Recommendation. Keep the current rules and K. Assess the unchanged sleep
-choice in a short probe and consider option 2 as a separately approved
-prompt condition before another full run if the probe again chooses brief
-sleep while recovery is needed.
+**Owner decision (2026-11-25).** Option 2 approved. Add a truthful,
+qualitative sleep recovery cue, such as “Longer uninterrupted sleep can
+restore more stamina.” Keep the 6–54 tick duration choice, gain rules,
+urgent wakes and K = 36.
 
 ## OQ-P3.5-M14-4: Reading explored terrain and water approaches
 
-Pending owner decision. The EV-06 replacement's sent grid correctly showed
+The EV-06 replacement's sent grid correctly showed
 `W woods`, `~ sea`, `^ rock` and `S spring`. Ella treated woods as water,
 misread target coordinates, and repeated moves to impassable terrain already
 visible in her packet. World events recorded 43 start failures as
@@ -1295,6 +1295,7 @@ spring distance or terrain passability would change a rule.
    behavior through a change request. This changes the policy condition or
    compatibility contract and requires separate verification.
 
-Recommendation. Keep movement and drink rules. If the control still
-misreads the map, try the presentation-only comparison in option 2 before
-considering movement advice or rule changes.
+**Owner decision (2026-11-25).** Option 2 approved. Add presentation-only
+map aids, such as full terrain names and coordinates alongside the existing
+grid and an unambiguous woods legend. Use only coordinates and terrain Ella
+received. Keep movement, target checks and drink rules unchanged.

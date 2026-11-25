@@ -142,6 +142,7 @@ def test_decision_prompt_requests_exact_ids_and_binds_them_on_adoption(
 
     wire = json.loads(exchange[1].dispatches[0])
     system, user = (part["content"] for part in wire["input"])
+    assert "Longer uninterrupted sleep can restore more stamina." in system
     assert "copy only their exact displayed m: or d: IDs" in system
     assert "between the opening bracket and the first |" in system
     assert f"[{entry.id} | tick 6 | body_change] {entry.text}" in user

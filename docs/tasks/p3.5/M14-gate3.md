@@ -468,3 +468,92 @@ with the same frontend sources as the pinned executable.
    telemetry** to compare the outgoing evidence with citation validation.
    Open the `act_settled` outcome to see the world tick.
    **Inspection record → Analysis → cost** shows the resident-day costs.
+
+### Owner-approved fixed-packet probe
+
+The owner approved one short probe on 2026-11-25 with a total cap of
+**CNY 0.50**. Offline preflight completed at **12:36:08 Beijing time**,
+before the 13:40 cutoff. The released window is **12:00 inclusive to 14:00
+exclusive Beijing time on 2026-11-25**. The release loader verifies that
+all of the window settles at the off-peak cache-hit, cache-miss and output
+rates of CNY 0.02, 1 and 4 per million tokens. It uses peak rates of CNY
+0.04, 2 and 8 for the reservation. [Dated pricing evidence](M14-provider-check.md#owner-release-on-2026-11-24)
+
+The probe uses `compat-v1` verb descriptions and schema, Ella's explorer
+profile, the pinned DeepSeek Responses transport and model
+`DeepSeek-V4.1-Flash-1017`, and the byte upper-bound counter `/0.4`. Both
+decision prompts are `/0.4`. Five synthetic packets pin the inputs and
+judgment separately from the previous capture. The post-recall fixture has
+a staged successful recall so the probe sends only the two decision
+stages required for citation comparison. [Owner sleep and map rulings](../../spec/open-questions.md#oq-p35-m14-3-sleep-duration-and-recovery-cues)
+
+| Packet | Counted input | Pass criterion |
+| --- | ---: | --- |
+| Initial decision with a day entry and a prior prose citation | 11,344 | Return an act with at least one bare ID that binds to a sent day entry and zero invalid citations. |
+| Decision after staged recall | 11,330 | Return an act with a bare memory or day-entry ID that binds to the sent recalled fragment and zero invalid citations. |
+| Low stamina, no urgent need | 10,987 | Choose `sleep` for 36–54 ticks. The lower bound evaluates the choice against K and is not disclosed in the prompt. |
+| Shore at `(36,31)`, blocked target `(35,31)`, spring at `(38,31)` | 11,164 | Select `move_to` on an explored land tile adjacent to the spring. Valid targets in this packet are `(37,31)`, `(38,30)` and `(38,32)`. |
+| Fixed follow-up at `(37,31)` | 11,068 | Choose `drink` from the adjacent spring with no target or instrument. The fixed packet is assessed independently of the prior reply. |
+
+Overall pass requires all five criteria on the first attempt and fully
+settled usage within the cap. Prep measured 55,893 counted input tokens
+and holds the 8,000-token limit on each of the five outputs. With zero
+cache hits the reserve is **CNY 0.431786 at peak** and CNY 0.215893 at the
+released rate. Before each claim the runner checks the signed window,
+settled probe charges plus outstanding holds and the worst-case peak cost
+of the candidate against the probe and phase limits. There are no retries
+or fallbacks. The output directory is exclusive and the probe cannot resume.
+
+The pinned phase evidence carries CNY 2.33784866 settled and the original
+CNY 0.133982 hold, leaving CNY 17.52816934 of phase headroom. EV-04 tariff
+rows are date-scoped. The wrapper ledger therefore retains the earlier
+peak-billed evidence byte for byte and supplies the separate off-peak
+probe slice. It combines their reconciled totals without re-rating the
+earlier claims. [Phase ledger](P3.5-spend-ledger.md#opening-ledger)
+
+| Input under `runs/m14-ev06-probe-inputs/` | SHA-256 |
+| --- | --- |
+| `probe.py` | `2311fc5191834afe96864e0bb784fe0fcc9cfc2be94218cf519c980ef0c02f4f` |
+| `preflight.json` | `d62e75351de574c0494aed4ce5f5900972bffad0859936ac62ccdafed3ff739b` |
+| `packets.json` | `36af51cf9e3f2414de48e3bb19b2ccb5a0e68c7f606f45afdf126def609b3421` |
+| `ledger.json` | `cec755e00f94383f7461726f8290cf69cde01403355747fcbc8036ec7f802fd9` |
+| `release.json` | `6082375d506217fc8a3b7c0783f6731fb6980e0159f01afa86af2379b6c72b85` |
+
+The executor ran the affirmative and negative cases with fake transport.
+The fixture bound exact citations, accepted the qualifying sleep and
+adjacent approach, and rejected prose, a six-tick sleep and a blocked
+target. Cap and closed-window cases sent nothing and wrote no claim.
+The live output is reserved for `runs/m14-ev06-probe/`. It will contain
+the input packets, durable provider audit, verdicts and probe-only EV-04
+ledger. A full replacement needs separate owner authorization.
+
+Use this PowerShell block from the EV-06 checkout during the released
+window. A nonzero exit preserves the probe evidence for review.
+
+```powershell
+Set-Location -LiteralPath 'F:\p35-w1\ev06' -ErrorAction Stop
+$env:GIT_CONFIG_COUNT = '1'
+$env:GIT_CONFIG_KEY_0 = 'safe.directory'
+$env:GIT_CONFIG_VALUE_0 = 'F:/p35-w1/ev06'
+$ev06ProbeHash = (Get-FileHash -LiteralPath 'runs/m14-ev06-probe-inputs/probe.py' -ErrorAction Stop).Hash
+if ($ev06ProbeHash -ine '2311fc5191834afe96864e0bb784fe0fcc9cfc2be94218cf519c980ef0c02f4f') {
+    throw 'EV-06 probe script differs from the verified release.'
+}
+try {
+    $ev06Pattern = '^\s*(?:export\s+)?DEEPSEEK_API_KEY\s*=\s*(?:"(?<key>[^"]+)"|''(?<key>[^'']+)''|(?<key>[^#\s]+))(?:\s*#.*)?\s*$'
+    $ev06KeyLine = Select-String -LiteralPath 'E:\桌面\Living_World\.env' `
+        -Pattern $ev06Pattern -ErrorAction Stop | Select-Object -Last 1
+    if ($null -eq $ev06KeyLine) { throw 'DEEPSEEK_API_KEY is missing or invalid.' }
+    $env:DEEPSEEK_API_KEY = $ev06KeyLine.Matches[0].Groups['key'].Value
+
+    uv run --offline --locked --no-env-file --no-sync --directory backend `
+        python ../runs/m14-ev06-probe-inputs/probe.py --live `
+        --release ../runs/m14-ev06-probe-inputs/release.json `
+        --ledger ../runs/m14-ev06-probe-inputs/ledger.json
+    if ($LASTEXITCODE -ne 0) { throw "EV-06 probe exited with code $LASTEXITCODE." }
+}
+finally {
+    Remove-Item -LiteralPath 'Env:\DEEPSEEK_API_KEY' -ErrorAction SilentlyContinue
+    Remove-Variable -Name ev06KeyLine -ErrorAction SilentlyContinue
+}
+```

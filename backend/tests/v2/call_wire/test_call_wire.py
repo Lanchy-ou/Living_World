@@ -262,14 +262,14 @@ def test_model_output_is_typed_at_each_kind_boundary():
         step="act", action={"kind": "continue"}, utterance=None, intention=None, mute=[], cite=[]
     )
     for kind, version, raw, model in [
-        ("decision", "0.3", dict(step="recall", query="?"), RecallStep),
-        ("decision_after_recall", "0.3", {**act, "actor_id": "unbound"}, ActStep),
-        ("morning", "0.2", {"ids": ["m:one"]}, MemoryIDs),
+        ("decision", "0.4", dict(step="recall", query="?"), RecallStep),
+        ("decision_after_recall", "0.4", {**act, "actor_id": "unbound"}, ActStep),
+        ("morning", "0.3", {"ids": ["m:one"]}, MemoryIDs),
         ("recall", "0.2", {"ids": []}, MemoryIDs),
-        ("consolidation_selection", "0.2", {"read": []}, Selection),
+        ("consolidation_selection", "0.3", {"read": []}, Selection),
         (
             "consolidation_change_set",
-            "0.2",
+            "0.3",
             {"ops": [{"op": "forget", "op_id": "f", "id": "m:x"}]},
             ChangeSetOutput,
         ),
