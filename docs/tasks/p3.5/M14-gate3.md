@@ -15,8 +15,8 @@ decision kinds parsed on their first attempt. [M13 sign-off PR #69](https://gith
 
 | Field | Proposed run |
 | --- | --- |
-| Executable commit | `5548029b4f3f2e6d387ad55824610d32dfa4fbde`, based on `3c51c311f8af1e20b7448e7ae4a28bb9f0f1fb91`. |
-| Preflight SHA-256 | `e94d36eadbd6afad11f103383816344f49c57d8211540ef6687b2e817624ca75` for the executable commit and this worktree's one-time capture directory. |
+| Executable commit | `92ce49726a653e62548655cd16e1aa8b6238c8fe`, based on `3c51c311f8af1e20b7448e7ae4a28bb9f0f1fb91`. |
+| Preflight SHA-256 | `f4ba7105f050e8b4fc3516384ffe25512f66a225b05266289818c8da4fa39871` for the executable commit and this worktree's one-time capture directory. |
 | Run ID and output | `m14-ev06-ella` under a fresh ignored `runs/m14-ev06-ella/`. |
 | Case | Ella (`ella`), schema `0.2` `explorer`, memory on. Ryan (`cautious`) and Mia (`cooperative`) use `rule-based-v0`. Production `compat-v1` with its registered bridge. |
 | Seed and horizon | `20261108`; ticks 0–431 dispatch, target committed tick 432. A game day is 144 ten-minute ticks. Consolidation K is 36 ticks after sleep/faint begins. |
@@ -118,7 +118,9 @@ call. The guard consumes rehearsal slots in dispatch order within each day and
 kind. The reserved-total check includes settled EV-06 spend, outstanding
 holds, the candidate quote and unused slots for the current and future days.
 EV-04 reconciles the recorded costs against the signed opening ledger and
-dated rates. [DL-04 composition](P3.5-DL-04.md#what-changed)
+dated rates. Release loading requires a signed window and verifies that every
+Beijing billing period it touches matches all three settlement rates in the
+dated EV-04 row. [DL-04 composition](P3.5-DL-04.md#what-changed)
 · [DL-05 replay](P3.5-DL-05.md#card-end-replay-evidence)
 
 The runner journals completed boundaries and checkpoints each tick. Resume
@@ -138,7 +140,7 @@ Run the offline preflight from `F:\p35-w1\ev06`. It prints the release hash and
 the pinned run, content, wire and rehearsal inputs.
 
 ```powershell
-uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident preflight --implementation 5548029b4f3f2e6d387ad55824610d32dfa4fbde
+uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident preflight --implementation 92ce49726a653e62548655cd16e1aa8b6238c8fe
 ```
 
 For the owner release, put the reconciled EV-04 bundle at
@@ -152,10 +154,11 @@ CNY 0.05343482 at this handoff. Put the owner's release at
 | --- | --- |
 | `dispatch_on` | Owner-approved UTC dispatch date (`YYYY-MM-DD`). |
 | `approval` and `wire_evidence` | References to the owner release and the dated model, Responses wire and tariff verification. |
-| `preflight_sha256` | `e94d36eadbd6afad11f103383816344f49c57d8211540ef6687b2e817624ca75` for this checkout and executable pin. |
+| `preflight_sha256` | `f4ba7105f050e8b4fc3516384ffe25512f66a225b05266289818c8da4fa39871` for this checkout and executable pin. |
 | `ledger_sha256` | SHA-256 of the exact ledger file above. |
 | `max_cny` | Decimal string `"9.480838"`. |
-| `dispatch_from` and `dispatch_until` | Optional paired ISO timestamps with offsets. EV-04 rates are dated. Sign a window contained in one verified billing-rate period if the UTC date has more than one rate. The end is exclusive. |
+| `dispatch_from` and `dispatch_until` | Required ISO timestamps with offsets. Every instant in the window must fall on `dispatch_on` UTC and use the dated EV-04 row's base rates. The start is inclusive and the end is exclusive. |
+| `beijing_public_holidays` | For a window that touches 09:00–12:00 or 14:00–18:00 Beijing time on a weekday, give each such Beijing date as `YYYY-MM-DD` with its verified holiday status (`true` or `false`). Cite the dated source in `wire_evidence`. |
 
 After Gate 2 and owner signature, the owner runs the following command in a
 terminal with `DEEPSEEK_API_KEY` already set in the process environment. The
@@ -164,7 +167,7 @@ runner uses no dotenv loader. `uv --offline` applies to package resolution.
 the one-time output directory exclusively.
 
 ```powershell
-uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident run --live --implementation 5548029b4f3f2e6d387ad55824610d32dfa4fbde --release F:/p35-w1/ev06/runs/m14-ev06-ella-release.json --ledger F:/p35-w1/ev06/runs/m14-ev06-ella-ledger.json --out F:/p35-w1/ev06/runs/m14-ev06-ella
+uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident run --live --implementation 92ce49726a653e62548655cd16e1aa8b6238c8fe --release F:/p35-w1/ev06/runs/m14-ev06-ella-release.json --ledger F:/p35-w1/ev06/runs/m14-ev06-ella-ledger.json --out F:/p35-w1/ev06/runs/m14-ev06-ella
 ```
 
 For an unfinished checkpoint within the same release window, use the original
