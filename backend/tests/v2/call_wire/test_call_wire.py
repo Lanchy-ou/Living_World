@@ -261,20 +261,21 @@ def test_model_output_is_typed_at_each_kind_boundary():
     act = dict(
         step="act", action={"kind": "continue"}, utterance=None, intention=None, mute=[], cite=[]
     )
-    for kind, raw, model in [
-        ("decision", dict(step="recall", query="?"), RecallStep),
-        ("decision_after_recall", {**act, "actor_id": "unbound"}, ActStep),
-        ("morning", {"ids": ["m:one"]}, MemoryIDs),
-        ("recall", {"ids": []}, MemoryIDs),
-        ("consolidation_selection", {"read": []}, Selection),
+    for kind, version, raw, model in [
+        ("decision", "0.3", dict(step="recall", query="?"), RecallStep),
+        ("decision_after_recall", "0.3", {**act, "actor_id": "unbound"}, ActStep),
+        ("morning", "0.2", {"ids": ["m:one"]}, MemoryIDs),
+        ("recall", "0.2", {"ids": []}, MemoryIDs),
+        ("consolidation_selection", "0.2", {"read": []}, Selection),
         (
             "consolidation_change_set",
+            "0.2",
             {"ops": [{"op": "forget", "op_id": "f", "id": "m:x"}]},
             ChangeSetOutput,
         ),
     ]:
         contract = Contract(kind)
-        assert contract.prompt_version == f"{kind}/0.2"
+        assert contract.prompt_version == f"{kind}/{version}"
         assert contract.instructions.endswith(
             " Reply with only the JSON object that matches the response schema, "
             "with no other text before or after it."

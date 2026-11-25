@@ -1228,3 +1228,73 @@ Owner decisions (2026-11-23):
 Result: all 36 cases matched at every boundary, the four repeats were
 identical, and no run reached a WAP-26 exception
 ([M12 equivalence report](../tasks/p3.5/M12-equivalence-report.md)).
+
+## OQ-P3.5-M14-3: Sleep duration and recovery cues
+
+Pending owner decision. In the EV-06 replacement, Ella chose one six-tick
+nap after repeated blocked paths. It completed normally and raised her
+stamina from 560 to 1640. At 253 of the 301 subsequent delivered boundaries
+from tick 131 through 431, her stamina was low or critical. She chose rest
+27 times and never chose another sleep. The only waking period stayed open.
+[Read-only diagnosis](../tasks/p3.5/P3.5-EV-06.md#offline-diagnosis-after-gate-2)
+
+The frozen `sleep` description gives the 6–54 tick choice and describes
+what the body does. The compatibility rules fix gain per tick and early
+waking. The decision-loop system instructions may name innate drives. The
+memory spec sets K at 36 consecutive ticks. A recovery claim in the sleep
+description would amend the neutral wording requirement. A new gain,
+wake threshold, forced duration or smaller K would change a rule.
+[Starter content §§2.2, 4.1 and 4.3](starter-content-v0.1.md#22-verb-descriptions) ·
+[Decision loop §4.1](decision-loop-v0.1.md#41-parts-and-order) ·
+[Engine §§9.4–9.5](world-engine-v0.1.md#94-waking) ·
+[Protocol §6.3](world-agent-protocol-v0.1.md#63-sleep-and-waking) ·
+[Memory formation §2](memory-formation-v0.1.md#2-the-waking-period-boundary)
+
+1. Keep the fixed wording and observe sleep choice under a short decision
+   probe with a grounded route to water and known low stamina.
+2. Approve a scoped wording experiment for the new evaluation condition.
+   A possible cue is “Longer uninterrupted sleep can restore more stamina.”
+   Keep the duration choice, gain rules, urgent wakes and K at their
+   existing values. The cue names a tradeoff and leaves timing to the model.
+3. Change gains, waking rules or K. This changes the measured behavior or
+   which naps count as a waking-period boundary, and requires new baselines.
+
+Recommendation. Keep the current rules and K. Assess the unchanged sleep
+choice in a short probe and consider option 2 as a separately approved
+prompt condition before another full run if the probe again chooses brief
+sleep while recovery is needed.
+
+## OQ-P3.5-M14-4: Reading explored terrain and water approaches
+
+Pending owner decision. The EV-06 replacement's sent grid correctly showed
+`W woods`, `~ sea`, `^ rock` and `S spring`. Ella treated woods as water,
+misread target coordinates, and repeated moves to impassable terrain already
+visible in her packet. World events recorded 43 start failures as
+`PATH_BLOCKED`. The first failed drink was from three tiles away, and a
+later drink at the same spring succeeded from an adjacent tile.
+[Read-only diagnosis](../tasks/p3.5/P3.5-EV-06.md#offline-diagnosis-after-gate-2)
+
+DL §4.4 fixes the explored-only character grid. WAP §4.2 and the engine
+inherit v1 target checks and movement. Starter content §2.2 already says to
+drink from an adjacent spring or something held. Explicit movement advice in
+the system instructions would require a scope decision under DL §4.1. An
+automatic retarget, repeat-block suppression in the world, or a change to
+spring distance or terrain passability would change a rule.
+[Decision loop §4.4](decision-loop-v0.1.md#44-the-current-state) ·
+[Protocol §4.2](world-agent-protocol-v0.1.md#42-failure-codes) ·
+[Engine §4.2](world-engine-v0.1.md#42-one-tick-of-progress) ·
+[v1 World rules §5.3](world-rules-v0.1.md#53-pathfinding-and-movement-budget) ·
+[Starter content §§2.2 and 4.3](starter-content-v0.1.md#22-verb-descriptions)
+
+1. Keep the grid and movement rules as the control. Probe a known shore
+   with a previously blocked target and a spring approach.
+2. Test clearer coordinate aids and the delivered terrain names alongside
+   the same grid. Measure impassable targets and correct adjacent approaches
+   on those packets. Use only coordinates and terrain Ella received.
+3. Approve explicit movement guidance or revise movement, retry or drink
+   behavior through a change request. This changes the policy condition or
+   compatibility contract and requires separate verification.
+
+Recommendation. Keep movement and drink rules. If the control still
+misreads the map, try the presentation-only comparison in option 2 before
+considering movement advice or rule changes.

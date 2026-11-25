@@ -106,6 +106,56 @@ def test_dl_21_citations_only_from_kept_entries_and_memories(
     )
 
 
+@pytest.mark.parametrize("stage", ["decision", "decision_after_recall"])
+def test_decision_prompt_requests_exact_ids_and_binds_them_on_adoption(
+    stage, audit, packet, working_context, add_record, fake_exchange
+):
+    from living_island.agents.v2.context.delivery import FilteredDelivery
+    from living_island.agents.v2.recall.attribution import bind_adopted_act
+    from living_island.memory.v2.store import MemoryStore
+
+    store = MemoryStore("ella")
+    add_record(store)
+    view = store.snapshot.resident(memory_on=True)
+    (memory,) = view.records
+    context = working_context(memories=(memory,))
+    delivery = packet(
+        tick=6,
+        reports=[
+            {
+                "kind": "need_band_changed",
+                "subject_id": "stamina",
+                "band": "low",
+                "addressed": None,
+                "threshold_id": None,
+            }
+        ],
+    )
+    (entry,) = context.log.deliver(FilteredDelivery(delivery))
+    past_reply = json.dumps(act(entry.text))
+    context.log.response(6, "previous", past_reply)
+    prepared = context.prepare_decision(
+        call(stage), state_for(packet), audit, view=view, stage=stage
+    )
+    exchange = fake_exchange([act(entry.id, memory.ref.id, entry.text)])
+    returned = send(prepared, audit, exchange)
+
+    wire = json.loads(exchange[1].dispatches[0])
+    system, user = (part["content"] for part in wire["input"])
+    assert "copy only their exact displayed m: or d: IDs" in system
+    assert "between the opening bracket and the first |" in system
+    assert f"[{entry.id} | tick 6 | body_change] {entry.text}" in user
+    assert context.prefix.memories[0].part.text in user
+    assert past_reply in user
+    assert returned.terminal.error_class is None
+
+    result = bind_adopted_act(returned, context.log.entries, audit)
+    day, recalled = result.valid
+    assert (day.id, day.fragments[0].sha256) == (entry.id, entry.fragment_sha256)
+    assert (recalled.id, recalled.fragments[0].memory_revision) == (memory.ref.id, memory.ref)
+    assert result.invalid == (entry.text,)
+
+
 def test_dl_28_first_dispatch_credits_and_local_intention_citations(
     audit, packet, working_context, add_record, fake_exchange, monkeypatch, tmp_path
 ):

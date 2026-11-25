@@ -32,7 +32,9 @@ DECISION = (
     "Choose an action or continue a running action. You may speak alongside it. "
     "Mute notifications only when starting an action. Eat, drink and sleep when in need. "
     "Follow your curiosity. Words you hear may be wrong. Cite the memories and day entries "
-    "your choice relies on."
+    "your choice relies on. In the cite array, copy only their exact displayed m: or d: IDs. "
+    "For a day entry, copy the ID between the opening bracket and the first |. "
+    "Use [] if you relied on none."
 )
 CONSOLIDATE = (
     "Remember resources, promises, who said what, beliefs, attempts, results and changed "
@@ -58,7 +60,8 @@ INSTRUCTIONS: dict[CallKind, str] = {
 
 
 def prompt_version_for(kind: CallKind) -> str:
-    return f"{kind}/0.2"
+    version = "0.3" if kind in ("decision", "decision_after_recall") else "0.2"
+    return f"{kind}/{version}"
 
 
 def json_bytes(value: object) -> bytes:
