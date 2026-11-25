@@ -7,12 +7,12 @@ import subprocess
 from collections.abc import Iterator
 from contextlib import ExitStack, closing, contextmanager, nullcontext
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta, timezone
 from pathlib import Path
 from time import sleep
 from typing import Any, Literal
 
-from pydantic import AwareDatetime, model_validator
+from pydantic import AwareDatetime, Field, StrictBool, model_validator
 
 from living_island.agents.llm import provider as p3
 from living_island.agents.types import OwnProfile
@@ -87,6 +87,10 @@ HORIZON = 3 * DAY
 RESERVED = 9_480_838_000_000
 REHEARSAL_SHA256 = "687dfbbf66abee2c12a6239ebdb2172d98f7472721bee40225e26b34f65ca509"
 SOURCE_INPUTS = ("backend/src", "backend/prompts", "backend/uv.lock", "content")
+BEIJING = timezone(timedelta(hours=8))
+OFF_PEAK_RATES = (20_000, 1_000_000, 4_000_000)
+PEAK_RATES = (40_000, 2_000_000, 8_000_000)
+BILLING_PERIODS = ((0, 9, False), (9, 12, True), (12, 14, False), (14, 18, True), (18, 24, False))
 
 # Sent input bounds, in dispatch order within each day and call kind. Extracted
 # from the pinned EV-05 /0.2 SQLite rehearsal, including four first-day retries.
@@ -126,32 +130,54 @@ REHEARSAL: dict[tuple[int, CallKind], tuple[int, ...]] = {
 
 
 class ResidentRelease(Release):
-    dispatch_from: AwareDatetime | None = None
-    dispatch_until: AwareDatetime | None = None
+    dispatch_from: AwareDatetime
+    dispatch_until: AwareDatetime
+    beijing_public_holidays: dict[date, StrictBool] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def check_window(self) -> "ResidentRelease":
         start, end = self.dispatch_from, self.dispatch_until
-        if start is None and end is None:
-            return self
         if (
-            start is None
-            or end is None
-            or start >= end
-            or (
-                start.astimezone(UTC).date() != self.dispatch_on
-                or end.astimezone(UTC).date() != self.dispatch_on
-            )
+            start >= end
+            or start.astimezone(UTC).date() != self.dispatch_on
+            or (end.astimezone(UTC) - timedelta(microseconds=1)).date() != self.dispatch_on
         ):
             raise ValueError("expected a signed dispatch window within dispatch_on UTC")
         return self
 
     def covers(self, timestamp: datetime) -> bool:
-        return (
-            timestamp.astimezone(UTC).date() == self.dispatch_on
-            and (self.dispatch_from is None or timestamp >= self.dispatch_from)
-            and (self.dispatch_until is None or timestamp < self.dispatch_until)
+        return self.dispatch_from <= timestamp < self.dispatch_until
+
+    def check_tariff(self, tariff: spend._Tariff) -> None:
+        rates = (
+            tariff.cache_hit_per_million,
+            tariff.cache_miss_per_million,
+            tariff.output_per_million,
         )
+        start = self.dispatch_from.astimezone(BEIJING)
+        end = self.dispatch_until.astimezone(BEIJING)
+        midnight = datetime.combine(start.date(), time.min, BEIJING)
+        while midnight < end:
+            day = midnight.date()
+            for first, last, weekday_peak in BILLING_PERIODS:
+                if midnight + timedelta(hours=last) <= start or end <= midnight + timedelta(
+                    hours=first
+                ):
+                    continue
+                expected = OFF_PEAK_RATES
+                if weekday_peak and day.weekday() < 5:
+                    holiday = self.beijing_public_holidays.get(day)
+                    if holiday is None:
+                        raise ValueError(
+                            f"release needs signed Beijing public holiday status for {day}"
+                        )
+                    if not holiday:
+                        expected = PEAK_RATES
+                if rates != expected:
+                    raise ValueError(
+                        "dispatch window intersects a different billing rate in Beijing"
+                    )
+            midnight += timedelta(days=1)
 
 
 @dataclass(frozen=True)
@@ -302,11 +328,16 @@ class Authority:
             ),
             None,
         )
-        if tariff is None or (
-            tariff.peak_cache_miss_per_million,
-            tariff.peak_output_per_million,
-        ) != (2_000_000, 8_000_000):
+        if (
+            tariff is None
+            or (
+                tariff.peak_cache_miss_per_million,
+                tariff.peak_output_per_million,
+            )
+            != PEAK_RATES[1:]
+        ):
             raise ValueError("released date requires the approved peak tariff and dated evidence")
+        release.check_tariff(tariff)
         if (
             prior.remaining_pico is None
             or not RESERVED <= release.max_cny <= prior.remaining_pico
