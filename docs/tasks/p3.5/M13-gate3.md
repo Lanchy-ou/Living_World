@@ -1,9 +1,11 @@
 # M13 Gate 3 — The new island
 
-**CT-10 executor status as of 2026-11-25.** The qualified starter pack passed
-the held-out balance round. Claude Code published the D1 PASS receipt and
-recorded the D4 search. D5 awaits the owner's disposition. CT-10 independent
-review, integrated acceptance, and owner signature are pending. [M13 plan](M13-plan.md)
+**Signed by the owner on 2026-11-25. M13 is accepted.** The qualified starter
+pack passed the held-out balance round. D1 passed on the recorded receipt,
+and the D4 search is recorded. The owner disposed D5 as shown below. Claude
+Code's Gate 2 review of CT-10 passed on
+[#68](https://github.com/Lanchy-ou/Living_World/pull/68), with green CI.
+Claude Code's integrated acceptance verdict is PASS. [M13 plan](M13-plan.md)
 
 The integration base is `7e8902acac7ef924acf0b8fd5dda5b36fcac213e`.
 M12 was signed on 2026-11-23. Its compatibility, synthetic-pack and
@@ -232,16 +234,16 @@ backend, frontend and contract jobs green.
 | CT-07 | Four static checks, six scoped passes, Claude Code's final command exit 0. [Handoff](P3.5-CT-07.md#final-qualified-evidence--2026-11-25) | Phase 1 review found no blockers. [#60](https://github.com/Lanchy-ou/Living_World/pull/60#issuecomment-7119964426) | `83e7bcf` [CI](https://github.com/Lanchy-ou/Living_World/actions/runs/45506672001) |
 | CT-08 | Four static checks and five scoped passes after rebase. Claude Code's final command exited 1 for the two D5 vectors. Receipt audit exited 0. [Handoff](P3.5-CT-08.md#final-evidence) | Phase 1 finding fixed in the handoff. [#59](https://github.com/Lanchy-ou/Living_World/pull/59#issuecomment-7119889117) | `d811b80` [CI](https://github.com/Lanchy-ou/Living_World/actions/runs/45507155855) |
 | CT-09 | Four static checks, five scoped passes, Claude Code's scripted PASS and receipt audit exit 0. [Handoff](P3.5-CT-09.md#final-required-fields) | Phase 1 review found no blockers. [#58](https://github.com/Lanchy-ou/Living_World/pull/58#issuecomment-7119869038) | `a269eec` [CI](https://github.com/Lanchy-ou/Living_World/actions/runs/45506816766) |
-| CT-10 | Four static checks and five scoped passes rerun on evidence head `09e3056`. Claude Code's final D1 command exited 0 and published PASS. [Handoff](P3.5-CT-10.md#handoff) | Claude Code's independent review and integrated acceptance verdict are pending. | PR and CI pending publication. [CI workflow](../../../.github/workflows/ci.yml) |
+| CT-10 | Four static checks and five scoped passes rerun on evidence head `09e3056`. Claude Code's final D1 command exited 0 and published PASS. [Handoff](P3.5-CT-10.md#handoff) | PASS: Claude Code's review at `0a4e9b2` re-verified the receipt. [#68](https://github.com/Lanchy-ou/Living_World/pull/68) | `0a4e9b2`, green CI on [#68](https://github.com/Lanchy-ou/Living_World/pull/68) |
 
 ## Owner dispositions
 
 | Item | Status |
 | --- | --- |
-| D5 / OQ-P3.5-M13-1 | **Pending owner disposition.** The published awake gain 50 becomes 30. Typical CT-09 day fatigue changes **6,400 → 4,480** and silent awake ticks from zero to faint change **200 → 334**. The 36-tick faint and 7,200-point recovery in 48 asleep ticks remain recorded in both vectors. Retain both published expectations and qualified observations. [D5](M13-plan.md#1-owner-decisions) · [CT-08 comparison](P3.5-CT-08.md#phase-2-qualified-pack-and-d5) |
+| D5 / OQ-P3.5-M13-1 | **Owner disposition, 2026-11-25: accept the qualified values.** The published vectors remain the reference expectations, and the qualified starter pack is accepted with its tuned observations. The published awake gain 50 becomes 30. Typical CT-09 day fatigue changes **6,400 → 4,480** and silent awake ticks from zero to faint change **200 → 334**. The 36-tick faint and 7,200-point recovery in 48 asleep ticks remain recorded in both vectors. Retain both published expectations and qualified observations. [D5](M13-plan.md#1-owner-decisions) · [CT-08 comparison](P3.5-CT-08.md#phase-2-qualified-pack-and-d5) |
 | D3 / P3-PERF-U1 | Dropped for P3.5. EN-07 replaced the targeted store. Preserve parked branch `task/P3-PERF-U1-validation-cache` and candidate `124e751`. [Owner decision](M13-plan.md#1-owner-decisions) |
 | D4 / original M9 artifacts | **Recorded independently of M13 acceptance.** Claude Code's single read-only search confirmed receipt folders for four M9 runs, 130 files with sorted listing SHA-256 `7ffcc5e9505c0fcb02f9201e998ff671fc14e1237a005eaf5ccf13d8e136c158`. The original run trees are lost across the accessible locations. Thirteen retained folders were access-denied and remain unresolved. [Search record](M13-m9-search.md) · [PR #67, `916fdf9`](https://github.com/Lanchy-ou/Living_World/pull/67) |
 | D6 / live measurements | M15 owns live benefit and time-use measurements on the starter pack. [M13 handoff](M13-plan.md#1-owner-decisions) |
 | Historical P3 V-04 | Stopped at committed tick 132. [P3 closeout](../p3/P3-closeout.md#owner-disposition-and-deferred-work) |
 
-Owner signature ____________________  Date ____________________
+Owner signature: signed by the owner in chat to Claude Code ("Sign, accept values").  Date: 2026-11-25
