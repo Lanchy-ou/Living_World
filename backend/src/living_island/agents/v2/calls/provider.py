@@ -1,6 +1,9 @@
 """A single stateless attempt. Only the host decides to retry or adopt a result."""
 
 import time
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
@@ -62,6 +65,31 @@ class Dispatch(Fact):
     settings: Settings
     started_at: datetime
     timeout_ms: int
+
+
+type Admission = Callable[[Dispatch], str | None]
+
+
+class BudgetStop(Exception):
+    """An operator refused the proposed attempt before it was claimed or sent."""
+
+    def __init__(self, dispatch: Dispatch, reason: str) -> None:
+        super().__init__(reason)
+        self.dispatch = dispatch
+        self.reason = reason
+
+
+_admission: ContextVar[Admission | None] = ContextVar("dispatch_admission", default=None)
+
+
+@contextmanager
+def dispatch_admission(admit: Admission) -> Iterator[None]:
+    """Share one operator policy across the synchronous resident and consolidation calls."""
+    token = _admission.set(admit)
+    try:
+        yield
+    finally:
+        _admission.reset(token)
 
 
 class Terminal(Fact):
@@ -154,6 +182,7 @@ def attempt(
     transport: p3.ByteTransport,
     clock: Clock,
     timeout_ms: int = p3.MAX_TIMEOUT_MS,
+    admit: Admission | None = None,
 ) -> Returned | None:
     """Claim the attempt durably before the sole exchange. All retries use new slots."""
     admitted = prepared.admitted
@@ -171,6 +200,9 @@ def attempt(
         started_at=clock.now(),
         timeout_ms=timeout_ms,
     )
+    admission = admit if admit is not None else _admission.get()
+    if admission is not None and (reason := admission(dispatch)) is not None:
+        raise BudgetStop(dispatch, reason)
     cursor = journal.fact(call.call_id, f"{n}.dispatch", dispatch, exclusive=True)
     start = clock.monotonic_ms()
     try:

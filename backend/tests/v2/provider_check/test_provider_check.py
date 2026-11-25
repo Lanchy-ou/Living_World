@@ -10,7 +10,12 @@ from living_island.agents.v2.calls.contracts import Contract, digest, json_bytes
 from living_island.agents.v2.calls.fake import FakeClock, FakeTransport, ScriptedReply
 from living_island.agents.v2.calls.guard import Assembly, Call, prepare
 from living_island.agents.v2.calls.journal import Journal
-from living_island.agents.v2.calls.provider import Terminal
+from living_island.agents.v2.calls.provider import (
+    BudgetStop,
+    Terminal,
+    attempt,
+    dispatch_admission,
+)
 from living_island.agents.v2.calls.wire import frame
 from living_island.agents.v2.decision.caller import Caller
 from living_island.persistence.v2.audit import AuditReader, AuditWriter
@@ -76,6 +81,62 @@ def test_source_hash_rejects_tampering(tmp_path):
     receipt.write_bytes(b"overwritten")
     with pytest.raises(ValueError, match=r"receipt\.json: pinned SHA-256 differs"):
         check.load_samples(tmp_path, pins)
+
+
+def test_admission_checks_before_claim_including_retries_and_preserves_default(tmp_path):
+    writer = AuditWriter(tmp_path / "admission.sqlite")
+    audit = AuditReader(writer.path)
+    journal = Journal(writer.keep, writer.create)
+    clock = FakeClock()
+    transport = FakeTransport(
+        clock,
+        [
+            ScriptedReply(TransportResponse(503, b"{}", True)),
+            ScriptedReply(TransportResponse(200, reply('{"ids":[]}'), True)),
+        ],
+    )
+    call = Call(call_id="admission:recall", resident_id="ella", tick=0, period_id="p:ella:1")
+    prepared = prepare(call, Contract("recall"), Assembly((), (), frozenset()), journal)
+    checked = []
+
+    def admit(proposal):
+        claim = Journal.cursor(call.call_id, f"{proposal.n}.dispatch")
+        with pytest.raises(KeyError):
+            audit.read(claim)
+        checked.append(proposal.n)
+        return "rehearsal_reserve" if proposal.n else None
+
+    with pytest.raises(BudgetStop, match="phase_cap"):
+        attempt(
+            prepared,
+            n=0,
+            has_running_action=False,
+            journal=journal,
+            transport=transport,
+            clock=clock,
+            admit=lambda _: "phase_cap",
+        )
+    assert not transport.dispatches
+    with pytest.raises(KeyError):
+        audit.read(Journal.cursor(call.call_id, "0.dispatch"))
+
+    with dispatch_admission(admit), pytest.raises(BudgetStop, match="rehearsal_reserve") as stop:
+        Caller(transport, clock, lambda _: None).dispatch(prepared, journal, running=False)
+    assert checked == [0, 1] and stop.value.dispatch.n == 1
+    assert len(transport.dispatches) == 1
+    with pytest.raises(KeyError):
+        audit.read(Journal.cursor(call.call_id, "1.dispatch"))
+
+    default = attempt(
+        prepared,
+        n=1,
+        has_running_action=False,
+        journal=journal,
+        transport=transport,
+        clock=clock,
+    )
+    assert default.terminal.error_class is None
+    assert len(transport.dispatches) == 2
 
 
 def test_framed_schema_is_single_and_only_in_provider_field():
