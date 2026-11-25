@@ -15,8 +15,8 @@ decision kinds parsed on their first attempt. [M13 sign-off PR #69](https://gith
 
 | Field | Proposed run |
 | --- | --- |
-| Executable commit | `a8e1226a9123c043f05b7a481fc10f358177e032`, based on `3c51c311f8af1e20b7448e7ae4a28bb9f0f1fb91`. |
-| Preflight SHA-256 | `08e4a276b3c73d5592cbebbb374d900f40a137a06c0aef3925e06af6afce1dbd` for the executable commit and this worktree's one-time capture directory. |
+| Executable commit | `5548029b4f3f2e6d387ad55824610d32dfa4fbde`, based on `3c51c311f8af1e20b7448e7ae4a28bb9f0f1fb91`. |
+| Preflight SHA-256 | `e94d36eadbd6afad11f103383816344f49c57d8211540ef6687b2e817624ca75` for the executable commit and this worktree's one-time capture directory. |
 | Run ID and output | `m14-ev06-ella` under a fresh ignored `runs/m14-ev06-ella/`. |
 | Case | Ella (`ella`), schema `0.2` `explorer`, memory on. Ryan (`cautious`) and Mia (`cooperative`) use `rule-based-v0`. Production `compat-v1` with its registered bridge. |
 | Seed and horizon | `20261108`; ticks 0–431 dispatch, target committed tick 432. A game day is 144 ten-minute ticks. Consolidation K is 36 ticks after sleep/faint begins. |
@@ -127,6 +127,8 @@ checkpoint is missing, resume rebuilds it offline. An uncommitted dispatch
 tail seals the run as incomplete and retains any unresolved hold. Inspection
 exports seal the verified boundary prefix and link to the raw SQLite and
 uncommitted-attempt count. The raw ledger includes the uncommitted attempts.
+An authorized consolidation without a confirming boundary appears abandoned
+in the inspection view. Its raw checkpoint retains the open period.
 A budget stop at tick 0 produces replay and ledger evidence without an EV-01
 view because there is no committed resident delivery to inspect.
 
@@ -136,7 +138,7 @@ Run the offline preflight from `F:\p35-w1\ev06`. It prints the release hash and
 the pinned run, content, wire and rehearsal inputs.
 
 ```powershell
-uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident preflight --implementation a8e1226a9123c043f05b7a481fc10f358177e032
+uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident preflight --implementation 5548029b4f3f2e6d387ad55824610d32dfa4fbde
 ```
 
 For the owner release, put the reconciled EV-04 bundle at
@@ -150,7 +152,7 @@ CNY 0.05343482 at this handoff. Put the owner's release at
 | --- | --- |
 | `dispatch_on` | Owner-approved UTC dispatch date (`YYYY-MM-DD`). |
 | `approval` and `wire_evidence` | References to the owner release and the dated model, Responses wire and tariff verification. |
-| `preflight_sha256` | `08e4a276b3c73d5592cbebbb374d900f40a137a06c0aef3925e06af6afce1dbd` for this checkout and executable pin. |
+| `preflight_sha256` | `e94d36eadbd6afad11f103383816344f49c57d8211540ef6687b2e817624ca75` for this checkout and executable pin. |
 | `ledger_sha256` | SHA-256 of the exact ledger file above. |
 | `max_cny` | Decimal string `"9.480838"`. |
 | `dispatch_from` and `dispatch_until` | Optional paired ISO timestamps with offsets. EV-04 rates are dated. Sign a window contained in one verified billing-rate period if the UTC date has more than one rate. The end is exclusive. |
@@ -162,7 +164,7 @@ runner uses no dotenv loader. `uv --offline` applies to package resolution.
 the one-time output directory exclusively.
 
 ```powershell
-uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident run --live --implementation a8e1226a9123c043f05b7a481fc10f358177e032 --release F:/p35-w1/ev06/runs/m14-ev06-ella-release.json --ledger F:/p35-w1/ev06/runs/m14-ev06-ella-ledger.json --out F:/p35-w1/ev06/runs/m14-ev06-ella
+uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident run --live --implementation 5548029b4f3f2e6d387ad55824610d32dfa4fbde --release F:/p35-w1/ev06/runs/m14-ev06-ella-release.json --ledger F:/p35-w1/ev06/runs/m14-ev06-ella-ledger.json --out F:/p35-w1/ev06/runs/m14-ev06-ella
 ```
 
 For an unfinished checkpoint within the same release window, use the original
