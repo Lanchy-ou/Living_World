@@ -2,9 +2,9 @@
 
 ## Owner pre-dispatch sheet · 2026-11-25
 
-**Budget fit: 3 of 3 whole game days. The guarded runner is ready for Gate 2.
-Paid dispatch, owner release and Gate 3 disposition remain pending.** M12 and
-M13 are signed. DL-06 passed D7 with
+**Budget fit: 3 of 3 whole game days. The owner released one peak-rate run on
+2026-11-25. The owner dispatch and final Gate 3 disposition remain pending.**
+M12 and M13 are signed. DL-06 passed D7 with
 the six JSON-only `/0.2` prompts. The recheck accepted 7/7 dispatches over
 HTTP, parsed 5/6 first attempts and completed all six logical calls. Both
 decision kinds parsed on their first attempt. [M13 sign-off PR #69](https://github.com/Lanchy-ou/Living_World/pull/69)
@@ -29,7 +29,7 @@ decision kinds parsed on their first attempt. [M13 sign-off PR #69](https://gith
 | Prompt and schema | Six JSON-only prompts at `/0.2`. Carry per-kind prompt and schema SHA-256 pins from the DL-06 recheck. [Prompt hashes](M14-provider-check.md#prepare-the-prompt-recheck) · [Recheck preflight](M14-provider-check.md#recheck-release-on-2026-11-24-utc) |
 | Counter | `deepseek-flash1017-byte-upper-bound/0.4`; counter source `fdaf256a6f4558bf8722af2e744e10a816f312248768d3278b988820a36146bc`; tokenizer `c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b`. |
 | Context pressure | `pressure/0.1` on the full provider-framed input before inserting the pressure line. Model window 1,000,000, output reserve 8,000, input window 992,000. Band thresholds are 5%, 15%, 30% and 50% of the input window. The largest rehearsal input was 18,593 tokens including framing and any pressure line. |
-| Tariff, CNY per million tokens | Dated DL-06 evidence for 2026-11-24 UTC. Cache-hit input / cache-miss input / output rates were **0.02 / 1 / 4 off-peak** and **0.04 / 2 / 8 peak**. The dated peak periods were weekdays 09:00–12:00 and 14:00–18:00 Beijing time, excluding Chinese public holidays. Use zero hits and the peak 2/8 rates for all holds. The owner attaches alias and tariff evidence covering the actual UTC dispatch date(s) at release. [Dated price source](M14-provider-check.md#owner-release-on-2026-11-24) |
+| Tariff, CNY per million tokens | Cache-hit input / cache-miss input / output rates are **0.04 / 2 / 8** for the released peak window on 2026-11-25 UTC. The off-peak rates are **0.02 / 1 / 4**. Peak periods are weekdays 09:00–12:00 and 14:00–18:00 Beijing time, excluding Chinese public holidays. All holds use zero hits and the peak 2/8 rates. Claude Code verified the official price page on 2026-11-24. [Official CNY pricing](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) |
 
 The compatibility loader reproduced the three canonical hashes, effective
 config and map from the local baseline. The accepted rehearsal uses the same
@@ -134,7 +134,7 @@ in the inspection view. Its raw checkpoint retains the open period.
 A budget stop at tick 0 produces replay and ledger evidence without an EV-01
 view because there is no committed resident delivery to inspect.
 
-### Operator command and wall time
+### Owner release and operator command
 
 Run the offline preflight from `F:\p35-w1\ev06`. It prints the release hash and
 the pinned run, content, wire and rehearsal inputs.
@@ -143,25 +143,35 @@ the pinned run, content, wire and rehearsal inputs.
 uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident preflight --implementation 92ce49726a653e62548655cd16e1aa8b6238c8fe
 ```
 
-For the owner release, put the reconciled EV-04 bundle at
-`runs/m14-ev06-ella-ledger.json`. Start from DL-06's accumulated
-`dl06-provider-recheck/ledger-evidence.json`. Add a verified tariff row for the
-released date if the existing rows lack coverage. The prior paid total remains
-CNY 0.05343482 at this handoff. Put the owner's release at
-`runs/m14-ev06-ella-release.json` with these fields.
+On 2026-11-25 the owner told Claude Code “现在就可以做，不需要等空闲，预算可以提高”
+and approved this sheet for a single paid run during the morning peak. The
+CNY 9.480838 reservation fits the remaining CNY 19.94656518. The CNY 20 phase
+cap applies. The release start was rounded up from 09:07:13 Beijing time.
+
+The release and reconciled EV-04 bundle are in the ignored `runs/` directory.
+The bundle preserves DL-06's accumulated evidence, with CNY 0.05343482 settled
+and CNY 0 outstanding, and adds the 2026-11-25 peak tariff. The release loader
+accepted the window and both file pins matched the offline preflight.
+[Dated tariff and model evidence](M14-provider-check.md#owner-release-on-2026-11-24)
+· [Official CNY pricing](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `runs/m14-ev06-ella-ledger.json` | `decb81579d48dbcd15e1ad4cd43a6124b77af80406fd633cf9a42407d383d32d` |
+| `runs/m14-ev06-ella-release.json` | `de10716851e3c9993a155be0b88f4870387b7c74a7d370318565ac1e2d3f5d99` |
 
 | Field | Value |
 | --- | --- |
-| `dispatch_on` | Owner-approved UTC dispatch date (`YYYY-MM-DD`). |
+| `dispatch_on` | `2026-11-25` UTC. |
 | `approval` and `wire_evidence` | References to the owner release and the dated model, Responses wire and tariff verification. |
 | `preflight_sha256` | `f4ba7105f050e8b4fc3516384ffe25512f66a225b05266289818c8da4fa39871` for this checkout and executable pin. |
 | `ledger_sha256` | SHA-256 of the exact ledger file above. |
 | `max_cny` | Decimal string `"9.480838"`. |
-| `dispatch_from` and `dispatch_until` | Required ISO timestamps with offsets. Every instant in the window must fall on `dispatch_on` UTC and use the dated EV-04 row's base rates. The start is inclusive and the end is exclusive. |
-| `beijing_public_holidays` | For a window that touches 09:00–12:00 or 14:00–18:00 Beijing time on a weekday, give each such Beijing date as `YYYY-MM-DD` with its verified holiday status (`true` or `false`). Cite the dated source in `wire_evidence`. |
+| `dispatch_from` and `dispatch_until` | `2026-11-25T09:10:00+08:00` inclusive through `2026-11-25T12:00:00+08:00` exclusive. The window uses the 2026-11-25 EV-04 peak rates throughout. |
+| `beijing_public_holidays` | `{"2026-11-25": false}` based on the owner's release for the morning peak. |
 
-After Gate 2 and owner signature, the owner runs the following command in a
-terminal with `DEEPSEEK_API_KEY` already set in the process environment. The
+During the released window, the owner runs the following command in a terminal
+with `DEEPSEEK_API_KEY` already set in the process environment. The
 runner uses no dotenv loader. `uv --offline` applies to package resolution.
 `--live` enables DeepSeek HTTPS. The command claims `C:\Temp\li-heavy.lock` and
 the one-time output directory exclusively.
@@ -198,7 +208,7 @@ work can change the estimate. [DL-06 recheck](M14-provider-check.md#live-recheck
 | Decision and memory trace | Pending. Select a model-origin outcome and trace earlier packet/day-entry through the K-boundary change set and record revision, then subsequent morning, sent recall, decision citation and world result. Distinguish rendered, dispatched and cited evidence. |
 | Skill and starter evidence | Pending. Report self-found skill evidence or an evidenced zero after the run. The starter-only grass-cord axe is due at M15. |
 | Prior engineering receipts | [MM-16/MF-14 and DL-19](P3.5-MM-02.md#gate-3-receipts) · [Round 3](M14-plan.md#4-done-when) · [EV-13 rehearsal](M14-fake-workload.md#receipts-and-verified-exports) · [PR-05 provenance](P3.5-PR-05-review.md) · [PR-06 provenance](P3.5-PR-06-review.md) |
-| Owner signature | Pending. Record the signed release separately from the final Gate 3 disposition and evidence revision. |
+| Owner release and Gate 3 | The owner approved the pre-dispatch sheet and the single peak run on 2026-11-25. Final Gate 3 signature and live evidence revision are pending. |
 
 After capture, run these commands offline in a terminal without the provider
 key. The export command verifies all shards and writes the viewer replay to
