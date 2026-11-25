@@ -158,9 +158,17 @@ def read(evidence):
     return read_evidence(json.dumps(evidence).encode())
 
 
+def dispatch_bounds(run, call_id, n):
+    row = next(
+        row for row in run["dispatches"] if row["call"]["call_id"] == call_id and row["n"] == n
+    )
+    return row["sent"]["manifest"]["tokens_total"], row["settings"]["max_output_tokens"]
+
+
 def forecast(evidence):
     (tariff,) = evidence["tariffs"]
     pin = {field: tariff[field] for field in ("provider", "model", "model_version")}
+    input_bound, output_bound = dispatch_bounds(evidence["runs"]["paid-vector"], "successful", 0)
     return {
         **pin,
         "stage": "resident_run",
@@ -171,8 +179,8 @@ def forecast(evidence):
                 "kind": "morning",
                 "n": 0,
                 "count": 1,
-                "input_bound": 155,
-                "output_bound": 8_000,
+                "input_bound": input_bound,
+                "output_bound": output_bound,
                 "central_cny": "0.0002575",
             }
             for day in (1, 2)
@@ -251,7 +259,9 @@ def test_reconciles_retry_restore_late_usage_and_no_dispatch(journal_evidence):
     after_settlement = project(read({**restored, "opening": opening, "plan": plan}))
     for ledger, days, fits in ((before_settlement, 1, False), (after_settlement, 2, True)):
         assert ledger.sizing is not None
-        assert ledger.sizing.reserve_pico == 2 * (155 * 2_500_000 + 8_000 * 8_750_000)
+        assert ledger.sizing.reserve_pico == 2 * (
+            first.input_bound * 2_500_000 + first.output_bound * 8_750_000
+        )
         assert ledger.sizing.affordable_days == days
         assert ledger.sizing.fits == fits
 
@@ -388,8 +398,9 @@ def test_incomplete_usage_beyond_pinned_bounds_blocks_paid_admission(journal_evi
     run = evidence["runs"]["paid-vector"]
     terminal = next(row for row in run["terminals"] if row["call_id"] == "split-missing")
     tokens = terminal["tokens"]
-    for name, overrun in (("input", 156), ("output", 8_001)):
-        terminal["tokens"] = {**tokens, name: overrun}
+    input_bound, output_bound = dispatch_bounds(run, terminal["call_id"], terminal["n"])
+    for name, bound in (("input", input_bound), ("output", output_bound)):
+        terminal["tokens"] = {**tokens, name: bound + 1}
         ledger = project(read(evidence))
         assert ledger.unbounded_attempts == 1
         assert ledger.remaining_pico is None
