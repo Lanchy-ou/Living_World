@@ -18,7 +18,7 @@ from living_island.world.v2.protocol import (
     validate_turn_shape,
 )
 
-from .changes import ChangeSetOutput, Output
+from .changes import ChangeSetOutput, ChangeSetSchema, Output
 
 type CallKind = Literal[
     "decision",
@@ -48,6 +48,12 @@ JSON_ONLY = (
     " Reply with only the JSON object that matches the response schema, "
     "with no other text before or after it."
 )
+EPISODIC_ADD_EXAMPLE = (
+    '{"op":"add","op_id":"remember_mia","ref":"new:1","record":{"kind":"episodic",'
+    '"gist":"I saw Mia nearby.","about_tick":{"from":20,"to":20},'
+    '"content":{"participants":["mia"],"place":null},'
+    '"sources":[{"kind":"observed","entry_id":"d:p:ella:1:12"}],"confidence":3}}'
+)
 INSTRUCTIONS: dict[CallKind, str] = {
     "decision": DECISION + " You may first ask to recall a memory." + JSON_ONLY,
     "decision_after_recall": DECISION + " You have recalled once. Act now." + JSON_ONLY,
@@ -55,26 +61,38 @@ INSTRUCTIONS: dict[CallKind, str] = {
     "morning": "Choose up to twenty memory IDs to carry into this waking period." + JSON_ONLY,
     "consolidation_selection": CONSOLIDATE
     + " Choose up to sixty exact IDs from the index to read in full. Select any existing record "
-    "you plan to edit. Intentions are read-only context." + JSON_ONLY,
+    "you plan to edit. Intentions are read-only context. Use the observed witness keys to "
+    "identify entries you could cite in the change set." + JSON_ONLY,
     "consolidation_change_set": CONSOLIDATE
     + " Propose memory changes in application order with unique op_id values. Use new:<n> "
     "refs such as new:1 for adds and merges. Later operations may cite an earlier accepted "
     "ref. Write a single-line gist of at most 160 characters and use the schema's content "
     "fields for episodic, belief or skill additions. Merge only episodic or belief records. "
     "Copy the displayed Change-set call ID into every inferred source. Use IDs from this "
-    "request. Observed sources must directly witness the subject. Existing records need "
-    "a full sent body to be edited. Intentions are read-only. Use trait for personality "
-    "changes, one supported step within bounds per trait." + JSON_ONLY,
+    "request. Every observed source must share a displayed observed witness key with the "
+    "record: participant or place for an episode, the named subject for a belief, or the verb "
+    "or a look's archetype or material for a skill. A general belief has no subject key; use "
+    "inferred or told evidence. An own response or own speech feedback cannot witness a "
+    "change-set record. A drink result tagged only with the verb and phenomenon cannot "
+    "witness a place claim; find a perception with the matching place key. A need key alone "
+    "does not witness a skill's verb. "
+    "Omit an edit if you lack an eligible source. The episode count is a target. "
+    "Existing records need a full sent body to be edited. "
+    "Intentions are read-only. Social updates can change gist, text, impression and trust "
+    "(trust by at most one step). Skill updates can change gist, text and status. In either case "
+    "omit add_sources and about_tick entirely, even when empty. Use trait for personality "
+    "changes, one supported step within bounds per trait. Example episodic add for a sent "
+    "tick-20 entry with witness key resident:mia (use IDs and ticks from your own input): "
+    + EPISODIC_ADD_EXAMPLE
+    + "."
+    + JSON_ONLY,
 }
 
 
 def prompt_version_for(kind: CallKind) -> str:
-    if kind in (
-        "decision",
-        "decision_after_recall",
-        "consolidation_selection",
-        "consolidation_change_set",
-    ):
+    if kind in ("consolidation_selection", "consolidation_change_set"):
+        return f"{kind}/0.5"
+    if kind in ("decision", "decision_after_recall"):
         return f"{kind}/0.4"
     version = "0.2" if kind == "recall" else "0.3"
     return f"{kind}/{version}"
@@ -203,7 +221,7 @@ class Contract:
         if kind in ("decision", "decision_after_recall"):
             schema = _decision_schema(kind, self.verbs)
         elif kind == "consolidation_change_set":
-            schema = ChangeSetOutput.model_json_schema()
+            schema = ChangeSetSchema.model_json_schema()
         elif kind == "consolidation_selection":
             schema = Selection.model_json_schema()
             schema["properties"]["read"]["maxItems"] = 60

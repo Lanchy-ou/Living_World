@@ -1,7 +1,7 @@
 """Build both consolidation requests from the resident's confirmed, frozen input."""
 
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import cast
 
 from living_island.agents.v2.calls.contracts import digest
@@ -20,10 +20,25 @@ class Choice:
     ignored: tuple[str, ...]
 
 
+def _parts(period: FrozenPeriod) -> Iterator[Part]:
+    # Mark packet-derived witness keys alongside the unchanged day-log line.
+    # The guard keeps or omits the line and its keys together.
+    observed = {
+        entry.id: entry.about
+        for entry in period.entries
+        if entry.about
+        and entry.type not in ("own_response", "recall", "heard_speech", "utterance_result")
+    }
+    for part in period.parts:
+        if part.source.kind == "day_log" and (keys := observed.get(part.source.id)):
+            yield replace(part, text=part.text + "\nObserved witness keys: " + "; ".join(keys))
+        else:
+            yield part
+
+
 def _pending_part(period: PendingPeriod[FrozenPeriod], view: ResidentView) -> Part:
-    # A pending context is an indivisible guard candidate. The published part
-    # contains precisely its resident-facing lines; typed evidence stays local.
-    parts = period.context.visible_to(view).parts
+    # A pending context is an indivisible guard candidate.
+    parts = _parts(period.context.visible_to(view))
     text = "\n".join([f"Pending period {period.period_id}", *(part.text for part in parts)])
     source = Ref(kind="pending_period", id=period.period_id, version=digest(text.encode()))
     return Part("pending_periods", source, text)
@@ -82,7 +97,7 @@ class FixedInput:
                     f"Change-set call ID for inferred sources: {change_set_id}",
                 )
             )
-        parts.extend(period.parts)
+        parts.extend(_parts(period))
         days = [i for i, part in enumerate(parts) if part.source.kind == "day_log"]
         pending_start = len(parts)
         parts.extend(_pending_part(pending, self.view) for pending in self.pending)

@@ -5,6 +5,9 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, RootModel
 from pydantic.json_schema import SkipJsonSchema
 
+from living_island.memory.v2.records import AboutTick as MemoryTickRange
+from living_island.memory.v2.records import Belief, Episodic, SkillHypothesis
+
 
 class Output(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
@@ -13,7 +16,10 @@ class Output(BaseModel):
 class Observed(Output):
     kind: Literal["observed"]
     entry_id: str = Field(
-        description="ID of a sent perception entry that directly witnesses the record's subject.",
+        description=(
+            "ID of a sent perception entry whose displayed observed witness keys overlap the "
+            "record's subject keys. A general belief has no key and cannot use this source."
+        ),
         examples=["d:p:ella:1:12"],
     )
 
@@ -63,49 +69,9 @@ class AboutTick(Output):
     to: int
 
 
-class NewRecord(Output):
-    kind: str = Field(
-        description="Add episodic, belief or skill records. Merge only episodic or belief records.",
-        examples=["episodic", "belief", "skill"],
-    )
+class RecordFields(Output):
     gist: Gist
     text: str | None = Field(default=None, description="Optional text, at most 2000 characters.")
-    content: dict[str, JsonValue] = Field(
-        description=(
-            "Use the exact fields for the record kind. Episodic: participants (resident IDs) "
-            "and place (x/y coordinate or null). Belief: subject {kind, ref}, stance and topics. "
-            "Subject kind is place, entity, resident, kind_of_thing or general. Place refs are "
-            "strings like 38,30; general has null ref. Stance is stable, dated or guess. Topics "
-            "are food, water, shelter, tools, materials, people, danger or other. Skill: "
-            "hypothesis {verb, target, instruments, inputs, circumstances, expected} and status "
-            "(active, doubtful or refuted). Target is a Look, {terrain}, or null. Instruments "
-            "are Looks; inputs have look and quantity. A Look has nullable archetype_id and "
-            "material_id and descriptors [{property_id, word}]. Circumstances is text or "
-            "null and expected lists phenomenon IDs. Code fills skill evidence."
-        ),
-        examples=[
-            {"participants": [], "place": {"x": 38, "y": 30}},
-            {"subject": {"kind": "place", "ref": "38,30"}, "stance": "stable", "topics": ["water"]},
-            {
-                "hypothesis": {
-                    "verb": "drink",
-                    "target": None,
-                    "instruments": [],
-                    "inputs": [],
-                    "circumstances": "beside a spring",
-                    "expected": ["drinks"],
-                },
-                "status": "active",
-            },
-        ],
-    )
-    about_tick: AboutTick | None = Field(
-        default=None,
-        description=(
-            "Inclusive tick range. Required for episodic and dated beliefs; omit for skills."
-        ),
-        examples=[{"from": 20, "to": 21}],
-    )
     sources: list[Source] = Field(
         description="Use observed, told or inferred evidence from this request."
     )
@@ -117,21 +83,83 @@ class NewRecord(Output):
     )
 
 
+class NewRecord(RecordFields):
+    """Receive each operation intact so MF can assign its original verdict."""
+
+    kind: str
+    content: dict[str, JsonValue]
+    about_tick: AboutTick | None = None
+
+
+class EpisodicRecord(RecordFields):
+    kind: Literal["episodic"]
+    content: Episodic
+    about_tick: MemoryTickRange = Field(
+        description="Inclusive range of the episode's ticks, even for a single tick.",
+        examples=[{"from": 20, "to": 20}],
+    )
+
+
+class BeliefRecord(RecordFields):
+    kind: Literal["belief"]
+    content: Belief
+    about_tick: MemoryTickRange | None = Field(
+        default=None, description="Required for dated beliefs. Omit or use null for stable beliefs."
+    )
+
+    # The stance is nested in content. The branches constrain the same typed
+    # fields without duplicating the belief kind in the outer discriminator.
+    model_config = ConfigDict(
+        json_schema_extra={
+            "oneOf": [
+                {
+                    "properties": {
+                        "content": {"properties": {"stance": {"const": "dated"}}},
+                        "about_tick": {"type": "object"},
+                    },
+                    "required": ["about_tick"],
+                },
+                {
+                    "properties": {
+                        "content": {"properties": {"stance": {"const": "stable"}}},
+                        "about_tick": {"type": "null"},
+                    },
+                },
+                {"properties": {"content": {"properties": {"stance": {"const": "guess"}}}}},
+            ],
+        }
+    )
+
+
+class SkillContent(Output):
+    hypothesis: SkillHypothesis
+    status: Literal["active", "doubtful", "refuted"]
+
+
+class SkillRecord(RecordFields):
+    kind: Literal["skill"]
+    content: SkillContent = Field(description="Code supplies the skill's evidence.")
+
+
+type Addition = Annotated[EpisodicRecord | BeliefRecord | SkillRecord, Field(discriminator="kind")]
+type MergedRecord = Annotated[EpisodicRecord | BeliefRecord, Field(discriminator="kind")]
+
+
 class Operation(Output):
     op_id: str = Field(description="Operation ID unique within this change set.")
 
 
-class Add(Operation):
+class Add[RecordT](Operation):
     op: Literal["add"]
     ref: NewRef
-    record: NewRecord
+    record: RecordT
 
 
-class Merge(Operation):
+class Merge[RecordT](Operation):
     op: Literal["merge"]
     ids: list[str]
     ref: NewRef
-    record: NewRecord
+    record: RecordT
 
 
 class Update(Operation):
@@ -147,8 +175,13 @@ class Update(Operation):
         ),
         examples=[{"impression": "Kept the promise."}, {"status": "doubtful"}],
     )
-    about_tick: AboutTick | None = None
-    add_sources: list[Source] = Field(default_factory=list)
+    about_tick: AboutTick | None = Field(
+        default=None, description="Omit this field entirely for social or skill updates."
+    )
+    add_sources: list[Source] = Field(
+        default_factory=list,
+        description="Omit this field entirely for social or skill updates, even when empty.",
+    )
 
 
 class Supersede(Operation):
@@ -195,8 +228,16 @@ class Trait(Operation):
     sources: list[Source] = Field(description="Evidence for the change. At least one source.")
 
 
-type KnownOperation = Annotated[
-    Add | Merge | Update | Supersede | Confidence | ReviewDone | Forget | CommitmentStatus | Trait,
+type KnownOperation[AddT, MergeT] = Annotated[
+    Add[AddT]
+    | Merge[MergeT]
+    | Update
+    | Supersede
+    | Confidence
+    | ReviewDone
+    | Forget
+    | CommitmentStatus
+    | Trait,
     Field(discriminator="op"),
 ]
 
@@ -211,6 +252,15 @@ class ChangeSetOutput(Output):
     # supplies base_version from the frozen store.
     ops: list[
         Annotated[
-            KnownOperation | SkipJsonSchema[InvalidOperation], Field(union_mode="left_to_right")
+            KnownOperation[NewRecord, NewRecord] | SkipJsonSchema[InvalidOperation],
+            Field(union_mode="left_to_right"),
         ]
     ] = Field(description="Operations in application order. The harness supplies base_version.")
+
+
+class ChangeSetSchema(Output):
+    """The output contract shown to the model. MF still validates each returned operation."""
+
+    ops: list[KnownOperation[Addition, MergedRecord]] = Field(
+        description="Operations in application order. The harness supplies base_version."
+    )
