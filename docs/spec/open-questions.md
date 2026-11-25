@@ -1120,6 +1120,23 @@ expectations through the phase plan §7 process.
 Until then a changed numeric outcome cannot close the affected test. An
 out-of-range change always requires a change request. Tracked by M13 D5.
 
+Owner decision (2026-11-25, at the M13 Gate 3 signature). The exception
+arose. The development round with `awake_per_tick = 50` failed only the
+faint tolerance, at 1.87 faints per resident-week. The owner chose the
+tuned candidate `awake_per_tick = 30`, which is within the §9.3 ±50% range.
+That candidate passed the held-out round with 0.85 faints per
+resident-week. The owner authorizes distinct reference and tuned-candidate
+expectations:
+
+- The published CT-09 vectors stay as the reference: day fatigue 6,400
+  and 200 silent awake ticks to faint.
+- The qualified `starter-v1` is accepted with its tuned observations:
+  4,480 and 334.
+
+The 36-tick faint and the 7,200-point recovery over 48 asleep ticks are
+unchanged. Both hashes and both result sets are retained in the
+[M13 Gate 3 report](../tasks/p3.5/M13-gate3.md#owner-dispositions).
+
 ## OQ-P3.5-M13-2: Recipe-ID scan when starter names also name engine concepts
 
 The owner approved D7 on 2026-11-23. EN-22 excludes recipe-specific engine code.
