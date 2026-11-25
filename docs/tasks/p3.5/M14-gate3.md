@@ -1230,3 +1230,125 @@ finally {
     Remove-Variable -Name ev06KeyLine -ErrorAction SilentlyContinue
 }
 ```
+
+### Second consolidation probe result and owner ruling
+
+The first probe settled CNY 0.05631456 and committed one gather skill.
+The second settled **CNY 0.04855008** across four first attempts, each with
+a metered terminal. It committed one episode and recorded three
+`provenance` drops and zero `format` drops. Period `p:ella:1` committed
+zero of one proposed operation. Period `p:ella:2` committed one of
+three, so the overall probe failed its original pass rule.
+[First consolidation probe result](#first-consolidation-probe-result)
+
+| Period and operation | Verdict | Sent evidence |
+| --- | --- | --- |
+| `p:ella:1` · `remember_woke_after_sleep` | `provenance` | `d:p:ella:1:528` reads “You fall asleep.” `d:p:ella:1:529` carries `need:stamina`. Neither matches `resident:ella` or `place:38,31`. |
+| `p:ella:2` · `remember_ryan_fill` | Committed | `d:p:ella:2:108` and `d:p:ella:2:109` both carry `resident:ryan` and show the start and result of filling his canteen. That participant key binds both citations. |
+| `p:ella:2` · `remember_failed_gathers` | `provenance` | `d:p:ella:2:124`, `d:p:ella:2:134`, and `d:p:ella:2:136` each carry `verb:gather`. The episode named no participant or place. |
+| `p:ella:2` · `remember_sleep_tired` | `provenance` | `d:p:ella:2:151` carries `need:stamina`. `d:p:ella:2:153` reads “You fall asleep.” Neither supplies the episode's `place:22,13`. |
+
+The second probe's scratch write at tick 420 created `m:ella:249` for
+ticks 356–357 with gist “I saw Ryan filling his canteen at the spring
+while I was nearby.” Its content hash is
+`a3a860405ca12135859184e5f38b8fc158686100aa812df808eb0663236390ce`.
+The owner ruled on 2026-11-25 that the provenance rule is working as
+specified and closed wording iterations. The second probe remains a
+separate evidence capture.
+
+| Artifact under `runs/m14-ev06-consolidation-probe2/` | SHA-256 |
+| --- | --- |
+| `result.json` | `e06624fbbf3004dbf16afaacce567f5e00d3a60e68fb2d60b028dbeb13c70148` |
+| `provider-probe.sqlite` | `ea03876877a8f522b76726c0e8c8c7fb452bb4b777164e3bf42f6f5211cf8bd6` |
+| `ledger-evidence.json` | `0afea33aec49a27fa272a19d9efec05724f40db61e562a23bb9d1fd5e8bd6f49` |
+| Period 1 parsed change set | `03906f5d37ce2b71e7529839d442cfd412ef14a73072fb7fb57acf973a7aeaad` |
+| Period 2 parsed change set | `d5fdec5772640177d0aa69779f998f64caab06bd8f24da4331ee0992f614782d` |
+
+### Fresh 576-tick live release
+
+The owner authorized one fresh 576-tick run after reviewing both probes.
+The detached checkout `F:/p35-w1/ev06r3` pins executable
+`c7454fc130f1eea731ce464e6c6a0f0e64d022a4` with both consolidation
+requests at `0.5`. The pack, vocabulary, setup, seed `20261108`,
+resident profiles and rehearsal match the prior four-day preflight. Ella
+uses the explorer profile with memory on in `compat-v1`. Ryan and Mia
+remain rule-controlled. The run uses the pinned DeepSeek V4.1 Flash 1017
+Responses transport and counter.
+
+The release is **Thursday 2026-11-26, 09:10 inclusive to 12:00 exclusive
+Beijing (+08:00)**, with the 2026-11-26 UTC peak tariff of **CNY 0.04 /
+2 / 8** per million cache-hit input, cache-miss input and output tokens.
+The normal preflight and authority loader accepted the release offline at
+**23:32:16 Beijing on 2026-11-25**.
+[Peak tariff evidence](M14-provider-check.md#owner-release-on-2026-11-24)
+
+| Game day | Rehearsed attempts | Counted input tokens | Output tokens held | Reserve CNY |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 47 | 551,104 | 376,000 | 4.110208 |
+| 2 | 33 | 375,923 | 264,000 | 2.863846 |
+| 3 | 29 | 363,856 | 232,000 | 2.583712 |
+| 4 | 36 | 423,035 | 288,000 | 3.150070 |
+| **Total** | **145** | **1,713,918** | **1,160,000** | **12.707836** |
+
+The archived EV-05 audit matches every pinned attempt slot and input bound.
+Reserve assumes zero cache hits and 8,000 output tokens per attempt.
+CNY 4.23773622 is settled and the original unmatched claim still holds
+CNY 0.133982. **All four rehearsed days fit** the CNY 15.62828178 headroom,
+leaving **CNY 2.92044578** outside the reservation. The runtime guard
+prices each proposed attempt, including retries, against the signed
+window, the phase cap and the remaining rehearsal reserve before a
+dispatch claim. Its published refusal ends the run at the next safe stop.
+[Rehearsal artifact](#rehearsed-waking-period-continuity)
+· [Reconciled spend](P3.5-spend-ledger.md#opening-ledger)
+
+The new authorization ledger carries both off-peak consolidation probe
+settlements as CNY 0.10486464 in its opening reconciliation, with the two
+receipt hashes. The prior tick-442 run keeps its itemized facts under
+`m14-ev06-ella-tick-442` in this ledger only, so the fresh live run can
+claim `m14-ev06-ella`. All earlier captures remain in place.
+
+| Input in `F:/p35-w1/ev06r3/runs/` | SHA-256 |
+| --- | --- |
+| `m14-ev06-ella-preflight.json` | `7ccf91cdd0f233cd3879aa8bd2a4c64e7865d3a829fbcf3c84f7cf1460bd728a` |
+| `m14-ev06-ella-ledger.json` | `119770ac2a4e996d6a527595dcf85dad99770f6d517822fe5113bc1f63ef8610` |
+| `m14-ev06-ella-release.json` | `0b6bf568dad1985d82f5616cce5a42f64cb6561cd1b9890470ff7c06212c6ef5` |
+
+#### Fresh live owner command
+
+Run this block in the released window. The one-time output is
+`F:/p35-w1/ev06r3/runs/m14-ev06-ella/`.
+
+```powershell
+Set-Location -LiteralPath 'F:\p35-w1\ev06r3' -ErrorAction Stop
+$env:GIT_CONFIG_COUNT = '1'
+$env:GIT_CONFIG_KEY_0 = 'safe.directory'
+$env:GIT_CONFIG_VALUE_0 = 'F:/p35-w1/ev06r3'
+$ev06Start = [DateTimeOffset]::Parse('2026-11-26T09:10:00+08:00')
+$ev06End = [DateTimeOffset]::Parse('2026-11-26T12:00:00+08:00')
+$ev06Now = [DateTimeOffset]::UtcNow
+if ($ev06Now -lt $ev06Start -or $ev06Now -ge $ev06End) {
+    throw 'Outside the signed EV-06 window on 2026-11-26, 09:10–12:00 Beijing.'
+}
+$ev06ReleaseHash = (Get-FileHash -LiteralPath 'runs/m14-ev06-ella-release.json' -ErrorAction Stop).Hash
+if ($ev06ReleaseHash -ine '0b6bf568dad1985d82f5616cce5a42f64cb6561cd1b9890470ff7c06212c6ef5') {
+    throw 'EV-06 release differs from the verified authorization.'
+}
+try {
+    $ev06Pattern = '^\s*(?:export\s+)?DEEPSEEK_API_KEY\s*=\s*(?:"(?<key>[^"]+)"|''(?<key>[^'']+)''|(?<key>[^#\s]+))(?:\s*#.*)?\s*$'
+    $ev06KeyLine = Select-String -LiteralPath 'E:\桌面\Living_World\.env' `
+        -Pattern $ev06Pattern -ErrorAction Stop | Select-Object -Last 1
+    if ($null -eq $ev06KeyLine) { throw 'DEEPSEEK_API_KEY is missing or invalid.' }
+    $env:DEEPSEEK_API_KEY = $ev06KeyLine.Matches[0].Groups['key'].Value
+
+    uv run --offline --locked --no-env-file --no-sync --no-dev --directory backend `
+        python -m living_island.sim.v2.harness.live_resident run --live --through 576 `
+        --implementation c7454fc130f1eea731ce464e6c6a0f0e64d022a4 `
+        --release ../runs/m14-ev06-ella-release.json `
+        --ledger ../runs/m14-ev06-ella-ledger.json --out ../runs/m14-ev06-ella
+    if ($LASTEXITCODE -ne 0) { throw "EV-06 exited with code $LASTEXITCODE." }
+}
+finally {
+    Remove-Item -LiteralPath 'Env:\DEEPSEEK_API_KEY' -ErrorAction SilentlyContinue
+    Remove-Variable -Name ev06KeyLine -ErrorAction SilentlyContinue
+}
+```
