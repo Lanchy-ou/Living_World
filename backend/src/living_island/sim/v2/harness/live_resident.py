@@ -83,50 +83,61 @@ RUN_ID = "m14-ev06-ella"
 LIVE_DIRECTORY = ROOT / "runs" / RUN_ID
 SEED = 20261108
 DAY = 144
-HORIZON = 3 * DAY
-RESERVED = 9_480_838_000_000
-REHEARSAL_SHA256 = "687dfbbf66abee2c12a6239ebdb2172d98f7472721bee40225e26b34f65ca509"
+HORIZON = 4 * DAY
+REHEARSAL_SHA256 = "780d8b45c5fea228399b51b71cf64e5905ffd25dbbc558ff70c94c5f10a6fe07"
 SOURCE_INPUTS = ("backend/src", "backend/prompts", "backend/uv.lock", "content")
 BEIJING = timezone(timedelta(hours=8))
 OFF_PEAK_RATES = (20_000, 1_000_000, 4_000_000)
 PEAK_RATES = (40_000, 2_000_000, 8_000_000)
 BILLING_PERIODS = ((0, 9, False), (9, 12, True), (12, 14, False), (14, 18, True), (18, 24, False))
 
-# Sent input bounds, in dispatch order within each day and call kind. Extracted
-# from the pinned EV-05 /0.2 SQLite rehearsal, including four first-day retries.
+# Sent input bounds in dispatch order within each day and call kind.
+# Extracted from the pinned 576-tick Ella rehearsal; retries keep their own slots.
 # fmt: off
 REHEARSAL: dict[tuple[int, CallKind], tuple[int, ...]] = {
-    (0, 'consolidation_change_set'): (13494, 14421, 8021),
-    (0, 'consolidation_selection'): (5279, 9078, 10005, 4059),
+    (0, 'consolidation_change_set'): (14456, 14925, 8525),
+    (0, 'consolidation_selection'): (5760, 10040, 10509, 4563),
     (0, 'decision'): (
-        11271, 11271, 11271, 11271, 11271, 11996, 12202, 12417, 12585, 12906,
-        13428, 13846, 12187, 12721, 12115, 12523, 12989, 13371, 13795, 14219,
-        14643, 15375, 15780, 16197, 17010, 17504, 17783, 18188, 18593, 12188,
-        12595,
+        11590, 11590, 11590, 11590, 11590, 12315, 12521, 12736, 12904, 13225, 13767, 14185,
+        12526, 13060, 12454, 12862, 13334, 13719, 14146, 14573, 15000, 15737, 16142, 16559,
+        17372, 17866, 18145, 18550, 18955, 12550, 12957,
     ),
-    (0, 'decision_after_recall'): (11209, 13785, 16137),
-    (0, 'morning'): (860, 889, 1055),
+    (0, 'decision_after_recall'): (11528, 14124, 16499),
+    (0, 'morning'): (996, 1025, 1206),
     (0, 'recall'): (253, 279, 306),
-    (1, 'consolidation_change_set'): (11829, 11858, 10771),
-    (1, 'consolidation_selection'): (6951, 7439, 6352),
+    (1, 'consolidation_change_set'): (12342, 12371, 11284),
+    (1, 'consolidation_selection'): (7464, 7952, 6865),
     (1, 'decision'): (
-        12325, 12720, 13508, 13973, 14438, 15485, 12277, 12684, 13383, 13801,
-        14603, 15113, 15578, 15859, 12277, 12684, 13387, 13927, 14392, 14673,
+        12687, 13082, 13879, 14344, 14809, 15856, 12648, 13055, 13754, 14172, 14974, 15484,
+        15949, 16230, 12648, 13055, 13758, 14298, 14763, 15044,
     ),
-    (1, 'decision_after_recall'): (14379, 13327),
-    (1, 'morning'): (1061, 1166, 1243),
+    (1, 'decision_after_recall'): (14750, 13698),
+    (1, 'morning'): (1212, 1323, 1400),
     (1, 'recall'): (334, 439),
-    (2, 'consolidation_change_set'): (14232, 11774),
-    (2, 'consolidation_selection'): (9813, 6896),
+    (2, 'consolidation_change_set'): (14745, 12287),
+    (2, 'consolidation_selection'): (10326, 7409),
     (2, 'decision'): (
-        12272, 12679, 13382, 13846, 14311, 14592, 15483, 16027, 16708, 17225,
-        17690, 17971, 12277, 12684, 13703, 14144, 14609, 14890, 12279, 12689,
+        12643, 13050, 13753, 14217, 14682, 14963, 15854, 16398, 17079, 17596, 18061, 18342,
+        12648, 13055, 14074, 14515, 14980, 15261, 12650, 13060,
     ),
-    (2, 'decision_after_recall'): (16649,),
-    (2, 'morning'): (1320, 1400, 1479),
+    (2, 'decision_after_recall'): (17020,),
+    (2, 'morning'): (1477, 1557, 1636),
     (2, 'recall'): (518,),
+    (3, 'consolidation_change_set'): (11792, 11879, 13942),
+    (3, 'consolidation_selection'): (7373, 7460, 9064),
+    (3, 'decision'): (
+        13766, 14309, 14776, 15059, 12650, 13060, 13766, 14232, 14699, 14982, 12652, 13220,
+        13907, 14405, 15153, 15591, 16058, 16422, 12652, 13062, 13768, 14234, 14701,
+    ),
+    (3, 'decision_after_recall'): (13707, 13849),
+    (3, 'morning'): (1715, 1796, 1824),
+    (3, 'recall'): (676, 834),
 }
 # fmt: on
+RESERVED = sum(
+    PEAK_RATES[1] * sum(bounds) + PEAK_RATES[2] * RESERVE * len(bounds)
+    for bounds in REHEARSAL.values()
+)
 
 
 class ResidentRelease(Release):

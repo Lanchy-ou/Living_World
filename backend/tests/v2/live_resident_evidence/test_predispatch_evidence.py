@@ -39,14 +39,19 @@ def evidence(day, *, opening):
 
 def test_rehearsed_whole_day_prefix_fits_phase_headroom():
     from living_island.analysis.v2_spend import project, read_evidence, render_markdown
+    from living_island.sim.v2.harness.live_resident import DAY, HORIZON, REHEARSAL, RESERVED
 
     day = "2026-11-25"
-    bundle = evidence(day, opening="0.05343482")
+    # Model settled spend and outstanding holds as opening exposure for this sizing test.
+    bundle = evidence(day, opening="2.50474130")
     # Each compact test row preserves the total input bound and attempt count
     # of that day. The retained sizing bundle accounts by kind and ordinal.
-    rehearsal = [(47, 534_641), (33, 364_236), (29, 353_542)]
+    rehearsal = [(47, 551_104), (33, 375_923), (29, 363_856), (36, 423_035)]
+    assert HORIZON == len(rehearsal) * DAY == 576
     rows = []
     for game_day, (attempts, counted_input) in enumerate(rehearsal, start=1):
+        slots = [n for (d, _), inputs in REHEARSAL.items() if d == game_day - 1 for n in inputs]
+        assert (len(slots), sum(slots)) == (attempts, counted_input)
         width, remainder = divmod(counted_input, attempts)
         for n, (count, bound) in enumerate(((attempts - remainder, width), (remainder, width + 1))):
             rows.append(
@@ -64,22 +69,23 @@ def test_rehearsed_whole_day_prefix_fits_phase_headroom():
 
     ledger = project(read_evidence(json.dumps(bundle).encode()))
     sizing = ledger.sizing
-    assert ledger.remaining_pico == 19_946_565_180_000
-    assert sizing.fits and sizing.affordable_days == 3
+    assert ledger.remaining_pico == 17_495_258_700_000
+    assert sizing.fits and sizing.affordable_days == 4
     assert [(row.attempts, row.reserve_pico) for row in sizing.days] == [
-        (47, 4_077_282_000_000),
-        (33, 2_840_472_000_000),
-        (29, 2_563_084_000_000),
+        (47, 4_110_208_000_000),
+        (33, 2_863_846_000_000),
+        (29, 2_583_712_000_000),
+        (36, 3_150_070_000_000),
     ]
-    assert sizing.reserve_pico == 9_480_838_000_000
+    assert sizing.reserve_pico == RESERVED == 12_707_836_000_000
     report = render_markdown(ledger)
-    assert "Affordable whole resident days from the proposed prefix — 3" in report
-    assert "Proposed unit hold (CNY) — 9.480838" in report
+    assert "Affordable whole resident days from the proposed prefix — 4" in report
+    assert "Proposed unit hold (CNY) — 12.707836" in report
 
-    # Exactly two days fit. The third would exceed the available phase balance.
-    bundle["opening"]["settled_cny"] = "13.082246"
+    # Exactly three days fit. The fourth would exceed the available phase balance.
+    bundle["opening"]["settled_cny"] = "10.442234"
     short = project(read_evidence(json.dumps(bundle).encode())).sizing
-    assert short.affordable_days == 2 and not short.fits
+    assert short.affordable_days == 3 and not short.fits
 
 
 def test_partial_day_report_reconciles_replayed_attempts_and_rejects_usage_drift(
