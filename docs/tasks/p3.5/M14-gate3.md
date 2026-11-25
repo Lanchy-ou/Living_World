@@ -856,13 +856,13 @@ For M15, Ella's 17 `gather` intents all failed `INVALID_TARGET`. Both
 `eat` intents resolved `unmatched`. Her delivered terrain never showed a
 fruit-tree tile and her entity view supplied no fruit or fruit-tree ID.
 At tick 342 the engine's unmatched-eat descriptor
-`m14-ev06-ella:0000000342:000014` listed an edible fruit at her position.
-The tick-341 and tick-342 packets both showed an empty inventory and no
-fruit entity. That discrepancy identifies a concrete
-food-discovery and action-affordance case for M15. The same world applied
-seven gathers and five eats for each rule-controlled companion. Ella could
-drink successfully 12 times. Food discovery and acquisition remained the
-survival failure in this run.
+`m14-ev06-ella:0000000342:000014` listed `e:4613441a83dc497f`, a fruit item
+Mia carried. Ella's tick-341 and tick-342 packets showed an empty inventory
+and no fruit entity. Ella never saw a fruit tree and invented her gather
+targets. The same world applied seven gathers and five eats for each
+rule-controlled companion. Ella drank successfully 12 times. For M15,
+the food-finding case is discovering a fruit tree, selecting an exposed
+gather target and acquiring food in time to eat.
 
 #### Live artifact verification and viewer steps
 
@@ -931,3 +931,144 @@ lower right and use **Inspection record** for the three linked views.
    **Cited · m:ella:184**, **Full request · sent**, and
    **Decision, citations and telemetry**. Expand `act_settled` and use
    **Show ella at tick 306** beside it to jump to the applied drink.
+
+### Consolidation contract repair and one-time probe
+
+The tick-442 capture showed two committed change sets with no edits. The new
+`consolidation_selection/0.4` and `consolidation_change_set/0.4` prompts describe the
+existing authority and evidence rules. The change-set schema shows `new:<n>`
+refs, the 160-character single-line gist limit, exact content fields for
+episodic, belief and skill additions, the source forms and the read-only
+status of intentions. The sent user input shows the actual change-set call
+ID for inferred evidence and carries the full resident-safe personality
+revision even when the model selects no records. The existing validator,
+commit rules and M13 calibration pins are unchanged.
+[Memory formation §§3.2–3.5](../../spec/memory-formation-v0.1.md#32-call-1-selection)
+· [Memory model §§2–3](../../spec/memory-model-v0.1.md#2-the-record-envelope)
+
+The offline regression stages all 11 captured operations against the recorded
+base records and sent allowlists. Each primary verdict below matches the audit.
+The regression also commits an observed episodic record, an inferred belief
+citing `new:1` and a one-step trait change. The next fake morning receives the
+new episode's store ID and selects it into its prefix.
+
+| Call | Operation | First recorded reason | Rule or dependency |
+| --- | --- | --- | --- |
+| `p:ella:1:270:change_set` | `op1` | `format` | `new-1` is outside the producer-ref format. The gist was 187 characters and the episodic content used unsupported fields. Its inferred source also named decision call `ella:t000221`. |
+| same | `op2` | `format` | `new-2` is outside the producer-ref format. The episode used `needs_at_wake` and a string `position` in its content. |
+| same | `op3` | `authority` | Tried to supersede intention `m:ella:184`. |
+| same | `op4` | `depends_on` | Cited `op3`'s intended target. Its `new-3` ref, 190-character gist, episodic `steps` field and inferred call ID also violated the contract. |
+| `p:ella:2:385:change_set` | `o1`, `o2`, `o3` | `format` | Used store-style refs `m:ella:249`, `m:ella:250` and `m:ella:251` for adds and proposed kind `observation` with unsupported content. |
+| same | `o4` | `authority` | Tried to update intention `m:ella:248`. |
+| same | `o5` | `format` | Proposed curiosity +1 while its current value and maximum were both 4. The old request also omitted the full personality revision, which trait provenance requires. |
+| same | `o6` | `depends_on` | Shared the personality mutation with dropped `o5`. |
+| same | `o7` | `depends_on` | Shared that mutation with dropped `o5` and `o6`. |
+
+The captured parsed reply hashes are
+`db7ab967cedaad3940d02e792969bec8a734c413621e7305148654cbca30b2fc` and
+`6e8909748b3e20c176772866ab89c4f374400f17dec5fc2df9ad8b720e12ff2f`.
+The regression fixture SHA-256 is
+`e0a3b0c3e007ad70303043a2791e559f1a4befc9f2008cd71d5f00811051fe3b`.
+
+#### Probe release
+
+The owner authorized one paid probe on 2026-11-25. The released window is
+**Wednesday 2026-11-25, 18:10 inclusive to 23:50 exclusive Beijing (+08:00)**.
+The operator script uses the confirming inputs at checkpoints 271 and 386
+of the tick-442 capture in read-only mode. It makes one selection and one
+dependent change-set attempt per period. It starts each period from that
+period's own original base and commits only to a scratch store. The
+historical capture and its inspection export remain intact.
+
+**Pass rule.** All four calls must parse on their sole attempt and settle
+inside the release terms. Each change set must commit at least one actual
+record edit and drop at most one third of its proposed operations
+(`3 × dropped ≤ proposed`). The result records every verdict, its
+dependency IDs and the committed revisions. A selection failure leaves
+that period's change set unsent. There are no retries or fallbacks.
+
+The original four requests would reserve CNY 0.575967 at the off-peak
+tariff and 8,000 output tokens per attempt. With the owner's approval, the
+probe uses the existing guard's omission order to drop only optional context
+from the two real frozen periods. Each selection has a 36,000 counted input
+limit. The dependent change set uses the surviving frozen context, with up
+to 50,000 counted inputs for its expanded schema and selected records.
+The complete index, mandatory record revisions and personality remain
+protected where required. The preflight records every omitted reference;
+the paid audit records the final omissions after each fresh selection.
+
+| Frozen period | Selection preflight | Change-set preflight using the recorded selection |
+| --- | --- | --- |
+| `p:ella:1` at 270 | 35,811 sent, 8,039 protected floor. Omitted day entries `d:p:ella:1:1`–`d:p:ella:1:430`. | 49,412 sent, 20,916 protected floor on the reused context. Omitted the same day entries and selected record `m:ella:183`. |
+| `p:ella:2` at 385 | 35,731 sent, 10,904 protected floor. Omitted day entries `d:p:ella:2:1`–`d:p:ella:2:81`. | 49,324 sent, 23,781 protected floor on the reused context. Omitted the same day entries and selected record `m:ella:247`. |
+
+DeepSeek V4.1 Flash 1017 is pinned through the DL-06 Responses settings and
+counter. Each attempt reserves 8,000 output tokens and assumes zero cache
+hits. CNY 0.068 per selection and CNY 0.082 per change set reserve exactly
+**CNY 0.30** at **0.02 / 1 / 4** CNY per million cache-hit, cache-miss and
+output tokens. The same bounds would reserve CNY 0.60 at peak rates.
+The reconciled prior phase ledger records **CNY 4.13287158 settled** and
+the original **CNY 0.133982 hold** (CNY 15.73314642 remaining). The new
+tariff applies only to the probe slice. Before each audit claim the runner
+checks the window and counted bound, plus settled probe spend, any open
+holds and the candidate charge against the probe and phase caps. It checks
+the window again immediately before HTTPS.
+[DL-06 pricing and wire evidence](M14-provider-check.md#owner-release-on-2026-11-24)
+
+| Input in `runs/m14-ev06-consolidation-probe-inputs/` | SHA-256 or commit |
+| --- | --- |
+| Implementation | `9918ae9a7e21621cbed7da20e27c596d548aa123` |
+| `probe.py` | `1f6a497639830b81710b3faa66c888aa5a7f4b49727f6c24f2e6184e4fe40a10` |
+| `preflight.json` | `586be762b7160bbfe0d9fecdb0e32e208cdb52493cdc88d8873e4c584fa2c0a9` |
+| `ledger.json` | `6454d21ecbe0f340ee8c2aad4bf8b7b855fc1b1d202601874cea9ceb1f56cb08` |
+| `release.json` | `cbfaada894986c529c9fc1018c9b05a46a5c9a568578b2b5134e5146fcafdc92` |
+
+The released inputs passed the offline fake-transport run with four
+claims and four terminals. Its one proposed operation per period
+committed scratch record `m:ella:185` and `m:ella:249`, respectively,
+with zero drops. The offline result in
+`C:/Temp/li-ev06-mf-probe-403b7769fa83/result.json` has SHA-256
+`964c0811a019cea1acdc858e4b7e5ee491ace88e7e7d42babaaca6c769f83385`.
+
+#### Owner command
+
+Run from the EV-06 worktree during the window. The exclusive output directory
+`runs/m14-ev06-consolidation-probe/` will contain the durable provider audit,
+probe-only ledger and `result.json`.
+
+```powershell
+Set-Location -LiteralPath 'F:\p35-w1\ev06' -ErrorAction Stop
+$env:GIT_CONFIG_COUNT = '1'
+$env:GIT_CONFIG_KEY_0 = 'safe.directory'
+$env:GIT_CONFIG_VALUE_0 = 'F:/p35-w1/ev06'
+$ev06Start = [DateTimeOffset]::Parse('2026-11-25T18:10:00+08:00')
+$ev06End = [DateTimeOffset]::Parse('2026-11-25T23:50:00+08:00')
+$ev06Now = [DateTimeOffset]::UtcNow
+if ($ev06Now -lt $ev06Start -or $ev06Now -ge $ev06End) {
+    throw 'Outside the signed EV-06 consolidation probe window.'
+}
+$ev06Inputs = 'runs/m14-ev06-consolidation-probe-inputs'
+$ev06ScriptHash = (Get-FileHash -LiteralPath "$ev06Inputs/probe.py" -ErrorAction Stop).Hash
+$ev06ReleaseHash = (Get-FileHash -LiteralPath "$ev06Inputs/release.json" -ErrorAction Stop).Hash
+if ($ev06ScriptHash -ine '1f6a497639830b81710b3faa66c888aa5a7f4b49727f6c24f2e6184e4fe40a10' -or
+    $ev06ReleaseHash -ine 'cbfaada894986c529c9fc1018c9b05a46a5c9a568578b2b5134e5146fcafdc92') {
+    throw 'EV-06 consolidation probe script or release differs from the verified input.'
+}
+try {
+    $ev06Pattern = '^\s*(?:export\s+)?DEEPSEEK_API_KEY\s*=\s*(?:"(?<key>[^"]+)"|''(?<key>[^'']+)''|(?<key>[^#\s]+))(?:\s*#.*)?\s*$'
+    $ev06KeyLine = Select-String -LiteralPath 'E:\桌面\Living_World\.env' `
+        -Pattern $ev06Pattern -ErrorAction Stop | Select-Object -Last 1
+    if ($null -eq $ev06KeyLine) { throw 'DEEPSEEK_API_KEY is missing or invalid.' }
+    $env:DEEPSEEK_API_KEY = $ev06KeyLine.Matches[0].Groups['key'].Value
+
+    uv run --offline --locked --no-env-file --no-sync --directory backend `
+        python "../$ev06Inputs/probe.py" --live `
+        --release "../$ev06Inputs/release.json" `
+        --ledger "../$ev06Inputs/ledger.json"
+    if ($LASTEXITCODE -ne 0) { throw "EV-06 consolidation probe exited with code $LASTEXITCODE." }
+}
+finally {
+    Remove-Item -LiteralPath 'Env:\DEEPSEEK_API_KEY' -ErrorAction SilentlyContinue
+    Remove-Variable -Name ev06KeyLine -ErrorAction SilentlyContinue
+}
+```
