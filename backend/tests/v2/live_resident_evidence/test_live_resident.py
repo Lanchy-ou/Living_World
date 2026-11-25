@@ -1,6 +1,7 @@
 """Exercise the fixed resident CLI and its dispatch stop with synthetic transports."""
 
 import json
+import subprocess
 import sys
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -15,6 +16,20 @@ from living_island.agents.v2.decision.caller import Caller
 from living_island.analysis.v2.shards import InspectionArchive
 from living_island.sim.v2.harness import live_resident as live
 from living_island.sim.v2.harness.checkpoint import Recording
+
+
+def test_release_preflight_matches_across_processes(monkeypatch):
+    command = [
+        sys.executable,
+        "-c",
+        "from living_island.sim.v2.harness.live_resident import Case, digest; "
+        "print(digest(Case.load().preflight('fixture')))",
+    ]
+    hashes = []
+    for seed in ("991", "123"):
+        monkeypatch.setenv("PYTHONHASHSEED", seed)
+        hashes.append(subprocess.check_output(command))
+    assert hashes[0] == hashes[1]
 
 
 def test_fake_cli_records_resumes_replays_and_exports(tmp_path, monkeypatch, capsys):

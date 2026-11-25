@@ -213,6 +213,8 @@ class Case:
     def preflight(self, implementation: str) -> bytes:
         world = initialize(self.bound.pack, self.setup)
         verbs = tuple(spec.shape for spec in world.pack.verbs.values())
+        setup = self.setup.model_dump(mode="json")
+        setup["terrain"]["opaque_terrains"] = sorted(self.setup.terrain.opaque_terrains)
         wires = {}
         for kind in INSTRUCTIONS:
             contract = Contract(kind, verbs)
@@ -229,7 +231,7 @@ class Case:
                 "through": HORIZON,
                 "seed": SEED,
                 "compat": asdict(self.bound.manifest),
-                "setup_sha256": digest(json_bytes(self.setup.model_dump(mode="json"))),
+                "setup_sha256": digest(json_bytes(setup)),
                 "profiles": {
                     actor: {
                         "profile_id": self.profiles[actor].profile_id,
