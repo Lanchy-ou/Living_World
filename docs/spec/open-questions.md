@@ -1212,6 +1212,12 @@ runtime stop guard. Use a 576-tick rehearsal when needed for sizing. Hold
 the release if the reserve exceeds the remaining CNY 20 phase balance
 after CNY 2.37075930 settled and the CNY 0.133982 hold.
 
+**Owner decision (2026-11-25, after the four-day run).** The capture passes
+the originally agreed three-day horizon of 432 ticks. The four-day
+extension assumed a faint that `compat-v1` cannot produce. Ella's death at
+tick 442 is a committed world outcome. Use this capture as the M14 live
+evidence, subject to offline verification.
+
 ## OQ-P3.5-PR-07: Run scope of the M12 equivalence matrix
 
 Protocol §11.3 (CR-011) requires M12 to check that no run of the P2 matrix
