@@ -1,11 +1,12 @@
 """Assemble a decision and retain the exact resident-visible parts for consolidation."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal
 
 from living_island.agents.v2.calls.contracts import INSTRUCTIONS, Contract, prompt_version_for
 from living_island.agents.v2.calls.guard import Assembly, Call, Part, Prepared, Ref, prepare
 from living_island.agents.v2.calls.journal import Journal
+from living_island.memory.v2.projections import ResidentView
 
 from .day_log import DayLog
 from .entries import DayEntry
@@ -20,6 +21,20 @@ class FrozenPeriod:
     prefix: FrozenPrefix
     entries: tuple[DayEntry, ...]
     current_state: tuple[Part, ...]
+
+    def visible_to(self, view: ResidentView) -> "FrozenPeriod":
+        """Project prompt parts without rewriting the saved prefix or append-only log."""
+        ids = {revision.ref.id for revision in view.records}
+        if view.current_intention is not None:
+            ids.add(view.current_intention.ref.id)
+        return FrozenPeriod(
+            replace(
+                self.prefix,
+                memories=tuple(m for m in self.prefix.memories if m.revision.id in ids),
+            ),
+            tuple(e for e in self.entries if e.retrieved is None or e.retrieved.id in ids),
+            tuple(p for p in self.current_state if p.source.kind != "memory" or p.source.id in ids),
+        )
 
     @property
     def parts(self) -> tuple[Part, ...]:
@@ -52,15 +67,19 @@ class WorkingContext:
         state: CurrentState,
         journal: Journal,
         *,
+        view: ResidentView,
         stage: Literal["decision", "decision_after_recall"] = "decision",
         protected_recall_ids: frozenset[str] = frozenset(),
     ) -> Prepared:
-        prefix = self.prefix.parts
-        entries = self.log.entries
+        # Current state was rendered from this turn's view. Only carried parts
+        # can outlive their store records and need a reachability projection.
+        visible = FrozenPeriod(self.prefix, self.log.entries, ()).visible_to(view)
+        prefix = visible.prefix.parts
+        entries = visible.entries
         state_start = len(prefix) + len(entries)
         assembly = Assembly.decision(
             (*prefix, *(entry.part for entry in entries), *state.parts),
-            prefix_memories=self.prefix.memory_positions,
+            prefix_memories=visible.prefix.memory_positions,
             day_log=tuple(range(len(prefix), state_start)),
             pressure_at=state_start + state.pressure_at,
             recall_entries=frozenset(

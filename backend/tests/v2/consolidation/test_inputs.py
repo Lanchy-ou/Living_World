@@ -9,10 +9,13 @@ from living_island.agents.v2.calls.provider import attempt
 from living_island.agents.v2.calls.wire import NOTICE, WINDOW, frame
 from living_island.agents.v2.context.day_log import DayLog
 from living_island.agents.v2.context.delivery import FilteredDelivery
-from living_island.agents.v2.context.prefix import FrozenPrefix, render_memory
+from living_island.agents.v2.context.entries import DeliberateRecall
+from living_island.agents.v2.context.prefix import FrozenPrefix, memory_ref, render_memory
 from living_island.agents.v2.context.working import FrozenPeriod
 from living_island.memory.v2.pending import PendingPeriod, PendingPeriods
 from living_island.memory.v2.provenance import HeardSpeechEntry, PerceptionEntry
+from living_island.memory.v2.records import Observed
+from living_island.memory.v2.store import MemoryStore
 from living_island.sim.v2.harness.consolidation.inputs import FixedInput
 from v2.call_wire.test_call_wire import oracle
 from v2.memory_changes.test_validation import _store
@@ -75,6 +78,52 @@ def fixture_input(audit, packet):
     current = context("p:ella:3", audit, packet, 100)
     changed = frozenset([*ids["social"], *ids["commitment"]])
     return FixedInput(current, periods.read(), view, store.snapshot.version, changed), ids
+
+
+def test_evicted_memory_is_absent_from_both_consolidation_requests(audit, fake_exchange):
+    store = MemoryStore("ella")
+    old_text = "Remember the trail at dusk."
+    source = Observed(entry_id="d:p:ella:1:1")
+    store.set_intention(turn_id="first", tick=1, text=old_text, source=source)
+    old = store.snapshot.resident(memory_on=True).current_intention
+
+    def frozen_period(period_id):
+        prefix = FrozenPrefix(period_id, (), (), (render_memory(old),), None)
+        log = DayLog(period_id, audit, phenomena={})
+        log.recall(2, DeliberateRecall(call_id=f"{period_id}:recall"), old)
+        log.response(2, f"{period_id}:turn", "I found the spring.")
+        state = Part("current_state", memory_ref(old.ref), old_text)
+        return FrozenPeriod(prefix, log.entries, (state,))
+
+    pending = frozen_period("p:ella:2")
+    period = frozen_period("p:ella:3")
+    for tick in range(2, store.registry["intention"].history_capacity + 3):
+        store.set_intention(turn_id=f"turn-{tick}", tick=tick, text=f"Plan {tick}.", source=source)
+    base = store.snapshot
+    view = base.resident(memory_on=True)
+    assert old.ref.id not in {row.ref.id for row in view.records}
+    fixed = FixedInput(
+        period, (PendingPeriod("ella", "p:ella:2", pending),), view, base.version, frozenset()
+    )
+    current = view.current_intention.ref.id
+    choice = fixed.select([old.ref.id, current])
+    assert choice.selected == (current,) and choice.ignored == (old.ref.id,)
+
+    clock, transport = fake_exchange(['{"read":[]}', '{"ops":[]}'])
+    for kind, selected in (("consolidation_selection", None), ("consolidation_change_set", choice)):
+        prepared = prepare(
+            call(kind, period.prefix.period_id), Contract(kind), fixed.assembly(selected), audit
+        )
+        returned = attempt(
+            prepared, n=0, has_running_action=False, journal=audit, transport=transport, clock=clock
+        )
+        assert returned.terminal.error_class is None
+        wire = json.loads(transport.dispatches[-1])["input"][1]["content"]
+        assert old_text not in wire
+        assert all(e.source.id != old.ref.id for e in returned.dispatch.sent.manifest.entries)
+        assert current in wire and "Pending period p:ella:2" in wire
+        assert wire.count("I found the spring.") == 2
+    assert all(old_text in "\n".join(p.text for p in frozen.parts) for frozen in (period, pending))
 
 
 def test_mf10_omit_last_selected_then_oldest_pending_then_oldest_current_entry(

@@ -234,6 +234,7 @@ def test_dl_07_only_resident_projections_reach_the_request(packet, audit, fake_e
             ),
             state,
             audit,
+            view=visible,
         )
         returned = attempt(
             prepared, n=1, has_running_action=True, journal=audit, transport=transport, clock=clock

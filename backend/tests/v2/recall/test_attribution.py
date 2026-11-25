@@ -4,6 +4,8 @@ import json
 
 import pytest
 
+from living_island.memory.v2.projections import ResidentView
+
 TURN = "ella:t000002"
 
 
@@ -44,14 +46,14 @@ def state_for(packet, intention=None):
     )
 
 
-def trimmed(context, state, audit, monkeypatch, name, *, stage="decision"):
+def trimmed(context, state, audit, monkeypatch, name, *, view, stage="decision"):
     from living_island.agents.v2.calls import guard
 
     # One token below full forces the actual guard to omit its first eligible part.
-    full = context.prepare_decision(call(name + "-measure"), state, audit, stage=stage)
+    full = context.prepare_decision(call(name + "-measure"), state, audit, view=view, stage=stage)
     with monkeypatch.context() as sizing:
         sizing.setattr(guard, "WINDOW", full.record.candidates[0].manifest.tokens_total - 1)
-        return context.prepare_decision(call(name), state, audit, stage=stage)
+        return context.prepare_decision(call(name), state, audit, view=view, stage=stage)
 
 
 def recall_index(name, records, version, audit):
@@ -77,12 +79,13 @@ def test_dl_21_citations_only_from_kept_entries_and_memories(
     store = MemoryStore("ella")
     kept = add_record(store)
     unseen = add_record(store)
-    first, _ = store.snapshot.resident(memory_on=True).records
+    view = store.snapshot.resident(memory_on=True)
+    first, _ = view.records
     context = working_context(memories=(first,))
     omitted = context.log.response(0, "earlier", "an older observation " * 20)
     for i in range(20):
         newest = context.log.response(6, f"t{i}", f"entry {i}")
-    prepared = trimmed(context, state_for(packet), audit, monkeypatch, "adopted")
+    prepared = trimmed(context, state_for(packet), audit, monkeypatch, "adopted", view=view)
     answer = act(newest.id, kept.id, omitted.id, "d:unknown", unseen.id)
     returned = send(prepared, audit, fake_exchange([answer]))
     assert returned.dispatch.sent.omitted == (omitted.part.source,)
@@ -143,11 +146,11 @@ def test_dl_28_first_dispatch_credits_and_local_intention_citations(
     journal = crediting_journal(audit, context.log.entries, credit)
     with monkeypatch.context() as sizing:
         sizing.setattr(guard, "WINDOW", 0)
-        stopped = context.prepare_decision(call("never"), state, audit)
+        stopped = context.prepare_decision(call("never"), state, audit, view=view)
         assert send(stopped, journal, exchange) is None
     assert not before_exchange and store.snapshot is start
 
-    initial = trimmed(context, state, audit, monkeypatch, "initial")
+    initial = trimmed(context, state, audit, monkeypatch, "initial", view=view)
     failed = send(initial, journal, exchange)
     assert failed.terminal.error_class == "server_error" and before_exchange == [0]
     used = store.snapshot
@@ -167,7 +170,9 @@ def test_dl_28_first_dispatch_credits_and_local_intention_citations(
     send(query, journal, fake_exchange([{"ids": [deliberate.ref.id]}]))
     assert store.snapshot is used
     context.log.recall(7, DeliberateRecall(call_id="query"), deliberate)
-    after = trimmed(context, state, audit, monkeypatch, "after", stage="decision_after_recall")
+    after = trimmed(
+        context, state, audit, monkeypatch, "after", view=view, stage="decision_after_recall"
+    )
     journal = crediting_journal(audit, context.log.entries, apply)
     answer = send(after, journal, fake_exchange([act(intention.ref.id)]))
     assert store.snapshot.version == used.version + 1
@@ -185,10 +190,15 @@ def test_dl_28_first_dispatch_credits_and_local_intention_citations(
     off = working_context(period="p:ella:2")
     empty = off.log.empty_recall(7, TURN, 1)
     assert empty.ref == LocalRecall(mode="off_empty", turn_id=TURN, ordinal=1)
-    off_intention = start.resident(memory_on=False).current_intention
+    off_view = start.resident(memory_on=False)
+    off_intention = off_view.current_intention
     off_call = call("off").model_copy(update={"period_id": "p:ella:2"})
     off_request = off.prepare_decision(
-        off_call, state_for(packet, off_intention), audit, stage="decision_after_recall"
+        off_call,
+        state_for(packet, off_intention),
+        audit,
+        view=off_view,
+        stage="decision_after_recall",
     )
     returned = send(off_request, audit, fake_exchange([act(off_intention.ref.id, recipe.ref.id)]))
     off_cites = bind_adopted_act(returned, off.log.entries, audit)
@@ -227,17 +237,20 @@ def test_dl_30_bind_old_projected_revision_only_in_adopted_request(
     )
     previous = add_record(store)
     unseen = add_record(store)
-    old, prior, index_only = store.snapshot.resident(memory_on=True).records
+    view = store.snapshot.resident(memory_on=True)
+    old, prior, index_only = view.records
     context = working_context(memories=(prior,))
     state = state_for(packet)
-    before = context.prepare_decision(call("before"), state, audit)
+    before = context.prepare_decision(call("before"), state, audit, view=view)
     first = send(before, audit, fake_exchange([{"step": "recall", "query": "the cup?"}]))
     assert prior.ref.id in [part.source.id for part in first.dispatch.sent.manifest.entries]
     index = recall_index("index", (old, index_only), old.ref.store_version, audit)
     selected = send(index, audit, fake_exchange([{"ids": [old.ref.id]}]))
     assert selected.parsed.ids == [old.ref.id]
     entry = context.log.recall(7, DeliberateRecall(call_id="index"), old)
-    prepared = trimmed(context, state, audit, monkeypatch, "final", stage="decision_after_recall")
+    prepared = trimmed(
+        context, state, audit, monkeypatch, "final", view=view, stage="decision_after_recall"
+    )
     exchange = fake_exchange([act(previous.id, unseen.id, promise.id, entry.id)])
     returned = send(prepared, audit, exchange)
     assert private_id.encode() not in exchange[1].dispatches[0]
@@ -269,7 +282,9 @@ def test_non_act_response_cannot_supply_citations(audit, packet, working_context
     from living_island.agents.v2.recall.attribution import bind_adopted_act
 
     context = working_context()
-    prepared = context.prepare_decision(call("asking"), state_for(packet), audit)
+    prepared = context.prepare_decision(
+        call("asking"), state_for(packet), audit, view=ResidentView((), None)
+    )
     returned = send(prepared, audit, fake_exchange([{"step": "recall", "query": "where?"}]))
     with pytest.raises(ValueError, match="only a returned act"):
         bind_adopted_act(returned, context.log.entries, audit)
@@ -280,7 +295,9 @@ def test_decision_attribution_requires_its_turn_id(audit, packet, working_contex
 
     context = working_context()
     unbound = call("unbound").model_copy(update={"turn_id": None})
-    prepared = context.prepare_decision(unbound, state_for(packet), audit)
+    prepared = context.prepare_decision(
+        unbound, state_for(packet), audit, view=ResidentView((), None)
+    )
     returned = send(prepared, audit, fake_exchange([act()]))
     with pytest.raises(ValueError, match="requires a turn ID"):
         bind_adopted_act(returned, context.log.entries, audit)
@@ -301,9 +318,10 @@ def test_failed_credit_write_can_recover_the_durable_dispatch(
     store = MemoryStore("ella")
     add_record(store)
     start = store.snapshot
-    (memory,) = start.resident(memory_on=True).records
+    view = start.resident(memory_on=True)
+    (memory,) = view.records
     context = working_context(memories=(memory,))
-    prepared = context.prepare_decision(call("interrupted"), state_for(packet), audit)
+    prepared = context.prepare_decision(call("interrupted"), state_for(packet), audit, view=view)
     use_cursor = Journal.cursor("interrupted", "1.use")
 
     def write_then_fail(key, data):

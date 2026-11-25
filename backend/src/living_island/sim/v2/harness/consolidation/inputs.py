@@ -20,12 +20,11 @@ class Choice:
     ignored: tuple[str, ...]
 
 
-def _pending_part(period: PendingPeriod[FrozenPeriod]) -> Part:
+def _pending_part(period: PendingPeriod[FrozenPeriod], view: ResidentView) -> Part:
     # A pending context is an indivisible guard candidate. The published part
     # contains precisely its resident-facing lines; typed evidence stays local.
-    text = "\n".join(
-        [f"Pending period {period.period_id}", *(part.text for part in period.context.parts)]
-    )
+    parts = period.context.visible_to(view).parts
+    text = "\n".join([f"Pending period {period.period_id}", *(part.text for part in parts)])
     source = Ref(kind="pending_period", id=period.period_id, version=digest(text.encode()))
     return Part("pending_periods", source, text)
 
@@ -70,10 +69,11 @@ class FixedInput:
 
     def assembly(self, choice: Choice | None = None) -> Assembly:
         """None builds selection. An empty successful choice still adds mechanical inputs."""
-        parts = list(self.period.parts)
+        period = self.period.visible_to(self.view)
+        parts = list(period.parts)
         days = [i for i, part in enumerate(parts) if part.source.kind == "day_log"]
         pending_start = len(parts)
-        parts.extend(_pending_part(period) for period in self.pending)
+        parts.extend(_pending_part(pending, self.view) for pending in self.pending)
         pending = range(pending_start, len(parts))
 
         version = str(self.base_version)
@@ -92,7 +92,7 @@ class FixedInput:
 
         # The fixed morning prefix can already carry a full base revision.
         # An older revision of the same ID still needs its current projection.
-        shown = {memory.revision for memory in self.period.prefix.memories}
+        shown = {memory.revision for memory in period.prefix.memories}
         for revision in self.view.records:
             mechanical = choice is not None and revision.ref.id in self.mechanical_ids
             open_commitment = revision.record.kind == "commitment" and "open" in revision.flags
