@@ -273,7 +273,17 @@ def test_model_output_is_typed_at_each_kind_boundary():
             ChangeSetOutput,
         ),
     ]:
-        assert isinstance(Contract(kind).parse(json.dumps(raw), has_running_action=True), model)
+        contract = Contract(kind)
+        assert contract.prompt_version == f"{kind}/0.2"
+        assert contract.instructions.endswith(
+            " Reply with only the JSON object that matches the response schema, "
+            "with no other text before or after it."
+        )
+        text = json.dumps(raw)
+        assert isinstance(contract.parse(text, has_running_action=True), model)
+        for invalid in (f"Here is my response.\n\n{text}", f"{text}\n\nDone."):
+            with pytest.raises(ValueError):
+                contract.parse(invalid, has_running_action=True)
     batch = Contract("consolidation_change_set").parse(
         '{"ops":[{"op":"unknown"},{"op":"forget","op_id":"f","id":"m:1"}]}',
         has_running_action=False,

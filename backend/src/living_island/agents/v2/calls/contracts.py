@@ -41,18 +41,24 @@ CONSOLIDATE = (
     "skill hypotheses by appearances and use a told source for taught methods. Aim for "
     "about five to fifteen episodic memories."
 )
+JSON_ONLY = (
+    " Reply with only the JSON object that matches the response schema, "
+    "with no other text before or after it."
+)
 INSTRUCTIONS: dict[CallKind, str] = {
-    "decision": DECISION + " You may first ask to recall a memory.",
-    "decision_after_recall": DECISION + " You have recalled once. Act now.",
-    "recall": "Choose up to five memory IDs from the index that answer the query.",
-    "morning": "Choose up to twenty memory IDs to carry into this waking period.",
-    "consolidation_selection": CONSOLIDATE + " Choose up to sixty records to read.",
-    "consolidation_change_set": CONSOLIDATE + " Propose memory changes in application order.",
+    "decision": DECISION + " You may first ask to recall a memory." + JSON_ONLY,
+    "decision_after_recall": DECISION + " You have recalled once. Act now." + JSON_ONLY,
+    "recall": "Choose up to five memory IDs from the index that answer the query." + JSON_ONLY,
+    "morning": "Choose up to twenty memory IDs to carry into this waking period." + JSON_ONLY,
+    "consolidation_selection": CONSOLIDATE + " Choose up to sixty records to read." + JSON_ONLY,
+    "consolidation_change_set": CONSOLIDATE
+    + " Propose memory changes in application order."
+    + JSON_ONLY,
 }
 
 
 def prompt_version_for(kind: CallKind) -> str:
-    return f"{kind}/0.1"
+    return f"{kind}/0.2"
 
 
 def json_bytes(value: object) -> bytes:
