@@ -1072,3 +1072,161 @@ finally {
     Remove-Variable -Name ev06KeyLine -ErrorAction SilentlyContinue
 }
 ```
+
+### First consolidation probe result
+
+The owner's off-peak probe dispatched four calls with four metered
+terminals. It settled **CNY 0.05631456**. Period `p:ella:1` committed
+one gather skill, `m:ella:185`, with content SHA-256
+`e199a79ff52da95665fcce26604a3b540087d4c4ad5c8f7391ee52d59ee1e3e9`.
+It dropped five of six proposed operations. Period `p:ella:2` dropped
+all ten operations and committed no edit. The probe failed its pass rule.
+The phase now settles CNY 4.18918614 with the original CNY 0.133982 hold
+and CNY 15.67683186 headroom. [Phase ledger](P3.5-spend-ledger.md#opening-ledger)
+
+Offline staging reproduced all 16 verdicts and the skill write from the
+parsed responses, frozen stores and sent allowlists. The decisive reasons
+below use the validator's recorded precedence.
+
+| Period | Operation | Verdict | Exact check |
+| --- | --- | --- | --- |
+| `p:ella:1` | `op1`, `op2`, `op4`, `op6` | `format` | Episodic additions omitted `about_tick`. |
+| `p:ella:1` | `op3` | `depends_on` | Its inferred source referenced `new:1` and `new:2` from dropped `op1` and `op2`. |
+| `p:ella:1` | `op5` | Committed | `d:p:ella:1:446` and `d:p:ella:1:503` both witnessed `verb:gather`. The write created `m:ella:185`. |
+| `p:ella:2` | `add_1`–`add_4` | `format` | Episodic additions omitted `about_tick`. |
+| `p:ella:2` | `add_5` | `provenance` | `d:p:ella:2:116` witnessed `verb:drink` and `phenomenon:drinks`. The belief's subject key was `place:38,30`. |
+| `p:ella:2` | `add_6` | `provenance` | The general belief had no subject keys. Its observed citations `d:p:ella:2:150` and `d:p:ella:2:116` could match none. |
+| `p:ella:2` | `add_7` | `depends_on` | Its inferred source referenced `new:3` from dropped `add_3`. |
+| `p:ella:2` | `add_8` | `provenance` | `d:p:ella:2:155` and `d:p:ella:2:151` carry `need:stamina`. The sleep skill's only key was `verb:sleep`. |
+| `p:ella:2` | `update_1` | `authority` | The update to Mia's social record `m:ella:2` supplied `add_sources`, a field social updates cannot write. |
+| `p:ella:2` | `update_2` | `authority` | The update to Ryan's social record `m:ella:3` supplied `add_sources`, a field social updates cannot write. |
+
+The missing dates masked other evidence errors. In the first period,
+`op1`, `op4` and `op6` used sleep, drink, rest or need entries
+without the claimed place key. `op2` used a gather failure keyed only
+to `verb:gather` and an own-response entry ineligible as an observed
+source. In the second period, `add_1` had a matching move entry and also
+cited an unkeyed sleep entry. `add_2` used own utterance feedback.
+The gather entries in `add_3` and the drink/rest entries in `add_4`
+also lacked the proposed places. Those are existing evidence rules.
+
+| Artifact under `runs/m14-ev06-consolidation-probe/` | SHA-256 |
+| --- | --- |
+| `result.json` | `3de442ea994981798de47731f458b9db8fef130ec704096b84bddab347de79de` |
+| `provider-probe.sqlite` | `9e2db87b273f23845efc6e171d83aecdf941409362a0f20fa77022d538caaf63` |
+| `ledger-evidence.json` | `4144d64962bac308f03ab179bb46b249731e0ca93860e958bb52d9ec79cf09ac` |
+| Period 1 parsed change set | `3af75a7cbfbd16c39dc7c9da65b325419b4fde6b91f1cb01e445548470323173` |
+| Period 2 parsed change set | `8fd17a44b600f9254363640e55b083cd489f4c8b6448aba29ed26738afac05eb` |
+
+### Consolidation schema repair
+
+The `consolidation_selection/0.5` and `consolidation_change_set/0.5`
+requests show the existing observed witness keys alongside the original
+day-log lines. Keys come from the resident's delivered entries and stay
+with each line when the guard trims it. The change-set instruction
+explains subject overlap, evidence for general beliefs and the social and
+skill update field limits. It includes one complete episodic add example.
+
+The sent add schema discriminates the three creatable kinds. Episodic and
+dated belief branches require a non-null tick range. Stable beliefs may
+omit the tick or use null. Skills exclude the field and code-owned
+evidence. The content object is typed for each kind. Merge offers the
+episodic and belief branches. The receiver still sends each returned
+operation to the existing validator, which assigns individual verdicts.
+This repair uses the existing source and authority rules and needs no
+spec amendment. [Memory formation §§3.3–3.5](../../spec/memory-formation-v0.1.md#33-call-2-change-set)
+· [Memory model §§2–3](../../spec/memory-model-v0.1.md#2-the-record-envelope)
+
+### Second consolidation probe release
+
+**Wednesday 2026-11-25, 22:30 inclusive to 23:50 exclusive Beijing (+08:00).**
+The offline preflight was prepared at 22:19 Beijing before the 23:20 cutoff. It uses the
+same frozen periods at checkpoints 271 and 386, the same DeepSeek V4.1
+Flash 1017 pin and the same one-attempt policy. Each period starts from
+its historical base and commits edits to an isolated store. The earlier
+probe and the tick-442 capture remain retained evidence.
+
+**Pass rule.** All four calls must parse on their only attempts and
+settle within the release. Each change set must commit at least one
+actual record edit and drop at most one third of the operations proposed
+in that period. The report records each verdict and its dependency IDs.
+A failed selection leaves that period's change set unsent.
+
+The same two per-stage bounds apply. Each selection reserves 36,000
+counted input tokens and each change set 50,000. Each call allows 8,000
+output tokens. At CNY 0.02 / 1 / 4 per million cache-hit, cache-miss and
+output tokens with zero assumed hits, the four-attempt reserve is
+**CNY 0.30**. The same bounds price at CNY 0.60 peak. The runner verifies
+the date, window and tariff before using the release and gates every
+claim against both the remaining probe budget and the phase headroom.
+The ledger wrapper preserves the historical and first-probe bundles
+byte for byte, so each UTC day's calls retain their billed tariff.
+[DL-06 dated tariff](M14-provider-check.md#owner-release-on-2026-11-24)
+
+The preflight and the paid report list omitted references. The following
+change-set columns use each original capture's recorded selection to
+check fit offline. The live change set follows its own new selection.
+
+| Period | Selection sent / floor | Change set sent / floor | Optional context omitted in the preflight |
+| --- | ---: | ---: | --- |
+| `p:ella:1` at 270 | 35,886 / 8,063 | 49,367 / 28,019 | Selection omits day entries 1–442. The change-set sample omits day entries 1–458 and selected records `m:ella:183` and `m:ella:184`. |
+| `p:ella:2` at 385 | 35,801 / 10,928 | 49,984 / 30,884 | Selection omits day entries 1–86. The change-set sample omits day entries 1–102 and selected records `m:ella:247` and `m:ella:248`. |
+
+| Input in `runs/m14-ev06-consolidation-probe2-inputs/` | SHA-256 or commit |
+| --- | --- |
+| Implementation | `c7454fc130f1eea731ce464e6c6a0f0e64d022a4` |
+| `probe.py` | `9682f2bc69fbe81a7a2711d4335c10565114fddc30dc3a53ae13df6e6e3a8900` |
+| `preflight.json` | `4d831502ae6ba4895ee83a2555d2cd5f3beffffa8c5046133c3f2c87e2abb979` |
+| `ledger.json` | `b9ab9c7aa472febf367f43f493a465b786aa31a543512938da989e45c640f6d2` |
+| `release.json` | `3bc0acfa1b078510b8136669058f01c7c19544b2e190d812c5ba8fe08441e233` |
+
+The fake run sent all four requests and committed one episode per
+period with zero drops. It used sent witness `d:p:ella:1:517` and
+tick range 262–262 for scratch record `m:ella:185`, then
+`d:p:ella:2:150` and tick range 384–384 for scratch record `m:ella:249`.
+The fresh C:/Temp result has SHA-256
+`4b0a8fd4414c7198df81f884b51ed742846cb8b83f9f82a2127c5ef33204046d`.
+
+#### Second probe owner command
+
+Use the block during the released window. Output goes to the exclusive
+directory `runs/m14-ev06-consolidation-probe2/`. The probe will record
+the observed results and settle any attempted call before reporting
+success or failure.
+
+```powershell
+Set-Location -LiteralPath 'F:\p35-w1\ev06' -ErrorAction Stop
+$env:GIT_CONFIG_COUNT = '1'
+$env:GIT_CONFIG_KEY_0 = 'safe.directory'
+$env:GIT_CONFIG_VALUE_0 = 'F:/p35-w1/ev06'
+$ev06Start = [DateTimeOffset]::Parse('2026-11-25T22:30:00+08:00')
+$ev06End = [DateTimeOffset]::Parse('2026-11-25T23:50:00+08:00')
+$ev06Now = [DateTimeOffset]::UtcNow
+if ($ev06Now -lt $ev06Start -or $ev06Now -ge $ev06End) {
+    throw 'Outside the signed second EV-06 consolidation probe window.'
+}
+$ev06Inputs = 'runs/m14-ev06-consolidation-probe2-inputs'
+$ev06ScriptHash = (Get-FileHash -LiteralPath "$ev06Inputs/probe.py" -ErrorAction Stop).Hash
+$ev06ReleaseHash = (Get-FileHash -LiteralPath "$ev06Inputs/release.json" -ErrorAction Stop).Hash
+if ($ev06ScriptHash -ine '9682f2bc69fbe81a7a2711d4335c10565114fddc30dc3a53ae13df6e6e3a8900' -or
+    $ev06ReleaseHash -ine '3bc0acfa1b078510b8136669058f01c7c19544b2e190d812c5ba8fe08441e233') {
+    throw 'EV-06 second probe script or release differs from the verified input.'
+}
+try {
+    $ev06Pattern = '^\s*(?:export\s+)?DEEPSEEK_API_KEY\s*=\s*(?:"(?<key>[^"]+)"|''(?<key>[^'']+)''|(?<key>[^#\s]+))(?:\s*#.*)?\s*$'
+    $ev06KeyLine = Select-String -LiteralPath 'E:\桌面\Living_World\.env' `
+        -Pattern $ev06Pattern -ErrorAction Stop | Select-Object -Last 1
+    if ($null -eq $ev06KeyLine) { throw 'DEEPSEEK_API_KEY is missing or invalid.' }
+    $env:DEEPSEEK_API_KEY = $ev06KeyLine.Matches[0].Groups['key'].Value
+
+    uv run --offline --locked --no-env-file --no-sync --directory backend `
+        python "../$ev06Inputs/probe.py" --live `
+        --release "../$ev06Inputs/release.json" `
+        --ledger "../$ev06Inputs/ledger.json"
+    if ($LASTEXITCODE -ne 0) { throw "EV-06 second consolidation probe exited with code $LASTEXITCODE." }
+}
+finally {
+    Remove-Item -LiteralPath 'Env:\DEEPSEEK_API_KEY' -ErrorAction SilentlyContinue
+    Remove-Variable -Name ev06KeyLine -ErrorAction SilentlyContinue
+}
+```
