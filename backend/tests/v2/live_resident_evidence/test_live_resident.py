@@ -5,6 +5,7 @@ import subprocess
 import sys
 from dataclasses import replace
 from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 
@@ -44,7 +45,7 @@ def test_release_window_must_match_the_ledger_billing_rate():
             "approval": "test window",
             "wire_evidence": "test dated tariff and holiday status",
             "dispatch_on": day,
-            "max_cny": "9.480838",
+            "max_cny": format(Decimal(live.RESERVED).scaleb(-12), "f"),
             "preflight_sha256": digest(preflight),
             "ledger_sha256": digest(raw),
         }

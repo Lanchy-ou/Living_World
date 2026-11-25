@@ -1204,6 +1204,14 @@ next safe stop. The guard also stops the run if any day's measured attempts
 or inputs exceed the rehearsal bounds by enough to break the reserved
 total.
 
+**Owner amendment (2026-11-25, after the fixed-packet probe).** Set the full
+M14 horizon to four game days, 576 ticks, to allow more time for a qualifying
+sleep or faint to end a waking period. Keep the approved sleep cue. Reserve
+the rehearsed four-day attempt counts at the peak tariff with the existing
+runtime stop guard. Use a 576-tick rehearsal when needed for sizing. Hold
+the release if the reserve exceeds the remaining CNY 20 phase balance
+after CNY 2.37075930 settled and the CNY 0.133982 hold.
+
 ## OQ-P3.5-PR-07: Run scope of the M12 equivalence matrix
 
 Protocol §11.3 (CR-011) requires M12 to check that no run of the P2 matrix
@@ -1299,3 +1307,8 @@ spring distance or terrain passability would change a rule.
 map aids, such as full terrain names and coordinates alongside the existing
 grid and an unambiguous woods legend. Use only coordinates and terrain Ella
 received. Keep movement, target checks and drink rules unchanged.
+
+**Owner follow-up (2026-11-25, after the fixed-packet probe).** Restate the
+existing drink description in the explored spring line. Say to drink from
+a tile next to a spring. Add no passability statement for other terrain and
+keep the rules unchanged.

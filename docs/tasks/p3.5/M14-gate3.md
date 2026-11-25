@@ -579,3 +579,135 @@ finally {
     Remove-Variable -Name ev06KeyLine -ErrorAction SilentlyContinue
 }
 ```
+
+#### Fixed-packet probe result
+
+The peak-window probe finished with five settled first attempts and no
+outstanding probe charges. **Three of five passed** at **CNY 0.03291064**.
+Both citation cases bound valid IDs to sent evidence with no invalid
+citations. The initial act cited `d:p:ella:1:2`. The post-recall act cited
+that packet's `d:p:ella:1:2` and recalled `m:ella:1`. The fixed adjacent
+packet selected `drink`.
+
+| Failed sample | Returned act and the model's stated reason |
+| --- | --- |
+| `sleep`, `ella:t000096:decision` | Moved to `(34,32)`. “Curious about the unknown tile and the woods beyond; stamina is low but exploring nearby is worth it.” Terminal seq 62. |
+| `spring_approach`, `ella:t000100:decision` | Moved to the spring tile `(38,31)`. “Low hydration; head to the known spring.” Terminal seq 67. |
+
+| Retained probe artifact under `F:/p35-w1/ev06/runs/m14-ev06-probe/` | SHA-256 |
+| --- | --- |
+| `result.json` | `faa814a87731a7e3c6b77c3f911824b20432219cc2cb2c23a55c89018857472e` |
+| `provider-probe.sqlite` | `d6e05924490ab94ae50be96965a5343e7a6b499b85e06d3b0a93ac5c282598c1` |
+| `ledger-evidence.json` | `433b101a5162a324203ed67eda8306fce9a4b6b9c1043cb91d3a273d571d5795` |
+
+The owner kept the sleep cue and approved an adjacent-drinking reminder
+in the map's spring line. The owner extended the full run horizon to 576
+ticks. Phase spend is now **CNY 2.37075930 settled** with **CNY 0.133982
+held**, leaving **CNY 17.49525870** before the new reserve. [Horizon amendment](../../spec/open-questions.md#oq-p35-m14-2-evidence-sufficient-for-the-paid-provider-check-and-horizon) · [Spring display follow-up](../../spec/open-questions.md#oq-p35-m14-4-reading-explored-terrain-and-water-approaches)
+
+### Four-day full-run sizing
+
+The new case runs Ella, memory on, with Ryan and Mia rule-controlled in
+`compat-v1` at seed `20261108` for **576 ticks**. The map part is now
+`state-map/0.3` and tells Ella to drink from a tile next to an explored
+spring. All sleep wording and rules carry forward. The compatibility
+pack has mental fatigue disabled, so a qualifying sleep is the available
+route to the 36-tick waking-period boundary in this case. The four-day
+extension gives the resident more time to choose such a sleep.
+[Compatibility physiology](../../spec/starter-content-v0.1.md#41-needs-and-physiology) · [Waking-period rule](../../spec/memory-formation-v0.1.md#2-the-waking-period-boundary)
+
+The 576-tick EV-05 Ella rehearsal uses the normal host with a fake
+transport and network calls disabled. It records each sent input bound in
+dispatch order and counts retries as separate attempts. Reserve each sent
+bound at zero cache and CNY 2 per million input tokens plus the 8,000-token
+output cap at CNY 8 per million, all at peak. The runtime stop guard uses
+the same cap, settled spend, outstanding holds and scheduled remainder
+checks as the previous release.
+
+| Game day | Rehearsed attempts | Counted input bound | Output tokens held | Peak reserve CNY |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 47 | 551,104 | 376,000 | 4.110208 |
+| 2 | 33 | 375,923 | 264,000 | 2.863846 |
+| 3 | 29 | 363,856 | 232,000 | 2.583712 |
+| 4 | 36 | 423,035 | 288,000 | 3.150070 |
+| **Total** | **145** | **1,713,918** | **1,160,000** | **12.707836** |
+
+All four days fit the CNY 17.49525870 phase headroom. CNY 4.78742270
+remains outside the reservation. The CNY 0.133982 hold for the original
+unmatched claim stays in the release ledger. The ledger retains both
+replacement and probe costs and keys the prior completed 432-tick run as
+`m14-ev06-ella-replacement-432` to distinguish it from the next capture.
+[Phase ledger](P3.5-spend-ledger.md#opening-ledger)
+
+#### Rehearsed waking-period continuity
+
+The fake workload completed and replayed all 576 ticks offline. At tick
+46 Ella chose 36 ticks of sleep. Packet `ev05-ella:perception:0000000047:ella`
+and event `ev05-ella:0000000047:000002` confirm sleep started. She woke
+naturally at `ev05-ella:0000000082:000006`. The same boundary closed
+`p:ella:2` with selection `p:ella:2:47:selection` and committed change set
+`p:ella:2:47:change_set`, advancing the store from v19 to v54 and producing
+`m:ella:5`. At tick 82 the adopted `p:ella:3:morning` selected `m:ella:1`,
+and `ella:t000010` was a model-origin decision in `p:ella:3`. These are
+scripted workload results. The paid run will supply the live behavior
+evidence.
+
+| Artifact under `F:/p35-w1/ev06/runs/m14-ev06-576-fake/` | SHA-256 |
+| --- | --- |
+| `ella/resident.sqlite` | `780d8b45c5fea228399b51b71cf64e5905ffd25dbbc558ff70c94c5f10a6fe07` |
+| `receipt.json` | `9a8d6806445bea7f6cb097721228f34199d4e4f3d615a5026c04ff400cb9f1d7` |
+| `inspection-ella/index.json` | `edd3c965701088b6056454c61137f10b44f9befe8aa959e6e725f480d89dc35f` |
+| `continuity.json` | `5f48163bd93a909771c4a4664a8538f74c597a6905018cccdaa556a1db76a7e9` |
+
+#### Four-day live release
+
+The detached checkout at `F:/p35-w1/ev06r2` pins executable commit
+`7e5ffc52c63760551899cdd73f9d7467c249f616`. Its locked offline preflight
+finished at **15:36:29 Beijing time on 2026-11-25**, before the 17:15
+cutoff. The released window is **15:30 inclusive to 18:00 exclusive
+Beijing time on Wednesday 2026-11-25**. The release validation matches
+the peak cache-hit, cache-miss and output rates of CNY 0.04, 2 and 8 per
+million tokens. The pack, vocabulary, profile, setup, seed and action
+schema hashes match the prior pinned case. M13 calibration is unchanged.
+[Peak tariff evidence](M14-provider-check.md#owner-release-on-2026-11-24)
+
+| Input in `F:/p35-w1/ev06r2/runs/` | SHA-256 |
+| --- | --- |
+| `m14-ev06-ella-preflight.json` | `baab10d2064c225b037f6945dd9791d196f1a24cd06d9745ea71599d632b9a52` |
+| `m14-ev06-ella-ledger.json` | `c0bf0bbb19be5c4fbf5e7cdad50ed13fa5194cf7b97106d63d36ccfc67ef897d` |
+| `m14-ev06-ella-release.json` | `23afb05ddddc69cb1826274f1c15da51b0a6f797bf3c5f56078f6814419150a5` |
+
+Run this PowerShell block in the released window. The guard checks the
+window before loading the key. The one-time capture directory is
+`F:/p35-w1/ev06r2/runs/m14-ev06-ella/`.
+
+```powershell
+Set-Location -LiteralPath 'F:\p35-w1\ev06r2' -ErrorAction Stop
+$env:GIT_CONFIG_COUNT = '1'
+$env:GIT_CONFIG_KEY_0 = 'safe.directory'
+$env:GIT_CONFIG_VALUE_0 = 'F:/p35-w1/ev06r2'
+$ev06Start = [DateTimeOffset]::Parse('2026-11-25T15:30:00+08:00')
+$ev06End = [DateTimeOffset]::Parse('2026-11-25T18:00:00+08:00')
+$ev06Now = [DateTimeOffset]::UtcNow
+if ($ev06Now -lt $ev06Start -or $ev06Now -ge $ev06End) {
+    throw 'Outside the EV-06 release window on 2026-11-25, 15:30–18:00 Beijing.'
+}
+try {
+    $ev06Pattern = '^\s*(?:export\s+)?DEEPSEEK_API_KEY\s*=\s*(?:"(?<key>[^"]+)"|''(?<key>[^'']+)''|(?<key>[^#\s]+))(?:\s*#.*)?\s*$'
+    $ev06KeyLine = Select-String -LiteralPath 'E:\桌面\Living_World\.env' `
+        -Pattern $ev06Pattern -ErrorAction Stop | Select-Object -Last 1
+    if ($null -eq $ev06KeyLine) { throw 'DEEPSEEK_API_KEY is missing or invalid.' }
+    $env:DEEPSEEK_API_KEY = $ev06KeyLine.Matches[0].Groups['key'].Value
+
+    uv run --offline --locked --no-env-file --no-sync --directory backend `
+        python -m living_island.sim.v2.harness.live_resident run --live --through 576 `
+        --implementation 7e5ffc52c63760551899cdd73f9d7467c249f616 `
+        --release ../runs/m14-ev06-ella-release.json `
+        --ledger ../runs/m14-ev06-ella-ledger.json --out ../runs/m14-ev06-ella
+    if ($LASTEXITCODE -ne 0) { throw "EV-06 exited with code $LASTEXITCODE." }
+}
+finally {
+    Remove-Item -LiteralPath 'Env:\DEEPSEEK_API_KEY' -ErrorAction SilentlyContinue
+    Remove-Variable -Name ev06KeyLine -ErrorAction SilentlyContinue
+}
+```
