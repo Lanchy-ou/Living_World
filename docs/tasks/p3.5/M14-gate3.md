@@ -2,12 +2,12 @@
 
 ## Owner pre-dispatch sheet · 2026-11-25
 
-**Budget fit: 3 of 3 whole game days. Paid dispatch: HOLD. Owner release and
-Gate 3 disposition: pending.** M12 and M13 are signed. DL-06 passed D7 with
+**Budget fit: 3 of 3 whole game days. The guarded runner is ready for Gate 2.
+Paid dispatch, owner release and Gate 3 disposition remain pending.** M12 and
+M13 are signed. DL-06 passed D7 with
 the six JSON-only `/0.2` prompts. The recheck accepted 7/7 dispatches over
 HTTP, parsed 5/6 first attempts and completed all six logical calls. Both
-decision kinds parsed on their first attempt. The candidate needs a guarded
-resident CLI entry point before the owner can release it. [M13 sign-off PR #69](https://github.com/Lanchy-ou/Living_World/pull/69)
+decision kinds parsed on their first attempt. [M13 sign-off PR #69](https://github.com/Lanchy-ou/Living_World/pull/69)
 · [DL-06 recheck](M14-provider-check.md#live-recheck-result)
 · [2026-11-25 sizing ruling](../../spec/open-questions.md#oq-p35-m14-2-evidence-sufficient-for-the-paid-provider-check-and-horizon)
 
@@ -15,7 +15,8 @@ resident CLI entry point before the owner can release it. [M13 sign-off PR #69](
 
 | Field | Proposed run |
 | --- | --- |
-| Execution baseline | `3c51c311f8af1e20b7448e7ae4a28bb9f0f1fb91`. Pin the exact guarded implementation commit in the signed release and executable manifest after integration. |
+| Executable commit | `a8e1226a9123c043f05b7a481fc10f358177e032`, based on `3c51c311f8af1e20b7448e7ae4a28bb9f0f1fb91`. |
+| Preflight SHA-256 | `08e4a276b3c73d5592cbebbb374d900f40a137a06c0aef3925e06af6afce1dbd` for the executable commit and this worktree's one-time capture directory. |
 | Run ID and output | `m14-ev06-ella` under a fresh ignored `runs/m14-ev06-ella/`. |
 | Case | Ella (`ella`), schema `0.2` `explorer`, memory on. Ryan (`cautious`) and Mia (`cooperative`) use `rule-based-v0`. Production `compat-v1` with its registered bridge. |
 | Seed and horizon | `20261108`; ticks 0–431 dispatch, target committed tick 432. A game day is 144 ten-minute ticks. Consolidation K is 36 ticks after sleep/faint begins. |
@@ -103,62 +104,79 @@ under the 2026-11-25 sizing ruling. [Phase ledger](P3.5-spend-ledger.md#opening-
    partial-day cost and closed waking periods. Release the host lock when the
    process exits. An operator budget stop produces no gameplay fallback.
 
-### Required production allocation
+### Guarded implementation
 
-`python -m living_island.sim.v2.cli --help` exposes only `equivalence` on the
-assigned base. `sim.v2.harness.composition.compose` and `Recording` are Python
-building blocks. The only shipped v2 `--live` command belongs to the DL-06
-six-sample provider check. Its one-time forecast and UTC check apply to that
-sample. `analysis.v2_spend` projects a static ledger. `ResidentSession` checks
-its manual `stop_file` after publication, so it cannot veto a dispatch or
-retry inside that boundary. The existing context guard measures window fit.
-
-The smallest shared admission point is `agents/v2/calls/provider.py::attempt`,
-after building `Dispatch` from the admitted wire and immediately before its
-exclusive `journal.fact(..., "<n>.dispatch", ...)` claim. Both
-`agents/v2/decision/caller.py::Caller.dispatch` and
-`sim/v2/harness/consolidation/workflow.py::Workflow.advance` pass through it on
-every retry. Inject an operator-owned admission/settlement policy, settle
-from durable terminal or charge rows, and propagate a distinct refusal through
-the caller and workflow to `ResidentSession` and its safe-stop record. The
-stop must preserve audit and replay semantics, including an authorized
-consolidation with earlier attempts and a refused later attempt. Existing
-`TerminalStop` and incomplete recording provide the starting points. Checking
-only at `transport.exchange` would leave a dispatch record for a vetoed call
-because `attempt` claims it first. Checking only between ticks would miss
-in-boundary retries.
-
-The CLI needs a live command in `sim/v2/cli.py` delegating to the existing
-composition, recording and provider adapter, with signed release wiring,
-credential redaction, the guard and a verifier for the resulting capture.
-Claude Code's allocation and independent fake tests of both callers' retry
-refusal, unresolved liabilities and safe stop are prerequisites. The existing
-inspection exporter requires a `FinishedRun` seal. A stopped run keeps its raw
-partial evidence and needs verified partial-run handling before it can be
-presented as an inspection artifact. [DL-04 composition](P3.5-DL-04.md#what-changed)
+Claude Code allocated `agents/v2/calls/provider.py` and the new
+`sim/v2/harness/live_resident.py` entry point to EV-06. `attempt()` calls the
+optional hook immediately before its exclusive dispatch claim. The resident
+command installs one admission policy around the synchronous composition, so
+decision, recall, morning and both consolidation calls pass through it on
+every retry. A refusal returns a typed budget stop to the runner. It leaves the
+world at its last committed tick and preserves the unsent candidate, earlier
+attempts and partial charges. The candidate has no dispatch fact or provider
+call. The guard consumes rehearsal slots in dispatch order within each day and
+kind. The reserved-total check includes settled EV-06 spend, outstanding
+holds, the candidate quote and unused slots for the current and future days.
+EV-04 reconciles the recorded costs against the signed opening ledger and
+dated rates. [DL-04 composition](P3.5-DL-04.md#what-changed)
 · [DL-05 replay](P3.5-DL-05.md#card-end-replay-evidence)
+
+The runner journals completed boundaries and checkpoints each tick. Resume
+uses the original capture directory and release. If a committed boundary's
+checkpoint is missing, resume rebuilds it offline. An uncommitted dispatch
+tail seals the run as incomplete and retains any unresolved hold. Inspection
+exports seal the verified boundary prefix and link to the raw SQLite and
+uncommitted-attempt count. The raw ledger includes the uncommitted attempts.
+A budget stop at tick 0 produces replay and ledger evidence without an EV-01
+view because there is no committed resident delivery to inspect.
 
 ### Operator command and wall time
 
-**Executable live command on `3c51c31`: unavailable.** The following is the
-proposed exact command shape for the allocated CLI, from `F:\p35-w1\ev06`.
-The signed release file would pin all values in the run and provider table.
-Replace this command in the signed sheet with the verified invocation on the
-guarded commit before running it.
+Run the offline preflight from `F:\p35-w1\ev06`. It prints the release hash and
+the pinned run, content, wire and rehearsal inputs.
 
 ```powershell
-uv run --offline --locked --directory backend --env-file F:/p35-w1/ev06/.env python -m living_island.sim.v2.cli live-resident --release F:/p35-w1/ev06/runs/m14-ev06-ella-release.json --out F:/p35-w1/ev06/runs/m14-ev06-ella
+uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident preflight --implementation a8e1226a9123c043f05b7a481fc10f358177e032
 ```
 
-The owner supplies `DEEPSEEK_API_KEY` in the live process environment. The
-explicit `--env-file` would load the root `.env` in the owner's terminal.
-With the key already injected, the owner can use `--no-env-file` in its place.
-The existing DeepSeek adapter consumes the key via the caller's environment
-wiring, as DL-06's wrapper does. `uv --offline` limits dependency resolution,
-and the live runner would still make HTTPS requests.
+For the owner release, put the reconciled EV-04 bundle at
+`runs/m14-ev06-ella-ledger.json`. Start from DL-06's accumulated
+`dl06-provider-recheck/ledger-evidence.json`. Add a verified tariff row for the
+released date if the existing rows lack coverage. The prior paid total remains
+CNY 0.05343482 at this handoff. Put the owner's release at
+`runs/m14-ev06-ella-release.json` with these fields.
 
-Estimated **4–5 minutes to record** 432 ticks at the rehearsed attempt count,
-plus **about 3 minutes** for offline replay, export and inspection validation.
+| Field | Value |
+| --- | --- |
+| `dispatch_on` | Owner-approved UTC dispatch date (`YYYY-MM-DD`). |
+| `approval` and `wire_evidence` | References to the owner release and the dated model, Responses wire and tariff verification. |
+| `preflight_sha256` | `08e4a276b3c73d5592cbebbb374d900f40a137a06c0aef3925e06af6afce1dbd` for this checkout and executable pin. |
+| `ledger_sha256` | SHA-256 of the exact ledger file above. |
+| `max_cny` | Decimal string `"9.480838"`. |
+| `dispatch_from` and `dispatch_until` | Optional paired ISO timestamps with offsets. EV-04 rates are dated. Sign a window contained in one verified billing-rate period if the UTC date has more than one rate. The end is exclusive. |
+
+After Gate 2 and owner signature, the owner runs the following command in a
+terminal with `DEEPSEEK_API_KEY` already set in the process environment. The
+runner uses no dotenv loader. `uv --offline` applies to package resolution.
+`--live` enables DeepSeek HTTPS. The command claims `C:\Temp\li-heavy.lock` and
+the one-time output directory exclusively.
+
+```powershell
+uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident run --live --implementation a8e1226a9123c043f05b7a481fc10f358177e032 --release F:/p35-w1/ev06/runs/m14-ev06-ella-release.json --ledger F:/p35-w1/ev06/runs/m14-ev06-ella-ledger.json --out F:/p35-w1/ev06/runs/m14-ev06-ella
+```
+
+For an unfinished checkpoint within the same release window, use the original
+capture directory. The archived release and ledger are loaded automatically.
+
+```powershell
+uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident run --live --resume --out F:/p35-w1/ev06/runs/m14-ev06-ella
+```
+
+Estimated **4–6 minutes to record** 432 ticks at the rehearsed attempt count,
+including checkpoint I/O, plus **about 3–5 minutes** for a replay and
+inspection export. The live command verifies the final ledger and capture
+offline before returning. Separate `replay` and `export` commands each verify
+the capture again.
 The `/0.2` fake recording took 86.4 seconds and the complete receipt took 271.3
 seconds. The DL-06 recheck spent 9.792 seconds across seven provider attempts,
 or about 1.40 seconds per attempt. At 109 dispatches that adds about 152
@@ -170,20 +188,20 @@ work can change the estimate. [DL-06 recheck](M14-provider-check.md#live-recheck
 | Item | Status |
 | --- | --- |
 | Paid capture, realized horizon, spend by resident-day and fallback counts | Pending owner dispatch. Keep the raw audit, packet journal, opening and final checkpoints, dedicated run manifest and EV-04 sanitized evidence under `runs/`. |
-| Offline rebuild | Pending paid capture. Run the DL-05 verifier with no key, network disabled and fail-on-call transport. Compare every reconstructed request, store-version hash, committed submission, event and final state to the originals. The replay API exists, and this baseline lacks a resident replay CLI. |
+| Offline rebuild | Pending paid capture. The `replay` command uses the DL-05 verifier without a provider transport. It compares request wires, store revisions, committed submissions, events and the final state, then audits any uncommitted tail. Run it without the key and with network disabled. |
 | Verified export and analysis walkthrough | Pending paid capture and seal. Load the matching `replay.json` in the viewer, open analysis mode and select the fresh inspection directory. Attach the actual resident/period/turn IDs and artifact hashes once selected. |
 | Decision and memory trace | Pending. Select a model-origin outcome and trace earlier packet/day-entry through the K-boundary change set and record revision, then subsequent morning, sent recall, decision citation and world result. Distinguish rendered, dispatched and cited evidence. |
 | Skill and starter evidence | Pending. Report self-found skill evidence or an evidenced zero after the run. The starter-only grass-cord axe is due at M15. |
 | Prior engineering receipts | [MM-16/MF-14 and DL-19](P3.5-MM-02.md#gate-3-receipts) · [Round 3](M14-plan.md#4-done-when) · [EV-13 rehearsal](M14-fake-workload.md#receipts-and-verified-exports) · [PR-05 provenance](P3.5-PR-05-review.md) · [PR-06 provenance](P3.5-PR-06-review.md) |
 | Owner signature | Pending. Record the signed release separately from the final Gate 3 disposition and evidence revision. |
 
-With the future sealed artifacts at the proposed paths, the available
-exporter and frontend commands are as follows. The export reads
-`sanitized-evidence.json` in the resident audit directory for ledger joins.
-Verify the new index and all referenced shards before selecting the live
-trace in analysis mode. [EV-01 export contract](P3.5-EV-01.md)
+After capture, run these commands offline in a terminal without the provider
+key. The export command verifies all shards and writes the viewer replay to
+`runs/m14-ev06-inspection-source/replay.json`. Load that replay, open analysis
+mode and select `runs/m14-ev06-inspection`. [EV-01 export contract](P3.5-EV-01.md)
 
 ```powershell
-uv run --offline --no-env-file --locked --directory backend python -m living_island.analysis.v2.export ../runs/m14-ev06-ella/ella ../runs/m14-ev06-ella/ella/finished.json ../runs/m14-ev06-ella/replay.json ../runs/m14-ev06-ella/inspection-ella
+uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident replay --out F:/p35-w1/ev06/runs/m14-ev06-ella
+uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident export --out F:/p35-w1/ev06/runs/m14-ev06-ella --destination F:/p35-w1/ev06/runs/m14-ev06-inspection
 pnpm --dir frontend dev
 ```
