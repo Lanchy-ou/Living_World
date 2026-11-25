@@ -2,8 +2,8 @@
 
 ## Owner pre-dispatch sheet · 2026-11-25
 
-**Budget fit: 3 of 3 whole game days. The owner released one peak-rate run on
-2026-11-25. The owner dispatch and final Gate 3 disposition remain pending.**
+**The owner-approved peak run stopped at committed tick 185 of 432. The
+capture is incomplete and final Gate 3 disposition remains pending.**
 M12 and M13 are signed. DL-06 passed D7 with
 the six JSON-only `/0.2` prompts. The recheck accepted 7/7 dispatches over
 HTTP, parsed 5/6 first attempts and completed all six logical calls. Both
@@ -15,7 +15,7 @@ decision kinds parsed on their first attempt. [M13 sign-off PR #69](https://gith
 
 | Field | Proposed run |
 | --- | --- |
-| Executable commit | `92ce49726a653e62548655cd16e1aa8b6238c8fe`, based on `3c51c311f8af1e20b7448e7ae4a28bb9f0f1fb91`. |
+| Original executable commit | `92ce49726a653e62548655cd16e1aa8b6238c8fe`, based on `3c51c311f8af1e20b7448e7ae4a28bb9f0f1fb91`. The interruption and replacement pin are recorded below. |
 | Preflight SHA-256 | `f4ba7105f050e8b4fc3516384ffe25512f66a225b05266289818c8da4fa39871` for the executable commit and this worktree's one-time capture directory. |
 | Run ID and output | `m14-ev06-ella` under a fresh ignored `runs/m14-ev06-ella/`. |
 | Case | Ella (`ella`), schema `0.2` `explorer`, memory on. Ryan (`cautious`) and Mia (`cooperative`) use `rule-based-v0`. Production `compat-v1` with its registered bridge. |
@@ -170,21 +170,14 @@ accepted the window and both file pins matched the offline preflight.
 | `dispatch_from` and `dispatch_until` | `2026-11-25T09:10:00+08:00` inclusive through `2026-11-25T12:00:00+08:00` exclusive. The window uses the 2026-11-25 EV-04 peak rates throughout. |
 | `beijing_public_holidays` | `{"2026-11-25": false}` based on the owner's release for the morning peak. |
 
-During the released window, the owner runs the following command in a terminal
-with `DEEPSEEK_API_KEY` already set in the process environment. The
+The operator command for the original release follows. It used the terminal's
+`DEEPSEEK_API_KEY` process environment. The
 runner uses no dotenv loader. `uv --offline` applies to package resolution.
 `--live` enables DeepSeek HTTPS. The command claims `C:\Temp\li-heavy.lock` and
 the one-time output directory exclusively.
 
 ```powershell
 uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident run --live --implementation 92ce49726a653e62548655cd16e1aa8b6238c8fe --release F:/p35-w1/ev06/runs/m14-ev06-ella-release.json --ledger F:/p35-w1/ev06/runs/m14-ev06-ella-ledger.json --out F:/p35-w1/ev06/runs/m14-ev06-ella
-```
-
-For an unfinished checkpoint within the same release window, use the original
-capture directory. The archived release and ledger are loaded automatically.
-
-```powershell
-uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident run --live --resume --out F:/p35-w1/ev06/runs/m14-ev06-ella
 ```
 
 Estimated **4–6 minutes to record** 432 ticks at the rehearsed attempt count,
@@ -198,25 +191,84 @@ or about 1.40 seconds per attempt. At 109 dispatches that adds about 152
 seconds to recording before backoff. Live latency, retries and actual tick
 work can change the estimate. [DL-06 recheck](M14-provider-check.md#live-recheck-result)
 
+### Owner run interruption and recovery
+
+The retained SQLite audit has 185 committed boundaries, 151 dispatch claims,
+150 terminals and CNY 0.63257112 settled. The owner reported 130 successful
+terminals and 20 invalid outputs. The last claim was written before use-credit
+raised `KeyError` and never reached transport. The capture and its checkpoint
+at tick 185 were inspected read-only.
+
+| Audit sequence | Finding |
+| --- | --- |
+| 2486–2487 | The tick-103 mechanical write v112 → v113 created current intention `m:ella:93`, replacing `m:ella:92`. |
+| 2717, 2722 | Ella's 48-tick sleep triggered the tick-140 consolidation. Change set v113 → v114 had no record edits. |
+| 2795, 2798, 2801 | Morning at tick 152 selected `m:ella:93` for `p:ella:2`. Its full resident projection was stored as fragment `e49cc22013bdc6fcce91946d27921eceea778c6429bf15e2dffd25bcf418eb34` with memory source version `115:375d98f4ccd037f54080f9dd1395dff497122ca1daedb95c2f43ecf53bb85a7e`. It appeared in the first decision's `prefix`. |
+| 2856–2857 | `ella:t000099` cleared the intention at tick 154. Its history record was still reachable. |
+| 3630–3635 | Tick-184 turn `ella:t000129` set a new intention. The mechanical revision v173 → v174 evicted `m:ella:93` to enforce the 20-record intention history limit. Boundary 184 committed at seq 3633. The checkpoint runtime blob at seq 3635 captured cursor 3634 and store v174 while its frozen prefix still carried `m:ella:93`. |
+| 3644–3645 | At tick 185 `ella:t000130:decision` prepared and claimed a request that still listed the same fragment in `prefix`. Use credit covered that section and tried to update the deleted store head before transport. There is no terminal or committed tick-185 boundary. |
+
+Morning freezes the selected revision's bytes. The decision assembler appended
+that prefix and the day log without checking whether the referenced IDs were
+still resident-visible. The fixed assembler projects both carriers against
+the current resident view on each decision. Consolidation applies the same
+projection to the current and pending contexts against its frozen base view.
+This retains legitimate history and exact revisions of visible records, and
+keeps the raw receipts and append-only log for inspection. The DL-28
+use-credit writer continues to credit first exposure from the actual sent
+manifest. [MM-09 and memory visibility](../../spec/memory-model-v0.1.md#5-supersession-review-merging-and-forgetting)
+· [DL-28 use credit](../../spec/decision-loop-v0.1.md#61-strength)
+
+**Live resume is unavailable.** The archived release pins `92ce497` and the
+fixed sources change that pin. The interrupted boundary also contains an
+exclusive dispatch claim at seq 3645, so the existing recovery path seals the
+tail without resending. The original one-time capture path stays occupied.
+EV-04 projects a CNY 0.133982 worst-case hold for the unmatched claim until
+the owner reconciles the pre-exchange failure. The projected phase total is
+CNY 0.68600594 settled, leaving CNY 19.18001206 after the hold. No additional
+paid run was authorized for this rework.
+
+This read-only verification command passed through tick 185, with one
+uncommitted claim. It bypasses the mutating run lock and writes no report
+inside the retained capture. The verified world hash is
+`de81117c231bfa2d9ee36ef61c47fbaa754fa3aa9026d7d27352529cd0a4c22b` and the
+store hash is `78752437455d2cc84f2a6e81532e6845d37caa778055c9018774534a55ee2094`.
+
+```powershell
+uv run --offline --locked --no-env-file --directory backend python -c "from pathlib import Path; from living_island.sim.v2.harness.live_resident import Case, Capture, verify; r = verify(Capture.open(Path('F:/p35-w1/ev06/runs/m14-ev06-ella'), Case.load(), write=False)); print(r.replay.frames[-1].tick, r.tail_attempts, r.world_hash, r.store_hash)"
+```
+
+A replacement requires owner authorization, a new reconciled ledger and a
+release signed for a separate checkout of fixed executable
+`4e2211081cb26b36d4c450f0abffd6eb978213f2`. From the fresh checkout root, the
+preflight pins its own empty `runs/m14-ev06-ella/` path. With the new release
+and key supplied by the owner, the exact commands are:
+
+```powershell
+uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident preflight --implementation 4e2211081cb26b36d4c450f0abffd6eb978213f2
+uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident run --live --implementation 4e2211081cb26b36d4c450f0abffd6eb978213f2 --release ../runs/m14-ev06-ella-release.json --ledger ../runs/m14-ev06-ella-ledger.json --out ../runs/m14-ev06-ella
+```
+
 ### Gate 3 evidence after the owner run
 
 | Item | Status |
 | --- | --- |
-| Paid capture, realized horizon, spend by resident-day and fallback counts | Pending owner dispatch. Keep the raw audit, packet journal, opening and final checkpoints, dedicated run manifest and EV-04 sanitized evidence under `runs/`. |
-| Offline rebuild | Pending paid capture. The `replay` command uses the DL-05 verifier without a provider transport. It compares request wires, store revisions, committed submissions, events and the final state, then audits any uncommitted tail. Run it without the key and with network disabled. |
+| Paid capture, realized horizon, spend by resident-day and fallback counts | Incomplete at tick 185. The raw audit, packets, opening checkpoint and committed checkpoint remain under `runs/m14-ev06-ella/`. Full Gate 3 accounting and analysis remain pending. |
+| Offline rebuild | Verified read-only through committed tick 185, including the unmatched claim in the audit tail. The DL-05 verifier rebuilt request wires and store revisions and checked committed submissions, events and final state without a provider transport. |
 | Verified export and analysis walkthrough | Pending paid capture and seal. Load the matching `replay.json` in the viewer, open analysis mode and select the fresh inspection directory. Attach the actual resident/period/turn IDs and artifact hashes once selected. |
 | Decision and memory trace | Pending. Select a model-origin outcome and trace earlier packet/day-entry through the K-boundary change set and record revision, then subsequent morning, sent recall, decision citation and world result. Distinguish rendered, dispatched and cited evidence. |
 | Skill and starter evidence | Pending. Report self-found skill evidence or an evidenced zero after the run. The starter-only grass-cord axe is due at M15. |
 | Prior engineering receipts | [MM-16/MF-14 and DL-19](P3.5-MM-02.md#gate-3-receipts) · [Round 3](M14-plan.md#4-done-when) · [EV-13 rehearsal](M14-fake-workload.md#receipts-and-verified-exports) · [PR-05 provenance](P3.5-PR-05-review.md) · [PR-06 provenance](P3.5-PR-06-review.md) |
 | Owner release and Gate 3 | The owner approved the pre-dispatch sheet and the single peak run on 2026-11-25. Final Gate 3 signature and live evidence revision are pending. |
 
-After capture, run these commands offline in a terminal without the provider
-key. The export command verifies all shards and writes the viewer replay to
-`runs/m14-ev06-inspection-source/replay.json`. Load that replay, open analysis
-mode and select `runs/m14-ev06-inspection`. [EV-01 export contract](P3.5-EV-01.md)
+For a separately released replacement capture, run these commands from its
+checkout in a terminal without the provider key. The export command verifies
+all shards and writes the viewer replay to `runs/m14-ev06-inspection-source/replay.json`.
+Load that replay, open analysis mode and select `runs/m14-ev06-inspection`.
+[EV-01 export contract](P3.5-EV-01.md)
 
 ```powershell
-uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident replay --out F:/p35-w1/ev06/runs/m14-ev06-ella
-uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident export --out F:/p35-w1/ev06/runs/m14-ev06-ella --destination F:/p35-w1/ev06/runs/m14-ev06-inspection
+uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident replay --out ../runs/m14-ev06-ella
+uv run --offline --locked --no-env-file --directory backend python -m living_island.sim.v2.harness.live_resident export --out ../runs/m14-ev06-ella --destination ../runs/m14-ev06-inspection
 pnpm --dir frontend dev
 ```
