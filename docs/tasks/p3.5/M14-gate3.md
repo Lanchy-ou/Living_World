@@ -1593,3 +1593,30 @@ inside `F:/p35-w1/ev06r3/runs/m14-ev06-inspection/`. Open
    request** and **Cited · m:ella:194**. Expand `action_failed`
    for `ella:t000198:a` and select **Show ella at tick 328** to
    see the gather result.
+
+## Owner Gate 3 signature
+
+The owner reviewed the sealed 576-tick capture in the viewer, using the
+three inspection records above, and signed M14 on 2026-11-26.
+
+- **Evidence.** Capture `F:/p35-w1/ev06r3/runs/m14-ev06-ella` at
+  implementation `c7454fc130f1eea731ce464e6c6a0f0e64d022a4`. The record
+  and seal are in commit `f0ef1fe60079f035032f702bb739964f83b45ffe`.
+  [M14 live evidence](#m14-live-evidence)
+- **Accepted.** One live resident completed four game days. The
+  decision loop, consolidation, morning selection, sent prefix and
+  valid memory citation ran end to end. Replay needed zero model calls.
+  [MM-16 with MF-14 and DL-19](P3.5-MM-02.md#gate-3-receipts) are
+  accepted as recorded.
+- **Spend.** The phase has CNY 6.40381186 settled and a CNY 0.133982
+  hold, under the CNY 20 cap. [Spend ledger](P3.5-spend-ledger.md)
+- **Carried to M15.** These findings are not M14 failures:
+  - Episode `m:ella:193` reached the morning prefix but was never cited.
+  - Skill `m:ella:194` has zero practice or watched evidence.
+  - Consolidation operations without matching observed witness keys are
+    still dropped for provenance.
+  - Food finding is weak. The tick-442 capture ended in starvation.
+- **Retained evidence.** The tick-185, tick-432 and tick-442 captures,
+  and both consolidation probes, stay as retained evidence.
+
+Owner signature: signed by the owner in chat to Claude Code ("看完了，签M14" — "viewed it, sign M14"). Date: 2026-11-26
