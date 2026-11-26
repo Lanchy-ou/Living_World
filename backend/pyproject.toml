@@ -118,6 +118,51 @@ as_packages = false
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
+name = "the live v2 path cannot reach the retired v1 engine or its launchers"
+type = "forbidden"
+# EV-07 owner scope (OQ-P3.5-EV07-1): the v1 engine stays only for M13
+# calibration setup and archived-projection tests, never for live v2 runs.
+source_modules = [
+    "living_island.agents.v2",
+    "living_island.analysis.v2",
+    "living_island.memory.v2",
+    "living_island.persistence.v2",
+    "living_island.sim.v2.cli",
+    "living_island.sim.v2.compat",
+    "living_island.sim.v2.harness",
+]
+forbidden_modules = [
+    "living_island.sim.cli",
+    "living_island.sim.equivalence.v1_extract",
+    "living_island.sim.p3",
+    "living_island.sim.runner",
+    "living_island.world.engine",
+]
+
+[[tool.importlinter.contracts]]
+name = "package initializers on the live v2 path cannot reach the retired v1 engine"
+type = "forbidden"
+# Starting a live v2 module runs every parent package initializer first. Their
+# packages also hold v1 code, so match the initializers as modules only.
+as_packages = false
+source_modules = [
+    "living_island",
+    "living_island.agents",
+    "living_island.analysis",
+    "living_island.memory",
+    "living_island.persistence",
+    "living_island.sim",
+    "living_island.sim.v2",
+]
+forbidden_modules = [
+    "living_island.sim.cli",
+    "living_island.sim.equivalence.v1_extract",
+    "living_island.sim.p3",
+    "living_island.sim.runner",
+    "living_island.world.engine",
+]
+
+[[tool.importlinter.contracts]]
 name = "world.v2 imports no other living_island subpackage"
 type = "forbidden"
 source_modules = ["living_island.world.v2"]

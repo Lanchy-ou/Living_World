@@ -1340,3 +1340,48 @@ received. Keep movement, target checks and drink rules unchanged.
 existing drink description in the explored spring line. Say to drink from
 a tile next to a spring. Add no passability statement for other terrain and
 keep the rules unchanged.
+
+## OQ-P3.5-EV07-1: Scope of the v1 retirement
+
+The EV-07 round-1 inventory traced four dependencies on the v1 engine at
+`9a50100`. [EV-07 inventory](../tasks/p3.5/P3.5-EV-07.md#blocking-dependencies-and-order-of-work)
+
+1. The live EV-06 runner imports the policy configuration from the v1
+   extractor, which loads `world/engine.py` and `sim/runner.py`.
+2. The signed M13 calibration fixtures construct the v1 `Engine` to
+   build their opening worlds. The card keeps M13 files unchanged byte
+   for byte.
+3. The PR-06 and PR-07 tests construct the old engine for their inputs.
+4. The v2 live export still writes the v1 display replay version, so the
+   viewer cannot refuse v1 replays without a new v2 display envelope.
+
+Claude Code offered three scopes:
+
+- **A.** Cut the live path off v1. Keep the engine for M13 setup and the
+  archived-projection tests. Defer the display envelope.
+- **B.** Remove v1 entirely, including an engine-free M13 setup and
+  re-verification.
+- **C.** Defer the whole card.
+
+**Owner decision (2026-11-26).** The owner gave the work to Claude Code
+under its recommendation, option A.
+
+Done in EV-07:
+
+- The live v2 runner takes the policy configuration from an engine-free
+  module.
+- An import contract forbids the live v2 packages from reaching
+  `world/engine.py`, `sim/runner.py`, `sim/cli.py`, `sim/p3.py` or the
+  v1 extractor.
+- A launch test proves the v2 entry points load none of them.
+
+Deferred to a post-P3.5 cleanup:
+
+- an engine-free M13 opening setup, with re-verification;
+- engine-free inputs for the PR-06 and PR-07 tests;
+- a v2 display envelope, with the viewer refusing v1 and unknown replay
+  versions;
+- removal of the v1 engine, launchers, scripts, viewer paths and their
+  historical tests.
+
+The `v1-archive` tag (`4d02d31`) keeps v1 replay and viewing reproducible.

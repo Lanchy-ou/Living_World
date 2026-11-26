@@ -24,6 +24,7 @@ from living_island.agents.types import (
 from living_island.contract.save import AgentStateSection, DeliveryCursor, SavePackage
 from living_island.sim.boundary import BoundaryLoop
 from living_island.sim.runner import _runtime_roster
+from living_island.sim.v2.compat.policy_config import script_policy_config as script_policy_config
 from living_island.world.content import EffectiveConfig, WorldContent
 from living_island.world.engine import Engine
 from living_island.world.facts import (
@@ -387,25 +388,6 @@ class FixturePolicy(RuleBasedPolicy):
             )
         self._pending = self._pending.model_copy(update={"issued_intents": refs})
         return decision.model_copy(update={"plan": plan})
-
-
-def script_policy_config(cfg: EffectiveConfig) -> PolicyConfig:
-    return PolicyConfig(
-        policy_id="rule-based-v0",
-        seed=cfg.meta.seed,
-        max_plan_actions=cfg.agents.max_plan_actions,
-        map_width=cfg.map.width,
-        map_height=cfg.map.height,
-        script_sha256=None,
-        source_trace_sha256=None,
-        rule_params=RuleParams(
-            rule_params_version="0.1",
-            canteen_use="enabled",
-            cue_use="enabled",
-            fruit_carry_target=2,
-            failed_target_retry_ticks=36,
-        ),
-    )
 
 
 def bootstrap_save(commit: WorldTickCommit, content: WorldContent) -> SavePackage:
