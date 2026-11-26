@@ -50,10 +50,10 @@ from living_island.persistence.v2.audit import AuditReader, AuditWriter
 from living_island.persistence.v2.journal import PacketJournal, store_once
 from living_island.persistence.v2.manifest import RunManifest
 from living_island.persistence.v2.replay import RuleStore
-from living_island.sim.equivalence.v1_extract import script_policy_config
 from living_island.sim.equivalence.v2_extract import snapshot
 from living_island.sim.v2.cli import PACK, ROOT, VOCABULARY, build_world_setup
 from living_island.sim.v2.compat.config import BoundCompatPack, load_compat_pack
+from living_island.sim.v2.compat.policy_config import script_policy_config
 from living_island.sim.v2.compat.policy_host import restore_policies
 from living_island.sim.v2.harness.checkpoint import Boundary, Recording, Runtime, load
 from living_island.sim.v2.harness.composition import compose
