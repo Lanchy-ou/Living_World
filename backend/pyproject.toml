@@ -140,6 +140,29 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "package initializers on the live v2 path cannot reach the retired v1 engine"
+type = "forbidden"
+# Starting a live v2 module runs every parent package initializer first. Their
+# packages also hold v1 code, so match the initializers as modules only.
+as_packages = false
+source_modules = [
+    "living_island",
+    "living_island.agents",
+    "living_island.analysis",
+    "living_island.memory",
+    "living_island.persistence",
+    "living_island.sim",
+    "living_island.sim.v2",
+]
+forbidden_modules = [
+    "living_island.sim.cli",
+    "living_island.sim.equivalence.v1_extract",
+    "living_island.sim.p3",
+    "living_island.sim.runner",
+    "living_island.world.engine",
+]
+
+[[tool.importlinter.contracts]]
 name = "world.v2 imports no other living_island subpackage"
 type = "forbidden"
 source_modules = ["living_island.world.v2"]
