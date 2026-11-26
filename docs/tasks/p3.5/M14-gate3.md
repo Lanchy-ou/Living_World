@@ -2,10 +2,10 @@
 
 ## Owner pre-dispatch sheet · 2026-11-25
 
-**The owner selected the tick-442 capture as the M14 live evidence.** It
-passes the original 432-tick horizon and records Ella's death by
-deprivation. The tick-185 and tick-432 captures are retained separately.
-[Current Gate 3 table](#m14-live-evidence)
+**The owner selected the completed 576-tick capture on 2026-11-26.**
+The tick-442, tick-432 and tick-185 captures and both consolidation probes
+are retained evidence. [Current Gate 3 table and viewer steps](#m14-live-evidence)
+
 M12 and M13 are signed. DL-06 passed D7 with
 the six JSON-only `/0.2` prompts. The recheck accepted 7/7 dispatches over
 HTTP, parsed 5/6 first attempts and completed all six logical calls. Both
@@ -300,7 +300,8 @@ finally {
 ### Replacement evidence and owner walkthrough
 
 This 432-tick capture is retained evidence from the first replacement.
-The owner selected the later [tick-442 capture](#m14-live-evidence) for M14.
+The owner first selected the later [tick-442 capture](#retained-tick-442-live-capture) for M14.
+The [576-tick capture](#m14-live-evidence) is the current selection.
 
 | Item | Status |
 | --- | --- |
@@ -715,13 +716,14 @@ finally {
 }
 ```
 
-### M14 live evidence
+### Retained tick-442 live capture
 
 The owner accepted this capture against the original 432-tick horizon on
 2026-11-25. The runner reports `incomplete` and `resident_died` at tick 442
 because the released run had a 576-tick limit. The last world step committed
 normally. The four-day extension had assumed fainting, which is disabled in
-`compat-v1`. The two earlier captures remain archived. [Owner decision](../../spec/open-questions.md#oq-p35-m14-2-evidence-sufficient-for-the-paid-provider-check-and-horizon)
+`compat-v1`. The owner retained this capture when selecting the later
+576-tick run. [Owner decision](../../spec/open-questions.md#oq-p35-m14-2-evidence-sufficient-for-the-paid-provider-check-and-horizon)
 
 | Gate 3 item | Verified live evidence |
 | --- | --- |
@@ -733,7 +735,7 @@ normally. The four-day extension had assumed fainting, which is disabled in
 | Skill and starter evidence | Zero skill record bodies in 397 audited store revisions. Neither consolidation wrote a record. Starter-only grass-cord axe evidence remains due at M15. [M15 food-finding finding](#starvation-and-food-finding) |
 | Offline verification and viewer | Replay matched through 442 with zero provider calls. EV-01 verified all 2,414 inspection shards. The frontend importer opened the three example records. [Replay, seals and viewer steps](#live-artifact-verification-and-viewer-steps) |
 | Retained evidence | The interrupted tick-185 capture remains in `F:/p35-w1/ev06/runs/m14-ev06-ella/`. The earlier 432-tick capture remains in `F:/p35-w1/ev06r/runs/m14-ev06-ella/`. |
-| Owner disposition | The owner accepted the horizon and designated this capture as the live evidence. Gate 3 remains for owner review, including the absence of consolidation-created records. |
+| Owner disposition | The owner accepted the horizon on 2026-11-25. The capture is retained evidence under the 2026-11-26 ruling. |
 
 #### Realized M14 resident-day accounting
 
@@ -1352,3 +1354,242 @@ finally {
     Remove-Variable -Name ev06KeyLine -ErrorAction SilentlyContinue
 }
 ```
+
+### M14 live evidence
+
+The owner selected the completed 576-tick run on 2026-11-26.
+[OQ-P3.5-M14-2](../../spec/open-questions.md#oq-p35-m14-2-evidence-sufficient-for-the-paid-provider-check-and-horizon)
+
+| Gate 3 item | Verified live evidence |
+| --- | --- |
+| Capture and horizon | `F:/p35-w1/ev06r3/runs/m14-ev06-ella/` at `c7454fc130f1eea731ce464e6c6a0f0e64d022a4`. Completed all 576 ticks, four full game days. Ella survived. |
+| Spend and model use | 387 logical calls and 407 attempts. 24 invalid outputs and four fallback turns. This run settled CNY 2.16607564. Phase settled CNY 6.40381186 with the original CNY 0.133982 hold. [Resident-day accounting](#576-tick-resident-day-accounting) |
+| Consolidation continuity | One close of `p:ella:1` at tick 303, two records committed at v219, and `p:ella:2:morning` adopted at 321. The later turn `ella:t000198` validly cited the skill and submitted a gather against `fruit_04`. The world returned `OUT_OF_REACH` at replay tick 328. [Full trace](#consolidation-continuity-through-a-cited-skill) |
+| Dropped operations | The adopted proposal had 14 operations. Two committed. Eleven dropped for `provenance` and one for `source_kind`. [Individual verdicts](#dropped-consolidation-operations) |
+| Citations and use credit | 1,200 valid and seven invalid adopted citation entries. The skill was validly cited on 72 turns. Both new records received 189 dispatch-time credits apiece, out of 786 credits in the run. [Denominators](#576-tick-citations-and-use-credit) |
+| Skill and food | One self-found gather hypothesis, with zero code-counted practice and watched evidence. Ella ate four fruit. [Skill record and consumption events](#self-found-skill-and-food) |
+| Offline reproduction | Replay reached tick 576 with matching world and store hashes, zero provider calls and zero uncommitted attempts. [Seals and viewer steps](#576-tick-seals-and-viewer-steps) |
+| Retained evidence | [Tick 442](#retained-tick-442-live-capture), [tick 432](#replacement-evidence-and-owner-walkthrough), [tick 185](#owner-run-interruption-and-recovery), and the [first](#first-consolidation-probe-result) and [second](#second-consolidation-probe-result-and-owner-ruling) consolidation probes remain in their original directories. |
+| Owner disposition | The completed capture replaces the tick-442 capture as the M14 live evidence. The sealed package is ready for Gate 3 review. |
+
+#### 576-tick resident-day accounting
+
+Ella was the only model-controlled resident. Days group the tick of
+each dispatch or decision into 144-tick intervals. Ryan and Mia used
+rule policies, with zero provider calls and zero cost.
+
+| Ella game day | Dispatch ticks | Logical calls | Attempts | Invalid outputs | Model decision turns | Fallback turns | Settled CNY |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 0–143 | 105 | 107 | 4 | 103 | 2 | 0.40553512 |
+| 2 | 144–287 | 92 | 98 | 8 | 88 | 2 | 0.71245664 |
+| 3 | 288–431 | 89 | 97 | 8 | 88 | 0 | 0.45377532 |
+| 4 | 432–575 | 101 | 105 | 4 | 101 | 0 | 0.59430856 |
+| **Run** | **0–575** | **387** | **407** | **24** | **380** | **4** | **2.16607564** |
+
+There were 20 retries and 383 parsed responses. Dispatches comprised
+403 decisions, one consolidation selection, two change-set attempts and
+one morning. The four invalid-output fallbacks used `rule-based-v0`:
+`ella:t000047` (58), `ella:t000049` (61), `ella:t000129` (172)
+and `ella:t000153` (224). The sent input bounds ranged from 3,714 to
+175,794 tokens, with zero guard omissions. All 407 claims settled,
+with no new hold. Phase settled spend is **CNY 6.40381186**, with the
+original **CNY 0.133982 hold**. [Phase ledger](P3.5-spend-ledger.md#opening-ledger)
+
+The inspection cost shard reproduces every daily row. It allocates
+CNY 1.57563564 to input and CNY 0.59044000 to output, with no unassigned
+cost.
+
+#### Consolidation continuity through a cited skill
+
+The successful change-set request sent these day entries from
+`p:ella:1`. All packet IDs below have prefix
+`m14-ev06-ella:perception:`, a ten-digit tick and suffix `:ella`.
+
+| Committed record | Day entry | Packet tick and member | Entry fact seq | Sent fragment SHA-256 |
+| --- | --- | --- | ---: | --- |
+| `m:ella:193` | `d:p:ella:1:238`, Mia finished moving to woods at (52,26) | 138, `perception.observed_actions[0]` | 2659 | `6ed55fab064abbcb4116435131e7e669a68495290b7d342b1dd314c33773a96a` |
+| `m:ella:193` | `d:p:ella:1:314`, Mia finished moving to woods at (52,28) | 180, `perception.observed_actions[0]` | 3540 | `6b2d90c9b311178910f4b26add3c98e8b6db52fae80a53fffa916f414e165c2d` |
+| `m:ella:194` | `d:p:ella:1:18`, gather failed `INVALID_TARGET` | 7, `perception.action_feedback[0]` | 179 | `891364f98e20455113a038b83c1ef865e7ad60d402a74d387aced77535a6ec83` |
+| `m:ella:194` | `d:p:ella:1:23`, gather failed `INVALID_TARGET` | 9, `perception.action_feedback[0]` | 228 | `675dbaad2baad067d04fbf1056b203e20aceb7a8fc22254de708713a24efaf7a` |
+| `m:ella:194` | `d:p:ella:1:63`, gather failed `INVALID_TARGET` | 33, `perception.action_feedback[0]` | 716 | `b94b203558c254b9632200ed3e52f7b4f750f2546d2e573bf919f1e66ee0b718` |
+| `m:ella:194` | `d:p:ella:1:133`, gather failed `INVALID_TARGET` | 70, `perception.action_feedback[0]` | 1471 | `bb59aef2e4cb4675dcc5e0ee73206aea75e3c67408fdc530d37826e6cfd35dc7` |
+
+1. `ella:t000194:a` began a 54-tick sleep at replay tick **268**,
+   event `m14-ev06-ella:0000000268:000002`. That tick's confirming
+   delivery opened consolidation `p:ella:1:268`. Its selection
+   dispatched at seq 5571. The change
+   set `p:ella:1:268:change_set` used the two sets of observed sources
+   above. The memory witnesses overlap `resident:mia` for the episode
+   and `verb:gather` for the skill. The two creation operations were
+   `remember_mia_at_tree` and `skill_probe_terrain`.
+2. At tick **303**, the consolidation rebased from its frozen v217
+   and wrote **v218 → v219** at seq **5597**. The new episode
+   `m:ella:193` describes Mia beside the fruit tree. Its audited record
+   body hashes to `9eb348b13adf9458797a4d4d332f08befbf8edfa6774aab0e89f1e4977ae9dc2`.
+   The new skill `m:ella:194` describes failed gathering on bare terrain
+   and the hypothesis that distinct plant or pile entities respond.
+   Its body hashes to `9e7bf975d08edbc020255b38a1ad2e3cfda8d4408e636509c3322cda1e2a7082`.
+   The consolidation receipt is seq 5602.
+3. The sleep completed at replay tick **321**, event
+   `m14-ev06-ella:0000000321:000004`. At that waking tick
+   `p:ella:2:morning` **dispatched** both IDs as v221 index lines
+   at seq 5701, wire
+   `a2997e501c73ee9102e9fe6167488b0534fd16a09472c3e03330aaab2764e13c`.
+   The adopted selection at seq **5705** included both among its five
+   IDs. The new waking prefix carries both as full v221 records.
+4. At replay tick **327**, the full `ella:t000198:decision` request
+   **rendered** both prefix fragments (prepared seq 5794). Seq **5795**
+   **dispatched** both in wire
+   `941ab4c069d447da55306e92b05682bcf7d988e84b0201f937d007d16d8ce91b`.
+   The `m:ella:193` fragment SHA-256 is
+   `8fb17a10d67ed52ccb93397dac54a0c527fee6b82d61baa9a6abb9163c3e8bb3`.
+   The `m:ella:194` fragment SHA-256 is
+   `ee61b6f72eafce0a674310c3c5569289ff4ed43b0ad9ba19a6b1c17a1090bd3e`.
+   The use-credit fact at seq 5796 credits both sent records. The
+   adopted act **cited** `m:ella:194`, `m:ella:192` and
+   `d:p:ella:2:12`. Seq **5801** binds the skill ID to its exact
+   sent v221 prefix fragment. The adopted output is seq 5799, SHA-256
+   `15ccfa69be4499fea361e61a0d6a88c5dde36fa3a44550c308b356655d7d6f47`.
+5. The model-origin act submitted `ella:t000198:a` to gather the
+   visible entity `fruit_04` and check regrowth. The world settled
+   it at replay tick **328** with `OUT_OF_REACH`, event
+   `m14-ev06-ella:0000000328:000004`. Boundary seq 5806 pins the event
+   batch `8028c9d27a043c299a74a74b7af7d4dada8a0874d63d097377476e4f4343dfbf`.
+
+#### Dropped consolidation operations
+
+The first change-set attempt, dispatch seq 5587, returned
+`INVALID_MODEL_OUTPUT` at seq 5589. The retry dispatched at seq 5591
+with wire SHA-256 `112a309e0ccc451bc205d35179c8f10e645b67eb3dbaacea03cf21ed26690cf0`
+and returned the adopted proposal at seq 5594, parsed SHA-256
+`b20b57a37b7c93922a1f8d894b2833f791ba745ca9c6af07098ee4d361a3bff1`.
+That proposal contained 14 operations. Two committed; the receipt
+records 11 `provenance` drops and one `source_kind` drop, with no
+dependencies. The witness suffixes below are from `d:p:ella:1:`.
+
+| Dropped operation | Verdict | Witness check |
+| --- | --- | --- |
+| `remember_wood_scan` | `provenance` | The episode had no place or participant; all six sources carried only `verb:gather`. |
+| `remember_spring_drink` | `provenance` | Sources 45, 170 and 267 carried drink verb and phenomenon keys but lacked `place:38,29`. |
+| `remember_no_water` | `provenance` | Sources 39, 41 and 321 carried drink and `no_water_here` keys but lacked `place:54,31`. |
+| `remember_fruit_harvest` | `provenance` | Gather result 148 and eat result 151 carried item, verb and phenomenon keys but lacked `place:52,27`. |
+| `remember_fruit_regrew` | `provenance` | Observation 365 matched the place. Gather result 371 lacked the place key. Each observed source must bind. |
+| `remember_ryan_glimpse` | `source_kind` | Observation 403 matched Ryan and the place. Source 407 was Ella's own utterance feedback. |
+| `remember_sleep_spring` | `provenance` | Sources 173 and 181 were unkeyed sleep transitions; 179 carried only `need:stamina`. |
+| `remember_rock_blocked` | `provenance` | Move and gather feedback 189, 201 and 211 carried verb keys but lacked `place:28,28`. |
+| `remember_southern_grass` | `provenance` | Move result 452 matched `place:38,39`. Sources 453 and 455 were stamina and sleep. |
+| `belief_spring_reliable` | `provenance` | Drink results 45, 170 and 267 lacked the belief's `place:38,30` key. |
+| `belief_fruit_tree` | `provenance` | Observation 365 matched `place:52,27`. Gather results 148 and 371 lacked the place key. |
+| `belief_sea_undrinkable` | `provenance` | Drink result 321 lacked `place:54,31`. |
+
+#### 576-tick citations and use credit
+
+The 380 adopted cite arrays contain 1,207 entries. Of those, 1,200
+bind validly (919 day entries and 281 memory IDs), and seven do not
+(three day IDs and four memory IDs). Valid citations occur on 379
+turns. Of those, 260 have a valid memory citation.
+
+The adopted binding receipts show **72 turns citing `m:ella:194`**
+and zero citing `m:ella:193`. The preliminary 215 count is
+unreproduced on the adopted-act denominator. Seq 5799 is the first
+matching parsed act and seq 5801 is its binding receipt. No separate
+deliberate recall call dispatched in the run.
+
+Across `p:ella:2`, 189 decision dispatches received **786**
+dispatch-time record credits covering five IDs. Both new records
+received 189 each, as did `m:ella:1` and `m:ella:2`.
+`m:ella:192` received 30. `p:ella:1` had zero credits.
+Credit counts sent prefix exposure, including `m:ella:193` on the
+example turn when the model cited the skill.
+
+#### Self-found skill and food
+
+`m:ella:194` is one self-found, active gather hypothesis at confidence
+3. Its four sources are Ella's own action feedback (ticks 7, 9, 33 and
+70). The v219 creation and the final v604 checkpoint both show
+`attempts=0`, `matched_expected=0`, `other_outcomes=0`,
+`watched=0`, `watched_matched=0`, and `last_attempt_tick=null`.
+Seq 5597 is the sole audited write of the skill body. The later
+`fruit_04` attempt had an explicit entity target, while this hypothesis
+has a null target. The 189 dispatch credits and 72 valid citations
+measure use of the stored hypothesis. Its automatic practice and
+observation counters remained at zero.
+
+**Ella ate four fruit**. These are world `entity_consumed` events
+under `compat_eat_fruit`. Each raised satiety by 2,000 before
+ordinary physiology. Her earlier `eat` at tick 67 resolved unmatched
+(event `m14-ev06-ella:0000000067:000004`). She finished alive with
+health 10,000 and satiety 1,100 at tick 576.
+
+| Replay tick | Eat intent | Consumed entity | Consumption event | Satiety change |
+| ---: | --- | --- | --- | --- |
+| 77 | `ella:t000063:a` | `e:6556645543849e08` | `m14-ev06-ella:0000000077:000004` | 5,600 → 7,600 |
+| 230 | `ella:t000157:a` | `e:48de4f671cdac834` | `m14-ev06-ella:0000000230:000013` | 3,775 → 5,775 |
+| 375 | `ella:t000237:a` | `e:f9f05de07e8deb6d` | `m14-ev06-ella:0000000375:000020` | 2,150 → 4,150 |
+| 516 | `ella:t000343:a` | `e:1d79cc28f30fc1db` | `m14-ev06-ella:0000000516:000004` | 625 → 2,625 |
+
+#### 576-tick seals and viewer steps
+
+The detached offline replay reached tick **576** with **zero provider
+calls** and **zero uncommitted attempts**. Its world SHA-256 is
+`4abb4d61c495d6c94487faf40f43effff9dbc61687568b12536920156207dd95`.
+Its store SHA-256 is
+`970932fc99f7171c82ec2f416a6f8eb7ea13ffc93c07a296f6c30f5b0324610e`.
+The seal contains 576 observed-tick packet batches and a replay with
+577 frames, including tick zero. Each packet-batch hash, the sealed
+SQLite hash and the replay hash verified against `finished.json`.
+The exporter verified all 3,157 indexed shards, including 384 decisions,
+387 calls, 1,728 resident deliveries and 604 store revisions. The capture
+receipt verifies the raw audit through seq 10895, and its raw hash
+matches the capture before export.
+
+| Artifact under `F:/p35-w1/ev06r3/runs/` | SHA-256 |
+| --- | --- |
+| `m14-ev06-ella/resident.sqlite` | `0a703f2198e5af7b20fe2a2dde7193dcfae0b2ff233d3a0c4df28e84aa5e5697` |
+| `m14-ev06-ella/result.json` | `39a8a9e7ad76d9ce32d3422a7d2556293cc6e850d43c5883308a9cb83b520a8c` |
+| `m14-ev06-ella/checkpoints/576.json` | `e2c6b2ac2393adffe8d7582387931b16adae6922ea983df50fd227ea6d32e40b` |
+| `m14-ev06-ella/sanitized-evidence.json` | `9a1add59ff587d0b3648068a989154ee46be5081346617a9196d864a9366694c` |
+| `m14-ev06-inspection-source/finished.json` | `14a1313ee658f6d21d75259287a50609b671721c6177d8617f69b7f650a784f4` |
+| `m14-ev06-inspection-source/capture.json` | `cc09223bf800e2a4eafbd4b031595e4c62a9cbc85df7b64f9c50e6502948c735` |
+| `m14-ev06-inspection-source/resident.sqlite` | `772645db4c391dc8b9afc1fa1881da0e3ddea470de6a98981f139d331f6d479a` |
+| `m14-ev06-inspection-source/replay.json` | `34e20a73549846d2eb6f6745caad97d37bb9b1c2bb8f1f5cf2719312d7483a57` |
+| `m14-ev06-inspection/index.json` | `643f72687a5e132507a55daf9aacb5bf98bbca89b791cf565237ee3166c56bd7` |
+
+| Verified inspection shard | SHA-256 |
+| --- | --- |
+| Consolidation `p:ella:1:268` | `0bfb372aaf5ab5730d2b2fe766c375a4eea5b3e322eaf1dbc6d70fbd3f497ead` |
+| Morning `p:ella:2:morning` | `25ffff739b547acee72ef79634123db9f148aa27062c71945bd4f00b66968341` |
+| Decision `ella:t000198` | `0fe520483cf88ac1904164d82a41c73b54335d3190454796619b3e9eaef7cdf1` |
+| Cost | `11a4a1726e0d42189a626716e63a829765090c83992506ff27c043677b7c440b` |
+| Metrics | `e3b90cff6c81731fb5b3ac6682c7a47bb12164ecf2bf59e7e2c43bc5e09cd4dd` |
+
+The executor used these commands. Any repeat export needs a fresh
+destination and sibling `-source` directory.
+
+```powershell
+Set-Location -LiteralPath 'F:\p35-w1\ev06r3'
+Remove-Item -LiteralPath 'Env:\DEEPSEEK_API_KEY' -ErrorAction SilentlyContinue
+$env:GIT_CONFIG_COUNT = '1'
+$env:GIT_CONFIG_KEY_0 = 'safe.directory'
+$env:GIT_CONFIG_VALUE_0 = 'F:/p35-w1/ev06r3'
+uv run --offline --no-env-file --locked --no-sync --no-dev --directory backend python -m living_island.sim.v2.harness.live_resident replay --out ../runs/m14-ev06-ella
+uv run --offline --no-env-file --locked --no-sync --no-dev --directory backend python -m living_island.sim.v2.harness.live_resident export --out ../runs/m14-ev06-ella --destination ../runs/m14-ev06-inspection
+```
+
+Start the viewer with `pnpm --dir frontend dev` in a checkout with the
+locked frontend dependencies. Use **Open replay…** to load
+`F:/p35-w1/ev06r3/runs/m14-ev06-inspection-source/replay.json`.
+Use **Open inspection…** to select `index.json` and all JSON shards
+inside `F:/p35-w1/ev06r3/runs/m14-ev06-inspection/`. Open
+**Decision debug** and choose these under **Inspection record**.
+
+1. **Period boundaries → `p:ella:1:268`.** At boundary tick 303,
+   expand the change set to see the two committed records and their
+   observed source entries.
+2. **Calls → `p:ella:2:morning`.** At tick 321, compare the sent
+   index entries and the adopted selection of `m:ella:193` and
+   `m:ella:194`.
+3. **Decisions → `ella:t000198`.** At tick 327, compare **Full
+   request** and **Cited · m:ella:194**. Expand `action_failed`
+   for `ella:t000198:a` and select **Show ella at tick 328** to
+   see the gather result.

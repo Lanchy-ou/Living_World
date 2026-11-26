@@ -1218,6 +1218,11 @@ extension assumed a faint that `compat-v1` cannot produce. Ella's death at
 tick 442 is a committed world outcome. Use this capture as the M14 live
 evidence, subject to offline verification.
 
+**Owner decision (2026-11-26, after the fresh 576-tick run).** Use the
+completed capture in `F:/p35-w1/ev06r3/runs/m14-ev06-ella/` in place of
+the tick-442 capture as the M14 live evidence. Retain the tick-442,
+tick-432 and tick-185 captures and both consolidation probes as evidence.
+
 ## OQ-P3.5-PR-07: Run scope of the M12 equivalence matrix
 
 Protocol §11.3 (CR-011) requires M12 to check that no run of the P2 matrix
