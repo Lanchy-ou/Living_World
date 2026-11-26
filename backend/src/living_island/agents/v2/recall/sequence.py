@@ -122,14 +122,15 @@ def run_recall_turn(
             call(kind),
             state,
             journal,
+            view=view,
             stage=kind,
             protected_recall_ids=frozenset(entry.id for entry in protected),
         )
         return run(prepared, crediting_journal(journal, context.log.entries, credit))
 
     entries: tuple[DayEntry, ...] = ()
+    view = read_memory()[1] if memory_on else ResidentView((), None)
     if memory_on:
-        _, view = read_memory()
         entries = recipes.append(view, cues, context, turn_id)
         if entries:
             _record(journal, turn_id, "recipe", entries)

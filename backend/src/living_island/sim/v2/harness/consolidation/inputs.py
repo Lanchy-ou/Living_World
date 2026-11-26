@@ -1,7 +1,7 @@
 """Build both consolidation requests from the resident's confirmed, frozen input."""
 
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import cast
 
 from living_island.agents.v2.calls.contracts import digest
@@ -20,12 +20,26 @@ class Choice:
     ignored: tuple[str, ...]
 
 
-def _pending_part(period: PendingPeriod[FrozenPeriod]) -> Part:
-    # A pending context is an indivisible guard candidate. The published part
-    # contains precisely its resident-facing lines; typed evidence stays local.
-    text = "\n".join(
-        [f"Pending period {period.period_id}", *(part.text for part in period.context.parts)]
-    )
+def _parts(period: FrozenPeriod) -> Iterator[Part]:
+    # Mark packet-derived witness keys alongside the unchanged day-log line.
+    # The guard keeps or omits the line and its keys together.
+    observed = {
+        entry.id: entry.about
+        for entry in period.entries
+        if entry.about
+        and entry.type not in ("own_response", "recall", "heard_speech", "utterance_result")
+    }
+    for part in period.parts:
+        if part.source.kind == "day_log" and (keys := observed.get(part.source.id)):
+            yield replace(part, text=part.text + "\nObserved witness keys: " + "; ".join(keys))
+        else:
+            yield part
+
+
+def _pending_part(period: PendingPeriod[FrozenPeriod], view: ResidentView) -> Part:
+    # A pending context is an indivisible guard candidate.
+    parts = _parts(period.context.visible_to(view))
+    text = "\n".join([f"Pending period {period.period_id}", *(part.text for part in parts)])
     source = Ref(kind="pending_period", id=period.period_id, version=digest(text.encode()))
     return Part("pending_periods", source, text)
 
@@ -68,12 +82,25 @@ class FixedInput:
                 ignored.append(key)
         return Choice(tuple(selected), tuple(ignored))
 
-    def assembly(self, choice: Choice | None = None) -> Assembly:
-        """None builds selection. An empty successful choice still adds mechanical inputs."""
-        parts = list(self.period.parts)
+    def assembly(
+        self, choice: Choice | None = None, *, change_set_id: str | None = None
+    ) -> Assembly:
+        """None builds selection. A successful choice adds mandatory change-set inputs."""
+        period = self.period.visible_to(self.view)
+        parts = []
+        if choice is not None:
+            assert change_set_id is not None
+            parts.append(
+                Part(
+                    "change_set_header",
+                    Ref(kind="template", id=change_set_id, version=None),
+                    f"Change-set call ID for inferred sources: {change_set_id}",
+                )
+            )
+        parts.extend(_parts(period))
         days = [i for i, part in enumerate(parts) if part.source.kind == "day_log"]
         pending_start = len(parts)
-        parts.extend(_pending_part(period) for period in self.pending)
+        parts.extend(_pending_part(pending, self.view) for pending in self.pending)
         pending = range(pending_start, len(parts))
 
         version = str(self.base_version)
@@ -92,12 +119,13 @@ class FixedInput:
 
         # The fixed morning prefix can already carry a full base revision.
         # An older revision of the same ID still needs its current projection.
-        shown = {memory.revision for memory in self.period.prefix.memories}
+        shown = {memory.revision for memory in period.prefix.memories}
         for revision in self.view.records:
             mechanical = choice is not None and revision.ref.id in self.mechanical_ids
+            personality = choice is not None and revision.record.kind == "personality"
             open_commitment = revision.record.kind == "commitment" and "open" in revision.flags
             if revision.ref not in shown and (
-                mechanical or open_commitment or revision.record.needs_review
+                mechanical or personality or open_commitment or revision.record.needs_review
             ):
                 shown.add(revision.ref)
                 fragment = render_memory(revision).part

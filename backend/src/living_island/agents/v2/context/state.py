@@ -30,7 +30,7 @@ _TERRAIN: dict[wap.Terrain, str] = {
     "sea": "~",
     "beach": ".",
     "grass": ",",
-    "woods": "W",
+    "woods": "T",
     "rock": "^",
     "spring": "S",
     "cave": "C",
@@ -81,23 +81,26 @@ def _sight(view: wap.Perception) -> str:
 
 def _explored_map(view: wap.Perception) -> str:
     tiles = {
-        (tile.position.x, tile.position.y): _TERRAIN[tile.terrain]
-        for tile in view.explored_static_tiles
+        (tile.position.x, tile.position.y): tile.terrain for tile in view.explored_static_tiles
     }
-    tiles[view.own_position.x, view.own_position.y] = "@"
-    left = min(x for x, _ in tiles)
-    right = max(x for x, _ in tiles)
-    top = min(y for _, y in tiles)
-    bottom = max(y for _, y in tiles)
-    rows = [
-        "".join(tiles.get((x, y), "?") for x in range(left, right + 1))
-        for y in range(top, bottom + 1)
+    own = (view.own_position.x, view.own_position.y)
+    symbols = {point: _TERRAIN[terrain] for point, terrain in tiles.items()}
+    symbols[own] = "@"
+    columns = range(min(x for x, _ in symbols), max(x for x, _ in symbols) + 1)
+    rows = range(min(y for _, y in symbols), max(y for _, y in symbols) + 1)
+    grid = ["".join(symbols.get((x, y), "?") for x in columns) for y in rows]
+    legend = [f"{_TERRAIN[t]} = {t.replace('_', ' ')}" for t in sorted(set(tiles.values()))]
+    springs = [f"({x},{y})" for (x, y), terrain in sorted(tiles.items()) if terrain == "spring"]
+    lines = [
+        f"Explored map from ({columns.start},{rows.start}):",
+        *grid,
+        ", ".join(["@ you", "? unknown", *legend]),
+        "Column x coordinates, left to right: " + " ".join(map(str, columns)),
+        "Row y coordinates, top to bottom: " + " ".join(map(str, rows)),
     ]
-    terrains = sorted({tile.terrain for tile in view.explored_static_tiles})
-    legend = [f"{_TERRAIN[terrain]} {terrain.replace('_', ' ')}" for terrain in terrains]
-    return "\n".join(
-        [f"Explored map from ({left},{top}):", *rows, ", ".join(["@ you", "? unknown", *legend])]
-    )
+    if springs:
+        lines.append("Explored spring tiles (drink from a tile next to one): " + ", ".join(springs))
+    return "\n".join(lines)
 
 
 @dataclass(frozen=True)
@@ -118,8 +121,8 @@ def render_current_state(
     """The coordinator supplies scheduled reasons, local clock words and action mute state."""
     view = packet.perception
 
-    def part(name: str, words: str) -> Part:
-        ref = Ref(kind="current_state", id=f"{packet.delivery_id}/{name}", version="state/0.1")
+    def part(name: str, words: str, version: str = "state/0.1") -> Part:
+        ref = Ref(kind="current_state", id=f"{packet.delivery_id}/{name}", version=version)
         return Part("current_state", ref, words)
 
     body = [need_words(need) for need in view.needs if need.need_id != "mental_fatigue"]
@@ -160,5 +163,5 @@ def render_current_state(
                 f"Current intention {intention.ref.id}: {intention.record.text}",
             )
         )
-    parts.extend((part("sight", _sight(view)), part("map", _explored_map(view))))
+    parts.extend((part("sight", _sight(view)), part("map", _explored_map(view), "state-map/0.3")))
     return CurrentState(tuple(parts), pressure_at)
