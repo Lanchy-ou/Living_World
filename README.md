@@ -32,6 +32,20 @@ for retained evidence, unmerged follow-ups and known limits.
   [evaluation and inspection](docs/spec/p3-evaluation-v0.1.md)
 - [M9 acceptance and evidence](docs/tasks/p3/M9-evidence.md)
 
+P3.5 is closed after the owner signed M12, M13 and M14 (2026-11-23 to
+2026-11-26). The v2 engine matches the v1 archive on the approved seed set,
+the starter world runs, and one live LLM resident completed four game days
+with consolidation and replay. The M15 multi-resident acceptance runs and
+the removal of v1 are deferred, not passed. See the
+[P3.5 closeout](docs/tasks/p3.5/P3.5-closeout.md), the
+[card index](docs/tasks/p3.5/P3.5-card-index.md) and the
+[retrospective and next direction](docs/tasks/p3.5/P3.5-retrospective.md).
+
+- [P3.5 implementation plan](docs/plans/p3.5-implementation-plan-v0.1.md)
+- [M12 equivalence report](docs/tasks/p3.5/M12-equivalence-report.md),
+  [M13 Gate 3](docs/tasks/p3.5/M13-gate3.md) and
+  [M14 Gate 3](docs/tasks/p3.5/M14-gate3.md)
+
 ## Prerequisites
 
 Use Python 3.13 with [uv](https://docs.astral.sh/uv/), Node.js 24, and pnpm 10.34.9.
