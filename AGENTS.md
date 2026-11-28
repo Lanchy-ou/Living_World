@@ -44,6 +44,8 @@ force for v1 runs; each P3.5 spec states which P3 parts it replaces for new work
 P3.5 is closed after the owner signed M12, M13 and M14. The M15 multi-resident
 acceptance runs and the removal of v1 are deferred, not passed. Read the
 [P3.5 closeout](docs/tasks/p3.5/P3.5-closeout.md) before starting new work.
+The [P3.5 retrospective](docs/tasks/p3.5/P3.5-retrospective.md) records lessons
+and a recommended next direction, which the owner has not yet decided.
 
 - [P3.5 plan](docs/plans/p3.5-implementation-plan-v0.1.md) (system index,
   milestones M11–M15, acceptance runs, deferred P3 work)

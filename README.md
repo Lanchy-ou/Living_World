@@ -25,6 +25,19 @@ Long-duration proof, new live multi-resident evaluation and full original M10
 acceptance are deferred, not passed. See the [closeout and P3.5 handoff](docs/tasks/p3/P3-closeout.md)
 for retained evidence, unmerged follow-ups and known limits.
 
+P3.5 is closed after the owner signed M12, M13 and M14 (2026-11-23 to
+2026-11-26). The v2 engine reproduces v1, the starter world runs, and one
+live LLM resident completed four game days with consolidation and replay.
+The M15 multi-resident acceptance runs and the removal of v1 are deferred,
+not passed. See the [P3.5 closeout](docs/tasks/p3.5/P3.5-closeout.md), the
+[card index](docs/tasks/p3.5/P3.5-card-index.md) and the
+[retrospective and next direction](docs/tasks/p3.5/P3.5-retrospective.md).
+
+- [P3.5 implementation plan](docs/plans/p3.5-implementation-plan-v0.1.md)
+- [M12 equivalence report](docs/tasks/p3.5/M12-equivalence-report.md),
+  [M13 Gate 3](docs/tasks/p3.5/M13-gate3.md) and
+  [M14 Gate 3](docs/tasks/p3.5/M14-gate3.md)
+
 - [P3 implementation plan](docs/plans/p3-implementation-plan-v0.1.md)
 - P3 specifications for [resident experience](docs/spec/resident-experience-v0.1.md),
   [resident cognition](docs/spec/resident-cognition-v0.1.md),
